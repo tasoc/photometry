@@ -9,7 +9,6 @@ Created on Mon Jun 26 18:12:33 2017
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
-import matplotlib.pyplot as plt
 import astropy.io.fits as pf
 from astropy.table import Table, Column
 import h5py
@@ -32,10 +31,22 @@ global_catalog.add_index('dec')
 
 #------------------------------------------------------------------------------
 class BasePhotometry(object):
+
+	"""Status to be returned by do_photometry on success."""
+	STATUS_OK = 0
+
+	"""Status to be returned by do_photometry on error."""
+	STATUS_ERROR = 1
+	
+	"""Status to be returned by do_photometry on warning."""
+	STATUS_WARNING = 2
+
 	def __init__(self, starid, mode='ffi'):
+		"""Initialize the photometry object."""
+	
 		self.starid = starid
 		self.mode = mode
-		
+
 		self._stamp = None
 		self._catalog = None
 
@@ -129,10 +140,10 @@ class BasePhotometry(object):
 
 	def set_stamp(self):
 		"""
-		
+
 		NB: Stamp is zero-based counted from the TOP of the image
 		"""
-		
+
 		logger = logging.getLogger(__name__)
 
 		if not self._stamp:
@@ -173,15 +184,17 @@ class BasePhotometry(object):
 
 	@property
 	def images(self):
+		"""Iterator that will loop through the image stamps."""
 		for img in self.hdf['images']:
 			filename = os.path.basename(img).rstrip('.gz')
 			with pf.open(os.path.join('input/images', filename), memmap=True, mode='readonly') as hdu:
 				data = hdu[0].data[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
-		
+
 			yield data
 
 	@property
 	def backgrounds(self):
+		"""Iterator that will loop through the background-image stamps."""
 		for k in range(self.hdf['backgrounds'].shape[2]):
 			yield self.hdf['backgrounds'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3], k]
 
@@ -201,9 +214,9 @@ class BasePhotometry(object):
 	@property
 	def catalog(self):
 		"""Catalog of stars in the current stamp.
-		
+
 		Returns an astropy.table.Table object"""
-		
+
 		if not self._catalog:
 			# Pixel-positions of the corners of the current stamp:
 			corners = np.array([
@@ -212,33 +225,33 @@ class BasePhotometry(object):
 				[self._stamp[3], self._stamp[0]],
 				[self._stamp[3], self._stamp[1]]
 			], dtype='int32')
-			
+
 			# Convert the corners into (ra, dec) coordinates and find the max and min values:
 			corners_radec = self.wcs.all_pix2world(corners, 0, ra_dec_order=True)
 			radec_min = np.min(corners_radec, axis=0)
 			radec_max = np.max(corners_radec, axis=0)
-			
+
 			# Select only the stars within the current stamp:
 			# TODO: This could be improved with an index!
 			# TODO: Include proper-motion movement to "now" => Modify (ra, dec).
 			indx = (global_catalog['ra'] >= radec_min[0]) & (global_catalog['ra'] <= radec_max[0]) & (global_catalog['dec'] >= radec_min[1]) & (global_catalog['dec'] <= radec_max[1])
 			# global_catalog.loc['ra', radec_min[0]:radec_max[0]]
 			# global_catalog.loc['dec', radec_min[1]:radec_max[1]]
-			
+
 			self._catalog = global_catalog[indx]
-			
+
 			# Use the WCS to find pixel coordinates of stars in mask:
 			pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)
-			
+
 			# Subtract the positions of the edge of the current stamp:
 			pixel_coords[:,0] -= self._stamp[2]
 			pixel_coords[:,1] -= self._stamp[0]
-			
+
 			# Add the pixel positions to the catalog table:
 			col_x = Column(data=pixel_coords[:,0], name='row', dtype='float32')
 			col_y = Column(data=pixel_coords[:,1], name='column', dtype='float32')
 			self._catalog.add_columns([col_x, col_y])
-			
+
 			# Sort the catalog after brightness:
 			#self._catalog.sort('tmag')
 
@@ -368,10 +381,3 @@ class BasePhotometry(object):
 		with pf.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
 			output_folder = 'output'
 			hdulist.writeto(os.path.join(output_folder, 'tess%09d.fits'%(self.starid, )), checksum=True, overwrite=True)
-
-
-#------------------------------------------------------------------------------
-class PhotometryStatus():
-	OK = 0
-	ERROR = 1
-	WARNING = 2
