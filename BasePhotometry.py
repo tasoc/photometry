@@ -29,7 +29,7 @@ global_catalog.add_index('starid', unique=True)
 global_catalog.add_index('ra')
 global_catalog.add_index('dec')
 
-#------------------------------------------------------------------------------
+
 class BasePhotometry(object):
 
 	"""Status to be returned by do_photometry on success."""
@@ -37,13 +37,13 @@ class BasePhotometry(object):
 
 	"""Status to be returned by do_photometry on error."""
 	STATUS_ERROR = 1
-	
+
 	"""Status to be returned by do_photometry on warning."""
 	STATUS_WARNING = 2
 
 	def __init__(self, starid, mode='ffi'):
 		"""Initialize the photometry object."""
-	
+
 		self.starid = starid
 		self.mode = mode
 
@@ -57,23 +57,52 @@ class BasePhotometry(object):
 		self.target_pos_ra = target['ra']
 		self.target_pos_dec = target['dec']
 
+		# TODO: These should also come from the catalog somehow:
+		self.camera = 1
+		self.ccd = 1
+
+		# Init table that will be filled with lightcurve stuff:
+		self.lightcurve = Table()
+
 		if self.mode == 'ffi':
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = 'input/test2.hdf5'
 			self.hdf = h5py.File(filepath_hdf5, 'r')
-			self.time = np.asarray(self.hdf['time'], dtype='float64')
-			self.cadenceno = np.asarray(self.hdf['cadenceno'], dtype='int32')
+
+			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64')
+			self.lightcurve['timecorr'] = Column(np.zeros(len(self.hdf['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+			self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
 
 			hdr = pf.Header().fromstring(self.hdf['wcs'][0])
 			self.wcs = WCS(header=hdr)
 
-		elif self.mode == 'stamp':
+			# Correct timestamps for light-travel time:
+			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
+			#ip_peg = coordinates.SkyCoord(self.target_pos_ra, self.target_pos_dec, unit=units.deg, frame='icrs')
+			#greenwich = coordinates.EarthLocation.of_site('greenwich')
+			#times = time.Time(self.time, format='mjd', scale='utc', location=greenwich)
+			#self.timecorr = times.light_travel_time(ip_peg, ephemeris='jpl')
+			#self.time = times.tdb + self.timecorr
+			#self.lightcurve['timecorr'] = np.zeros(N, dtype='float32')
 
+		elif self.mode == 'stamp':
 			with pf.open(mode, mode='readonly', memmap=True) as hdu:
-				self.time = hdu[1].data.field('TIME')
-				self.cadenceno = hdu[1].data.field('CADENCENO')
+
+				self.lightcurve['time'] = Column(hdu[1].data.field('TIME'), description='Time', dtype='float64')
+				self.lightcurve['timecorr'] = Column(hdu[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
+				self.lightcurve['cadenceno'] = Column(hdu[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
+
 				self.wcs = WCS(header=hdu[2].header)
 
+		# Define the columns that have to be filled by the do_photometry method:
+		N = len(self.hdf['time'])
+		self.lightcurve['flux'] = Column(length=N, description='Flux', dtype='float64')
+		self.lightcurve['flux_background'] = Column(length=N, description='Background flux', dtype='float64')
+		self.lightcurve['quality'] = Column(length=N, description='Quality flags', dtype='int32')
+		self.lightcurve['pos_centroid'] = Column(length=N, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
+
+		# Init arrays that will be filled with lightcurve stuff:
+		self.final_mask = None
 
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
 		#print(self.target_pos_row, self.target_pos_column)
@@ -82,23 +111,6 @@ class BasePhotometry(object):
 		self._stamp = None
 		self.set_stamp()
 		self._sumimage = None
-
-		# Init arrays that will be filled with lightcurve stuff:
-		N = len(self.time)
-		self.flux = np.zeros(N, dtype='float64')
-		self.flux_background = np.zeros(N, dtype='float64')
-		self.quality = np.zeros(N, dtype='int32')
-		self.pos_centroid = np.zeros((N, 2), dtype='float64')
-		self.final_mask = None
-
-		# Correct timestamps for light-travel time:
-		# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
-		#ip_peg = coordinates.SkyCoord(self.target_pos_ra, self.target_pos_dec, unit=units.deg, frame='icrs')
-		#greenwich = coordinates.EarthLocation.of_site('greenwich')
-		#times = time.Time(self.time, format='mjd', scale='utc', location=greenwich)
-		#self.timecorr = times.light_travel_time(ip_peg, ephemeris='jpl')
-		#self.time = times.tdb + self.timecorr
-		self.timecorr = np.zeros(N, dtype='float32')
 
 	def __enter__(self):
 		return self
@@ -131,10 +143,14 @@ class BasePhotometry(object):
 
 	def resize_stamp(self, down=None, up=None, left=None, right=None):
 		self._stamp = list(self._stamp)
-		if up:    self._stamp[1] += up
-		if down:  self._stamp[0] -= down
-		if left:  self._stamp[2] -= left
-		if right: self._stamp[3] += right
+		if up:
+			self._stamp[1] += up
+		if down:
+			self._stamp[0] -= down
+		if left:
+			self._stamp[2] -= left
+		if right:
+			self._stamp[3] += right
 		self._stamp = tuple(self._stamp)
 		self.set_stamp()
 
@@ -311,14 +327,14 @@ class BasePhotometry(object):
 
 		# Make binary table:
 		# Define table columns:
-		c1 = pf.Column(name='TIME', format='D', array=self.time)
-		c2 = pf.Column(name='TIMECORR', format='E', array=self.timecorr)
-		c3 = pf.Column(name='CADENCENO', format='J', array=self.cadenceno)
-		c4 = pf.Column(name='FLUX', format='D', unit='e-/s', array=self.flux)
-		c5 = pf.Column(name='QUALITY', format='J', array=self.quality)
-		c6 = pf.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.flux_background)
-		c7 = pf.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.pos_centroid[:, 0]) # column
-		c8 = pf.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.pos_centroid[:, 1]) # row
+		c1 = pf.Column(name='TIME', format='D', array=self.lightcurve['time'])
+		c2 = pf.Column(name='TIMECORR', format='E', array=self.lightcurve['timecorr'])
+		c3 = pf.Column(name='CADENCENO', format='J', array=self.lightcurve['cadenceno'])
+		c4 = pf.Column(name='FLUX', format='D', unit='e-/s', array=self.lightcurve['flux'])
+		c5 = pf.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
+		c6 = pf.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
+		c7 = pf.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
+		c8 = pf.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
 		#c10 = pf.Column(name='POS_CORR1', format='E', unit='pixels', array=poscorr1) # column
 		#c11 = pf.Column(name='POS_CORR2', format='E', unit='pixels', array=poscorr2) # row
 
@@ -369,7 +385,7 @@ class BasePhotometry(object):
 
 		# Make aperture image:
 		img_aperture = []
-		if not self.final_mask is None:
+		if self.final_mask is not None:
 			mask = np.ones_like(self.final_mask, dtype='int32')
 			mask[self.final_mask] = 3
 			img_aperture = pf.ImageHDU(data=mask, header=self.wcs.to_header(), name='APERTURE') # header=ori_mask_header,
@@ -380,4 +396,4 @@ class BasePhotometry(object):
 		# Write to file:
 		with pf.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
 			output_folder = 'output'
-			hdulist.writeto(os.path.join(output_folder, 'tess%09d.fits'%(self.starid, )), checksum=True, overwrite=True)
+			hdulist.writeto(os.path.join(output_folder, 'tess{0:%09d}.fits'.format(self.starid)), checksum=True, overwrite=True)

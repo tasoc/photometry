@@ -10,12 +10,8 @@ from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
 import logging
-from astropy.table import Table
-import sys
 from BasePhotometry import BasePhotometry
-import k2p2v2 as k2p2
-from time import clock
-import matplotlib.pyplot as plt
+from . import k2p2v2 as k2p2
 
 #------------------------------------------------------------------------------
 class AperturePhotometry(BasePhotometry):
@@ -55,9 +51,9 @@ class AperturePhotometry(BasePhotometry):
 
 			catalog = self.catalog
 
-			#plt.figure()
-			#plt.imshow(np.log10(self.sumimage), origin='lower')
-			#plt.scatter(catalog['row']+0.5, catalog['column']+0.5, s=100/catalog['tmag'], c='r')
+			# plt.figure()
+			# plt.imshow(np.log10(self.sumimage), origin='lower')
+			# plt.scatter(catalog['row']+0.5, catalog['column']+0.5, s=100/catalog['tmag'], c='r')
 
 			cat = np.column_stack((catalog['row'], catalog['column'], catalog['tmag']))
 
@@ -67,29 +63,29 @@ class AperturePhotometry(BasePhotometry):
 
 			if len(masks.shape) == 0:
 				logger.error("No masks found")
-				return PhotometryStatus.ERROR
+				return AperturePhotometry.STATUS_ERROR
 
 			# Look at the central pixel where the target should be:
 			indx_main = masks[:, target_pixel_row, target_pixel_column].flatten()
 
 			if not np.any(indx_main):
 				logger.error('No pixels')
-				return STATUS_ERROR
+				return AperturePhotometry.STATUS_ERROR
 			elif np.sum(indx_main) > 1:
 				logger.error('Too many masks')
-				return STATUS_ERROR
+				return AperturePhotometry.STATUS_ERROR
 
 			# Mask of the main target:
-			mask_main = masks[indx_main,:,:].reshape(SumImage.shape)
+			mask_main = masks[indx_main, :, :].reshape(SumImage.shape)
 
 			resize_args = {}
-			if np.any(mask_main[0,:]):
+			if np.any(mask_main[0, :]):
 				resize_args['down'] = 10
-			if np.any(mask_main[-1,:]):
+			if np.any(mask_main[-1, :]):
 				resize_args['up'] = 10
-			if np.any(mask_main[:,0]):
+			if np.any(mask_main[:, 0]):
 				resize_args['left'] = 10
-			if np.any(mask_main[:,-1]):
+			if np.any(mask_main[:, -1]):
 				resize_args['right'] = 10
 
 			if resize_args:
@@ -110,71 +106,15 @@ class AperturePhotometry(BasePhotometry):
 			flux_in_cluster = img[mask_main] - bck[mask_main]
 
 			# Calculate flux in mask:
-			self.flux[k] = np.sum(flux_in_cluster)
-			self.flux_background[k] = np.sum(bck[mask_main])
+			self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
+			self.lightcurve['flux_background'][k] = np.sum(bck[mask_main])
 
 			# Calculate flux centroid:
 			finite_vals = (flux_in_cluster > 0)
-			self.pos_centroid[k, :] = np.average(members[finite_vals, :], weights=flux_in_cluster[finite_vals], axis=0)
+			self.lightcurve['pos_centroid'][k, :] = np.average(members[finite_vals, :], weights=flux_in_cluster[finite_vals], axis=0)
 
 		#
 		self.final_mask = mask_main
 
 		# Return whether you think it went well:
-		return STATUS_OK
-
-#------------------------------------------------------------------------------
-if __name__ == '__main__':
-
-	logging_level = logging.WARNING
-
-	# Setup logging:
-	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-	console = logging.StreamHandler()
-	console.setFormatter(formatter)
-	logger = logging.getLogger(__name__)
-	logger.addHandler(console)
-	logger.setLevel(logging_level)
-	logger_parent = logging.getLogger('BasePhotometry')
-	logger_parent.addHandler(console)
-	logger_parent.setLevel(logging_level)
-
-	cat = np.genfromtxt(r'input/catalog.txt.gz', skip_header=1, usecols=(4,5,6), dtype='float64')
-	cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
-	catalog = Table(cat,
-		names=('starid', 'x', 'y', 'tmag'),
-		dtype=('int64', 'float32', 'float32', 'float32')
-	)
-
-	indx = (catalog['x'] > 0) & (catalog['x'] < 2048) & (catalog['y'] > 0) & (catalog['y'] < 2048)
-	catalog = catalog[indx]
-	catalog.sort('tmag')
-
-	Ntests = 1000
-
-	position_errors = np.zeros((Ntests, 2), dtype='float64') + np.nan
-	for k, thisone in enumerate(catalog[:Ntests]):
-		starid = thisone['starid']
-		print(k, starid)
-
-		with AperturePhotometry(starid) as pho:
-			try:
-				status = pho.do_photometry()
-			except (KeyboardInterrupt, SystemExit):
-				break
-			except:
-				status = STATUS_ERROR
-				logger.error("Something happened")
-
-			if status == STATUS_OK:
-				#pho.save_lightcurve()
-
-				extracted_pos = np.median(pho.pos_centroid, axis=0)
-				real_pos = np.array([thisone['x'], thisone['y']])
-
-				position_errors[k,:] = real_pos - extracted_pos
-
-	fig = plt.figure()
-	plt.scatter(position_errors[:,0], position_errors[:,1])
-	fig.savefig('position_errors.png')
-	plt.show()
+		return AperturePhotometry.STATUS_OK

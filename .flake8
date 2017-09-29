@@ -1,0 +1,4 @@
+[flake8]
+# W292 : no newline at end of file
+ignore = W191,E501,E265,E231,E226,E261,W293,E128,W292
+exclude = .git
