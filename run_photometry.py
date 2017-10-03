@@ -3,7 +3,7 @@
 """
 Created on Mon Jun 26 17:52:09 2017
 
-@author: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
@@ -13,9 +13,7 @@ import logging
 from astropy.table import Table
 from time import clock
 import matplotlib.pyplot as plt
-from BasePhotometry import BasePhotometry
-from AperturePhotometry import AperturePhotometry
-
+from photometry import BasePhotometry, AperturePhotometry
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -64,7 +62,7 @@ if __name__ == '__main__':
 
 				print(pho.lightcurve)
 
-				pho.save_lightcurve()
+				#pho.save_lightcurve()
 
 				extracted_pos = np.median(pho.lightcurve['pos_centroid'], axis=0)
 				real_pos = np.array([thisone['x'], thisone['y']])

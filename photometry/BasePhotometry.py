@@ -3,7 +3,7 @@
 """
 Created on Mon Jun 26 18:12:33 2017
 
-@author: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
@@ -18,19 +18,13 @@ import os.path
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
 
-cat = np.genfromtxt(r'input/catalog.txt.gz', skip_header=1, usecols=(0,1,2,3,4,5,6), dtype='float64')
-cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
-
-global_catalog = Table(cat,
-	names=('starid', 'ra', 'dec', 'pm_ra', 'pm_dec', 'x', 'y', 'tmag'),
-	dtype=('int64', 'float64','float64','float32','float32','float64','float64','float32')
-)
-global_catalog.add_index('starid', unique=True)
-global_catalog.add_index('ra')
-global_catalog.add_index('dec')
-
+global_catalog = None
 
 class BasePhotometry(object):
+	"""Base photometry class.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
 
 	"""Status to be returned by do_photometry on success."""
 	STATUS_OK = 0
@@ -42,13 +36,30 @@ class BasePhotometry(object):
 	STATUS_WARNING = 2
 
 	def __init__(self, starid, mode='ffi'):
-		"""Initialize the photometry object."""
+		"""Initialize the photometry object.
+
+		:param starid: TIC number of star to be processed
+		"""
 
 		self.starid = starid
 		self.mode = mode
 
 		self._stamp = None
 		self._catalog = None
+		input_folder = r'C:\Users\au195407\Documents\GitHub\photometry\input'
+
+		global global_catalog
+		if global_catalog is None:
+			cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,2,3,4,5,6), dtype='float64')
+			cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
+
+			global_catalog = Table(cat,
+				names=('starid', 'ra', 'dec', 'pm_ra', 'pm_dec', 'x', 'y', 'tmag'),
+				dtype=('int64', 'float64','float64','float32','float32','float64','float64','float32')
+			)
+			global_catalog.add_index('starid', unique=True)
+			global_catalog.add_index('ra')
+			global_catalog.add_index('dec')
 
 		# Load information about main target:
 		# TODO: HOW?
@@ -57,7 +68,8 @@ class BasePhotometry(object):
 		self.target_pos_ra = target['ra']
 		self.target_pos_dec = target['dec']
 
-		# TODO: These should also come from the catalog somehow:
+		# TODO: These should also come from the catalog somehow
+		#       They will be needed to find the correct input files
 		self.camera = 1
 		self.ccd = 1
 
@@ -66,10 +78,10 @@ class BasePhotometry(object):
 
 		if self.mode == 'ffi':
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = 'input/test2.hdf5'
+			filepath_hdf5 = os.path.join(input_folder, 'test2.hdf5')
 			self.hdf = h5py.File(filepath_hdf5, 'r')
 
-			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64')
+			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
 			self.lightcurve['timecorr'] = Column(np.zeros(len(self.hdf['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
 
@@ -80,10 +92,9 @@ class BasePhotometry(object):
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
 			#ip_peg = coordinates.SkyCoord(self.target_pos_ra, self.target_pos_dec, unit=units.deg, frame='icrs')
 			#greenwich = coordinates.EarthLocation.of_site('greenwich')
-			#times = time.Time(self.time, format='mjd', scale='utc', location=greenwich)
-			#self.timecorr = times.light_travel_time(ip_peg, ephemeris='jpl')
-			#self.time = times.tdb + self.timecorr
-			#self.lightcurve['timecorr'] = np.zeros(N, dtype='float32')
+			#times = time.Time(self.lightcurve['time'], format='mjd', scale='utc', location=greenwich)
+			#self.lightcurve['timecorr'] = times.light_travel_time(ip_peg, ephemeris='jpl')
+			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
 		elif self.mode == 'stamp':
 			with pf.open(mode, mode='readonly', memmap=True) as hdu:
@@ -95,7 +106,7 @@ class BasePhotometry(object):
 				self.wcs = WCS(header=hdu[2].header)
 
 		# Define the columns that have to be filled by the do_photometry method:
-		N = len(self.hdf['time'])
+		N = len(self.lightcurve['time'])
 		self.lightcurve['flux'] = Column(length=N, description='Flux', dtype='float64')
 		self.lightcurve['flux_background'] = Column(length=N, description='Background flux', dtype='float64')
 		self.lightcurve['quality'] = Column(length=N, description='Quality flags', dtype='int32')
@@ -142,6 +153,17 @@ class BasePhotometry(object):
 		return Nrows, Ncolumns
 
 	def resize_stamp(self, down=None, up=None, left=None, right=None):
+		"""
+		Resize the stamp in a given direction.
+		
+		Parameters
+		----------
+		:param down: Number of pixels to extend the stamp down.
+		:param up: Number of pixels to extend the stamp up.
+		:param left: Number of pixels to extend the stamp left.
+		:param right: Number of pixels to extend the stamp right.
+		"""
+		
 		self._stamp = list(self._stamp)
 		if up:
 			self._stamp[1] += up
@@ -190,8 +212,8 @@ class BasePhotometry(object):
 	def get_pixel_grid(self):
 		"""Returns mesh-grid of the pixels (1-based) in the stamp."""
 		return np.meshgrid(
-			np.arange(self._stamp[0]+1, self._stamp[1]+1, 1, dtype='int32'),
-			np.arange(self._stamp[2]+1, self._stamp[3]+1, 1, dtype='int32')
+			np.arange(self._stamp[2]+1, self._stamp[3]+1, 1, dtype='int32'),
+			np.arange(self._stamp[0]+1, self._stamp[1]+1, 1, dtype='int32')
 		)
 
 	@property
@@ -396,4 +418,4 @@ class BasePhotometry(object):
 		# Write to file:
 		with pf.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
 			output_folder = 'output'
-			hdulist.writeto(os.path.join(output_folder, 'tess{0:%09d}.fits'.format(self.starid)), checksum=True, overwrite=True)
+			hdulist.writeto(os.path.join(output_folder, 'tess{0:09d}.fits'.format(self.starid)), checksum=True, overwrite=True)

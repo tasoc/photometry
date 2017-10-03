@@ -3,14 +3,14 @@
 """
 Created on Mon Jun 26 17:52:09 2017
 
-@author: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
 import logging
-from BasePhotometry import BasePhotometry
+from .. import BasePhotometry
 from . import k2p2v2 as k2p2
 
 #------------------------------------------------------------------------------
@@ -29,9 +29,7 @@ class AperturePhotometry(BasePhotometry):
 		"""Perform photometry on the given target.
 
 		This function needs to set
-			* self.flux
-			* self.flux_background
-			* self.quality
+			* self.lightcurve
 		"""
 
 		logger = logging.getLogger(__name__)
@@ -97,8 +95,8 @@ class AperturePhotometry(BasePhotometry):
 				break
 
 		# XY of pixels in frame
-		Y, X = self.get_pixel_grid()
-		members = np.column_stack((X[mask_main], Y[mask_main]))
+		cols, rows = self.get_pixel_grid()
+		members = np.column_stack((cols[mask_main], rows[mask_main]))
 
 		#
 		for k, (img, bck) in enumerate(zip(self.images, self.backgrounds)):
