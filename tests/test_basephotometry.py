@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import BasePhotometry
 
-INPUT_DIR = 'input'
+INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 DUMMY_TARGET = 143159
 
 def test_stamp():
