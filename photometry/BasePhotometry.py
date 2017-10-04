@@ -21,7 +21,8 @@ from astropy.wcs import WCS
 global_catalog = None
 
 class BasePhotometry(object):
-	"""Base photometry class.
+	"""
+	Base photometry class.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -35,18 +36,21 @@ class BasePhotometry(object):
 	"""Status to be returned by do_photometry on warning."""
 	STATUS_WARNING = 2
 
-	def __init__(self, starid, mode='ffi'):
-		"""Initialize the photometry object.
+	def __init__(self, starid, input_folder, mode='ffi'):
+		"""
+		Initialize the photometry object.
 
+		Parameters
+		----------
 		:param starid: TIC number of star to be processed
 		"""
 
 		self.starid = starid
+		self.input_folder = input_folder
 		self.mode = mode
 
 		self._stamp = None
 		self._catalog = None
-		input_folder = r'C:\Users\au195407\Documents\GitHub\photometry\input'
 
 		global global_catalog
 		if global_catalog is None:
@@ -70,6 +74,7 @@ class BasePhotometry(object):
 
 		# TODO: These should also come from the catalog somehow
 		#       They will be needed to find the correct input files
+		self.sector = 0
 		self.camera = 1
 		self.ccd = 1
 
@@ -78,7 +83,7 @@ class BasePhotometry(object):
 
 		if self.mode == 'ffi':
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = os.path.join(input_folder, 'test2.hdf5')
+			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
 			self.hdf = h5py.File(filepath_hdf5, 'r')
 
 			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
@@ -114,6 +119,7 @@ class BasePhotometry(object):
 
 		# Init arrays that will be filled with lightcurve stuff:
 		self.final_mask = None
+		self.additional_headers = {}
 
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
 		#print(self.target_pos_row, self.target_pos_column)
@@ -134,6 +140,9 @@ class BasePhotometry(object):
 			self.hdf.close()
 
 	def get_sumimage(self):
+		"""
+		Get the sum-image for the given stamp.
+		"""
 		if self._sumimage is None:
 			if self.mode == 'ffi':
 				self._sumimage = self.hdf['sumimage'][self._stamp[0]:(self._stamp[1]+1), self._stamp[2]:(self._stamp[3]+1)]
@@ -155,7 +164,7 @@ class BasePhotometry(object):
 	def resize_stamp(self, down=None, up=None, left=None, right=None):
 		"""
 		Resize the stamp in a given direction.
-		
+
 		Parameters
 		----------
 		:param down: Number of pixels to extend the stamp down.
@@ -163,7 +172,7 @@ class BasePhotometry(object):
 		:param left: Number of pixels to extend the stamp left.
 		:param right: Number of pixels to extend the stamp right.
 		"""
-		
+
 		self._stamp = list(self._stamp)
 		if up:
 			self._stamp[1] += up
@@ -210,7 +219,14 @@ class BasePhotometry(object):
 		self._catalog = None
 
 	def get_pixel_grid(self):
-		"""Returns mesh-grid of the pixels (1-based) in the stamp."""
+		"""
+		Returns mesh-grid of the pixels (1-based) in the stamp.
+
+		Returns
+		-------
+		cols : numpy.array
+		rows : numpy.array
+		"""
 		return np.meshgrid(
 			np.arange(self._stamp[2]+1, self._stamp[3]+1, 1, dtype='int32'),
 			np.arange(self._stamp[0]+1, self._stamp[1]+1, 1, dtype='int32')
@@ -222,17 +238,34 @@ class BasePhotometry(object):
 
 	@property
 	def images(self):
-		"""Iterator that will loop through the image stamps."""
+		"""
+		Iterator that will loop through the image stamps.
+
+		Returns
+		-------
+		Iterator with images.
+		"""
 		for img in self.hdf['images']:
-			filename = os.path.basename(img).rstrip('.gz')
-			with pf.open(os.path.join('input/images', filename), memmap=True, mode='readonly') as hdu:
+			# Path to file:
+			filename = os.path.join(self.input_folder, 'images', os.path.basename(img))
+			# If file does not exist, try to see if the GZ version exists:
+			if not os.path.exists(filename):
+				filename = os.path.join(self.input_folder, 'images', os.path.basename(img) + '.gz')
+			# Try to open file:
+			with pf.open(filename, memmap=True, mode='readonly') as hdu:
 				data = hdu[0].data[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 
 			yield data
 
 	@property
 	def backgrounds(self):
-		"""Iterator that will loop through the background-image stamps."""
+		"""
+		Iterator that will loop through the background-image stamps.
+
+		Returns
+		-------
+		Iterator with background images.
+		"""
 		for k in range(self.hdf['backgrounds'].shape[2]):
 			yield self.hdf['backgrounds'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3], k]
 
@@ -290,25 +323,19 @@ class BasePhotometry(object):
 			col_y = Column(data=pixel_coords[:,1], name='column', dtype='float32')
 			self._catalog.add_columns([col_x, col_y])
 
-			# Sort the catalog after brightness:
-			#self._catalog.sort('tmag')
-
 		return self._catalog
 
 	def do_photometry(self):
 		"""Run photometry algorithm.
 
 		This should fill the following
-		* self.flux
-		* self.flux_background
-		* self.quality
-		* self.pos_centroid
+		* self.lightcurve
 
 		Returns the status of the photometry.
 		"""
-		raise NotImplemented()
+		raise NotImplemented("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
-	def save_lightcurve(self):
+	def save_lightcurve(self, output_folder):
 		"""Save generated lightcurve to file."""
 
 		# Get the current date for the files:
@@ -320,32 +347,29 @@ class BasePhotometry(object):
 		hdu.header['EXTNAME'] = ('PRIMARY', 'name of extension')
 		hdu.header['ORIGIN'] = ('TASOC/Aarhus', 'institution responsible for creating this file')
 		hdu.header['DATE'] = (now.strftime("%Y-%m-%d"), 'date the file was created')
-		#hdu.header['KEPLERID'] = (star, 'Kepler identifier')
-		#hdu.header['OBJECT'] = (kasocutil.star_identifier(star), 'string version of KEPLERID')
-		#hdu.header['TELESCOP'] = ('Kepler', 'telescope')
-		#hdu.header['INSTRUME'] = ('Kepler Photometer', 'detector type')
-		#hdu.header['OBSMODE'] = (cadence, 'observing mode')
-		#hdu.header['TRACEID'] = (traceid, 'unique id in KASOC of processed file')
-		#hdu.header['CAMPAIGN'] = (campaign, 'Kepler quarters used in this file')
+		hdu.header['TELESCOP'] = ('TESS', 'telescope')
+		hdu.header['INSTRUME'] = ('TESS Photometer', 'detector type')
+		hdu.header['OBJECT'] = ("TIC {0:d}".format(self.starid), 'string version of TICID')
+		hdu.header['TICID'] = (self.starid, 'unique TESS target identifier')
+		hdu.header['CAMERA'] = (self.camera, 'Camera number')
+		hdu.header['CCD'] = (self.ccd, 'CCD number')
+		hdu.header['SECTOR'] = (self.sector, 'Observing sector')
+
+		# Versions:
 		#hdu.header['VERPIXEL'] = (__version__, 'version of K2P2 pipeline')
-		#hdu.header['SUBTARG'] = (subtarget, 'sub-target number from K2P2')
+		#hdu.header['DATA_REL'] = (__version__, 'version of K2P2 pipeline')
+
+		# Object properties:
+		hdu.header['RADESYS'] = ('ICRS', 'reference frame of celestial coordinates')
+		hdu.header['EQUINOX'] = (2000.0, 'equinox of celestial coordinate system')
+		hdu.header['RA_OBJ'] = (self.target_pos_ra, '[deg] Right ascension')
+		hdu.header['DEC_OBJ'] = (self.target_pos_dec, '[deg] Declination')
+		hdu.header['TESSMAG'] = (self.target_tmag, '[mag] TESS magnitude')
 
 		# Add K2P2 Settings to the header of the file:
-		#if custom_mask:
-		#	hdu.header['KP_MODE']	= 'Custom Mask'
-		#else:
-		#	hdu.header['KP_MODE'] = 'Normal'
-		#hdu.header['KP_SUBKG'] = (bool(subtract_background), 'K2P2 subtract background?')
-		#hdu.header['KP_THRES'] = (sumimage_threshold, 'K2P2 sum-image threshold')
-		#hdu.header['KP_MIPIX'] = (min_no_pixels_in_mask, 'K2P2 min pixels in mask')
-		#hdu.header['KP_MICLS'] = (min_for_cluster, 'K2P2 min pix. for cluster')
-		#hdu.header['KP_CLSRA'] = (cluster_radius, 'K2P2 cluster radius')
-		#hdu.header['KP_WS'] = (bool(ws), 'K2P2 watershed segmentation')
-		#hdu.header['KP_WSALG'] = (ws_alg, 'K2P2 watershed weighting')
-		#hdu.header['KP_WSBLR'] = (ws_blur, 'K2P2 watershed blur')
-		#hdu.header['KP_WSTHR'] = (ws_threshold, 'K2P2 watershed threshold')
-		#hdu.header['KP_WSFOT'] = (ws_footprint, 'K2P2 watershed footprint')
-		#hdu.header['KP_EX'] = (bool(extend_overflow), 'K2P2 extend overflow')
+		if self.additional_headers:
+			for key, value in self.additional_headers.items():
+				hdu.header[key] = value
 
 		# Make binary table:
 		# Define table columns:
@@ -353,8 +377,8 @@ class BasePhotometry(object):
 		c2 = pf.Column(name='TIMECORR', format='E', array=self.lightcurve['timecorr'])
 		c3 = pf.Column(name='CADENCENO', format='J', array=self.lightcurve['cadenceno'])
 		c4 = pf.Column(name='FLUX', format='D', unit='e-/s', array=self.lightcurve['flux'])
-		c5 = pf.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
-		c6 = pf.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
+		c5 = pf.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
+		c6 = pf.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
 		c7 = pf.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
 		c8 = pf.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
 		#c10 = pf.Column(name='POS_CORR1', format='E', unit='pixels', array=poscorr1) # column
@@ -362,48 +386,59 @@ class BasePhotometry(object):
 
 		tbhdu = pf.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8])
 		tbhdu.header['EXTNAME'] = ('LIGHTCURVE', 'name of extension')
+
 		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
 		tbhdu.header['TFORM1'] = ('D', 'column format: 64-bit floating point')
-		#tbhdu.header['TUNIT1'] = (ori_table_header['TUNIT1'], ori_table_header.comments['TUNIT1'])
-		#tbhdu.header['TDISP1'] = (ori_table_header['TDISP1'], 'column display format')
+		tbhdu.header['TUNIT1'] = ('BJD', 'column unit: barycenter corrected JD')
+		tbhdu.header['TDISP1'] = ('D14.7', 'column display format')
+
 		tbhdu.header['TTYPE2'] = ('TIMECORR', 'column title: barycenter - timeslice correction')
 		tbhdu.header['TFORM2'] = ('E', 'column format: 32-bit floating point')
-		#tbhdu.header['TUNIT2'] = (ori_table_header['TUNIT2'], ori_table_header.comments['TUNIT2'])
-		#tbhdu.header['TDISP2'] = (ori_table_header['TDISP2'], 'column display format')
-		tbhdu.header['TTYPE3'] = ('CADENCENO', 'column title: data time stamps')
+		tbhdu.header['TUNIT2'] = ('d', 'column units: day')
+		tbhdu.header['TDISP2'] = ('E13.6', 'column display format')
+
+		tbhdu.header['TTYPE3'] = ('CADENCENO', 'column title: unique cadence number')
 		tbhdu.header['TFORM3'] = ('J', 'column format: signed 32-bit integer')
-		#tbhdu.header['TDISP3'] = (ori_table_header['TDISP3'], 'column display format')
-		tbhdu.header['TTYPE4'] = ('FLUX', 'column title: Relative photometric flux')
+		tbhdu.header['TDISP3'] = ('I10', 'column display format')
+
+		tbhdu.header['TTYPE4'] = ('FLUX', 'column title: photometric flux')
 		tbhdu.header['TFORM4'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT4'] = ('e-/s', 'column units: electrons per second')
 		tbhdu.header['TDISP4'] = ('E26.17', 'column display format')
-		tbhdu.header['TTYPE5'] = ('QUALITY', 'column title: photometry quality flag')
-		tbhdu.header['TFORM5'] = ('J', 'column format: signed 32-bit integer')
-		tbhdu.header['TDISP5'] = ('B16.16', 'column display format')
-		tbhdu.header['TTYPE6'] = ('FLUX_BKG', 'column title: photometric background flux')
-		tbhdu.header['TFORM6'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT6'] = ('e-/s', 'column units: electrons per second')
-		tbhdu.header['TDISP6'] = ('E26.17', 'column display format')
+
+		tbhdu.header['TTYPE5'] = ('FLUX_BKG', 'column title: photometric background flux')
+		tbhdu.header['TFORM5'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT5'] = ('e-/s', 'column units: electrons per second')
+		tbhdu.header['TDISP5'] = ('E26.17', 'column display format')
+
+		tbhdu.header['TTYPE6'] = ('QUALITY', 'column title: photometry quality flag')
+		tbhdu.header['TFORM6'] = ('J', 'column format: signed 32-bit integer')
+		tbhdu.header['TDISP6'] = ('B16.16', 'column display format')
+
 		tbhdu.header['TTYPE7'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
 		tbhdu.header['TFORM7'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT7'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP7'] = ('F10.5', 'column display format')
+
 		tbhdu.header['TTYPE8'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
 		tbhdu.header['TFORM8'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT8'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP8'] = ('F10.5', 'column display format')
-		tbhdu.header['TTYPE9'] = ('FLUX_BKG_SUM', 'column title: pho. background flux in sumimage')
-		tbhdu.header['TFORM9'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT9'] = ('e-/s', 'column units: electrons per second')
-		tbhdu.header['TDISP9'] = ('E26.17', 'column display format')
-		tbhdu.header['TTYPE10'] = ('POS_CORR1', 'column title: column position correction')
-		tbhdu.header['TFORM10'] = ('E', 'column format: 32-bit floating point')
-		tbhdu.header['TUNIT10'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP10'] = ('F14.7', 'column display format')
-		tbhdu.header['TTYPE11'] = ('POS_CORR2', 'column title: row position correction')
-		tbhdu.header['TFORM11'] = ('E', 'column format: 32-bit floating point')
-		tbhdu.header['TUNIT11'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP11'] = ('F14.7', 'column display format')
+
+		#tbhdu.header['TTYPE9'] = ('FLUX_BKG_SUM', 'column title: pho. background flux in sumimage')
+		#tbhdu.header['TFORM9'] = ('D', 'column format: 64-bit floating point')
+		#tbhdu.header['TUNIT9'] = ('e-/s', 'column units: electrons per second')
+		#tbhdu.header['TDISP9'] = ('E26.17', 'column display format')
+
+		#tbhdu.header['TTYPE10'] = ('POS_CORR1', 'column title: column position correction')
+		#tbhdu.header['TFORM10'] = ('E', 'column format: 32-bit floating point')
+		#tbhdu.header['TUNIT10'] = ('pixel', 'column units: pixels')
+		#tbhdu.header['TDISP10'] = ('F14.7', 'column display format')
+
+		#tbhdu.header['TTYPE11'] = ('POS_CORR2', 'column title: row position correction')
+		#tbhdu.header['TFORM11'] = ('E', 'column format: 32-bit floating point')
+		#tbhdu.header['TUNIT11'] = ('pixel', 'column units: pixels')
+		#tbhdu.header['TDISP11'] = ('F14.7', 'column display format')
 
 		# Make aperture image:
 		img_aperture = []
@@ -417,5 +452,4 @@ class BasePhotometry(object):
 
 		# Write to file:
 		with pf.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
-			output_folder = 'output'
 			hdulist.writeto(os.path.join(output_folder, 'tess{0:09d}.fits'.format(self.starid)), checksum=True, overwrite=True)

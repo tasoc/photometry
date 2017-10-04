@@ -44,13 +44,14 @@ if __name__ == '__main__':
 		'fletcher32': True
 	}
 
-	with h5py.File('input/test2.hdf5', 'w') as hdf:
-	
+	with h5py.File('input/camera{0:d}_ccd{1:d}.hdf5'.format(1, 1), 'w') as hdf:
+
 		#dset1 = hdf.create_dataset('images', (SUMIMAGE.shape[0], SUMIMAGE.shape[1], numfiles), **args)
 		dset2 = hdf.create_dataset('backgrounds', (SUMIMAGE.shape[0], SUMIMAGE.shape[1], numfiles), **args)
-	
-		hdf.create_dataset('images', data=files, **args)
-	
+
+		filenames = ['images/' + os.path.basename(fname).rstrip('.gz') for fname in files]
+		hdf.create_dataset('images', data=filenames, **args)
+
 		for k,fname in enumerate(files):
 			logger.info("%.2f%% - %s", 100*k/numfiles, fname)
 
@@ -60,7 +61,7 @@ if __name__ == '__main__':
 				flux0 = hdu[0].data
 
 				bck = background
-				
+
 				# Save data in HDF5 file:
 				#dset1[:, :, k] = flux0
 				dset2[:, :, k] = bck

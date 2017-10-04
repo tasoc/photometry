@@ -27,9 +27,10 @@ if __name__ == '__main__':
 	logger = logging.getLogger(__name__)
 	logger.addHandler(console)
 	logger.setLevel(logging_level)
-	logger_parent = logging.getLogger('BasePhotometry')
-	logger_parent.addHandler(console)
-	logger_parent.setLevel(logging_level)
+	for logger_name in ('photometry', 'photometry.AperturePhotometry.photometry'):
+		logger_parent = logging.getLogger(logger_name)
+		logger_parent.addHandler(console)
+		logger_parent.setLevel(logging_level)
 
 	cat = np.genfromtxt(r'input/catalog.txt.gz', skip_header=1, usecols=(4,5,6), dtype='float64')
 	cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
@@ -42,14 +43,17 @@ if __name__ == '__main__':
 	catalog = catalog[indx]
 	catalog.sort('tmag')
 
-	Ntests = 1000
+	Ntests = 100
+
+	input_folder = 'input'
+	output_folder = 'output'
 
 	position_errors = np.zeros((Ntests, 2), dtype='float64') + np.nan
 	for k, thisone in enumerate(catalog[:Ntests]):
 		starid = thisone['starid']
 		print(k, starid)
 
-		with AperturePhotometry(starid) as pho:
+		with AperturePhotometry(starid, input_folder) as pho:
 			try:
 				status = pho.do_photometry()
 			except (KeyboardInterrupt, SystemExit):
@@ -60,9 +64,7 @@ if __name__ == '__main__':
 
 			if status == BasePhotometry.STATUS_OK:
 
-				print(pho.lightcurve)
-
-				#pho.save_lightcurve()
+				#pho.save_lightcurve(output_folder)
 
 				extracted_pos = np.median(pho.lightcurve['pos_centroid'], axis=0)
 				real_pos = np.array([thisone['x'], thisone['y']])

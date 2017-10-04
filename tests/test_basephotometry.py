@@ -12,9 +12,11 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import BasePhotometry
 
-def test_stamp():
+INPUT_DIR = 'input'
+DUMMY_TARGET = 143159
 
-	with BasePhotometry(143159) as pho:
+def test_stamp():
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
 		pho.set_stamp()
@@ -47,5 +49,28 @@ def test_stamp():
 		assert(rows.shape == (22, 20))
 		assert(cols.shape == (22, 20))
 
+
+def test_images():
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
+
+		pho._stamp = (0, 10, 0, 20)
+		pho.set_stamp()
+
+		for img in pho.images:
+			assert(img.shape == (10, 20))
+
+
+def test_backgrounds():
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
+
+		pho._stamp = (0, 10, 0, 20)
+		pho.set_stamp()
+
+		for img in pho.backgrounds:
+			assert(img.shape == (10, 20))
+
+
 if __name__ == '__main__':
 	test_stamp()
+	test_images()
+	test_backgrounds()
