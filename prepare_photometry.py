@@ -10,9 +10,12 @@ import h5py
 import logging
 import astropy.io.fits as pyfits
 from astropy.wcs import WCS
+import sqlite3
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
+
+	input_folder = r'C:\Users\au195407\Documents\tess_data\input'
 
 	# Setup logging:
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -22,11 +25,41 @@ if __name__ == '__main__':
 	logger.addHandler(console)
 	logger.setLevel(logging.INFO)
 
+	camera = 1
+	ccd = 1
+
+	cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,6), dtype='float64')
+	cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
+
+	catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
+	if os.path.exists(catalog_file): os.remove(catalog_file)
+	conn = sqlite3.connect(catalog_file)
+	conn.row_factory = sqlite3.Row
+	cursor = conn.cursor()
+
+	cursor.execute("""CREATE TABLE catalog (
+			starid BIGINT NOT NULL,
+			ra DOUBLE PRECISION NOT NULL,
+			decl DOUBLE PRECISION NOT NULL,
+			tmag REAL NOT NULL
+		);""")
+
+	for row in cat:
+		cursor.execute("INSERT INTO catalog (starid,ra,decl,tmag) VALUES (?,?,?,?);", row)
+
+	cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
+	cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
+	conn.commit()
+	cursor.close()
+	conn.close()
+
+
 	run = 'ffi_north'
 	folder = os.path.join(r'/aadc/kasoc/conferences/TDA1/data/', run)
 
 	with pyfits.open(os.path.join(folder, 'backgrounds.fits.gz'), mode='readonly', memmap=True) as hdu:
 		background = hdu[0].data
+
 
 	files = glob.glob(os.path.join(folder, 'simulated', 'simulated_*.fits.gz'))
 	#files = files[0:50]
@@ -44,7 +77,7 @@ if __name__ == '__main__':
 		'fletcher32': True
 	}
 
-	with h5py.File('input/camera{0:d}_ccd{1:d}.hdf5'.format(1, 1), 'w') as hdf:
+	with h5py.File('camera{0:d}_ccd{1:d}.hdf5'.format(1, 1), 'w') as hdf:
 
 		#dset1 = hdf.create_dataset('images', (SUMIMAGE.shape[0], SUMIMAGE.shape[1], numfiles), **args)
 		dset2 = hdf.create_dataset('backgrounds', (SUMIMAGE.shape[0], SUMIMAGE.shape[1], numfiles), **args)
@@ -82,4 +115,6 @@ if __name__ == '__main__':
 
 		dset = hdf.create_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=str), **args)
 		dset[0] = WCS(hdr).to_header_string().strip()
+
+
 

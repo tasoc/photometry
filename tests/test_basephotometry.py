@@ -49,7 +49,6 @@ def test_stamp():
 		assert(rows.shape == (22, 20))
 		assert(cols.shape == (22, 20))
 
-
 def test_images():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
@@ -58,7 +57,6 @@ def test_images():
 
 		for img in pho.images:
 			assert(img.shape == (10, 20))
-
 
 def test_backgrounds():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
@@ -69,8 +67,13 @@ def test_backgrounds():
 		for img in pho.backgrounds:
 			assert(img.shape == (10, 20))
 
+def test_catalog():
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
+		print(pho.catalog)
+		assert(DUMMY_TARGET in pho.catalog['starid'])
 
 if __name__ == '__main__':
 	test_stamp()
 	test_images()
 	test_backgrounds()
+	test_catalog()

@@ -12,13 +12,12 @@ import numpy as np
 import astropy.io.fits as pf
 from astropy.table import Table, Column
 import h5py
+import sqlite3
 import logging
 import datetime
 import os.path
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
-
-global_catalog = None
 
 class BasePhotometry(object):
 	"""
@@ -49,34 +48,27 @@ class BasePhotometry(object):
 		self.input_folder = input_folder
 		self.mode = mode
 
-		self._stamp = None
-		self._catalog = None
-
-		global global_catalog
-		if global_catalog is None:
-			cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,2,3,4,5,6), dtype='float64')
-			cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
-
-			global_catalog = Table(cat,
-				names=('starid', 'ra', 'dec', 'pm_ra', 'pm_dec', 'x', 'y', 'tmag'),
-				dtype=('int64', 'float64','float64','float32','float32','float64','float64','float32')
-			)
-			global_catalog.add_index('starid', unique=True)
-			global_catalog.add_index('ra')
-			global_catalog.add_index('dec')
-
-		# Load information about main target:
-		# TODO: HOW?
-		target = global_catalog.loc['starid', starid]
-		self.target_tmag = target['tmag']
-		self.target_pos_ra = target['ra']
-		self.target_pos_dec = target['dec']
-
 		# TODO: These should also come from the catalog somehow
 		#       They will be needed to find the correct input files
 		self.sector = 0
 		self.camera = 1
 		self.ccd = 1
+
+		# The
+		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
+		self._catalog = None
+
+		# Load information about main target:
+		conn = sqlite3.connect(self.catalog_file)
+		conn.row_factory = sqlite3.Row
+		cursor = conn.cursor()
+		cursor.execute("SELECT ra,decl,tmag FROM catalog WHERE starid={0:d};".format(self.starid))
+		target = cursor.fetchone()
+		self.target_tmag = target['tmag']
+		self.target_pos_ra = target['ra']
+		self.target_pos_dec = target['decl']
+		cursor.close()
+		conn.close()
 
 		# Init table that will be filled with lightcurve stuff:
 		self.lightcurve = Table()
@@ -303,13 +295,25 @@ class BasePhotometry(object):
 			radec_max = np.max(corners_radec, axis=0)
 
 			# Select only the stars within the current stamp:
-			# TODO: This could be improved with an index!
 			# TODO: Include proper-motion movement to "now" => Modify (ra, dec).
-			indx = (global_catalog['ra'] >= radec_min[0]) & (global_catalog['ra'] <= radec_max[0]) & (global_catalog['dec'] >= radec_min[1]) & (global_catalog['dec'] <= radec_max[1])
-			# global_catalog.loc['ra', radec_min[0]:radec_max[0]]
-			# global_catalog.loc['dec', radec_min[1]:radec_max[1]]
+			conn = sqlite3.connect(self.catalog_file)
+			cursor = conn.cursor()
+			cursor.execute("SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;", {
+				'ra_min': radec_min[0],
+				'ra_max': radec_max[0],
+				'dec_min': radec_min[1],
+				'dec_max': radec_max[1]
+			})
+			cat = cursor.fetchall()
+			cursor.close()
+			conn.close()
 
-			self._catalog = global_catalog[indx]
+			# Convert data to astropy table for further use:
+			self._catalog = Table(
+				rows=cat,
+				names=('starid', 'ra', 'dec', 'tmag'),
+				dtype=('int64', 'float64', 'float64', 'float32')
+			)
 
 			# Use the WCS to find pixel coordinates of stars in mask:
 			pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)

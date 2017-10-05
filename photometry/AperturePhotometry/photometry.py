@@ -90,7 +90,7 @@ class AperturePhotometry(BasePhotometry):
 				resize_args['right'] = 10
 
 			if resize_args:
-				logger.error("Touching the edges! Retrying")
+				logger.warning("Touching the edges! Retrying")
 				logger.info(resize_args)
 				self.resize_stamp(**resize_args)
 				logger.info('-'*70)
@@ -117,7 +117,7 @@ class AperturePhotometry(BasePhotometry):
 		#
 		self.final_mask = mask_main
 
-
+		# Add additional headers specific to this method:
 		#if custom_mask:
 		#	self.additional_headers['KP_MODE']	= 'Custom Mask'
 		#else:

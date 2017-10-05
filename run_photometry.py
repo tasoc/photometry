@@ -8,6 +8,7 @@ Created on Mon Jun 26 17:52:09 2017
 
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
+import os
 import numpy as np
 import logging
 from astropy.table import Table
@@ -19,6 +20,9 @@ from photometry import BasePhotometry, AperturePhotometry
 if __name__ == '__main__':
 
 	logging_level = logging.WARNING
+
+	input_folder = r'C:\Users\au195407\Documents\tess_data\input'
+	output_folder = 'C:\Users\au195407\Documents\tess_data\output'
 
 	# Setup logging:
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -32,7 +36,7 @@ if __name__ == '__main__':
 		logger_parent.addHandler(console)
 		logger_parent.setLevel(logging_level)
 
-	cat = np.genfromtxt(r'input/catalog.txt.gz', skip_header=1, usecols=(4,5,6), dtype='float64')
+	cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(4,5,6), dtype='float64')
 	cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
 	catalog = Table(cat,
 		names=('starid', 'x', 'y', 'tmag'),
@@ -44,9 +48,6 @@ if __name__ == '__main__':
 	catalog.sort('tmag')
 
 	Ntests = 100
-
-	input_folder = 'input'
-	output_folder = 'output'
 
 	position_errors = np.zeros((Ntests, 2), dtype='float64') + np.nan
 	for k, thisone in enumerate(catalog[:Ntests]):
