@@ -25,6 +25,7 @@ using clustering algorithms.
 #==============================================================================
 
 from __future__ import division, with_statement
+from six.moves import range
 import matplotlib as mpl
 import numpy as np
 import matplotlib.pyplot as plt
@@ -157,7 +158,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 	max_label = np.max(labels)
 
-	for i in xrange(len(unique_labels_ini)):
+	for i in range(len(unique_labels_ini)):
 
 
 		lab = list(unique_labels_ini)[i]
@@ -223,7 +224,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			sat_labels, numfeatures = ndimage.label(saturated_pixels)
 
 			# Loop through the patches of saturated pixels:
-			for k in xrange(1, numfeatures+1):
+			for k in range(1, numfeatures+1):
 				# This mask of saturated pixels:
 				sp = saturated_pixels & (sat_labels == k)
 
@@ -259,7 +260,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 		# If the cluster is segmented we will assign these new labels, starting from
 		# the highest original label + 1
-		for u in xrange(no_labels-2):
+		for u in range(no_labels-2):
 			max_label += 1
 
 			idx = (labels_ws==u+2) & (Z!=0)
@@ -314,7 +315,7 @@ def k2p2_saturated(SumImage, MASKS, idx):
 	pixels_added = 0
 
 	# Loop through the different masks:
-	for u in xrange(no_masks):
+	for u in range(no_masks):
 		# Create binary version of mask and extract
 		# the rows and columns which it spans and
 		# the highest value in it:
@@ -471,7 +472,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 	else:
 		labels = labels_ini
 		unique_labels = set(labels)
-		NoCluster = len(unique_labels) - (1 if -1 in labels else 0)
+		#NoCluster = len(unique_labels) - (1 if -1 in labels else 0)
 
 	# Make sure it is a tuple and not a set - much easier to work with:
 	unique_labels = tuple(unique_labels)
@@ -498,7 +499,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 
 		# Create 3D array that will hold masks for each target:
 		MASKS = np.zeros((no_masks, NY, NX))
-		for u in xrange(no_masks):
+		for u in range(no_masks):
 			lab = No_pix_sort[u, 1]
 			class_member_mask = (labels == lab)
 			xy = XX[class_member_mask ,:]
@@ -553,7 +554,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 			# changinng anything:
 			if logger.isEnabledFor(logging.DEBUG):
 				outline_before = []
-				for u in xrange(no_masks):
+				for u in range(no_masks):
 					outline_before.append( k2p2maks(MASKS[u,:,:], 1, 0.5) )
 
 			# Add the saturated pixels to the masks:
@@ -563,7 +564,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 			if logger.isEnabledFor(logging.DEBUG):
 				logger.debug("Plotting overflow figures...")
 				Ypixel = np.arange(NY)
-				for u in xrange(no_masks):
+				for u in range(no_masks):
 					mask = np.asarray(MASKS[u, :, :], dtype='bool')
 					mask_rows, mask_columns = np.where(mask)
 					mask_max = np.nanmax(SumImage[mask])
@@ -682,7 +683,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 		config_pixel_plot(ax1, size=SumImage.shape)
 
 		# Plot outlines of selected masks:
-		for u in xrange(no_masks):
+		for u in range(no_masks):
 			# Get the color associated with this label:
 			col = colors[ int(np.where(unique_labels == No_pix_sort[u, 1])[0]) ]
 			# Make mask outline:

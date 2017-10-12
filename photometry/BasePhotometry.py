@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun 26 18:12:33 2017
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
+import six
 from six.moves import range, zip
 import numpy as np
 import astropy.io.fits as pf
@@ -18,22 +18,28 @@ import datetime
 import os.path
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
+from .utilities import enum
+
+__docformat__ = 'restructuredtext'
+
+STATUS = enum('UNKNOWN', 'OK', 'ERROR', 'WARNING', 'ABORT', 'SKIPPED')
 
 class BasePhotometry(object):
 	"""
-	Base photometry class.
+	The basic photometry class for the TASOC Photometry pipeline.
+	All other specific photometric algorithms will inherit from this.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	"""Status to be returned by do_photometry on success."""
-	STATUS_OK = 0
+	STATUS = enum('UNKNOWN', 'OK', 'ERROR', 'WARNING', 'ABORT', 'SKIPPED')
 
-	"""Status to be returned by do_photometry on error."""
-	STATUS_ERROR = 1
-
-	"""Status to be returned by do_photometry on warning."""
-	STATUS_WARNING = 2
+	STATUS_OK = 0 # """Status to be returned by do_photometry on success."""
+	STATUS_ERROR = 1 # """Status to be returned by do_photometry on error."""
+	STATUS_WARNING = 2 # """Status to be returned by do_photometry on warning."""
+	STATUS_ABORT = 3
+	STATUS_UNKNOWN = 4
+	STATUS_SKIPPED = 5
 
 	def __init__(self, starid, input_folder, mode='ffi'):
 		"""
@@ -54,7 +60,9 @@ class BasePhotometry(object):
 		self.camera = 1
 		self.ccd = 1
 
-		# The
+		self._status = BasePhotometry.STATUS_UNKNOWN
+
+		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
 		self._catalog = None
 
@@ -64,6 +72,8 @@ class BasePhotometry(object):
 		cursor = conn.cursor()
 		cursor.execute("SELECT ra,decl,tmag FROM catalog WHERE starid={0:d};".format(self.starid))
 		target = cursor.fetchone()
+		if target is None:
+			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
 		self.target_tmag = target['tmag']
 		self.target_pos_ra = target['ra']
 		self.target_pos_dec = target['decl']
@@ -82,7 +92,9 @@ class BasePhotometry(object):
 			self.lightcurve['timecorr'] = Column(np.zeros(len(self.hdf['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
 
-			hdr = pf.Header().fromstring(self.hdf['wcs'][0])
+			hdr_string = self.hdf['wcs'][0]
+			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+			hdr = pf.Header().fromstring(hdr_string)
 			self.wcs = WCS(header=hdr)
 
 			# Correct timestamps for light-travel time:
@@ -130,6 +142,10 @@ class BasePhotometry(object):
 	def close(self):
 		if self.hdf:
 			self.hdf.close()
+
+	@property
+	def status(self):
+		return self._status
 
 	def get_sumimage(self):
 		"""
@@ -233,16 +249,32 @@ class BasePhotometry(object):
 		"""
 		Iterator that will loop through the image stamps.
 
-		Returns
-		-------
-		Iterator with images.
+		:return: Iterator which can be used to loop through the image stamps.
+		:rtype: iterator
+
+		.. note::
+		  For each image, this function will actually load the nessacery
+		  data from disk, so don't loop through it more than you absolutely
+		  have to to save I/O.
+
+		:Example:
+
+		>>> pho = BasePhotometry(starid)
+        >>> for img in pho.images:
+		>>> 	print(img)
+
+		.. seealso::
+		  :py:func:`BasePhotometry.backgrounds`
 		"""
+	
 		for img in self.hdf['images']:
 			# Path to file:
-			filename = os.path.join(self.input_folder, 'images', os.path.basename(img))
+			bname = os.path.basename(img)
+			if not isinstance(bname, six.string_types): bname = bname.decode('utf-8')  # For Python 3
+			filename = os.path.join(self.input_folder, 'images', bname)
 			# If file does not exist, try to see if the GZ version exists:
 			if not os.path.exists(filename):
-				filename = os.path.join(self.input_folder, 'images', os.path.basename(img) + '.gz')
+				filename = os.path.join(self.input_folder, 'images', bname + '.gz')
 			# Try to open file:
 			with pf.open(filename, memmap=True, mode='readonly') as hdu:
 				data = hdu[0].data[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
@@ -254,9 +286,22 @@ class BasePhotometry(object):
 		"""
 		Iterator that will loop through the background-image stamps.
 
-		Returns
-		-------
-		Iterator with background images.
+		:return: Iterator which can be used to loop through the background-image stamps.
+		:rtype: iterator
+
+		.. note::
+		  For each image, this function will actually load the nessacery
+		  data from disk, so don't loop through it more than you absolutely
+		  have to to save I/O.
+
+		:Example:
+
+		>>> pho = BasePhotometry(starid)
+        >>> for img in pho.backgrounds:
+		>>> 	print(img)
+
+		.. seealso::
+		  :py:func:`BasePhotometry.images`
 		"""
 		for k in range(self.hdf['backgrounds'].shape[2]):
 			yield self.hdf['backgrounds'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3], k]
@@ -318,14 +363,18 @@ class BasePhotometry(object):
 			# Use the WCS to find pixel coordinates of stars in mask:
 			pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)
 
+			col_x = Column(data=pixel_coords[:,0], name='row', dtype='float32')
+			col_y = Column(data=pixel_coords[:,1], name='column', dtype='float32')
+
 			# Subtract the positions of the edge of the current stamp:
 			pixel_coords[:,0] -= self._stamp[2]
 			pixel_coords[:,1] -= self._stamp[0]
 
 			# Add the pixel positions to the catalog table:
-			col_x = Column(data=pixel_coords[:,0], name='row', dtype='float32')
-			col_y = Column(data=pixel_coords[:,1], name='column', dtype='float32')
-			self._catalog.add_columns([col_x, col_y])
+			col_x_stamp = Column(data=pixel_coords[:,0], name='row_stamp', dtype='float32')
+			col_y_stamp = Column(data=pixel_coords[:,1], name='column_stamp', dtype='float32')
+
+			self._catalog.add_columns([col_x, col_y, col_x_stamp, col_y_stamp])
 
 		return self._catalog
 
@@ -338,6 +387,12 @@ class BasePhotometry(object):
 		Returns the status of the photometry.
 		"""
 		raise NotImplemented("You have to implement the actual lightcurve extraction yourself... Sorry!")
+
+	def photometry(self, *args, **kwargs):
+		self._status = self.do_photometry(*args, **kwargs)
+
+		if self._status == BasePhotometry.STATUS_UNKNOWN:
+			raise Exception("STATUS was not set by do_photometry")
 
 	def save_lightcurve(self, output_folder):
 		"""Save generated lightcurve to file."""

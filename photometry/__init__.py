@@ -4,3 +4,4 @@
 from __future__ import absolute_import
 from .BasePhotometry import BasePhotometry
 from .AperturePhotometry import AperturePhotometry
+from .tessphot import tessphot

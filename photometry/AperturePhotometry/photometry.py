@@ -50,7 +50,7 @@ class AperturePhotometry(BasePhotometry):
 			logger.info(self.stamp)
 			logger.info("Target position in stamp: (%d,%d)", target_pixel_row, target_pixel_column )
 
-			cat = np.column_stack((self.catalog['row'], self.catalog['column'], self.catalog['tmag']))
+			cat = np.column_stack((self.catalog['row_stamp'], self.catalog['column_stamp'], self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
 			k2p2_settings = {
@@ -97,11 +97,15 @@ class AperturePhotometry(BasePhotometry):
 			else:
 				break
 
+		# If we reached the last retry but still needed a resize, give up:
+		if resize_args:
+			return AperturePhotometry.STATUS_ERROR
+
 		# XY of pixels in frame
 		cols, rows = self.get_pixel_grid()
 		members = np.column_stack((cols[mask_main], rows[mask_main]))
 
-		#
+		# Loop through the images and backgrounds together:
 		for k, (img, bck) in enumerate(zip(self.images, self.backgrounds)):
 
 			flux_in_cluster = img[mask_main] - bck[mask_main]
@@ -114,7 +118,7 @@ class AperturePhotometry(BasePhotometry):
 			finite_vals = (flux_in_cluster > 0)
 			self.lightcurve['pos_centroid'][k, :] = np.average(members[finite_vals, :], weights=flux_in_cluster[finite_vals], axis=0)
 
-		#
+		# Save the mask to be stored in the outout file:
 		self.final_mask = mask_main
 
 		# Add additional headers specific to this method:
@@ -133,6 +137,26 @@ class AperturePhotometry(BasePhotometry):
 		#self.additional_headers['KP_WSTHR'] = (k2p2_settings['ws_threshold'], 'K2P2 watershed threshold')
 		#self.additional_headers['KP_WSFOT'] = (k2p2_settings['ws_footprint'], 'K2P2 watershed footprint')
 		#self.additional_headers['KP_EX'] = (bool(extend_overflow), 'K2P2 extend overflow')
+
+		# Targets that are in the mask:
+		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['column']) in rows[mask_main] and np.floor(t['row']) in cols[mask_main]]
+
+		# Calculate contamination metric as defined in Lund & Handberg (2014):
+		mags_in_mask = self.catalog[target_in_mask]['tmag']
+		mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
+		contamination = 1.0 - 10**(0.4*(mags_total - self.target_tmag))
+		contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
+		logger.info("Contamination: %f", contamination)
+		self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
+
+		# If contamination is high, return a warning:
+		if contamination > 0.1:
+			return AperturePhotometry.STATUS_WARNING
+
+		#
+		logger.info("These stars could be skipped:")
+		logger.info(self.catalog[target_in_mask]['starid'])
+		#self.set_skip_targets(self.catalog[target_in_mask]['starid'])
 
 		# Return whether you think it went well:
 		return AperturePhotometry.STATUS_OK

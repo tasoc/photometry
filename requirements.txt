@@ -6,6 +6,7 @@ matplotlib
 astropy
 Bottleneck
 h5py
+mpi4py
 scikit-image==0.13.0
 scikit-learn==0.19.0
 statsmodels==0.8.0
