@@ -6,7 +6,7 @@
 
 from __future__ import division, print_function, with_statement, absolute_import
 import logging
-from . import BasePhotometry, AperturePhotometry
+from . import BasePhotometry, STATUS, AperturePhotometry
 
 #------------------------------------------------------------------------------
 def tessphot(starid=None, method='aperture', input_folder=None, output_folder=None):
@@ -22,18 +22,23 @@ def tessphot(starid=None, method='aperture', input_folder=None, output_folder=No
 
 	with AperturePhotometry(starid, input_folder) as pho:
 		try:
-			status = pho.photometry()
+			pho.photometry()
+			status = pho.status
 		except (KeyboardInterrupt, SystemExit):
-			status = BasePhotometry.STATUS_ABORT
+			status = STATUS.ABORT
 			logger.info("Stopped by user or system")
 		except:
-			status = BasePhotometry.STATUS_ERROR
 			logger.exception("Something happened")
+			status = STATUS.ERROR
+			try:
+				pho._status = STATUS.ERROR
+			except:
+				pass
 
-		if status == BasePhotometry.STATUS_OK:
+		if status == STATUS.OK:
 			pho.save_lightcurve(output_folder)
 
-	if status == BasePhotometry.STATUS_WARNING:
+	if status == STATUS.WARNING:
 		logger.warning("Try something else?")
 
 	logger.info("Done")

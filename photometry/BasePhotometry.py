@@ -22,6 +22,17 @@ from .utilities import enum
 
 __docformat__ = 'restructuredtext'
 
+"""
+Status indicator of the status of the photometry.
+
+Possible values:
+UNKNOWN : The status is unknown. The actual calculation has not started yet.
+OK      : Everything has gone well.
+ERROR   : Encountered a catastrophic error that I could not recover from.
+WARNING : Something is a bit fishy. Maybe we should try again with a different algorithm?
+ABORT   : The calculation was aborted.
+SKIPPED : The target was skipped because the algorithm found that to be the best solution.
+"""
 STATUS = enum('UNKNOWN', 'OK', 'ERROR', 'WARNING', 'ABORT', 'SKIPPED')
 
 class BasePhotometry(object):
@@ -31,15 +42,6 @@ class BasePhotometry(object):
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
-
-	STATUS = enum('UNKNOWN', 'OK', 'ERROR', 'WARNING', 'ABORT', 'SKIPPED')
-
-	STATUS_OK = 0 # """Status to be returned by do_photometry on success."""
-	STATUS_ERROR = 1 # """Status to be returned by do_photometry on error."""
-	STATUS_WARNING = 2 # """Status to be returned by do_photometry on warning."""
-	STATUS_ABORT = 3
-	STATUS_UNKNOWN = 4
-	STATUS_SKIPPED = 5
 
 	def __init__(self, starid, input_folder, mode='ffi'):
 		"""
@@ -60,7 +62,7 @@ class BasePhotometry(object):
 		self.camera = 1
 		self.ccd = 1
 
-		self._status = BasePhotometry.STATUS_UNKNOWN
+		self._status = STATUS.UNKNOWN
 
 		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
@@ -266,7 +268,7 @@ class BasePhotometry(object):
 		.. seealso::
 		  :py:func:`BasePhotometry.backgrounds`
 		"""
-	
+
 		for img in self.hdf['images']:
 			# Path to file:
 			bname = os.path.basename(img)
@@ -280,7 +282,7 @@ class BasePhotometry(object):
 				data = hdu[0].data[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 
 			yield data
-
+			
 	@property
 	def backgrounds(self):
 		"""
@@ -391,7 +393,7 @@ class BasePhotometry(object):
 	def photometry(self, *args, **kwargs):
 		self._status = self.do_photometry(*args, **kwargs)
 
-		if self._status == BasePhotometry.STATUS_UNKNOWN:
+		if self._status == STATUS.UNKNOWN:
 			raise Exception("STATUS was not set by do_photometry")
 
 	def save_lightcurve(self, output_folder):

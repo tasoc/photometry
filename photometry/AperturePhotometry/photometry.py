@@ -10,7 +10,7 @@ from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
 import logging
-from .. import BasePhotometry
+from .. import BasePhotometry, STATUS
 from . import k2p2v2 as k2p2
 
 #------------------------------------------------------------------------------
@@ -63,17 +63,17 @@ class AperturePhotometry(BasePhotometry):
 
 			if len(masks.shape) == 0:
 				logger.error("No masks found")
-				return AperturePhotometry.STATUS_ERROR
+				return STATUS.ERROR
 
 			# Look at the central pixel where the target should be:
 			indx_main = masks[:, target_pixel_row, target_pixel_column].flatten()
 
 			if not np.any(indx_main):
 				logger.error('No pixels')
-				return AperturePhotometry.STATUS_ERROR
+				return STATUS.ERROR
 			elif np.sum(indx_main) > 1:
 				logger.error('Too many masks')
-				return AperturePhotometry.STATUS_ERROR
+				return STATUS.ERROR
 
 			# Mask of the main target:
 			mask_main = masks[indx_main, :, :].reshape(SumImage.shape)
@@ -99,7 +99,7 @@ class AperturePhotometry(BasePhotometry):
 
 		# If we reached the last retry but still needed a resize, give up:
 		if resize_args:
-			return AperturePhotometry.STATUS_ERROR
+			return STATUS.ERROR
 
 		# XY of pixels in frame
 		cols, rows = self.get_pixel_grid()
@@ -151,7 +151,7 @@ class AperturePhotometry(BasePhotometry):
 
 		# If contamination is high, return a warning:
 		if contamination > 0.1:
-			return AperturePhotometry.STATUS_WARNING
+			return STATUS.WARNING
 
 		#
 		logger.info("These stars could be skipped:")
@@ -159,4 +159,4 @@ class AperturePhotometry(BasePhotometry):
 		#self.set_skip_targets(self.catalog[target_in_mask]['starid'])
 
 		# Return whether you think it went well:
-		return AperturePhotometry.STATUS_OK
+		return STATUS.OK
