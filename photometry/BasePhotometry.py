@@ -18,22 +18,29 @@ import datetime
 import os.path
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
-from .utilities import enum
+import enum
 
 __docformat__ = 'restructuredtext'
 
-"""
-Status indicator of the status of the photometry.
+@enum.unique
+class STATUS(enum.Enum):
+	"""
+	Status indicator of the status of the photometry.
 
-Possible values:
-UNKNOWN : The status is unknown. The actual calculation has not started yet.
-OK      : Everything has gone well.
-ERROR   : Encountered a catastrophic error that I could not recover from.
-WARNING : Something is a bit fishy. Maybe we should try again with a different algorithm?
-ABORT   : The calculation was aborted.
-SKIPPED : The target was skipped because the algorithm found that to be the best solution.
-"""
-STATUS = enum('UNKNOWN', 'OK', 'ERROR', 'WARNING', 'ABORT', 'SKIPPED')
+	Possible values:
+	UNKNOWN : The status is unknown. The actual calculation has not started yet.
+	OK      : Everything has gone well.
+	ERROR   : Encountered a catastrophic error that I could not recover from.
+	WARNING : Something is a bit fishy. Maybe we should try again with a different algorithm?
+	ABORT   : The calculation was aborted.
+	SKIPPED : The target was skipped because the algorithm found that to be the best solution.
+	"""
+	UNKNOWN = 0
+	OK = 1
+	ERROR = 2
+	WARNING = 3
+	ABORT = 4
+	SKIPPED = 5
 
 class BasePhotometry(object):
 	"""
@@ -43,7 +50,7 @@ class BasePhotometry(object):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	def __init__(self, starid, input_folder, mode='ffi'):
+	def __init__(self, starid, input_folder, datasource='ffi'):
 		"""
 		Initialize the photometry object.
 
@@ -54,7 +61,7 @@ class BasePhotometry(object):
 
 		self.starid = starid
 		self.input_folder = input_folder
-		self.mode = mode
+		self.mode = datasource
 
 		# TODO: These should also come from the catalog somehow
 		#       They will be needed to find the correct input files
@@ -262,7 +269,7 @@ class BasePhotometry(object):
 		:Example:
 
 		>>> pho = BasePhotometry(starid)
-        >>> for img in pho.images:
+		>>> for img in pho.images:
 		>>> 	print(img)
 
 		.. seealso::
@@ -271,8 +278,8 @@ class BasePhotometry(object):
 
 		for img in self.hdf['images']:
 			# Path to file:
+			if not isinstance(img, six.string_types): img = img.decode('utf-8')  # For Python 3
 			bname = os.path.basename(img)
-			if not isinstance(bname, six.string_types): bname = bname.decode('utf-8')  # For Python 3
 			filename = os.path.join(self.input_folder, 'images', bname)
 			# If file does not exist, try to see if the GZ version exists:
 			if not os.path.exists(filename):
