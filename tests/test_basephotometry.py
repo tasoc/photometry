@@ -19,7 +19,7 @@ def test_stamp():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		cols, rows = pho.get_pixel_grid()
 		print('Rows:')
@@ -53,7 +53,7 @@ def test_images():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		for img in pho.images:
 			assert(img.shape == (10, 20))
@@ -62,7 +62,7 @@ def test_backgrounds():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		for img in pho.backgrounds:
 			assert(img.shape == (10, 20))
