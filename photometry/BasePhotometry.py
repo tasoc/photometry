@@ -40,8 +40,6 @@ class BasePhotometry(object):
 	The basic photometry class for the TASOC Photometry pipeline.
 	All other specific photometric algorithms will inherit from this.
 
-	Parameters
-	----------
 	:param starid: TIC number of star to be processed
 	
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -51,9 +49,10 @@ class BasePhotometry(object):
 		"""
 		Initialize the photometry object.
 
-		Parameters
-		----------
 		:param starid: TIC number of star to be processed
+		
+		.. todo:: 
+		  test of todo
 		"""
 
 		self.starid = starid
@@ -161,10 +160,8 @@ class BasePhotometry(object):
 	def default_stamp(self):
 		"""
 		
-		Returns
-		-------
-		:param Nrows:
-		:param Ncolumns:
+		:returns Nrows: Number of rows
+		:rtype Nrows: integer 
 		
 		"""
 		if self.mode == 'ffi':
@@ -183,14 +180,17 @@ class BasePhotometry(object):
 
 		Parameters
 		----------
-		:param down: Number of pixels to extend the stamp down.
-		:param up: Number of pixels to extend the stamp up.
-		:param left: Number of pixels to extend the stamp left.
-		:param right: Number of pixels to extend the stamp right.
-		
+		down : int, optional
+			number of pixels to extend downwards
+		up : int, optional
+		left : int, optional
+		right : int, optional
+	
+
 		Returns
 		-------
-		`True` if the stamp could be resized, `False` otherwise.
+		bool
+			`True` if the stamp could be resized, `False` otherwise
 		"""
 
 		self._stamp = list(self._stamp)
@@ -250,10 +250,8 @@ class BasePhotometry(object):
 		"""
 		Returns mesh-grid of the pixels (1-based) in the stamp.
 
-		Returns
-		-------
-		cols : numpy.array
-		rows : numpy.array
+		:returns: tuple(cols, rows)
+		:rtype: typle(numpy.array, numpy.array)
 		"""
 		return np.meshgrid(
 			np.arange(self._stamp[2]+1, self._stamp[3]+1, 1, dtype='int32'),
@@ -298,7 +296,7 @@ class BasePhotometry(object):
 		"""
 		Iterator that will loop through the background-image stamps.
 
-		:return: Iterator which can be used to loop through the background-image stamps.
+		:returns: Iterator which can be used to loop through the background-image stamps.
 		:rtype: iterator
 
 		.. note::
@@ -309,7 +307,7 @@ class BasePhotometry(object):
 		:Example:
 
 		>>> pho = BasePhotometry(starid)
-        >>> for img in pho.backgrounds:
+		>>> for img in pho.backgrounds:
 		>>> 	print(img)
 
 		.. seealso::
@@ -327,7 +325,7 @@ class BasePhotometry(object):
 		For FFIs this has been pre-calculated and for postage-stamps it is calculated
 		on-the-fly when needed.
 
-		:return: Iterator which can be used to loop through the background-image stamps.
+		:returns: Iterator which can be used to loop through the background-image stamps.
 		:rtype: numpy.array
 		"""
 		if self._sumimage is None:
@@ -348,6 +346,7 @@ class BasePhotometry(object):
 		Catalog of stars in the current stamp.
 
 		The table contains the following columns:
+		
 		 * starid:       TIC identifier.
 		 * tmag:         TESS magnitude.
 		 * ra:           Right ascension in degrees.
@@ -357,16 +356,17 @@ class BasePhotometry(object):
 		 * row_stamp:    Pixel row relative to the stamp.
 		 * column_stamp: Pixel column relative to the stamp.
 		
-		:return: Table with all known stars falling within the current stamp.
+		:returns: Table with all known stars falling within the current stamp.
 		:rtype: astropy.table.Table
 		
-		:Example:
+		Example
+		-------		
 		If ``pho`` is an instance of BasePhotometry:
-
-        >>> pho.catalog['tmag']
-		>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
 		
+		>>> pho.catalog['tmag']
+		>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
 		"""
+		
 		if not self._catalog:
 			# Pixel-positions of the corners of the current stamp:
 			corners = np.array([
@@ -428,6 +428,10 @@ class BasePhotometry(object):
 		* self.lightcurve
 
 		Returns the status of the photometry.
+		
+		Raises
+		------
+		NotImplemented
 		"""
 		raise NotImplemented("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
