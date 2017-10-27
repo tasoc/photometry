@@ -3,7 +3,7 @@
 """
 Created on Fri Sep 29 10:54:10 2017
 
-@author: au195407
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 from __future__ import division, print_function, with_statement, absolute_import
@@ -19,7 +19,7 @@ def test_stamp():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		cols, rows = pho.get_pixel_grid()
 		print('Rows:')
@@ -49,28 +49,31 @@ def test_stamp():
 		assert(rows.shape == (22, 20))
 		assert(cols.shape == (22, 20))
 
-
 def test_images():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		for img in pho.images:
 			assert(img.shape == (10, 20))
-
 
 def test_backgrounds():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		for img in pho.backgrounds:
 			assert(img.shape == (10, 20))
 
+def test_catalog():
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
+		print(pho.catalog)
+		assert(DUMMY_TARGET in pho.catalog['starid'])
 
 if __name__ == '__main__':
 	test_stamp()
 	test_images()
 	test_backgrounds()
+	test_catalog()

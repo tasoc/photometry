@@ -2,5 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import absolute_import
-from .BasePhotometry import BasePhotometry
+from .BasePhotometry import BasePhotometry, STATUS
 from .AperturePhotometry import AperturePhotometry
+from .tessphot import tessphot
