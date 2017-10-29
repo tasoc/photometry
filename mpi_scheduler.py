@@ -12,7 +12,8 @@ when the run times vary for each task.
 The basic example was inspired by
 http://math.acadiau.ca/ACMMaC/Rmpi/index.html
 
-Example:
+Example
+-------
 
 >> mpiexec -n 4 python mpi_scheduler.py
 
@@ -25,11 +26,6 @@ import sys
 import os
 import enum
 import logging
-
-# Get paths to input and output files from environment variables:
-input_folder = os.environ['TESSPHOT_INPUT']
-output_folder = os.environ['TESSPHOT_OUTPUT']
-todo_file = os.path.join(input_folder, 'todo.sqlite')
 
 #------------------------------------------------------------------------------
 class TaskManager(object):
@@ -73,101 +69,107 @@ class TaskManager(object):
 
 
 #------------------------------------------------------------------------------
+if __name__ == '__main__':
 
-# Define MPI message tags
-tags = enum.IntEnum('tags', ('READY', 'DONE', 'EXIT', 'START'))
+	# Get paths to input and output files from environment variables:
+	input_folder = os.environ['TESSPHOT_INPUT']
+	output_folder = os.environ['TESSPHOT_OUTPUT']
+	todo_file = os.path.join(input_folder, 'todo.sqlite')
 
-# Initializations and preliminaries
-comm = MPI.COMM_WORLD   # get MPI communicator object
-size = comm.size        # total number of processes
-rank = comm.rank        # rank of this process
-status = MPI.Status()   # get MPI status object
+	# Define MPI message tags
+	tags = enum.IntEnum('tags', ('READY', 'DONE', 'EXIT', 'START'))
 
-if rank == 0:
-	# Master process executes code below
-	import sqlite3
+	# Initializations and preliminaries
+	comm = MPI.COMM_WORLD   # get MPI communicator object
+	size = comm.size        # total number of processes
+	rank = comm.rank        # rank of this process
+	status = MPI.Status()   # get MPI status object
 
-	with TaskManager(todo_file) as tm:
-		# Get list of tasks:
-		tasks = tm.get_tasks()
-		tm.logger.info("%d tasks to be run", len(tasks))
+	if rank == 0:
+		# Master process executes code below
+		import sqlite3
 
-		# Start the master loop that will assing tasks
-		# to the workers:
-		task_index = 0
-		num_workers = size - 1
-		closed_workers = 0
-		tm.logger.info("Master starting with %d workers", num_workers)
-		while closed_workers < num_workers:
-			# Ask workers for information:
-			data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
-			source = status.Get_source()
+		with TaskManager(todo_file) as tm:
+			# Get list of tasks:
+			tasks = tm.get_tasks()
+			tm.logger.info("%d tasks to be run", len(tasks))
+
+			# Start the master loop that will assing tasks
+			# to the workers:
+			task_index = 0
+			num_workers = size - 1
+			closed_workers = 0
+			tm.logger.info("Master starting with %d workers", num_workers)
+			while closed_workers < num_workers:
+				# Ask workers for information:
+				data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+				source = status.Get_source()
+				tag = status.Get_tag()
+
+				if tag == tags.READY:
+					# Worker is ready, so send it a task
+					if task_index < len(tasks):
+						comm.send(tasks[task_index], dest=source, tag=tags.START)
+						tm.logger.info("Sending task %d to worker %d", task_index, source)
+						task_index += 1
+					else:
+						comm.send(None, dest=source, tag=tags.EXIT)
+
+				elif tag == tags.DONE:
+					# The worker is done with a task
+					tm.logger.info("Got data from worker %d: %s", source, data)
+					tm.save_result(data)
+
+				elif tag == tags.EXIT:
+					# The worker has exited
+					tm.logger.info("Worker %d exited.", source)
+					closed_workers += 1
+					
+				else:
+					# This should never happen, but just to
+					# make sure we dont run into an infinite loop:
+					raise Exception("Master recieved an unknown tag: '{0}'".format(tag))
+
+		tm.logger.info("Master finishing")
+
+	else:
+		# Worker processes execute code below
+		from photometry import tessphot
+		from timeit import default_timer
+
+		while True:
+			# Send signal that we are ready for task,
+			# and recieve a task from the master:
+			comm.send(None, dest=0, tag=tags.READY)
+			task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
 			tag = status.Get_tag()
 
-			if tag == tags.READY:
-				# Worker is ready, so send it a task
-				if task_index < len(tasks):
-					comm.send(tasks[task_index], dest=source, tag=tags.START)
-					tm.logger.info("Sending task %d to worker %d", task_index, source)
-					task_index += 1
-				else:
-					comm.send(None, dest=source, tag=tags.EXIT)
+			if tag == tags.START:
+				# Do the work here
+				task['input_folder'] = input_folder
+				task['output_folder'] = output_folder
 
-			elif tag == tags.DONE:
-				# The worker is done with a task
-				tm.logger.info("Got data from worker %d: %s", source, data)
-				tm.save_result(data)
+				t1 = default_timer()
+				pho = tessphot(**task)
+				t2 = default_timer()
+
+				# Construct result message:
+				result = {
+					'starid': pho.starid,
+					'status': pho.status,
+					'time': t2 - t1
+				}
+
+				# Send the result back to the master:
+				comm.send(result, dest=0, tag=tags.DONE)
 
 			elif tag == tags.EXIT:
-				# The worker has exited
-				tm.logger.info("Worker %d exited.", source)
-				closed_workers += 1
+				# We were told to EXIT, so lets do that
+				break
 				
 			else:
 				# This should never happen, but just to
 				# make sure we dont run into an infinite loop:
-				raise Exception("Master recieved an unknown tag: '{0}'".format(tag))
+				raise Exception("Worker recieved an unknown tag: '{0}'".format(tag))
 
-	tm.logger.info("Master finishing")
-
-else:
-	# Worker processes execute code below
-	from photometry import tessphot
-	from timeit import default_timer
-
-	while True:
-		# Send signal that we are ready for task,
-		# and recieve a task from the master:
-		comm.send(None, dest=0, tag=tags.READY)
-		task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
-		tag = status.Get_tag()
-
-		if tag == tags.START:
-			# Do the work here
-			task['input_folder'] = input_folder
-			task['output_folder'] = output_folder
-
-			t1 = default_timer()
-			pho = tessphot(**task)
-			t2 = default_timer()
-
-			# Construct result message:
-			result = {
-				'starid': pho.starid,
-				'status': pho.status,
-				'time': t2 - t1
-			}
-
-			# Send the result back to the master:
-			comm.send(result, dest=0, tag=tags.DONE)
-
-		elif tag == tags.EXIT:
-			# We were told to EXIT, so lets do that
-			break
-			
-		else:
-			# This should never happen, but just to
-			# make sure we dont run into an infinite loop:
-			raise Exception("Worker recieved an unknown tag: '{0}'".format(tag))
-
-	comm.send(None, dest=0, tag=tags.EXIT)
+		comm.send(None, dest=0, tag=tags.EXIT)
