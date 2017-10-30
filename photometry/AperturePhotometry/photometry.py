@@ -56,7 +56,7 @@ class AperturePhotometry(BasePhotometry):
 				'min_no_pixels_in_mask': 4
 			}
 
-			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, None, plot_folder='.', catalog=cat, **k2p2_settings)
+			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, None, plot_folder=None, catalog=cat, **k2p2_settings)
 			masks = np.asarray(masks, dtype='bool')
 
 			if len(masks.shape) == 0:
