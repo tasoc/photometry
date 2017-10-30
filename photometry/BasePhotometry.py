@@ -63,9 +63,9 @@ class BasePhotometry(object):
 
 		# TODO: These should also come from the catalog somehow
 		#       They will be needed to find the correct input files
-		self.sector = 0
-		self.camera = 1
-		self.ccd = 1
+		self.sector = 0 #: TESS observing sector.
+		self.camera = 1 #: TESS camera.
+		self.ccd = 1 #: TESS CCD.
 
 		self._status = STATUS.UNKNOWN
 
@@ -81,14 +81,14 @@ class BasePhotometry(object):
 		target = cursor.fetchone()
 		if target is None:
 			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
-		self.target_tmag = target['tmag']
-		self.target_pos_ra = target['ra']
-		self.target_pos_dec = target['decl']
+		self.target_tmag = target['tmag'] #: TESS magnitude of the main target.
+		self.target_pos_ra = target['ra'] #: Right ascension of the main target.
+		self.target_pos_dec = target['decl'] #: Declination of the main target.
 		cursor.close()
 		conn.close()
 
 		# Init table that will be filled with lightcurve stuff:
-		self.lightcurve = Table()
+		self.lightcurve = Table() #: Table to be filled with an extracted lightcurve
 
 		if self.mode == 'ffi':
 			# Load stuff from the common HDF5 file:
@@ -102,7 +102,7 @@ class BasePhotometry(object):
 			hdr_string = self.hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
 			hdr = pf.Header().fromstring(hdr_string)
-			self.wcs = WCS(header=hdr)
+			self.wcs = WCS(header=hdr) #: World Coordinate system solution
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
@@ -121,7 +121,7 @@ class BasePhotometry(object):
 				self.lightcurve['timecorr'] = Column(hdu[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 				self.lightcurve['cadenceno'] = Column(hdu[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 
-				self.wcs = WCS(header=hdu[2].header)
+				self.wcs = WCS(header=hdu[2].header) #: World Coordinate system solution
 				
 				self._max_stamp_size = (hdu[2].header['NAXIS1'], hdu[2].header['NAXIS2'])
 
@@ -133,11 +133,15 @@ class BasePhotometry(object):
 		self.lightcurve['pos_centroid'] = Column(length=N, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
 
 		# Init arrays that will be filled with lightcurve stuff:
-		self.final_mask = None
-		self.additional_headers = {}
+		self.final_mask = None #: Mask indicating which pixels were used in extraction of lightcurve
+		self.additional_headers = {} #: Additional headers to be included in FITS files
 
 		# Project target position onto the pixel plane:
 		# TODO: Include proper motion
+		self.target_pos_column = None #: Test
+		self.target_pos_row = None #: Test2
+		self.target_pos_column_stamp = None #: Test2
+		self.target_pos_row_stamp = None #: Test2
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
 		logger.info("Target column: %f", self.target_pos_column)
 		logger.info("Target row: %f", self.target_pos_row)
