@@ -7,6 +7,7 @@ Created on Fri Sep 29 10:54:10 2017
 """
 
 from __future__ import division, print_function, with_statement, absolute_import
+import numpy as np
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
