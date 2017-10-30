@@ -49,7 +49,6 @@ class AperturePhotometry(BasePhotometry):
 			logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
 
 			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
-			print(cat)
 
 			logger.info("Creating new masks...")
 			k2p2_settings = {
@@ -123,13 +122,9 @@ class AperturePhotometry(BasePhotometry):
 		self.final_mask = mask_main
 
 		# Add additional headers specific to this method:
-		#if custom_mask:
-		#	self.additional_headers['KP_MODE']	= 'Custom Mask'
-		#else:
-		#	self.additional_headers['KP_MODE'] = 'Normal'
 		#self.additional_headers['KP_SUBKG'] = (bool(subtract_background), 'K2P2 subtract background?')
-		#self.additional_headers['KP_THRES'] = (k2p2_settings['sumimage_threshold'], 'K2P2 sum-image threshold')
-		#self.additional_headers['KP_MIPIX'] = (k2p2_settings['min_no_pixels_in_mask'], 'K2P2 min pixels in mask')
+		self.additional_headers['KP_THRES'] = (k2p2_settings['thresh'], 'K2P2 sum-image threshold')
+		self.additional_headers['KP_MIPIX'] = (k2p2_settings['min_no_pixels_in_mask'], 'K2P2 min pixels in mask')
 		#self.additional_headers['KP_MICLS'] = (k2p2_settings['min_for_cluster'], 'K2P2 min pix. for cluster')
 		#self.additional_headers['KP_CLSRA'] = (k2p2_settings['cluster_radius'], 'K2P2 cluster radius')
 		#self.additional_headers['KP_WS'] = (bool(ws), 'K2P2 watershed segmentation')
@@ -139,9 +134,9 @@ class AperturePhotometry(BasePhotometry):
 		#self.additional_headers['KP_WSFOT'] = (k2p2_settings['ws_footprint'], 'K2P2 watershed footprint')
 		#self.additional_headers['KP_EX'] = (bool(extend_overflow), 'K2P2 extend overflow')
 
-		# Targets that are in the mask:		
-		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['row']) in rows[mask_main] and np.floor(t['column']) in cols[mask_main]]
-
+		# Targets that are in the mask:
+		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['row'])+1 in rows[mask_main] and np.floor(t['column'])+1 in cols[mask_main]]
+		
 		# Calculate contamination metric as defined in Lund & Handberg (2014):
 		mags_in_mask = self.catalog[target_in_mask]['tmag']
 		mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))

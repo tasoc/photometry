@@ -201,6 +201,8 @@ class BasePhotometry(object):
 			bool : `True` if the stamp could be resized, `False` otherwise
 		"""
 
+		old_stamp = self._stamp
+
 		self._stamp = list(self._stamp)
 		if up:
 			self._stamp[1] += up
@@ -211,7 +213,10 @@ class BasePhotometry(object):
 		if right:
 			self._stamp[3] += right
 		self._stamp = tuple(self._stamp)
-		return self._set_stamp()
+		self._set_stamp()
+		
+		# Return if the stamp actually changed:
+		return (old_stamp != self._stamp)
 
 	def _set_stamp(self):
 		"""
@@ -220,8 +225,6 @@ class BasePhotometry(object):
 		"""
 
 		logger = logging.getLogger(__name__)
-
-		old_stamp = self._stamp
 		
 		if not self._stamp:
 			Nrows, Ncolumns = self.default_stamp()
@@ -244,11 +247,7 @@ class BasePhotometry(object):
 		# Sanity checks:
 		if self._stamp[0] > self._stamp[1] or self._stamp[2] > self._stamp[3]:
 			raise ValueError("Invalid stamp selected")
-	
-		# Check if the stamp actually changed:
-		if old_stamp == self._stamp:
-			return False
-		
+
 		# Calculate main target position in stamp:
 		self.target_pos_row_stamp = self.target_pos_row - self._stamp[0]
 		self.target_pos_column_stamp = self.target_pos_column - self._stamp[2]
@@ -256,7 +255,6 @@ class BasePhotometry(object):
 		# Force sum-image and catalog to be recalculated next time:
 		self._sumimage = None
 		self._catalog = None
-		return True
 
 	def get_pixel_grid(self):
 		"""
@@ -345,10 +343,12 @@ class BasePhotometry(object):
 				self._sumimage = self.hdf['sumimage'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 			else:
 				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
+				Nimg = np.zeros_like(self._sumimage, dtype='int32')
 				for img in self.images:
 					replace(img, np.nan, 0)
 					self._sumimage += img
-				#self._sumimage /= N
+					Nimg += np.isfinite(img)
+				self._sumimage /= Nimg
 
 		return self._sumimage
 
@@ -377,6 +377,10 @@ class BasePhotometry(object):
 		
 		>>> pho.catalog['tmag']
 		>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
+		
+		ToDo
+		----
+		 * Include proper-motion movement to "now".
 		"""
 		
 		if not self._catalog:
