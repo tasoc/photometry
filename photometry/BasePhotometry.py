@@ -55,6 +55,8 @@ class BasePhotometry(object):
 		  test of todo
 		"""
 
+		logger = logging.getLogger(__name__)
+		
 		self.starid = starid
 		self.input_folder = input_folder
 		self.mode = datasource
@@ -134,8 +136,11 @@ class BasePhotometry(object):
 		self.final_mask = None
 		self.additional_headers = {}
 
+		# Project target position onto the pixel plane:
+		# TODO: Include proper motion
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
-		#print(self.target_pos_row, self.target_pos_column)
+		logger.info("Target column: %f", self.target_pos_column)
+		logger.info("Target row: %f", self.target_pos_row)
 
 		# Init the stamp:
 		self._stamp = None
@@ -159,10 +164,18 @@ class BasePhotometry(object):
 
 	def default_stamp(self):
 		"""
+		The default size of the stamp to use.
 		
-		:returns Nrows: Number of rows
-		:rtype Nrows: integer 
-		
+		The stamp will be centered on the target star position, with
+		a width and height specified by this function. The stamp can
+		later be resized using :py:func:`resize_stamp`.
+	
+		Returns:
+			int : Number of rows
+			int : Number of columns
+			
+		See Also:
+			:py:func:`resize_stamp`
 		"""
 		if self.mode == 'ffi':
 			# Decide how many pixels to use based on lookup tables as a function of Tmag:
@@ -178,19 +191,14 @@ class BasePhotometry(object):
 		"""
 		Resize the stamp in a given direction.
 
-		Parameters
-		----------
-		down : int, optional
-			number of pixels to extend downwards
-		up : int, optional
-		left : int, optional
-		right : int, optional
+		Parameters:
+			down (int, optional) : Number of pixels to extend downwards
+			up (int, optional) : Number of pixels to extend upwards
+			left (int, optional) : Number of pixels to extend left
+			right (int, optional) : Number of pixels to extend right
 	
-
-		Returns
-		-------
-		bool
-			`True` if the stamp could be resized, `False` otherwise
+		Returns:
+			bool : `True` if the stamp could be resized, `False` otherwise
 		"""
 
 		self._stamp = list(self._stamp)
@@ -236,11 +244,15 @@ class BasePhotometry(object):
 		# Sanity checks:
 		if self._stamp[0] > self._stamp[1] or self._stamp[2] > self._stamp[3]:
 			raise ValueError("Invalid stamp selected")
-
+	
 		# Check if the stamp actually changed:
 		if old_stamp == self._stamp:
 			return False
-			
+		
+		# Calculate main target position in stamp:
+		self.target_pos_row_stamp = self.target_pos_row - self._stamp[0]
+		self.target_pos_column_stamp = self.target_pos_column - self._stamp[2]
+		
 		# Force sum-image and catalog to be recalculated next time:
 		self._sumimage = None
 		self._catalog = None
@@ -405,16 +417,16 @@ class BasePhotometry(object):
 			# Use the WCS to find pixel coordinates of stars in mask:
 			pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)
 
-			col_x = Column(data=pixel_coords[:,0], name='row', dtype='float32')
-			col_y = Column(data=pixel_coords[:,1], name='column', dtype='float32')
+			col_x = Column(data=pixel_coords[:,0], name='column', dtype='float32')
+			col_y = Column(data=pixel_coords[:,1], name='row', dtype='float32')
 
 			# Subtract the positions of the edge of the current stamp:
 			pixel_coords[:,0] -= self._stamp[2]
 			pixel_coords[:,1] -= self._stamp[0]
 
 			# Add the pixel positions to the catalog table:
-			col_x_stamp = Column(data=pixel_coords[:,0], name='row_stamp', dtype='float32')
-			col_y_stamp = Column(data=pixel_coords[:,1], name='column_stamp', dtype='float32')
+			col_x_stamp = Column(data=pixel_coords[:,0], name='column_stamp', dtype='float32')
+			col_y_stamp = Column(data=pixel_coords[:,1], name='row_stamp', dtype='float32')
 
 			self._catalog.add_columns([col_x, col_y, col_x_stamp, col_y_stamp])
 
@@ -533,11 +545,6 @@ class BasePhotometry(object):
 		tbhdu.header['TFORM8'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT8'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP8'] = ('F10.5', 'column display format')
-
-		#tbhdu.header['TTYPE9'] = ('FLUX_BKG_SUM', 'column title: pho. background flux in sumimage')
-		#tbhdu.header['TFORM9'] = ('D', 'column format: 64-bit floating point')
-		#tbhdu.header['TUNIT9'] = ('e-/s', 'column units: electrons per second')
-		#tbhdu.header['TDISP9'] = ('E26.17', 'column display format')
 
 		#tbhdu.header['TTYPE10'] = ('POS_CORR1', 'column title: column position correction')
 		#tbhdu.header['TFORM10'] = ('E', 'column format: 32-bit floating point')

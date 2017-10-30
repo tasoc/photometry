@@ -71,7 +71,12 @@ def test_catalog():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 		print(pho.catalog)
 		assert(DUMMY_TARGET in pho.catalog['starid'])
-
+		
+		assert(pho.target_pos_ra >= np.min(pho.catalog['ra']))
+		assert(pho.target_pos_ra <= np.max(pho.catalog['ra']))
+		assert(pho.target_pos_dec >= np.min(pho.catalog['dec']))
+		assert(pho.target_pos_dec <= np.max(pho.catalog['dec']))
+		
 if __name__ == '__main__':
 	test_stamp()
 	test_images()

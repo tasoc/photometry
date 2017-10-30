@@ -25,7 +25,7 @@ using clustering algorithms.
 #==============================================================================
 
 from __future__ import division, with_statement
-from six.moves import range
+from six.moves import range, zip
 import matplotlib as mpl
 import numpy as np
 import matplotlib.pyplot as plt
@@ -49,9 +49,6 @@ from re import match
 #==============================================================================
 # Constants and settings
 #==============================================================================
-
-# The version of K2P2:
-__version__ = '1.1 - build %d' % int(match(r'\$Revision:\s*(\d+)\s*\$', '$Revision: 723 $').group(1))
 
 # Constants:
 mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
@@ -561,7 +558,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 			MASKS[saturated_mask] = 1
 
 			# If we are running as DEBUG, output some plots as well:
-			if logger.isEnabledFor(logging.DEBUG):
+			if not plot_folder is None and logger.isEnabledFor(logging.DEBUG):
 				logger.debug("Plotting overflow figures...")
 				Ypixel = np.arange(NY)
 				for u in range(no_masks):
