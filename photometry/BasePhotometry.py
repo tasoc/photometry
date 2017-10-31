@@ -102,7 +102,7 @@ class BasePhotometry(object):
 			hdr_string = self.hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
 			hdr = pf.Header().fromstring(hdr_string)
-			self.wcs = WCS(header=hdr) #: World Coordinate system solution
+			self.wcs = WCS(header=hdr) #: World Coordinate system solution.
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
@@ -133,15 +133,15 @@ class BasePhotometry(object):
 		self.lightcurve['pos_centroid'] = Column(length=N, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
 
 		# Init arrays that will be filled with lightcurve stuff:
-		self.final_mask = None #: Mask indicating which pixels were used in extraction of lightcurve
-		self.additional_headers = {} #: Additional headers to be included in FITS files
+		self.final_mask = None #: Mask indicating which pixels were used in extraction of lightcurve.
+		self.additional_headers = {} #: Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
 		# TODO: Include proper motion
-		self.target_pos_column = None #: Test
-		self.target_pos_row = None #: Test2
-		self.target_pos_column_stamp = None #: Test2
-		self.target_pos_row_stamp = None #: Test2
+		self.target_pos_column = None #: Main target CCD column position.
+		self.target_pos_row = None #: Main target CCD row position.
+		self.target_pos_column_stamp = None #: Main target CCD column position in stamp.
+		self.target_pos_row_stamp = None #: Main target CCD row position in stamp.
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
 		logger.info("Target column: %f", self.target_pos_column)
 		logger.info("Target row: %f", self.target_pos_row)
@@ -158,6 +158,7 @@ class BasePhotometry(object):
 		self.close()
 
 	def close(self):
+		"""Close photometry object and close all associated open file handles."""
 		if self.hdf:
 			self.hdf.close()
 
@@ -166,29 +167,30 @@ class BasePhotometry(object):
 		"""The status of the photometry."""
 		return self._status
 
-	def default_stamp(self):
-		"""
-		The default size of the stamp to use.
+	def default_stamp(self): 
+		""" 
+		The default size of the stamp to use. 
+		 
+		The stamp will be centered on the target star position, with 
+		a width and height specified by this function. The stamp can 
+		later be resized using :py:func:`resize_stamp`. 
+	 
+		Returns: 
+			int : Number of rows 
+			int : Number of columns 
+
+		Note:
+			This function is only used for FFIs. For postage stamps
+			the default stamp is the entire available postage stamp.
+			
+		See Also: 
+			:py:func:`resize_stamp` 
+		""" 
 		
-		The stamp will be centered on the target star position, with
-		a width and height specified by this function. The stamp can
-		later be resized using :py:func:`resize_stamp`.
-	
-		Returns:
-			int : Number of rows
-			int : Number of columns
-			
-		See Also:
-			:py:func:`resize_stamp`
-		"""
-		if self.mode == 'ffi':
-			# Decide how many pixels to use based on lookup tables as a function of Tmag:
-			Npixels = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0, 12.0, 14.0, 16.0]), np.array([350.0, 200.0, 125.0, 100.0, 50.0, 40.0]))
-			Nrows = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
-			Ncolumns = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
-		else:
-			Nrows, Ncolumns = self._max_stamp_size
-			
+		# Decide how many pixels to use based on lookup tables as a function of Tmag:
+		Npixels = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0, 12.0, 14.0, 16.0]), np.array([350.0, 200.0, 125.0, 100.0, 50.0, 40.0]))
+		Nrows = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
+		Ncolumns = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
 		return Nrows, Ncolumns
 
 	def resize_stamp(self, down=None, up=None, left=None, right=None):
@@ -217,21 +219,40 @@ class BasePhotometry(object):
 		if right:
 			self._stamp[3] += right
 		self._stamp = tuple(self._stamp)
-		self._set_stamp()
 		
 		# Return if the stamp actually changed:
-		return (old_stamp != self._stamp)
+		return self._set_stamp(old_stamp)
 
-	def _set_stamp(self):
+	def _set_stamp(self, compare_stamp=None):
 		"""
-
-		NB: Stamp is zero-based counted from the TOP of the image
+		The default size of the stamp to use.
+		
+		The stamp will be centered on the target star position, with
+		a width and height specified by this function. The stamp can
+		later be resized using :py:func:`resize_stamp`.
+		
+		Parameters:
+			compare_stamp (tuple) : Stamp to compare against wheter anything changed.
+		
+		Returns:
+			bool : `True` if ``compare_stamp`` is set and has changed. If ``compare_stamp``
+			is not provided, always returns `True`.
+		
+		See Also:
+			:py:func:`resize_stamp`
+		
+		Note:
+			Stamp is zero-based counted from the TOP of the image.
 		"""
 
 		logger = logging.getLogger(__name__)
 		
 		if not self._stamp:
-			Nrows, Ncolumns = self.default_stamp()
+			if self.mode == 'ffi':
+				Nrows, Ncolumns = self.default_stamp()
+			else:
+				Nrows, Ncolumns = self._max_stamp_size
+		
 			logger.info("Setting default stamp with sizes (%d,%d)", Nrows, Ncolumns)
 			self._stamp = (
 				int(self.target_pos_row) - Nrows//2,
@@ -251,14 +272,20 @@ class BasePhotometry(object):
 		# Sanity checks:
 		if self._stamp[0] > self._stamp[1] or self._stamp[2] > self._stamp[3]:
 			raise ValueError("Invalid stamp selected")
+		
+		# Check if the stamp actually changed:
+		if self._stamp == compare_stamp:
+			return False
 
 		# Calculate main target position in stamp:
 		self.target_pos_row_stamp = self.target_pos_row - self._stamp[0]
 		self.target_pos_column_stamp = self.target_pos_column - self._stamp[2]
 		
 		# Force sum-image and catalog to be recalculated next time:
+		# TODO: Do not reset these if nothing has changed
 		self._sumimage = None
 		self._catalog = None
+		return True
 
 	def get_pixel_grid(self):
 		"""
@@ -397,9 +424,11 @@ class BasePhotometry(object):
 			], dtype='int32')
 
 			# Convert the corners into (ra, dec) coordinates and find the max and min values:
+			pixel_scale = 21.0 # Size of single pixel in arcsecs
+			buffer_size = 3 # Buffer to add around stamp in pixels
 			corners_radec = self.wcs.all_pix2world(corners, 0, ra_dec_order=True)
-			radec_min = np.min(corners_radec, axis=0)
-			radec_max = np.max(corners_radec, axis=0)
+			radec_min = np.min(corners_radec, axis=0) - buffer_size*pixel_scale/3600.0
+			radec_max = np.max(corners_radec, axis=0) + buffer_size*pixel_scale/3600.0
 
 			# Select only the stars within the current stamp:
 			# TODO: Include proper-motion movement to "now" => Modify (ra, dec).
