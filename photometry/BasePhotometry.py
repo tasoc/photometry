@@ -19,6 +19,7 @@ import os.path
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
 import enum
+from bottleneck import replace
 
 __docformat__ = 'restructuredtext'
 
@@ -26,27 +27,21 @@ __docformat__ = 'restructuredtext'
 class STATUS(enum.Enum):
 	"""
 	Status indicator of the status of the photometry.
-
-	Possible values:
-	UNKNOWN : The status is unknown. The actual calculation has not started yet.
-	OK      : Everything has gone well.
-	ERROR   : Encountered a catastrophic error that I could not recover from.
-	WARNING : Something is a bit fishy. Maybe we should try again with a different algorithm?
-	ABORT   : The calculation was aborted.
-	SKIPPED : The target was skipped because the algorithm found that to be the best solution.
 	"""
-	UNKNOWN = 0
-	OK = 1
-	ERROR = 2
-	WARNING = 3
-	ABORT = 4
-	SKIPPED = 5
+	UNKNOWN = 0 #: The status is unknown. The actual calculation has not started yet.
+	OK = 1      #: Everything has gone well.
+	ERROR = 2   #: Encountered a catastrophic error that I could not recover from.
+	WARNING = 3 #: Something is a bit fishy. Maybe we should try again with a different algorithm?
+	ABORT = 4   #: The calculation was aborted.
+	SKIPPED = 5 #: The target was skipped because the algorithm found that to be the best solution.
 
 class BasePhotometry(object):
 	"""
 	The basic photometry class for the TASOC Photometry pipeline.
 	All other specific photometric algorithms will inherit from this.
 
+	:param starid: TIC number of star to be processed
+	
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
@@ -54,20 +49,23 @@ class BasePhotometry(object):
 		"""
 		Initialize the photometry object.
 
-		Parameters
-		----------
 		:param starid: TIC number of star to be processed
+		
+		.. todo:: 
+		  test of todo
 		"""
 
+		logger = logging.getLogger(__name__)
+		
 		self.starid = starid
 		self.input_folder = input_folder
 		self.mode = datasource
 
 		# TODO: These should also come from the catalog somehow
 		#       They will be needed to find the correct input files
-		self.sector = 0
-		self.camera = 1
-		self.ccd = 1
+		self.sector = 0 #: TESS observing sector.
+		self.camera = 1 #: TESS camera.
+		self.ccd = 1 #: TESS CCD.
 
 		self._status = STATUS.UNKNOWN
 
@@ -83,14 +81,14 @@ class BasePhotometry(object):
 		target = cursor.fetchone()
 		if target is None:
 			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
-		self.target_tmag = target['tmag']
-		self.target_pos_ra = target['ra']
-		self.target_pos_dec = target['decl']
+		self.target_tmag = target['tmag'] #: TESS magnitude of the main target.
+		self.target_pos_ra = target['ra'] #: Right ascension of the main target.
+		self.target_pos_dec = target['decl'] #: Declination of the main target.
 		cursor.close()
 		conn.close()
 
 		# Init table that will be filled with lightcurve stuff:
-		self.lightcurve = Table()
+		self.lightcurve = Table() #: Table to be filled with an extracted lightcurve
 
 		if self.mode == 'ffi':
 			# Load stuff from the common HDF5 file:
@@ -104,7 +102,7 @@ class BasePhotometry(object):
 			hdr_string = self.hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
 			hdr = pf.Header().fromstring(hdr_string)
-			self.wcs = WCS(header=hdr)
+			self.wcs = WCS(header=hdr) #: World Coordinate system solution.
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
@@ -113,6 +111,8 @@ class BasePhotometry(object):
 			#times = time.Time(self.lightcurve['time'], format='mjd', scale='utc', location=greenwich)
 			#self.lightcurve['timecorr'] = times.light_travel_time(ip_peg, ephemeris='jpl')
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
+			
+			self._max_stamp_size = (2048, 2048)
 
 		elif self.mode == 'stamp':
 			with pf.open(mode, mode='readonly', memmap=True) as hdu:
@@ -121,7 +121,9 @@ class BasePhotometry(object):
 				self.lightcurve['timecorr'] = Column(hdu[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 				self.lightcurve['cadenceno'] = Column(hdu[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 
-				self.wcs = WCS(header=hdu[2].header)
+				self.wcs = WCS(header=hdu[2].header) #: World Coordinate system solution
+				
+				self._max_stamp_size = (hdu[2].header['NAXIS1'], hdu[2].header['NAXIS2'])
 
 		# Define the columns that have to be filled by the do_photometry method:
 		N = len(self.lightcurve['time'])
@@ -131,15 +133,22 @@ class BasePhotometry(object):
 		self.lightcurve['pos_centroid'] = Column(length=N, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
 
 		# Init arrays that will be filled with lightcurve stuff:
-		self.final_mask = None
-		self.additional_headers = {}
+		self.final_mask = None #: Mask indicating which pixels were used in extraction of lightcurve.
+		self.additional_headers = {} #: Additional headers to be included in FITS files.
 
+		# Project target position onto the pixel plane:
+		# TODO: Include proper motion
+		self.target_pos_column = None #: Main target CCD column position.
+		self.target_pos_row = None #: Main target CCD row position.
+		self.target_pos_column_stamp = None #: Main target CCD column position in stamp.
+		self.target_pos_row_stamp = None #: Main target CCD row position in stamp.
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
-		#print(self.target_pos_row, self.target_pos_column)
+		logger.info("Target column: %f", self.target_pos_column)
+		logger.info("Target row: %f", self.target_pos_row)
 
 		# Init the stamp:
 		self._stamp = None
-		self.set_stamp()
+		self._set_stamp()
 		self._sumimage = None
 
 	def __enter__(self):
@@ -149,29 +158,35 @@ class BasePhotometry(object):
 		self.close()
 
 	def close(self):
+		"""Close photometry object and close all associated open file handles."""
 		if self.hdf:
 			self.hdf.close()
 
 	@property
 	def status(self):
+		"""The status of the photometry."""
 		return self._status
 
-	def get_sumimage(self):
-		"""
-		Get the sum-image for the given stamp.
-		"""
-		if self._sumimage is None:
-			if self.mode == 'ffi':
-				self._sumimage = self.hdf['sumimage'][self._stamp[0]:(self._stamp[1]+1), self._stamp[2]:(self._stamp[3]+1)]
-			else:
-				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
-				for k, img in enumerate(self.images):
-					self._sumimage += img
-				#self._sumimage /= N
+	def default_stamp(self): 
+		""" 
+		The default size of the stamp to use. 
+		 
+		The stamp will be centered on the target star position, with 
+		a width and height specified by this function. The stamp can 
+		later be resized using :py:func:`resize_stamp`. 
+	 
+		Returns: 
+			int : Number of rows 
+			int : Number of columns 
 
-		return self._sumimage
-
-	def default_stamp(self):
+		Note:
+			This function is only used for FFIs. For postage stamps
+			the default stamp is the entire available postage stamp.
+			
+		See Also: 
+			:py:func:`resize_stamp` 
+		""" 
+		
 		# Decide how many pixels to use based on lookup tables as a function of Tmag:
 		Npixels = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0, 12.0, 14.0, 16.0]), np.array([350.0, 200.0, 125.0, 100.0, 50.0, 40.0]))
 		Nrows = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
@@ -182,13 +197,17 @@ class BasePhotometry(object):
 		"""
 		Resize the stamp in a given direction.
 
-		Parameters
-		----------
-		:param down: Number of pixels to extend the stamp down.
-		:param up: Number of pixels to extend the stamp up.
-		:param left: Number of pixels to extend the stamp left.
-		:param right: Number of pixels to extend the stamp right.
+		Parameters:
+			down (int, optional) : Number of pixels to extend downwards
+			up (int, optional) : Number of pixels to extend upwards
+			left (int, optional) : Number of pixels to extend left
+			right (int, optional) : Number of pixels to extend right
+	
+		Returns:
+			bool : `True` if the stamp could be resized, `False` otherwise
 		"""
+
+		old_stamp = self._stamp
 
 		self._stamp = list(self._stamp)
 		if up:
@@ -200,18 +219,40 @@ class BasePhotometry(object):
 		if right:
 			self._stamp[3] += right
 		self._stamp = tuple(self._stamp)
-		self.set_stamp()
+		
+		# Return if the stamp actually changed:
+		return self._set_stamp(old_stamp)
 
-	def set_stamp(self):
+	def _set_stamp(self, compare_stamp=None):
 		"""
-
-		NB: Stamp is zero-based counted from the TOP of the image
+		The default size of the stamp to use.
+		
+		The stamp will be centered on the target star position, with
+		a width and height specified by this function. The stamp can
+		later be resized using :py:func:`resize_stamp`.
+		
+		Parameters:
+			compare_stamp (tuple) : Stamp to compare against wheter anything changed.
+		
+		Returns:
+			bool : `True` if ``compare_stamp`` is set and has changed. If ``compare_stamp``
+			is not provided, always returns `True`.
+		
+		See Also:
+			:py:func:`resize_stamp`
+		
+		Note:
+			Stamp is zero-based counted from the TOP of the image.
 		"""
 
 		logger = logging.getLogger(__name__)
-
+		
 		if not self._stamp:
-			Nrows, Ncolumns = self.default_stamp()
+			if self.mode == 'ffi':
+				Nrows, Ncolumns = self.default_stamp()
+			else:
+				Nrows, Ncolumns = self._max_stamp_size
+		
 			logger.info("Setting default stamp with sizes (%d,%d)", Nrows, Ncolumns)
 			self._stamp = (
 				int(self.target_pos_row) - Nrows//2,
@@ -220,29 +261,38 @@ class BasePhotometry(object):
 				int(self.target_pos_column) + Ncolumns//2 + 1
 			)
 
+		# Limit the stamp to not go outside the limits of the images:
 		self._stamp = list(self._stamp)
 		self._stamp[0] = int(np.maximum(self._stamp[0], 0))
-		self._stamp[1] = int(np.minimum(self._stamp[1], 2048))
+		self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp_size[0]))
 		self._stamp[2] = int(np.maximum(self._stamp[2], 0))
-		self._stamp[3] = int(np.minimum(self._stamp[3], 2048))
+		self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp_size[1]))
 		self._stamp = tuple(self._stamp)
 
 		# Sanity checks:
 		if self._stamp[0] > self._stamp[1] or self._stamp[2] > self._stamp[3]:
 			raise ValueError("Invalid stamp selected")
+		
+		# Check if the stamp actually changed:
+		if self._stamp == compare_stamp:
+			return False
 
+		# Calculate main target position in stamp:
+		self.target_pos_row_stamp = self.target_pos_row - self._stamp[0]
+		self.target_pos_column_stamp = self.target_pos_column - self._stamp[2]
+		
 		# Force sum-image and catalog to be recalculated next time:
+		# TODO: Do not reset these if nothing has changed
 		self._sumimage = None
 		self._catalog = None
+		return True
 
 	def get_pixel_grid(self):
 		"""
 		Returns mesh-grid of the pixels (1-based) in the stamp.
 
-		Returns
-		-------
-		cols : numpy.array
-		rows : numpy.array
+		:returns: tuple(cols, rows)
+		:rtype: typle(numpy.array, numpy.array)
 		"""
 		return np.meshgrid(
 			np.arange(self._stamp[2]+1, self._stamp[3]+1, 1, dtype='int32'),
@@ -262,6 +312,10 @@ class BasePhotometry(object):
 		:rtype: iterator
 
 		.. note::
+		  The images has had the large-scale background subtracted. If needed
+		  the backgrounds can be added again from :py:func:`backgrounds`.
+		
+		.. note::
 		  For each image, this function will actually load the nessacery
 		  data from disk, so don't loop through it more than you absolutely
 		  have to to save I/O.
@@ -273,29 +327,17 @@ class BasePhotometry(object):
 		>>> 	print(img)
 
 		.. seealso::
-		  :py:func:`BasePhotometry.backgrounds`
+		  :py:func:`backgrounds`
 		"""
+		for k in range(self.hdf['images'].shape[2]):
+			yield self.hdf['images'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3], k]
 
-		for img in self.hdf['images']:
-			# Path to file:
-			if not isinstance(img, six.string_types): img = img.decode('utf-8')  # For Python 3
-			bname = os.path.basename(img)
-			filename = os.path.join(self.input_folder, 'images', bname)
-			# If file does not exist, try to see if the GZ version exists:
-			if not os.path.exists(filename):
-				filename = os.path.join(self.input_folder, 'images', bname + '.gz')
-			# Try to open file:
-			with pf.open(filename, memmap=True, mode='readonly') as hdu:
-				data = hdu[0].data[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
-
-			yield data
-			
 	@property
 	def backgrounds(self):
 		"""
 		Iterator that will loop through the background-image stamps.
 
-		:return: Iterator which can be used to loop through the background-image stamps.
+		:returns: Iterator which can be used to loop through the background-image stamps.
 		:rtype: iterator
 
 		.. note::
@@ -306,34 +348,72 @@ class BasePhotometry(object):
 		:Example:
 
 		>>> pho = BasePhotometry(starid)
-        >>> for img in pho.backgrounds:
+		>>> for img in pho.backgrounds:
 		>>> 	print(img)
 
 		.. seealso::
-		  :py:func:`BasePhotometry.images`
+		  :py:func:`images`
 		"""
 		for k in range(self.hdf['backgrounds'].shape[2]):
 			yield self.hdf['backgrounds'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3], k]
 
 	@property
 	def sumimage(self):
+		"""
+		Average image.
+		
+		Calculated as the mean of all good images (quality=0) as a function of time.
+		For FFIs this has been pre-calculated and for postage-stamps it is calculated
+		on-the-fly when needed.
+
+		:returns: Iterator which can be used to loop through the background-image stamps.
+		:rtype: numpy.array
+		"""
 		if self._sumimage is None:
 			if self.mode == 'ffi':
 				self._sumimage = self.hdf['sumimage'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 			else:
 				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
-				for img, bck in zip(self.images, self.backgrounds):
-					self._sumimage += (img - bck)
-				#self._sumimage /= N
+				Nimg = np.zeros_like(self._sumimage, dtype='int32')
+				for img in self.images:
+					replace(img, np.nan, 0)
+					self._sumimage += img
+					Nimg += np.isfinite(img)
+				self._sumimage /= Nimg
 
 		return self._sumimage
 
 	@property
 	def catalog(self):
-		"""Catalog of stars in the current stamp.
+		"""
+		Catalog of stars in the current stamp.
 
-		Returns an astropy.table.Table object"""
-
+		The table contains the following columns:
+		
+		 * starid:       TIC identifier.
+		 * tmag:         TESS magnitude.
+		 * ra:           Right ascension in degrees.
+		 * dec:          Declination in degrees.
+		 * row:          Pixel row on CCD.
+		 * column:       Pixel column on CCD.
+		 * row_stamp:    Pixel row relative to the stamp.
+		 * column_stamp: Pixel column relative to the stamp.
+		
+		:returns: Table with all known stars falling within the current stamp.
+		:rtype: astropy.table.Table
+		
+		Example
+		-------		
+		If ``pho`` is an instance of BasePhotometry:
+		
+		>>> pho.catalog['tmag']
+		>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
+		
+		ToDo
+		----
+		 * Include proper-motion movement to "now".
+		"""
+		
 		if not self._catalog:
 			# Pixel-positions of the corners of the current stamp:
 			corners = np.array([
@@ -344,9 +424,11 @@ class BasePhotometry(object):
 			], dtype='int32')
 
 			# Convert the corners into (ra, dec) coordinates and find the max and min values:
+			pixel_scale = 21.0 # Size of single pixel in arcsecs
+			buffer_size = 3 # Buffer to add around stamp in pixels
 			corners_radec = self.wcs.all_pix2world(corners, 0, ra_dec_order=True)
-			radec_min = np.min(corners_radec, axis=0)
-			radec_max = np.max(corners_radec, axis=0)
+			radec_min = np.min(corners_radec, axis=0) - buffer_size*pixel_scale/3600.0
+			radec_max = np.max(corners_radec, axis=0) + buffer_size*pixel_scale/3600.0
 
 			# Select only the stars within the current stamp:
 			# TODO: Include proper-motion movement to "now" => Modify (ra, dec).
@@ -372,32 +454,40 @@ class BasePhotometry(object):
 			# Use the WCS to find pixel coordinates of stars in mask:
 			pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)
 
-			col_x = Column(data=pixel_coords[:,0], name='row', dtype='float32')
-			col_y = Column(data=pixel_coords[:,1], name='column', dtype='float32')
+			col_x = Column(data=pixel_coords[:,0], name='column', dtype='float32')
+			col_y = Column(data=pixel_coords[:,1], name='row', dtype='float32')
 
 			# Subtract the positions of the edge of the current stamp:
 			pixel_coords[:,0] -= self._stamp[2]
 			pixel_coords[:,1] -= self._stamp[0]
 
 			# Add the pixel positions to the catalog table:
-			col_x_stamp = Column(data=pixel_coords[:,0], name='row_stamp', dtype='float32')
-			col_y_stamp = Column(data=pixel_coords[:,1], name='column_stamp', dtype='float32')
+			col_x_stamp = Column(data=pixel_coords[:,0], name='column_stamp', dtype='float32')
+			col_y_stamp = Column(data=pixel_coords[:,1], name='row_stamp', dtype='float32')
 
 			self._catalog.add_columns([col_x, col_y, col_x_stamp, col_y_stamp])
 
 		return self._catalog
 
 	def do_photometry(self):
-		"""Run photometry algorithm.
+		"""
+		Run photometry algorithm.
 
 		This should fill the following
 		* self.lightcurve
 
 		Returns the status of the photometry.
+		
+		Raises
+		------
+		NotImplemented
 		"""
 		raise NotImplemented("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
 	def photometry(self, *args, **kwargs):
+		"""
+		Run photometry
+		"""
 		self._status = self.do_photometry(*args, **kwargs)
 
 		if self._status == STATUS.UNKNOWN:
@@ -493,11 +583,6 @@ class BasePhotometry(object):
 		tbhdu.header['TUNIT8'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP8'] = ('F10.5', 'column display format')
 
-		#tbhdu.header['TTYPE9'] = ('FLUX_BKG_SUM', 'column title: pho. background flux in sumimage')
-		#tbhdu.header['TFORM9'] = ('D', 'column format: 64-bit floating point')
-		#tbhdu.header['TUNIT9'] = ('e-/s', 'column units: electrons per second')
-		#tbhdu.header['TDISP9'] = ('E26.17', 'column display format')
-
 		#tbhdu.header['TTYPE10'] = ('POS_CORR1', 'column title: column position correction')
 		#tbhdu.header['TFORM10'] = ('E', 'column format: 32-bit floating point')
 		#tbhdu.header['TUNIT10'] = ('pixel', 'column units: pixels')
@@ -516,7 +601,7 @@ class BasePhotometry(object):
 			img_aperture = pf.ImageHDU(data=mask, header=self.wcs.to_header(), name='APERTURE') # header=ori_mask_header,
 
 		# Make sumimage image:
-		img_sumimage = pf.ImageHDU(data=self.get_sumimage(), header=self.wcs.to_header(), name="SUMIMAGE") # header=ori_mask_header,
+		img_sumimage = pf.ImageHDU(data=self.sumimage, header=self.wcs.to_header(), name="SUMIMAGE") # header=ori_mask_header,
 
 		# Write to file:
 		with pf.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:

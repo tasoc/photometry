@@ -4,6 +4,7 @@ numpy
 scipy
 matplotlib
 astropy
+photutils
 Bottleneck
 h5py
 enum-compat

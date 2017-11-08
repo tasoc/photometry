@@ -7,6 +7,7 @@ Created on Fri Sep 29 10:54:10 2017
 """
 
 from __future__ import division, print_function, with_statement, absolute_import
+import numpy as np
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -19,7 +20,7 @@ def test_stamp():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		cols, rows = pho.get_pixel_grid()
 		print('Rows:')
@@ -53,7 +54,7 @@ def test_images():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		for img in pho.images:
 			assert(img.shape == (10, 20))
@@ -62,7 +63,7 @@ def test_backgrounds():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
-		pho.set_stamp()
+		pho._set_stamp()
 
 		for img in pho.backgrounds:
 			assert(img.shape == (10, 20))
@@ -71,7 +72,12 @@ def test_catalog():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR) as pho:
 		print(pho.catalog)
 		assert(DUMMY_TARGET in pho.catalog['starid'])
-
+		
+		assert(pho.target_pos_ra >= np.min(pho.catalog['ra']))
+		assert(pho.target_pos_ra <= np.max(pho.catalog['ra']))
+		assert(pho.target_pos_dec >= np.min(pho.catalog['dec']))
+		assert(pho.target_pos_dec <= np.max(pho.catalog['dec']))
+		
 if __name__ == '__main__':
 	test_stamp()
 	test_images()

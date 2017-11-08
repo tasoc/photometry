@@ -9,6 +9,7 @@ Created on Mon Jun 26 17:52:09 2017
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
+import matplotlib.pyplot as plt
 import logging
 from .. import BasePhotometry, STATUS
 from . import k2p2v2 as k2p2
@@ -44,13 +45,10 @@ class AperturePhotometry(BasePhotometry):
 			SumImage = self.sumimage
 			logger.info("SumImage shape: %s", SumImage.shape)
 
-			target_pixel_row = int(self.target_pos_row) - self.stamp[0]
-			target_pixel_column = int(self.target_pos_column) - self.stamp[2]
-
 			logger.info(self.stamp)
-			logger.info("Target position in stamp: (%d,%d)", target_pixel_row, target_pixel_column )
+			logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
 
-			cat = np.column_stack((self.catalog['row_stamp'], self.catalog['column_stamp'], self.catalog['tmag']))
+			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
 			k2p2_settings = {
@@ -66,7 +64,7 @@ class AperturePhotometry(BasePhotometry):
 				return STATUS.ERROR
 
 			# Look at the central pixel where the target should be:
-			indx_main = masks[:, target_pixel_row, target_pixel_column].flatten()
+			indx_main = masks[:, int(self.target_pos_row_stamp), int(self.target_pos_row_stamp)].flatten()
 
 			if not np.any(indx_main):
 				logger.error('No pixels')
@@ -92,8 +90,10 @@ class AperturePhotometry(BasePhotometry):
 			if resize_args:
 				logger.warning("Touching the edges! Retrying")
 				logger.info(resize_args)
-				self.resize_stamp(**resize_args)
-				logger.info('-'*70)
+				if not self.resize_stamp(**resize_args):
+					resize_args = {}
+					logger.warning("Could not resize stamp any further")
+					break
 			else:
 				break
 
@@ -122,13 +122,9 @@ class AperturePhotometry(BasePhotometry):
 		self.final_mask = mask_main
 
 		# Add additional headers specific to this method:
-		#if custom_mask:
-		#	self.additional_headers['KP_MODE']	= 'Custom Mask'
-		#else:
-		#	self.additional_headers['KP_MODE'] = 'Normal'
 		#self.additional_headers['KP_SUBKG'] = (bool(subtract_background), 'K2P2 subtract background?')
-		#self.additional_headers['KP_THRES'] = (k2p2_settings['sumimage_threshold'], 'K2P2 sum-image threshold')
-		#self.additional_headers['KP_MIPIX'] = (k2p2_settings['min_no_pixels_in_mask'], 'K2P2 min pixels in mask')
+		self.additional_headers['KP_THRES'] = (k2p2_settings['thresh'], 'K2P2 sum-image threshold')
+		self.additional_headers['KP_MIPIX'] = (k2p2_settings['min_no_pixels_in_mask'], 'K2P2 min pixels in mask')
 		#self.additional_headers['KP_MICLS'] = (k2p2_settings['min_for_cluster'], 'K2P2 min pix. for cluster')
 		#self.additional_headers['KP_CLSRA'] = (k2p2_settings['cluster_radius'], 'K2P2 cluster radius')
 		#self.additional_headers['KP_WS'] = (bool(ws), 'K2P2 watershed segmentation')
@@ -139,8 +135,8 @@ class AperturePhotometry(BasePhotometry):
 		#self.additional_headers['KP_EX'] = (bool(extend_overflow), 'K2P2 extend overflow')
 
 		# Targets that are in the mask:
-		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['column']) in rows[mask_main] and np.floor(t['row']) in cols[mask_main]]
-
+		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['row'])+1 in rows[mask_main] and np.floor(t['column'])+1 in cols[mask_main]]
+		
 		# Calculate contamination metric as defined in Lund & Handberg (2014):
 		mags_in_mask = self.catalog[target_in_mask]['tmag']
 		mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
@@ -156,7 +152,7 @@ class AperturePhotometry(BasePhotometry):
 		#
 		logger.info("These stars could be skipped:")
 		logger.info(self.catalog[target_in_mask]['starid'])
-		#self.set_skip_targets(self.catalog[target_in_mask]['starid'])
+		#self.skip_other_targets(self.catalog[target_in_mask]['starid'])
 
 		# Return whether you think it went well:
 		return STATUS.OK
