@@ -18,7 +18,7 @@ if __name__ == '__main__':
 	logging_level = logging.INFO
 
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
-	parser.add_argument('-m', '--method', help='Photometric method to use.', default='aperture', choices=('aperture', 'psf'))
+	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('starid', type=int, help='TIC identifier of target.')
@@ -47,7 +47,7 @@ if __name__ == '__main__':
 	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
 	logger.info("Loading input data from '%s'", input_folder)
 	logger.info("Putting output data in '%s'", output_folder)
-	
+
 	# Run the program:
 	pho = tessphot(starid, method, input_folder=input_folder, output_folder=output_folder)
 

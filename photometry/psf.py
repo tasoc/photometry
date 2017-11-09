@@ -73,23 +73,26 @@ class PSF(object):
 		PRFx = (PRFx - np.size(PRFx) / 2) * cdelt1p
 		PRFy = (PRFy - np.size(PRFy) / 2) * cdelt2p
 
-		plt.figure()
-		plt.imshow(prf, origin='lower')
-
 		# Interpolation function over the PRF:
 		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf)
 
 
-	def integrate_to_image(self, params, cutoff_radius=3):
+	def integrate_to_image(self, params, cutoff_radius=5):
+		"""
+		Integrate the underlying high-res PSF onto pixels.
+		"""
 
 		img = np.zeros(self.shape, dtype='float64')
 		for i in range(self.shape[0]):
 			for j in range(self.shape[1]):
 				for star in params:
-					if np.sqrt((j-star['column'])**2 + (i-star['row'])**2) < cutoff_radius:
-						column_cen = j - star['column']
-						row_cen = i - star['row']
-						img[i,j] += star['flux'] * self.splineInterpolation.integral(column_cen-0.5, column_cen+0.5, row_cen-0.5, row_cen+0.5)
+					star_row = star[0]
+					star_column = star[1]
+					if np.sqrt((j-star_column)**2 + (i-star_row)**2) < cutoff_radius:
+						star_flux = star[2]
+						column_cen = j - star_column
+						row_cen = i - star_row
+						img[i,j] += star_flux * self.splineInterpolation.integral(column_cen-0.5, column_cen+0.5, row_cen-0.5, row_cen+0.5)
 
 		return img
 
@@ -121,3 +124,5 @@ if __name__ == '__main__':
 
 	psf = PSF((10, 20, 80, 100))
 	psf.plot()
+
+
