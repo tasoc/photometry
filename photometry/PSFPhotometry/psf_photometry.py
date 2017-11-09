@@ -39,55 +39,66 @@ class PSFPhotometry(BasePhotometry):
 
 		# Generate list of stars to fit:
 		cat = self.catalog
-		cat.sort('tmag')
 
-		dist = np.sqrt( (self.target_pos_row_stamp - cat['row_stamp'])**2 + (self.target_pos_column_stamp - cat['column_stamp'])**2 )
+		# Calculate distance from main target:
+		cat['dist'] = np.sqrt((self.target_pos_row_stamp - cat['row_stamp'])**2 + (self.target_pos_column_stamp - cat['column_stamp'])**2)
+		print(cat)
 
-		cat = cat[(dist < 5) & (cat['tmag'] < 15) & (cat['row_stamp'] > 0) & (cat['column_stamp'] > 0)]
+		# Only include stars that are close to the main target and that are not much fainter:
+		cat = cat[(cat['dist'] < 5) & (self.target_tmag-cat['tmag'] > -5)]
+
+		# Sort the catalog by distance and include at max the five closest stars:
+		# FIXME: Make sure that the main target is in there!!!
+		cat.sort('dist')
 		if len(cat) > 5:
 			cat = cat[:5]
 
-		params0 = np.empty((0,3), dtype='float64')
-		for target in cat[('row_stamp', 'column_stamp', 'tmag')]:
-			flux = 10**(-0.4*(target['tmag'] - 28.24))
-			params0 = np.append(params0, [[target['row_stamp'], target['column_stamp'], flux]], axis=0)
+		# Because the minimize routine used below only likes 1D numpy arrays
+		# we have to restructure the catalog:
+		params0 = np.empty((len(cat), 3), dtype='float64')
+		for k, target in enumerate(cat[('row_stamp', 'column_stamp', 'tmag')]):
+			flux = 10**(-0.4*(target['tmag'] - 28.24)) # Scaling relation from aperture photometry
+			params0[k,:] = [target['row_stamp'], target['column_stamp'], flux]
 		print(params0)
-		params_start = deepcopy(params0)
+		params_start = deepcopy(params0) # Save the starting parameters for later
+		params0 = params0.flatten() # Make the parameters into a 1D array
 
-		params0 = params0.flatten()
-
-		for img in self.images:
-			fig = plt.figure()
-			ax = fig.add_subplot(111)
-			ax.imshow(np.log10(img), origin='lower')
-			ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
-			plt.show()
-
+		# Start looping through the images:
+		for k, img in enumerate(self.images):
+			# Run the fitting routine for this image:
 			res = minimize(self._lhood, params0, args=img, method='Nelder-Mead')
-			logger.info(res)
+			logger.debug(res)
 
 			if res.success:
 				result = res.x
 				result = np.array(result.reshape(len(result)//3, 3))
-				print(result)
+				logger.debug(result)
+
+				# Add the result of the main star to the lightcurve:
+				self.lightcurve['flux'][k] = result[0,2]
+				self.lightcurve['pos_centroid'][k] = result[0,0:2]
+				self.lightcurve['quality'][k] = 0
 
 				fig = plt.figure()
 				ax = fig.add_subplot(131)
 				ax.imshow(np.log10(img), origin='lower')
 				ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
 				ax.scatter(result[:,1], result[:,0], c='r', alpha=0.5)
-
 				ax = fig.add_subplot(132)
 				ax.imshow(np.log10(self.psf.integrate_to_image(result)), origin='lower')
-
 				ax = fig.add_subplot(133)
 				ax.imshow(img - self.psf.integrate_to_image(result, cutoff_radius=10), origin='lower')
 
-				fig.show()
-				plt.show()
-
 				# In the next iteration, start from the current solution:
 				params0 = res.x
+			else:
+				logger.warning("We should flag that this has not gone well.")
+
+				self.lightcurve['flux'][k] = np.NaN
+				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
+				self.lightcurve['quality'][k] = 1
+
+		plt.show()
 
 		# Return whether you think it went well:
 		return STATUS.OK
