@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 import logging
 from copy import deepcopy
 from scipy.optimize import minimize
-from ..BasePhotometry import BasePhotometry, STATUS
-from ..psf import PSF
+from .BasePhotometry import BasePhotometry, STATUS
+from .psf import PSF
 
 class PSFPhotometry(BasePhotometry):
 
