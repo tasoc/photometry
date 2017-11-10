@@ -13,7 +13,7 @@ import matplotlib.colors as colors
 
 class PSF(object):
 
-	def __init__(self, stamp, renorm=False):
+	def __init__(self, stamp):
 
 		self.stamp = stamp
 
@@ -22,8 +22,6 @@ class PSF(object):
 		self.xdim = int(stamp[1] - stamp[0])
 		self.ydim = int(stamp[3] - stamp[2])
 		self.shape = (self.ydim, self.xdim)
-		self.column = 0.5*(stamp[3] + stamp[2])
-		self.row = 0.5*(stamp[1] + stamp[0])
 
 		# The number of header units in the Kepler PSF files:
 		n_hdu = 5
@@ -39,8 +37,8 @@ class PSF(object):
 		minimum_prf_weight = 1e-6
 
 		# Interpolate the calibrated PRF shape to the target position:
-		ref_column = self.column + (self.xdim - 1.) / 2.
-		ref_row	= self.row +	(self.ydim - 1.) / 2.
+		ref_column = 0.5*(stamp[3] + stamp[2])
+		ref_row	= 0.5*(stamp[1] + stamp[0])
 
 		# Read the Kepler PRF images:
 		with pyfits.open(self.PSFfile, mode='readonly', memmap=True) as hdu:
