@@ -30,7 +30,7 @@ class PSF(object):
 		self.output = 1
 
 		# Get path to corresponding Kepler PSF file:
-		PSFdir = r'C:\Users\au195407\Downloads\kplr2011265_prf.tar\kplr2011265_prf'
+		PSFdir = os.path.join(os.path.dirname(__file__), 'data', 'psf')
 		PSFglob = os.path.join(PSFdir, 'kplr{0:02d}.{1:d}*_prf.fits'.format(self.module, self.output))
 		self.PSFfile = glob.glob(PSFglob)[0]
 
