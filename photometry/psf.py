@@ -9,10 +9,11 @@ import astropy.io.fits as pyfits
 from scipy.interpolate import RectBivariateSpline
 import glob
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
 
 class PSF(object):
 
-	def __init__(self, stamp):
+	def __init__(self, stamp, renorm=False):
 
 		self.stamp = stamp
 
@@ -37,21 +38,26 @@ class PSF(object):
 		# Set minimum PRF weight to avoid dividing by almost 0 somewhere:
 		minimum_prf_weight = 1e-6
 
-		# Preallocate prf and prfWeight arrays:
-		prf = np.zeros((550, 550), dtype='float64')
-
 		# Interpolate the calibrated PRF shape to the target position:
 		ref_column = self.column + (self.xdim - 1.) / 2.
 		ref_row	= self.row +	(self.ydim - 1.) / 2.
 
 		# Read the Kepler PRF images:
 		with pyfits.open(self.PSFfile, mode='readonly', memmap=True) as hdu:
+			# Find size of PSF images and
+			# the pixel-scale of the PSF images:
+			xdim = hdu[1].header['NAXIS1']
+			ydim = hdu[1].header['NAXIS2']
+			cdelt1p = hdu[1].header['CDELT1P']
+			cdelt2p = hdu[1].header['CDELT2P']
+
+			# Preallocate prf array:
+			prf = np.zeros((xdim, ydim), dtype='float64')
+
 			for i in range(1, n_hdu+1):
 				prfn = hdu[i].data
-				crval1p = hdu[i].header['CRPIX1P']
-				crval2p = hdu[i].header['CRPIX2P']
-				cdelt1p = hdu[i].header['CDELT1P']
-				cdelt2p = hdu[i].header['CDELT2P']
+				crval1p = hdu[1].header['CRPIX1P']
+				crval2p = hdu[1].header['CRPIX2P']
 
 				# Weight with the distance between each PRF sample and the target:
 				prfWeight = np.sqrt((ref_column - crval1p)**2 + (ref_row - crval2p)**2)
@@ -67,8 +73,8 @@ class PSF(object):
 		prf /= (np.nansum(prf) * cdelt1p * cdelt2p)
 
 		# Define pixel centered index arrays for the interpolater:
-		PRFx = np.arange(0.5, 550 + 0.5)
-		PRFy = np.arange(0.5, 550 + 0.5)
+		PRFx = np.arange(0.5, xdim + 0.5)
+		PRFy = np.arange(0.5, ydim + 0.5)
 		# Center around 0 and convert to PSF subpixel resolution:
 		PRFx = (PRFx - np.size(PRFx) / 2) * cdelt1p
 		PRFy = (PRFy - np.size(PRFy) / 2) * cdelt2p
@@ -99,23 +105,31 @@ class PSF(object):
 
 	def plot(self):
 
-		params = [{'column': 5, 'row': 15, 'flux': 100}, {'column': 7.5, 'row': 10, 'flux': 150}]
+		stars = np.array([
+			[2.4, 2.7, 80],
+			[15, 5, 100],
+			[10, 7.5, 150]
+		])
 
 		y = np.linspace(-5, 5, 500)
 		x = np.linspace(-5, 5, 500)
 		xx, yy = np.meshgrid(y, x)
 
-		img = self.integrate_to_image(params)
+		spline = self.splineInterpolation(x, y, grid=True)
+		spline += np.abs(spline.min()) + 1e-14
+		spline = np.sqrt(spline)
+		img = self.integrate_to_image(stars)
 
 		fig = plt.figure()
 		ax = fig.add_subplot(121)
-		ax.contourf(yy, xx, self.splineInterpolation(x, y, grid=True))
+		ax.contourf(yy, xx, spline, 20,
+			cmap='bone')
 		ax.axis('equal')
-
+		ax.set_xlim(-5, 5)
+		ax.set_ylim(-5, 5)
 		ax = fig.add_subplot(122)
 		ax.imshow(img, origin='lower')
-		for star in params:
-			ax.scatter(star['column'], star['row'], c='r', alpha=0.5)
+		ax.scatter(stars[:,1], stars[:,0], c='r', alpha=0.5)
 
 		plt.show()
 
