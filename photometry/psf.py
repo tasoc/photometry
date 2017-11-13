@@ -5,43 +5,43 @@ from __future__ import division, print_function, with_statement, absolute_import
 from six.moves import range
 import os
 import numpy as np
-import astropy.io.fits as pyfits
+from astropy.io import fits
 from scipy.interpolate import RectBivariateSpline
 import glob
 import matplotlib.pyplot as plt
-import matplotlib.colors as colors
+from astropy.visualization import LogStretch
+from astropy.visualization.mpl_normalize import ImageNormalize
 
 class PSF(object):
 
-	def __init__(self, stamp):
+	def __init__(self, camera, ccd, stamp):
 
+		# Store information given in call:
+		self.camera = 20
+		self.ccd = 1
 		self.stamp = stamp
 
 		# Target pixel file shape in pixels:
 		# TODO: check that the following are indeed x and y and not reversed:
-		self.xdim = int(stamp[1] - stamp[0])
-		self.ydim = int(stamp[3] - stamp[2])
-		self.shape = (self.ydim, self.xdim)
+		self.shape = (int(stamp[1] - stamp[0]), int(stamp[3] - stamp[2]))
 
 		# The number of header units in the Kepler PSF files:
 		n_hdu = 5
-		self.module = 20
-		self.output = 1
 
 		# Get path to corresponding Kepler PSF file:
 		PSFdir = os.path.join(os.path.dirname(__file__), 'data', 'psf')
-		PSFglob = os.path.join(PSFdir, 'kplr{0:02d}.{1:d}*_prf.fits'.format(self.module, self.output))
+		PSFglob = os.path.join(PSFdir, 'kplr{0:02d}.{1:d}*_prf.fits'.format(20, 1))
 		self.PSFfile = glob.glob(PSFglob)[0]
 
 		# Set minimum PRF weight to avoid dividing by almost 0 somewhere:
 		minimum_prf_weight = 1e-6
 
-		# Interpolate the calibrated PRF shape to the target position:
-		ref_column = 0.5*(stamp[3] + stamp[2])
-		ref_row	= 0.5*(stamp[1] + stamp[0])
+		# Interpolate the calibrated PRF shape to middle of the stamp:
+		self.ref_column = 0.5*(stamp[3] + stamp[2])
+		self.ref_row = 0.5*(stamp[1] + stamp[0])
 
 		# Read the Kepler PRF images:
-		with pyfits.open(self.PSFfile, mode='readonly', memmap=True) as hdu:
+		with fits.open(self.PSFfile, mode='readonly', memmap=True) as hdu:
 			# Find size of PSF images and
 			# the pixel-scale of the PSF images:
 			xdim = hdu[1].header['NAXIS1']
@@ -58,7 +58,7 @@ class PSF(object):
 				crval2p = hdu[1].header['CRPIX2P']
 
 				# Weight with the distance between each PRF sample and the target:
-				prfWeight = np.sqrt((ref_column - crval1p)**2 + (ref_row - crval2p)**2)
+				prfWeight = np.sqrt((self.ref_column - crval1p)**2 + (self.ref_row - crval2p)**2)
 
 				# Catch too small weights
 				if prfWeight < minimum_prf_weight:
@@ -84,6 +84,17 @@ class PSF(object):
 	def integrate_to_image(self, params, cutoff_radius=5):
 		"""
 		Integrate the underlying high-res PSF onto pixels.
+
+		Parameters
+		----------
+		params : iterator, numpy.array
+			List of stars to add to image. Should be an interator where each element is an numpy array with three elements: row, column and flux.
+		cutoff_radius : float, optional
+			Maximal radius away from center of star in pixels to integrate PSF model.
+
+		Returns
+		-------
+		numpy.array : Image
 		"""
 
 		img = np.zeros(self.shape, dtype='float64')
@@ -102,39 +113,33 @@ class PSF(object):
 
 
 	def plot(self):
+		"""
+		Create a plot of the shape of the PSF.
+		"""
 
 		stars = np.array([
-			[2.4, 2.7, 80],
-			[15, 5, 100],
-			[10, 7.5, 150]
+			[self.ref_row-self.stamp[0], self.ref_column-self.stamp[2], 1],
 		])
 
 		y = np.linspace(-5, 5, 500)
 		x = np.linspace(-5, 5, 500)
 		xx, yy = np.meshgrid(y, x)
 
+		norm = ImageNormalize(stretch=LogStretch())
+
 		spline = self.splineInterpolation(x, y, grid=True)
 		spline += np.abs(spline.min()) + 1e-14
 		spline = np.sqrt(spline)
+
 		img = self.integrate_to_image(stars)
 
 		fig = plt.figure()
 		ax = fig.add_subplot(121)
-		ax.contourf(yy, xx, spline, 20,
-			cmap='bone')
+		ax.contourf(yy, xx, spline, 20, cmap='bone')
 		ax.axis('equal')
 		ax.set_xlim(-5, 5)
 		ax.set_ylim(-5, 5)
 		ax = fig.add_subplot(122)
-		ax.imshow(img, origin='lower')
+		ax.imshow(img, origin='lower', cmap='bone', norm=norm)
 		ax.scatter(stars[:,1], stars[:,0], c='r', alpha=0.5)
-
 		plt.show()
-
-
-if __name__ == '__main__':
-
-	psf = PSF((10, 20, 80, 100))
-	psf.plot()
-
-

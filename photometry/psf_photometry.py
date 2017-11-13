@@ -23,7 +23,10 @@ class PSFPhotometry(BasePhotometry):
 		super(self.__class__, self).__init__(*args, **kwargs)
 
 		# Create instance of the PSF for the given pixel stamp:
-		self.psf = PSF(self.stamp)
+		# NOTE: If we run resize_stamp at any point in the code,
+		#       we should also update self.PSF.
+		# TODO: Maybe we should move this into BasePhotometry?
+		self.psf = PSF(self.camera, self.ccd, self.stamp)
 
 	def _lhood(self, params, img):
 		# Reshape the parameters into a 2D array:
@@ -56,10 +59,9 @@ class PSFPhotometry(BasePhotometry):
 		# Because the minimize routine used below only likes 1D numpy arrays
 		# we have to restructure the catalog:
 		params0 = np.empty((len(cat), 3), dtype='float64')
-		for k, target in enumerate(cat[('row_stamp', 'column_stamp', 'tmag')]):
+		for k, target in enumerate(cat):
 			flux = 10**(-0.4*(target['tmag'] - 28.24)) # Scaling relation from aperture photometry
 			params0[k,:] = [target['row_stamp'], target['column_stamp'], flux]
-		print(params0)
 		params_start = deepcopy(params0) # Save the starting parameters for later
 		params0 = params0.flatten() # Make the parameters into a 1D array
 
@@ -96,9 +98,7 @@ class PSFPhotometry(BasePhotometry):
 
 				self.lightcurve['flux'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
-				self.lightcurve['quality'][k] = 1
-
-		plt.show()
+				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
 
 		# Return whether you think it went well:
 		return STATUS.OK
