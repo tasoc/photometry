@@ -9,19 +9,35 @@ import sys
 import os
 from astropy.io import fits
 import glob
+#import matplotlib.pyplot as plt
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.backgrounds import fit_background
 
 def test_background():
+	"""Test of background estimator"""
 
+	# Load the first image in the input directory:
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input', 'images')
-	fname = glob.glob(os.path.join(INPUT_DIR, '*.fits.gz'))[0]
+	files = glob.glob(os.path.join(INPUT_DIR, '*.fits.gz'))
+	fname = sorted(files)[0]
 
+	# Find the shape of the original image:
 	hdr = fits.getheader(fname, ext=0)
 	img_shape = (hdr['NAXIS1'], hdr['NAXIS2'])
 
+	# Estimate the background:
 	bck, mask = fit_background(fname)
 
+	#plt.figure()
+	#plt.imshow(mask, origin='lower')
+	#plt.show()
+
+	# Print some information:
+	print(fname)
+	print(bck.shape)
+	print(mask.shape)
+
+	# Check the sizes of the returned images:
 	assert(bck.shape == img_shape)
 	assert(mask.shape == img_shape)
 

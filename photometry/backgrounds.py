@@ -3,6 +3,8 @@
 
 """
 Estimation of sky background in TESS Full Frame Images.
+
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
@@ -22,6 +24,8 @@ def fit_background(image):
 	Returns:
 		ndarray: Estimated background with the same size as the input image.
 		ndarray: Mask specifying which pixels was used to estimate the background.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
 	# Load file:
