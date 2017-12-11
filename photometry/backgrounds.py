@@ -3,8 +3,9 @@
 
 from __future__ import division, with_statement, print_function, absolute_import
 import numpy as np
-import astropy.io.fits as pyfits
-from photutils import Background2D, SigmaClip, SExtractorBackground
+from astropy.io import fits
+from astropy.stats import SigmaClip
+from photutils import Background2D, SExtractorBackground
 
 def fit_background(fname):
 
@@ -12,7 +13,7 @@ def fit_background(fname):
 	if fname.endswith('.npy'):
 		img = np.load(fname)
 	else:
-		with pyfits.open(fname, memmap=True, mode='readonly') as hdu:
+		with fits.open(fname, memmap=True, mode='readonly') as hdu:
 			img = hdu[0].data
 
 	# Create mask
