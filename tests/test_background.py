@@ -9,7 +9,6 @@ import sys
 import os
 from astropy.io import fits
 import glob
-#import matplotlib.pyplot as plt
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.backgrounds import fit_background
 
@@ -27,10 +26,6 @@ def test_background():
 
 	# Estimate the background:
 	bck, mask = fit_background(fname)
-
-	#plt.figure()
-	#plt.imshow(mask, origin='lower')
-	#plt.show()
 
 	# Print some information:
 	print(fname)

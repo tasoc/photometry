@@ -13,6 +13,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.stats import SigmaClip
 from photutils import Background2D, SExtractorBackground
+#import matplotlib.pyplot as plt
 
 def fit_background(image):
 	"""
@@ -43,7 +44,11 @@ def fit_background(image):
 	# Create mask
 	# TODO: Use the known locations of bright stars
 	mask = ~np.isfinite(img)
-	mask |= (img > 2e5)
+	mask |= (img > 3e5)
+
+	#plt.figure()
+	#plt.imshow(mask, origin='lower')
+	#plt.show()
 
 	# Estimate the background:
 	sigma_clip = SigmaClip(sigma=3.0, iters=5)
@@ -52,6 +57,7 @@ def fit_background(image):
 		filter_size=(3, 3),
 		sigma_clip=sigma_clip,
 		bkg_estimator=bkg_estimator,
-		mask=mask)
+		mask=mask,
+		exclude_percentile=50)
 
 	return bkg.background, mask
