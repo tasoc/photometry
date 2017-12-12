@@ -136,7 +136,7 @@ class AperturePhotometry(BasePhotometry):
 
 		# Targets that are in the mask:
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['row'])+1 in rows[mask_main] and np.floor(t['column'])+1 in cols[mask_main]]
-		
+
 		# Calculate contamination metric as defined in Lund & Handberg (2014):
 		mags_in_mask = self.catalog[target_in_mask]['tmag']
 		mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
@@ -152,7 +152,7 @@ class AperturePhotometry(BasePhotometry):
 		#
 		logger.info("These stars could be skipped:")
 		logger.info(self.catalog[target_in_mask]['starid'])
-		#self.skip_other_targets(self.catalog[target_in_mask]['starid'])
+		self.report_details(skip_targets=self.catalog[target_in_mask]['starid'])
 
 		# Return whether you think it went well:
 		return STATUS.OK
