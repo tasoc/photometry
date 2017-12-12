@@ -3,7 +3,7 @@ pytest
 numpy
 scipy
 matplotlib
-astropy
+astropy>=2.0
 photutils
 Bottleneck
 h5py
