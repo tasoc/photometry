@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import division, with_statement, print_function, absolute_import
-import six
 from six.moves import range
 import os
 import glob
@@ -61,8 +60,9 @@ def create_todo(sector):
 		tmag = float(row['tmag'])
 		cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,x,y,tmag) VALUES (?,?,?,?,?,?,?);", (pri+1, starid, 1, 1, row['x'], row['y'], tmag))
 
-	cursor.execute("CREATE UNIQUE INDEX starid_idx ON todolist (starid);")
 	cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
+	cursor.execute("CREATE INDEX status_idx ON todolist (status);")
+	cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 	conn.commit()
 	cursor.close()
 	conn.close()
@@ -137,6 +137,8 @@ def create_hdf5(camera, ccd):
 	hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
 
 	files = glob.glob(os.path.join(input_folder, 'images', '*.fits'))
+	files += glob.glob(os.path.join(input_folder, 'images', '*.fits.gz'))
+	files = sorted(files)
 	#files = files[0:2]
 	numfiles = len(files)
 	logger.info("Number of files: %d", numfiles)

@@ -19,7 +19,7 @@ import os.path
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
 import enum
-from bottleneck import replace
+from bottleneck import replace, nanmedian
 
 __docformat__ = 'restructuredtext'
 
@@ -29,6 +29,7 @@ class STATUS(enum.Enum):
 	Status indicator of the status of the photometry.
 	"""
 	UNKNOWN = 0 #: The status is unknown. The actual calculation has not started yet.
+	STARTED = 6 #: The calculation has started, but not yet finished.
 	OK = 1      #: Everything has gone well.
 	ERROR = 2   #: Encountered a catastrophic error that I could not recover from.
 	WARNING = 3 #: Something is a bit fishy. Maybe we should try again with a different algorithm?
@@ -68,6 +69,7 @@ class BasePhotometry(object):
 		self.ccd = 1 #: TESS CCD.
 
 		self._status = STATUS.UNKNOWN
+		self._details = {}
 
 		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
@@ -85,7 +87,7 @@ class BasePhotometry(object):
 		self.target_pos_ra = target['ra'] #: Right ascension of the main target at time of observation.
 		self.target_pos_dec = target['decl'] #: Declination of the main target at time of observation.
 		self.target_pos_ra_J2000 = target['ra_J2000'] #: Right ascension of the main target at J2000.
-		self.target_pos_ra_J2000 = target['decl_J2000'] #: Declination of the main target at J2000.
+		self.target_pos_dec_J2000 = target['decl_J2000'] #: Declination of the main target at J2000.
 		cursor.close()
 		conn.close()
 
@@ -118,7 +120,7 @@ class BasePhotometry(object):
 			self.n_readout = 900 #: Number of frames coadded in each timestamp.
 
 		elif self.mode == 'stamp':
-			with pf.open(mode, mode='readonly', memmap=True) as hdu:
+			with pf.open(datasource, mode='readonly', memmap=True) as hdu:
 
 				self.lightcurve['time'] = Column(hdu[1].data.field('TIME'), description='Time', dtype='float64')
 				self.lightcurve['timecorr'] = Column(hdu[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
@@ -180,8 +182,8 @@ class BasePhotometry(object):
 		later be resized using :py:func:`resize_stamp`.
 
 		Returns:
-			int : Number of rows
-			int : Number of columns
+			int: Number of rows
+			int: Number of columns
 
 		Note:
 			This function is only used for FFIs. For postage stamps
@@ -202,13 +204,13 @@ class BasePhotometry(object):
 		Resize the stamp in a given direction.
 
 		Parameters:
-			down (int, optional) : Number of pixels to extend downwards
-			up (int, optional) : Number of pixels to extend upwards
-			left (int, optional) : Number of pixels to extend left
-			right (int, optional) : Number of pixels to extend right
+			down (int, optional): Number of pixels to extend downwards.
+			up (int, optional): Number of pixels to extend upwards.
+			left (int, optional): Number of pixels to extend left.
+			right (int, optional): Number of pixels to extend right.
 
 		Returns:
-			bool : `True` if the stamp could be resized, `False` otherwise
+			bool: `True` if the stamp could be resized, `False` otherwise.
 		"""
 
 		old_stamp = self._stamp
@@ -236,10 +238,10 @@ class BasePhotometry(object):
 		later be resized using :py:func:`resize_stamp`.
 
 		Parameters:
-			compare_stamp (tuple) : Stamp to compare against wheter anything changed.
+			compare_stamp (tuple): Stamp to compare against whether anything changed.
 
 		Returns:
-			bool : `True` if ``compare_stamp`` is set and has changed. If ``compare_stamp``
+			bool: `True` if ``compare_stamp`` is set and has changed. If ``compare_stamp``
 			is not provided, always returns `True`.
 
 		See Also:
@@ -295,8 +297,8 @@ class BasePhotometry(object):
 		"""
 		Returns mesh-grid of the pixels (1-based) in the stamp.
 
-		:returns: tuple(cols, rows)
-		:rtype: typle(numpy.array, numpy.array)
+		Returns:
+			tuple(cols, rows): Meshgrid of pixel coordinates in the current stamp.
 		"""
 		return np.meshgrid(
 			np.arange(self._stamp[2]+1, self._stamp[3]+1, 1, dtype='int32'),
@@ -312,26 +314,26 @@ class BasePhotometry(object):
 		"""
 		Iterator that will loop through the image stamps.
 
-		:return: Iterator which can be used to loop through the image stamps.
-		:rtype: iterator
+		Returns:
+			iterator: Iterator which can be used to loop through the image stamps.
 
-		.. note::
-		  The images has had the large-scale background subtracted. If needed
-		  the backgrounds can be added again from :py:func:`backgrounds`.
+		Note:
+			The images has had the large-scale background subtracted. If needed
+			the backgrounds can be added again from :py:func:`backgrounds`.
 
-		.. note::
-		  For each image, this function will actually load the nessacery
-		  data from disk, so don't loop through it more than you absolutely
-		  have to to save I/O.
+		Note:
+			For each image, this function will actually load the necessary
+			data from disk, so don't loop through it more than you absolutely
+			have to to save I/O.
 
-		:Example:
+		Example:
 
-		>>> pho = BasePhotometry(starid)
-		>>> for img in pho.images:
-		>>> 	print(img)
+			>>> pho = BasePhotometry(starid)
+			>>> for img in pho.images:
+			>>> 	print(img)
 
-		.. seealso::
-		  :py:func:`backgrounds`
+		See Also:
+			:py:func:`backgrounds`
 		"""
 		for k in range(len(self.hdf['images'])):
 			yield self.hdf['images/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
@@ -341,22 +343,22 @@ class BasePhotometry(object):
 		"""
 		Iterator that will loop through the background-image stamps.
 
-		:returns: Iterator which can be used to loop through the background-image stamps.
-		:rtype: iterator
+		Returns:
+			iterator: Iterator which can be used to loop through the background-image stamps.
 
-		.. note::
-		  For each image, this function will actually load the nessacery
-		  data from disk, so don't loop through it more than you absolutely
-		  have to to save I/O.
+		Note:
+			For each image, this function will actually load the nessacery
+			data from disk, so don't loop through it more than you absolutely
+			have to to save I/O.
 
-		:Example:
+		Example:
 
-		>>> pho = BasePhotometry(starid)
-		>>> for img in pho.backgrounds:
-		>>> 	print(img)
+			>>> pho = BasePhotometry(starid)
+			>>> for img in pho.backgrounds:
+			>>> 	print(img)
 
-		.. seealso::
-		  :py:func:`images`
+		See Also:
+			:py:func:`images`
 		"""
 		for k in range(len(self.hdf['backgrounds'])):
 			yield self.hdf['backgrounds/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
@@ -370,8 +372,8 @@ class BasePhotometry(object):
 		For FFIs this has been pre-calculated and for postage-stamps it is calculated
 		on-the-fly when needed.
 
-		:returns: Iterator which can be used to loop through the background-image stamps.
-		:rtype: numpy.array
+		Returns:
+			numpy.array: Summed image across all valid timestamps.
 		"""
 		if self._sumimage is None:
 			if self.mode == 'ffi':
@@ -396,26 +398,21 @@ class BasePhotometry(object):
 
 		 * starid:       TIC identifier.
 		 * tmag:         TESS magnitude.
-		 * ra:           Right ascension in degrees.
-		 * dec:          Declination in degrees.
+		 * ra:           Right ascension in degrees at time of observation.
+		 * dec:          Declination in degrees at time of observation.
 		 * row:          Pixel row on CCD.
 		 * column:       Pixel column on CCD.
 		 * row_stamp:    Pixel row relative to the stamp.
 		 * column_stamp: Pixel column relative to the stamp.
 
-		:returns: Table with all known stars falling within the current stamp.
-		:rtype: astropy.table.Table
+		Returns:
+			astropy.table.Table: Table with all known stars falling within the current stamp.
 
-		Example
-		-------
-		If ``pho`` is an instance of BasePhotometry:
+		Example:
+			If ``pho`` is an instance of BasePhotometry:
 
-		>>> pho.catalog['tmag']
-		>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
-
-		ToDo
-		----
-		 * Include proper-motion movement to "now".
+			>>> pho.catalog['tmag']
+			>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
 		"""
 
 		if not self._catalog:
@@ -434,16 +431,60 @@ class BasePhotometry(object):
 			radec_min = np.min(corners_radec, axis=0) - buffer_size*pixel_scale/3600.0
 			radec_max = np.max(corners_radec, axis=0) + buffer_size*pixel_scale/3600.0
 
+			# Upper and lower bounds on ra and dec:
+			ra_min = radec_min[0]
+			ra_max = radec_max[0]
+			dec_min = radec_min[1]
+			dec_max = radec_max[1]
+			
 			# Select only the stars within the current stamp:
-			# TODO: Include proper-motion movement to "now" => Modify (ra, dec).
 			conn = sqlite3.connect(self.catalog_file)
 			cursor = conn.cursor()
-			cursor.execute("SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;", {
-				'ra_min': radec_min[0],
-				'ra_max': radec_max[0],
-				'dec_min': radec_min[1],
-				'dec_max': radec_max[1]
-			})
+			query = "SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;"
+			if dec_min < -90:
+				# We are very close to the southern pole
+				# Ignore everything about RA
+				cursor.execute(query, {
+					'ra_min': 0,
+					'ra_max': 360,
+					'dec_min': -90,
+					'dec_max': dec_max
+				})
+			elif dec_max > 90:
+				# We are very close to the northern pole
+				# Ignore everything about RA
+				cursor.execute(query, {
+					'ra_min': 0,
+					'ra_max': 360,
+					'dec_min': dec_min,
+					'dec_max': 90
+				})
+			elif ra_min < 0:
+				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra <= :ra_max AND de BETWEEN :dec_min AND :dec_max
+				UNION
+				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND 360 AND de BETWEEN :dec_min AND :dec_max;""", {
+					'ra_min': 360 - abs(ra_min),
+					'ra_max': ra_max,
+					'dec_min': dec_min,
+					'dec_max': dec_max
+				})
+			elif ra_max > 360:
+				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra >= :ra_min AND de BETWEEN :dec_min AND :dec_max
+				UNION
+				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN 0 AND :ra_max AND de BETWEEN :dec_min AND :dec_max;""", {
+					'ra_min': ra_min,
+					'ra_max': ra_max - 360,
+					'dec_min': dec_min,
+					'dec_max': dec_max
+				})	
+			else:
+				cursor.execute(query, {
+					'ra_min': ra_min,
+					'ra_max': ra_max,
+					'dec_min': dec_min,
+					'dec_max': dec_max
+				})
+			
 			cat = cursor.fetchall()
 			cursor.close()
 			conn.close()
@@ -473,6 +514,11 @@ class BasePhotometry(object):
 
 		return self._catalog
 
+	def report_details(self, skip_targets=None):
+
+		if not skip_targets is None:
+			self._details['skip_targets'] = skip_targets
+
 	def do_photometry(self):
 		"""
 		Run photometry algorithm.
@@ -480,25 +526,50 @@ class BasePhotometry(object):
 		This should fill the following
 		* self.lightcurve
 
-		Returns the status of the photometry.
+		Returns:
+			The status of the photometry.
 
-		Raises
-		------
-		NotImplemented
+		Raises:
+			NotImplemented
 		"""
 		raise NotImplemented("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
+		
 	def photometry(self, *args, **kwargs):
 		"""
-		Run photometry
+		Run photometry.
+		
+		Will run the :py:func:`do_photometry` method and
+		check some of the output and calculate various
+		performance metrics.
+		
+		See Also:
+			:py:func:`do_photometry`
 		"""
+		
+		# Run the photometry:
 		self._status = self.do_photometry(*args, **kwargs)
 
+		# Check that the status has been changed:
 		if self._status == STATUS.UNKNOWN:
 			raise Exception("STATUS was not set by do_photometry")
 
+		# TODO: Calculate performance metrics
+		if self._status == STATUS.OK:
+			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
+			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
+			if self.final_mask is not None:
+				self._details['mask_size'] = int(np.sum(self.final_mask))
+			if self.additional_headers and 'AP_CONT' in self.additional_headers:
+				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
+
 	def save_lightcurve(self, output_folder):
-		"""Save generated lightcurve to file."""
+		"""
+		Save generated lightcurve to file.
+		
+		Parameters:
+			output_folder (string): Path to directory where to save lightcurve.
+		"""
 
 		# Get the current date for the files:
 		now = datetime.datetime.now()
