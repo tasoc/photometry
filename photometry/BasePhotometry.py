@@ -120,7 +120,7 @@ class BasePhotometry(object):
 			self._max_stamp_size = (2048, 2048)
 			self.n_readout = 900 #: Number of frames co-added in each timestamp.
 
-		elif self.datasource == 'stamp':
+		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
 			fname = glob(os.path.join(
 				input_folder,
@@ -147,7 +147,10 @@ class BasePhotometry(object):
 
 			self._max_stamp_size = (self.tpf[2].header['NAXIS1'], self.tpf[2].header['NAXIS2'])
 			self.n_readout = self.tpf[1].header['NUM_FRM'] #: Number of frames co-added in each timestamp.
-
+			
+		else:
+			raise ValueError("Invalid datasource: '%s'" % self.datasource)
+			
 		# Define the columns that have to be filled by the do_photometry method:
 		N = len(self.lightcurve['time'])
 		self.lightcurve['flux'] = Column(length=N, description='Flux', dtype='float64')
