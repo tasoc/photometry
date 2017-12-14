@@ -7,15 +7,16 @@
 
 from __future__ import division, with_statement, print_function, absolute_import
 import six
-from six.moves import range, zip
+from six.moves import range
 import numpy as np
-import astropy.io.fits as pf
+from astropy.io import fits
 from astropy.table import Table, Column
 import h5py
 import sqlite3
 import logging
 import datetime
 import os.path
+from glob import glob
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
 import enum
@@ -41,8 +42,6 @@ class BasePhotometry(object):
 	The basic photometry class for the TASOC Photometry pipeline.
 	All other specific photometric algorithms will inherit from this.
 
-	:param starid: TIC number of star to be processed
-
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
@@ -50,17 +49,17 @@ class BasePhotometry(object):
 		"""
 		Initialize the photometry object.
 
-		:param starid: TIC number of star to be processed
-
-		.. todo::
-		  test of todo
+		Parameters:
+			starid (int): TIC number of star to be processed.
+			datasource (string): Source of the data (FFI or Postage Stamp).
+			input_folder (string): Root directory where files are loaded from.
 		"""
 
 		logger = logging.getLogger(__name__)
 
 		self.starid = starid
 		self.input_folder = input_folder
-		self.mode = datasource
+		self.datasource = datasource
 
 		# TODO: These should also come from the catalog somehow
 		#       They will be needed to find the correct input files
@@ -94,7 +93,7 @@ class BasePhotometry(object):
 		# Init table that will be filled with lightcurve stuff:
 		self.lightcurve = Table() #: Table to be filled with an extracted lightcurve
 
-		if self.mode == 'ffi':
+		if self.datasource == 'ffi':
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
 			self.hdf = h5py.File(filepath_hdf5, 'r')
@@ -105,31 +104,45 @@ class BasePhotometry(object):
 
 			hdr_string = self.hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-			hdr = pf.Header().fromstring(hdr_string)
+			hdr = fits.Header().fromstring(hdr_string)
 			self.wcs = WCS(header=hdr) #: World Coordinate system solution.
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
-			#star_coord = coordinates.SkyCoord(self.target_pos_ra, self.target_pos_dec, unit=units.deg, frame='icrs')
-			#greenwich = coordinates.EarthLocation.of_site('greenwich')
-			#times = time.Time(self.lightcurve['time'], format='mjd', scale='utc', location=greenwich)
+			#star_coord = coordinates.SkyCoord(self.target_pos_ra_J2000, self.target_pos_dec_J2000, unit=units.deg, frame='icrs')
+			#tess = coordinates.EarthLocation.of_site('greenwich')
+			#times = time.Time(self.lightcurve['time'], format='mjd', scale='utc', location=tess)
 			#self.lightcurve['timecorr'] = times.light_travel_time(star_coord, ephemeris='jpl')
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
 			self._max_stamp_size = (2048, 2048)
 			self.n_readout = 900 #: Number of frames coadded in each timestamp.
 
-		elif self.mode == 'stamp':
-			with pf.open(datasource, mode='readonly', memmap=True) as hdu:
+		elif self.datasource == 'stamp':
+			# Find the target pixel file for this star:
+			fname = glob(os.path.join(
+				input_folder,
+				'images',
+				'{0:011d}'.format(self.starid)[:6],
+				'tess??????????????-{0:011d}-????-[xsab]_tp.fits.gz'.format(self.starid)
+			))
+			if len(fname) == 1:
+				fname = fname[0]
+			elif len(fname) == 0:
+				raise IOError("Target Pixel File not found")
+			elif len(fname) > 1:
+				raise IOError("Multiple Target Pixel Files found matching pattern")
+		
+			self.tpf = fits.open(fname, mode='readonly', memmap=True)
 
-				self.lightcurve['time'] = Column(hdu[1].data.field('TIME'), description='Time', dtype='float64')
-				self.lightcurve['timecorr'] = Column(hdu[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
-				self.lightcurve['cadenceno'] = Column(hdu[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
+			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64')
+			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
+			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 
-				self.wcs = WCS(header=hdu[2].header) #: World Coordinate system solution
+			self.wcs = WCS(header=self.tpf[2].header) #: World Coordinate system solution
 
-				self._max_stamp_size = (hdu[2].header['NAXIS1'], hdu[2].header['NAXIS2'])
-				self.n_readout = hdu[1].header['NUM_FRM'] #: Number of frames coadded in each timestamp.
+			self._max_stamp_size = (self.tpf[2].header['NAXIS1'], self.tpf[2].header['NAXIS2'])
+			self.n_readout = self.tpf[1].header['NUM_FRM'] #: Number of frames coadded in each timestamp.
 
 		# Define the columns that have to be filled by the do_photometry method:
 		N = len(self.lightcurve['time'])
@@ -167,6 +180,8 @@ class BasePhotometry(object):
 		"""Close photometry object and close all associated open file handles."""
 		if self.hdf:
 			self.hdf.close()
+		if self.tpf:
+			self.tpf.close()
 
 	@property
 	def status(self):
@@ -226,6 +241,9 @@ class BasePhotometry(object):
 			self._stamp[3] += right
 		self._stamp = tuple(self._stamp)
 
+		# Count the number of times that we are resizing the stamp:
+		self._details['stamp_resizes'] = self._details.get('stamp_resizes', 0) + 1
+
 		# Return if the stamp actually changed:
 		return self._set_stamp(old_stamp)
 
@@ -254,7 +272,7 @@ class BasePhotometry(object):
 		logger = logging.getLogger(__name__)
 
 		if not self._stamp:
-			if self.mode == 'ffi':
+			if self.datasource == 'ffi':
 				Nrows, Ncolumns = self.default_stamp()
 			else:
 				Nrows, Ncolumns = self._max_stamp_size
@@ -335,8 +353,12 @@ class BasePhotometry(object):
 		See Also:
 			:py:func:`backgrounds`
 		"""
-		for k in range(len(self.hdf['images'])):
-			yield self.hdf['images/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+		if self.datasource == 'ffi':
+			for k in range(len(self.hdf['images'])):
+				yield self.hdf['images/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+		else:
+			for k in range(self.tpf[1].header['NAXIS1']):
+				yield self.tpf[1].data['FLUX'][k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 
 	@property
 	def backgrounds(self):
@@ -347,7 +369,7 @@ class BasePhotometry(object):
 			iterator: Iterator which can be used to loop through the background-image stamps.
 
 		Note:
-			For each image, this function will actually load the nessacery
+			For each image, this function will actually load the necessary
 			data from disk, so don't loop through it more than you absolutely
 			have to to save I/O.
 
@@ -360,9 +382,13 @@ class BasePhotometry(object):
 		See Also:
 			:py:func:`images`
 		"""
-		for k in range(len(self.hdf['backgrounds'])):
-			yield self.hdf['backgrounds/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
-
+		if self.datasource == 'ffi':
+			for k in range(len(self.hdf['backgrounds'])):
+				yield self.hdf['backgrounds/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+		else:
+			for k in range(self.tpf[1].header['NAXIS1']):
+				yield self.tpf[1].data['FLUX_BKG'][k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+			
 	@property
 	def sumimage(self):
 		"""
@@ -376,15 +402,15 @@ class BasePhotometry(object):
 			numpy.array: Summed image across all valid timestamps.
 		"""
 		if self._sumimage is None:
-			if self.mode == 'ffi':
+			if self.datasource == 'ffi':
 				self._sumimage = self.hdf['sumimage'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 			else:
 				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
 				Nimg = np.zeros_like(self._sumimage, dtype='int32')
 				for img in self.images:
+					Nimg += np.isfinite(img)
 					replace(img, np.nan, 0)
 					self._sumimage += img
-					Nimg += np.isfinite(img)
 				self._sumimage /= Nimg
 
 		return self._sumimage
@@ -436,7 +462,7 @@ class BasePhotometry(object):
 			ra_max = radec_max[0]
 			dec_min = radec_min[1]
 			dec_max = radec_max[1]
-			
+
 			# Select only the stars within the current stamp:
 			conn = sqlite3.connect(self.catalog_file)
 			cursor = conn.cursor()
@@ -476,7 +502,7 @@ class BasePhotometry(object):
 					'ra_max': ra_max - 360,
 					'dec_min': dec_min,
 					'dec_max': dec_max
-				})	
+				})
 			else:
 				cursor.execute(query, {
 					'ra_min': ra_min,
@@ -484,7 +510,7 @@ class BasePhotometry(object):
 					'dec_min': dec_min,
 					'dec_max': dec_max
 				})
-			
+
 			cat = cursor.fetchall()
 			cursor.close()
 			conn.close()
@@ -514,10 +540,21 @@ class BasePhotometry(object):
 
 		return self._catalog
 
-	def report_details(self, skip_targets=None):
+	def report_details(self, error=None, skip_targets=None):
+		"""
+		Report details of the processing back to the overlying scheduler system.
+		
+		Parameters:
+			error (string): Error message the be logged with the results.
+			skip_targets (list): List of starids that can be safely skipped.
+		"""
 
 		if not skip_targets is None:
 			self._details['skip_targets'] = skip_targets
+
+		if not error is None:
+			if not 'errors' in self._details: self._details['errors'] = []
+			self._details['errors'].append(error)
 
 	def do_photometry(self):
 		"""
@@ -534,19 +571,19 @@ class BasePhotometry(object):
 		"""
 		raise NotImplemented("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
-		
+
 	def photometry(self, *args, **kwargs):
 		"""
 		Run photometry.
-		
+
 		Will run the :py:func:`do_photometry` method and
 		check some of the output and calculate various
 		performance metrics.
-		
+
 		See Also:
 			:py:func:`do_photometry`
 		"""
-		
+
 		# Run the photometry:
 		self._status = self.do_photometry(*args, **kwargs)
 
@@ -555,7 +592,7 @@ class BasePhotometry(object):
 			raise Exception("STATUS was not set by do_photometry")
 
 		# TODO: Calculate performance metrics
-		if self._status == STATUS.OK:
+		if self._status in (STATUS.OK, STATUS.WARNING):
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
 			if self.final_mask is not None:
@@ -566,7 +603,7 @@ class BasePhotometry(object):
 	def save_lightcurve(self, output_folder):
 		"""
 		Save generated lightcurve to file.
-		
+
 		Parameters:
 			output_folder (string): Path to directory where to save lightcurve.
 		"""
@@ -575,7 +612,7 @@ class BasePhotometry(object):
 		now = datetime.datetime.now()
 
 		# Primary FITS header:
-		hdu = pf.PrimaryHDU()
+		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3, 'number of standard extensions')
 		hdu.header['EXTNAME'] = ('PRIMARY', 'name of extension')
 		hdu.header['ORIGIN'] = ('TASOC/Aarhus', 'institution responsible for creating this file')
@@ -606,18 +643,18 @@ class BasePhotometry(object):
 
 		# Make binary table:
 		# Define table columns:
-		c1 = pf.Column(name='TIME', format='D', array=self.lightcurve['time'])
-		c2 = pf.Column(name='TIMECORR', format='E', array=self.lightcurve['timecorr'])
-		c3 = pf.Column(name='CADENCENO', format='J', array=self.lightcurve['cadenceno'])
-		c4 = pf.Column(name='FLUX', format='D', unit='e-/s', array=self.lightcurve['flux'])
-		c5 = pf.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
-		c6 = pf.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
-		c7 = pf.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
-		c8 = pf.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
-		#c10 = pf.Column(name='POS_CORR1', format='E', unit='pixels', array=poscorr1) # column
-		#c11 = pf.Column(name='POS_CORR2', format='E', unit='pixels', array=poscorr2) # row
+		c1 = fits.Column(name='TIME', format='D', array=self.lightcurve['time'])
+		c2 = fits.Column(name='TIMECORR', format='E', array=self.lightcurve['timecorr'])
+		c3 = fits.Column(name='CADENCENO', format='J', array=self.lightcurve['cadenceno'])
+		c4 = fits.Column(name='FLUX', format='D', unit='e-/s', array=self.lightcurve['flux'])
+		c5 = fits.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
+		c6 = fits.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
+		c7 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
+		c8 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
+		#c10 = fits.Column(name='POS_CORR1', format='E', unit='pixels', array=poscorr1) # column
+		#c11 = fits.Column(name='POS_CORR2', format='E', unit='pixels', array=poscorr2) # row
 
-		tbhdu = pf.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8])
+		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8])
 		tbhdu.header['EXTNAME'] = ('LIGHTCURVE', 'name of extension')
 
 		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
@@ -673,11 +710,11 @@ class BasePhotometry(object):
 		if self.final_mask is not None:
 			mask[self.final_mask] += 2 + 8
 
-		img_aperture = pf.ImageHDU(data=mask, header=self.wcs.to_header(), name='APERTURE')
+		img_aperture = fits.ImageHDU(data=mask, header=self.wcs.to_header(), name='APERTURE')
 
 		# Make sumimage image:
-		img_sumimage = pf.ImageHDU(data=self.sumimage, header=self.wcs.to_header(), name="SUMIMAGE") # header=ori_mask_header,
+		img_sumimage = fits.ImageHDU(data=self.sumimage, header=self.wcs.to_header(), name="SUMIMAGE") # header=ori_mask_header,
 
 		# Write to file:
-		with pf.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
+		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
 			hdulist.writeto(os.path.join(output_folder, 'tess{0:09d}.fits'.format(self.starid)), checksum=True, overwrite=True)

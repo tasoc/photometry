@@ -39,7 +39,7 @@ class TaskManager(object):
 		self.cursor.execute("UPDATE todolist SET status=NULL,elaptime=NULL;")
 		self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
 		self.conn.commit()
-		
+
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
 			priority INT PRIMARY KEY NOT NULL,
 			starid BIGINT NOT NULL,
@@ -47,7 +47,9 @@ class TaskManager(object):
 			mask_size INT,
 			pos_row REAL,
 			pos_column REAL,
-			contamination REAL
+			contamination REAL,
+			stamp_resizes INT,
+			errors TEXT
 		)""")
 		self.conn.commit()
 
@@ -91,14 +93,18 @@ class TaskManager(object):
 			self.cursor.execute("UPDATE todolist SET status=5 WHERE status IS NULL AND starid IN (" + skip_starids + ");")
 
 		# Save diagnostics:
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, pos_column, pos_row, mean_flux, mask_size, contamination) VALUES (?,?,?,?,?,?,?);", (
+		error_msg = result['details'].get('errors', None)
+		if error_msg: error_msg = '\n'.join(error_msg)
+		self.cursor.execute("INSERT INTO diagnostics (priority, starid, pos_column, pos_row, mean_flux, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			result['details'].get('pos_centroid', (None, None))[0],
 			result['details'].get('pos_centroid', (None, None))[1],
 			result['details'].get('mean_flux', None),
 			result['details'].get('mask_size', None),
-			result['details'].get('contamination', None)
+			result['details'].get('contamination', None),
+			result['details'].get('stamp_resizes', 0),
+			error_msg
 		))
 		self.conn.commit()
 
@@ -168,7 +174,7 @@ if __name__ == '__main__':
 
 				else:
 					# This should never happen, but just to
-					# make sure we dont run into an infinite loop:
+					# make sure we don't run into an infinite loop:
 					raise Exception("Master recieved an unknown tag: '{0}'".format(tag))
 
 		tm.logger.info("Master finishing")
@@ -187,13 +193,11 @@ if __name__ == '__main__':
 
 			if tag == tags.START:
 				# Do the work here
-				task['input_folder'] = input_folder
-				task['output_folder'] = output_folder
 				result = task.copy()
 				del task['priority']
 
 				t1 = default_timer()
-				pho = tessphot(**task)
+				pho = tessphot(input_folder=input_folder, output_folder=output_folder, **task)
 				t2 = default_timer()
 
 				# Construct result message:
