@@ -51,7 +51,7 @@ class BasePhotometry(object):
 
 		Parameters:
 			starid (int): TIC number of star to be processed.
-			datasource (string): Source of the data (FFI or Postage Stamp).
+			datasource (string): Source of the data. Can be either ``ffi`` or ``tpf``.
 			input_folder (string): Root directory where files are loaded from.
 		"""
 
@@ -69,6 +69,8 @@ class BasePhotometry(object):
 
 		self._status = STATUS.UNKNOWN
 		self._details = {}
+		self.tpf = None
+		self.hdf = None
 
 		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
@@ -116,7 +118,7 @@ class BasePhotometry(object):
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
 			self._max_stamp_size = (2048, 2048)
-			self.n_readout = 900 #: Number of frames coadded in each timestamp.
+			self.n_readout = 900 #: Number of frames co-added in each timestamp.
 
 		elif self.datasource == 'stamp':
 			# Find the target pixel file for this star:
@@ -133,8 +135,10 @@ class BasePhotometry(object):
 			elif len(fname) > 1:
 				raise IOError("Multiple Target Pixel Files found matching pattern")
 		
+			# Open the FITS file:
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
 
+			# Extract the relevant information from the FITS file:
 			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64')
 			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
@@ -142,7 +146,7 @@ class BasePhotometry(object):
 			self.wcs = WCS(header=self.tpf[2].header) #: World Coordinate system solution
 
 			self._max_stamp_size = (self.tpf[2].header['NAXIS1'], self.tpf[2].header['NAXIS2'])
-			self.n_readout = self.tpf[1].header['NUM_FRM'] #: Number of frames coadded in each timestamp.
+			self.n_readout = self.tpf[1].header['NUM_FRM'] #: Number of frames co-added in each timestamp.
 
 		# Define the columns that have to be filled by the do_photometry method:
 		N = len(self.lightcurve['time'])
@@ -156,7 +160,6 @@ class BasePhotometry(object):
 		self.additional_headers = {} #: Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
-		# TODO: Include proper motion
 		self.target_pos_column = None #: Main target CCD column position.
 		self.target_pos_row = None #: Main target CCD row position.
 		self.target_pos_column_stamp = None #: Main target CCD column position in stamp.
