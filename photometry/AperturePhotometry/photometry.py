@@ -9,7 +9,6 @@ Simple Aperture Photometry using K2P2 to define masks.
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
-import matplotlib.pyplot as plt
 import logging
 from .. import BasePhotometry, STATUS
 from . import k2p2v2 as k2p2
@@ -47,7 +46,7 @@ class AperturePhotometry(BasePhotometry):
 		logger.info('='*80)
 		logger.info("starid: %d", self.starid)
 
-		for retries in range(1, 5):
+		for retries in range(5):
 
 			SumImage = self.sumimage
 			logger.info("SumImage shape: %s", SumImage.shape)

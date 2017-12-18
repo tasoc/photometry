@@ -1,4 +1,5 @@
 [flake8]
+# E701 multiple statements on one line (colon)
 # W292 : no newline at end of file
-ignore = W191,E501,E265,E231,E226,E261,W293,E128,W292
+ignore = W191,E501,E265,E231,E226,E261,W293,E128,W292,E701
 exclude = .git

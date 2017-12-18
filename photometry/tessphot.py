@@ -6,7 +6,7 @@
 
 from __future__ import division, print_function, with_statement, absolute_import
 import logging
-from . import BasePhotometry, STATUS, AperturePhotometry
+from . import STATUS, AperturePhotometry
 
 #------------------------------------------------------------------------------
 def tessphot(starid=None, method='aperture', input_folder=None, output_folder=None):

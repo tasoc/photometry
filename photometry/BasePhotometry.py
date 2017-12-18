@@ -117,7 +117,7 @@ class BasePhotometry(object):
 			#self.lightcurve['timecorr'] = times.light_travel_time(star_coord, ephemeris='jpl')
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
-			self._max_stamp_size = (2048, 2048)
+			self._max_stamp_size = self.hdf['sumimage'].shape
 			self.n_readout = 900 #: Number of frames co-added in each timestamp.
 
 		elif self.datasource == 'tpf':
@@ -134,7 +134,7 @@ class BasePhotometry(object):
 				raise IOError("Target Pixel File not found")
 			elif len(fname) > 1:
 				raise IOError("Multiple Target Pixel Files found matching pattern")
-		
+
 			# Open the FITS file:
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
 
@@ -147,10 +147,10 @@ class BasePhotometry(object):
 
 			self._max_stamp_size = (self.tpf[2].header['NAXIS1'], self.tpf[2].header['NAXIS2'])
 			self.n_readout = self.tpf[1].header['NUM_FRM'] #: Number of frames co-added in each timestamp.
-			
+
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)
-			
+
 		# Define the columns that have to be filled by the do_photometry method:
 		N = len(self.lightcurve['time'])
 		self.lightcurve['flux'] = Column(length=N, description='Flux', dtype='float64')
@@ -363,7 +363,7 @@ class BasePhotometry(object):
 			for k in range(len(self.hdf['images'])):
 				yield self.hdf['images/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 		else:
-			for k in range(self.tpf[1].header['NAXIS1']):
+			for k in range(self.tpf[1].header['NAXIS2']):
 				yield self.tpf[1].data['FLUX'][k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 
 	@property
@@ -392,9 +392,9 @@ class BasePhotometry(object):
 			for k in range(len(self.hdf['backgrounds'])):
 				yield self.hdf['backgrounds/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
 		else:
-			for k in range(self.tpf[1].header['NAXIS1']):
+			for k in range(self.tpf[1].header['NAXIS2']):
 				yield self.tpf[1].data['FLUX_BKG'][k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
-			
+
 	@property
 	def sumimage(self):
 		"""
@@ -427,7 +427,6 @@ class BasePhotometry(object):
 		Catalog of stars in the current stamp.
 
 		The table contains the following columns:
-
 		 * starid:       TIC identifier.
 		 * tmag:         TESS magnitude.
 		 * ra:           Right ascension in degrees at time of observation.
@@ -549,17 +548,17 @@ class BasePhotometry(object):
 	def report_details(self, error=None, skip_targets=None):
 		"""
 		Report details of the processing back to the overlying scheduler system.
-		
+
 		Parameters:
 			error (string): Error message the be logged with the results.
 			skip_targets (list): List of starids that can be safely skipped.
 		"""
 
-		if not skip_targets is None:
+		if skip_targets is not None:
 			self._details['skip_targets'] = skip_targets
 
-		if not error is None:
-			if not 'errors' in self._details: self._details['errors'] = []
+		if error is not None:
+			if 'errors' not in self._details: self._details['errors'] = []
 			self._details['errors'].append(error)
 
 	def do_photometry(self):
