@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Scheduler using MPI for running the TESS photometry
-pipeline on a large scale multicore computer.
+pipeline on a large scale multi-core computer.
 
 The setup uses the task-pull paradigm for high-throughput computing
 using ``mpi4py``. Task pull is an efficient way to perform a large number of
@@ -40,6 +40,7 @@ class TaskManager(object):
 		self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
 		self.conn.commit()
 
+		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
 			priority INT PRIMARY KEY NOT NULL,
 			starid BIGINT NOT NULL,
@@ -139,7 +140,7 @@ if __name__ == '__main__':
 			numtasks = tm.get_number_tasks()
 			tm.logger.info("%d tasks to be run", numtasks)
 
-			# Start the master loop that will assing tasks
+			# Start the master loop that will assign tasks
 			# to the workers:
 			num_workers = size - 1
 			closed_workers = 0
@@ -186,7 +187,7 @@ if __name__ == '__main__':
 
 		while True:
 			# Send signal that we are ready for task,
-			# and recieve a task from the master:
+			# and receive a task from the master:
 			comm.send(None, dest=0, tag=tags.READY)
 			task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
 			tag = status.Get_tag()
@@ -216,7 +217,7 @@ if __name__ == '__main__':
 
 			else:
 				# This should never happen, but just to
-				# make sure we dont run into an infinite loop:
+				# make sure we don't run into an infinite loop:
 				raise Exception("Worker recieved an unknown tag: '{0}'".format(tag))
 
 		comm.send(None, dest=0, tag=tags.EXIT)

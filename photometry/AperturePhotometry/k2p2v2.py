@@ -32,19 +32,18 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, ScalarFormatter
 y_formatter = ScalarFormatter(useOffset=False)
 from matplotlib.backends.backend_pdf import PdfPages
+import matplotlib.cm as cm
 from scipy import stats
 from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from statsmodels.nonparametric.bandwidths import select_bandwidth
 from scipy import ndimage
 import os
 from scipy import optimize as OP
-import matplotlib.cm as cm
 from sklearn.cluster import DBSCAN
 from skimage.feature import peak_local_max
 from skimage.morphology import watershed
 from bottleneck import nanmedian
 import logging
-from re import match
 
 #==============================================================================
 # Constants and settings
@@ -102,7 +101,7 @@ def k2p2maks(frame, no_combined_images, threshold=0.5):
 def config_pixel_plot(ax, size=None, aspect='auto'):
 	"""Utility function for configuring axes when plotting pixel images."""
 
-	if not size is None:
+	if size is not None:
 		ax.set_xlim([-0.5, size[1]-0.5])
 		ax.set_ylim([-0.5, size[0]-0.5])
 
@@ -355,7 +354,7 @@ def k2p2_saturated(SumImage, MASKS, idx):
 #==============================================================================
 #
 #==============================================================================
-def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=None, plot=True,show_plot=True,
+def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=None, show_plot=True,
 				   min_no_pixels_in_mask=8, min_for_cluster=4, cluster_radius=np.sqrt(2),
 				   segmentation=True, ws_alg='flux', ws_blur=0.5, ws_thres=0.05, ws_footprint=3,
 				   extend_overflow=True, catalog=None):
@@ -406,7 +405,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 
 	logger.debug("  Threshold used: %f", thresh)
 	logger.debug("  Flux cut is: %f", CUT)
-	if logger.isEnabledFor(logging.DEBUG) and not plot_folder is None:
+	if logger.isEnabledFor(logging.DEBUG) and plot_folder is not None:
 		fig = plt.figure()
 		ax = fig.add_subplot(111)
 		ax.fill_between(kernel.support, kernel.density, alpha=0.3)
@@ -558,7 +557,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 			MASKS[saturated_mask] = 1
 
 			# If we are running as DEBUG, output some plots as well:
-			if not plot_folder is None and logger.isEnabledFor(logging.DEBUG):
+			if plot_folder is not None and logger.isEnabledFor(logging.DEBUG):
 				logger.debug("Plotting overflow figures...")
 				Ypixel = np.arange(NY)
 				for u in range(no_masks):
@@ -602,7 +601,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 	#==============================================================================
 	# Create plots
 	#==============================================================================
-	if not plot_folder is None:
+	if plot_folder is not None:
 		# Colors to use for each cluster label:
 		colors = plt.cm.gist_rainbow(np.linspace(0, 1, len(unique_labels)))
 
@@ -661,8 +660,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 
 			else:
 				Flux_mat4[xy[:,1], xy[:,0]] = u+1
-
-				ax2.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=colors[u],
+				ax2.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(colors[u]),
 						 markeredgecolor='k', markersize=5)
 
 		# ---------------
