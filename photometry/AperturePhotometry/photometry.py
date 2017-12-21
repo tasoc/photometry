@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on Mon Jun 26 17:52:09 2017
+Simple Aperture Photometry using K2P2 to define masks.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -9,7 +9,6 @@ Created on Mon Jun 26 17:52:09 2017
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
-import matplotlib.pyplot as plt
 import logging
 from .. import BasePhotometry, STATUS
 from . import k2p2v2 as k2p2
@@ -21,13 +20,20 @@ class AperturePhotometry(BasePhotometry):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	def __init__(self, starid, input_folder):
+	def __init__(self, *args, **kwargs):
 		# Call the parent initializing:
 		# This will set several default settings
-		super(self.__class__, self).__init__(starid, input_folder)
+		super(self.__class__, self).__init__(*args, **kwargs)
 
 		# Here you could do other things that needs doing in the beginning
 		# of the run on each target.
+
+	def _minimum_aperture(self):
+		x = int(self.target_pos_row_stamp + 0.5)
+		y = int(self.target_pos_column_stamp - 0.5)
+		mask_main = np.zeros_like(self.sumimage, dtype='bool')
+		mask_main[y:y+2, x:x+2] = True
+		return mask_main
 
 	def do_photometry(self):
 		"""Perform photometry on the given target.
@@ -40,7 +46,7 @@ class AperturePhotometry(BasePhotometry):
 		logger.info('='*80)
 		logger.info("starid: %d", self.starid)
 
-		for retries in range(1, 5):
+		for retries in range(5):
 
 			SumImage = self.sumimage
 			logger.info("SumImage shape: %s", SumImage.shape)
@@ -60,21 +66,27 @@ class AperturePhotometry(BasePhotometry):
 			masks = np.asarray(masks, dtype='bool')
 
 			if len(masks.shape) == 0:
-				logger.error("No masks found")
-				return STATUS.ERROR
+				logger.warning("No masks found")
+				self.report_details(error='No masks found')
+				mask_main = self._minimum_aperture()
 
-			# Look at the central pixel where the target should be:
-			indx_main = masks[:, int(self.target_pos_row_stamp), int(self.target_pos_row_stamp)].flatten()
+			else:
+				# Look at the central pixel where the target should be:
+				indx_main = masks[:, int(self.target_pos_row_stamp), int(self.target_pos_column_stamp)].flatten()
 
-			if not np.any(indx_main):
-				logger.error('No pixels')
-				return STATUS.ERROR
-			elif np.sum(indx_main) > 1:
-				logger.error('Too many masks')
-				return STATUS.ERROR
+				if not np.any(indx_main):
+					logger.warning('No pixels')
+					self.report_details(error='No pixels')
+					mask_main = self._minimum_aperture()
 
-			# Mask of the main target:
-			mask_main = masks[indx_main, :, :].reshape(SumImage.shape)
+				elif np.sum(indx_main) > 1:
+					logger.error('Too many masks')
+					self.report_details(error='Too many masks')
+					return STATUS.ERROR
+
+				else:
+					# Mask of the main target:
+					mask_main = masks[indx_main, :, :].reshape(SumImage.shape)
 
 			# Find out if we are touching any of the edges:
 			resize_args = {}
@@ -99,6 +111,7 @@ class AperturePhotometry(BasePhotometry):
 
 		# If we reached the last retry but still needed a resize, give up:
 		if resize_args:
+			self.report_details(error='Too many stamp resizes')
 			return STATUS.ERROR
 
 		# XY of pixels in frame
@@ -116,7 +129,10 @@ class AperturePhotometry(BasePhotometry):
 
 			# Calculate flux centroid:
 			finite_vals = (flux_in_cluster > 0)
-			self.lightcurve['pos_centroid'][k, :] = np.average(members[finite_vals, :], weights=flux_in_cluster[finite_vals], axis=0)
+			if np.any(finite_vals):
+				self.lightcurve['pos_centroid'][k, :] = np.average(members[finite_vals], weights=flux_in_cluster[finite_vals], axis=0)
+			else:
+				self.lightcurve['pos_centroid'][k, :] = np.NaN
 
 		# Save the mask to be stored in the outout file:
 		self.final_mask = mask_main
@@ -136,23 +152,31 @@ class AperturePhotometry(BasePhotometry):
 
 		# Targets that are in the mask:
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['row'])+1 in rows[mask_main] and np.floor(t['column'])+1 in cols[mask_main]]
-		
-		# Calculate contamination metric as defined in Lund & Handberg (2014):
-		mags_in_mask = self.catalog[target_in_mask]['tmag']
-		mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
-		contamination = 1.0 - 10**(0.4*(mags_total - self.target_tmag))
-		contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
+
+		# Calculate contamination from the other targets in the mask:
+		if len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
+			contamination = 0
+		else:
+			# Calculate contamination metric as defined in Lund & Handberg (2014):
+			mags_in_mask = self.catalog[target_in_mask]['tmag']
+			mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
+			contamination = 1.0 - 10**(0.4*(mags_total - self.target_tmag))
+			contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
+
 		logger.info("Contamination: %f", contamination)
 		self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
 
 		# If contamination is high, return a warning:
 		if contamination > 0.1:
+			self.report_details(error='High contamination')
 			return STATUS.WARNING
 
 		#
-		logger.info("These stars could be skipped:")
-		logger.info(self.catalog[target_in_mask]['starid'])
-		#self.skip_other_targets(self.catalog[target_in_mask]['starid'])
+		skip_targets = [t['starid'] for t in self.catalog[target_in_mask] if t['starid'] != self.starid]
+		if skip_targets:
+			logger.info("These stars could be skipped:")
+			logger.info(skip_targets)
+			self.report_details(skip_targets=skip_targets)
 
 		# Return whether you think it went well:
 		return STATUS.OK

@@ -1,24 +1,54 @@
-#!/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import division, with_statement, print_function, absolute_import
-import numpy as np
-import astropy.io.fits as pyfits
-from photutils import Background2D, SigmaClip, SExtractorBackground
+"""
+Estimation of sky background in TESS Full Frame Images.
 
-def fit_background(fname):
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+"""
+
+from __future__ import division, with_statement, print_function, absolute_import
+import six
+import numpy as np
+from astropy.io import fits
+from astropy.stats import SigmaClip
+from photutils import Background2D, SExtractorBackground
+#import matplotlib.pyplot as plt
+
+def fit_background(image):
+	"""
+	Estimate background in Full Frame Image.
+
+	Parameters:
+		image (ndarray or string): Either the image as 2D ndarray or a path to FITS or NPY file where to load image from.
+
+	Returns:
+		ndarray: Estimated background with the same size as the input image.
+		ndarray: Mask specifying which pixels was used to estimate the background.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
 
 	# Load file:
-	if fname.endswith('.npy'):
-		img = np.load(fname)
+	if isinstance(image, np.ndarray):
+		img = image
+	elif isinstance(image, six.string_types):
+		if image.endswith('.npy'):
+			img = np.load(image)
+		else:
+			with fits.open(image, memmap=True, mode='readonly') as hdu:
+				img = hdu[0].data
 	else:
-		with pyfits.open(fname, memmap=True, mode='readonly') as hdu:
-			img = hdu[0].data
+		raise ValueError("Input image must be either 2D ndarray or path to file.")
 
 	# Create mask
 	# TODO: Use the known locations of bright stars
 	mask = ~np.isfinite(img)
-	mask |= (img > 2e5)
+	mask |= (img > 3e5)
+
+	#plt.figure()
+	#plt.imshow(mask, origin='lower')
+	#plt.show()
 
 	# Estimate the background:
 	sigma_clip = SigmaClip(sigma=3.0, iters=5)
@@ -27,6 +57,7 @@ def fit_background(fname):
 		filter_size=(3, 3),
 		sigma_clip=sigma_clip,
 		bkg_estimator=bkg_estimator,
-		mask=mask)
-		
+		mask=mask,
+		exclude_percentile=50)
+
 	return bkg.background, mask
