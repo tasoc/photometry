@@ -22,7 +22,6 @@ class PSF(object):
 		self.stamp = stamp
 
 		# Target pixel file shape in pixels:
-		# TODO: check that the following are indeed x and y and not reversed:
 		self.shape = (int(stamp[1] - stamp[0]), int(stamp[3] - stamp[2]))
 
 		# The number of header units in the Kepler PSF files:
