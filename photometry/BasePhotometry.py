@@ -109,6 +109,15 @@ class BasePhotometry(object):
 			hdr = fits.Header().fromstring(hdr_string)
 			self.wcs = WCS(header=hdr) #: World Coordinate system solution.
 
+			# Get info for psf fit Gaussian statistic:
+			self.readnoise = 10 # hardcoded from test files
+			self.gain = 100 # hardcoded estimate from selected Kepler value
+			# TODO: get values from header instead:
+#			with pf.open(os.path.join(input_folder, ), mode='readonly', memmap=True) as hdu:
+#				self.readnoise = hdu[0].header['readnoise']
+#				self.nreads = hdu[0].header['nreads']
+#				self.gain = hdu[0].header['gain']
+
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
 			#star_coord = coordinates.SkyCoord(self.target_pos_ra_J2000, self.target_pos_dec_J2000, unit=units.deg, frame='icrs')
