@@ -75,7 +75,7 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		sigma (float, optional) : Standard deviation of Gaussian. Default=1.
 	
 	Returns:
-		(numpy array) : 2D Gaussian integrated pixel values at (x,y).
+		numpy array : 2D Gaussian integrated pixel values at (x,y).
 	
 	Note:
 		Inspired by
@@ -95,3 +95,17 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		  erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma))) *
 		 (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma)) -
 		  erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
+
+#------------------------------------------------------------------------------
+	def mag2flux(self, mag):
+		"""
+		Convert from magnitude to flux using scaling relation from 
+		aperture photometry. This is an estimate.
+		
+		Parameters:
+			mag (float) : Magnitude
+
+		Returns:
+			float : Corresponding flux value
+		"""
+		return 10**(-0.4*(mag - 28.24))
