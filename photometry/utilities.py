@@ -12,6 +12,7 @@ from six.moves import range
 import numpy as np
 from bottleneck import move_median, nanmedian
 import logging
+from scipy.special import erf
 
 #------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):
@@ -59,3 +60,38 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 
 	# Return the current positions
 	return raindegrees, decindegrees
+
+#------------------------------------------------------------------------------
+def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
+	'''
+	Evaluate a 2D symmetrical Gaussian integrated in pixels.
+	
+	Parameters:
+		x (numpy array) : x coordinates at which to evaluate the PSF.
+		y (numpy array) : y coordinates at which to evaluate the PSF.
+		flux (float) : Integrated value.
+		x_0 (float) : Centroid position.
+		y_0 (float) : Centroid position.
+		sigma (float, optional) : Standard deviation of Gaussian. Default=1.
+	
+	Returns:
+		(numpy array) : 2D Gaussian integrated pixel values at (x,y).
+	
+	Note:
+		Inspired by
+		https://github.com/astropy/photutils/blob/master/photutils/psf/models.py
+	
+	Example:
+	
+	>>> import numpy as np
+	>>> X, Y = np.meshgrid(np.arange(-1,2), np.arange(-1,2))
+	>>> integratedGaussian(X, Y, 10, 0, 0)
+	array([[ 0.58433556,  0.92564571,  0.58433556],
+		[ 0.92564571,  1.46631496,  0.92564571],
+		[ 0.58433556,  0.92564571,  0.58433556]])
+	'''
+	return (flux / 4 *
+		((erf((x - x_0 + 0.5) / (np.sqrt(2) * sigma)) -
+		  erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma))) *
+		 (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma)) -
+		  erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
