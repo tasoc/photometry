@@ -28,13 +28,37 @@ class PSFPhotometry(BasePhotometry):
 		# TODO: Maybe we should move this into BasePhotometry?
 		self.psf = PSF(self.camera, self.ccd, self.stamp)
 
-	def _lhood(self, params, img):
+	def _lhood(self, params, img, lhood_stat = 'Gaussian_d'):
 		# Reshape the parameters into a 2D array:
 		params = params.reshape(len(params)//3, 3)
 		# Pass the list of stars to the PSF integrator to produce an artificial image:
 		mdl = self.psf.integrate_to_image(params, cutoff_radius=10)
-		# Return the chi2:
-		return np.nansum( (img - mdl)**2 / img )
+		# Define minimum weights to avoid dividing by 0:
+		minweight = 1e-9
+		minvar = 1e-9
+		# Calculate the likelihood value:
+		out = None
+		if lhood_stat[0:8] == 'Gaussian':			
+			if lhood_stat == 'Gaussian_m':
+				var = np.abs(img + self.background) # can be outside _lhood
+			elif lhood_stat == 'Gaussian_d':
+				var = np.abs(mdl + self.background) # has to be in _lhood
+			# Add 2nd term of Erwin (2015), eq. (13):
+			var += self.nreads * self.readnoise**2 / self.gain**2
+			var[var<minvar] = minvar
+			weightmap = 1 / var 
+			weightmap[weightmap<minweight] = minweight
+			# Return the chi2:
+			return np.nansum( weightmap * (img - mdl)**2 )
+		elif lhood_stat == 'Poisson':
+			# Return the Cash statistic:
+			mdlforlog = mdl
+			mdlforlog[mdlforlog < 1e-9] = 1e-9 # set 0 to low
+			return 2 * np.nansum( mdl - img * np.log(mdlforlog) )
+		elif lhood_stat == 'old_Gaussian':
+			# Return the chi2:
+			out = np.nansum( (img - mdl)**2 / img )
+		return out
 
 	def do_photometry(self):
 
