@@ -84,12 +84,13 @@ class PSFPhotometry(BasePhotometry):
 		# we have to restructure the catalog:
 		params0 = np.empty((len(cat), 3), dtype='float64')
 		for k, target in enumerate(cat):
+			# TODO: use mag2flux from utilities instead of the following:
 			flux = 10**(-0.4*(target['tmag'] - 28.24)) # Scaling relation from aperture photometry
 			params0[k,:] = [target['row_stamp'], target['column_stamp'], flux]
 		params_start = deepcopy(params0) # Save the starting parameters for later
 		params0 = params0.flatten() # Make the parameters into a 1D array
 
-		# Start looping through the images:
+		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
 			# Run the fitting routine for this image:
 			res = minimize(self._lhood, params0, args=img, method='Nelder-Mead')
@@ -105,6 +106,7 @@ class PSFPhotometry(BasePhotometry):
 				self.lightcurve['pos_centroid'][k] = result[0,0:2]
 				self.lightcurve['quality'][k] = 0
 
+				# TODO: outcomment this plotting feature eventually?
 				fig = plt.figure()
 				ax = fig.add_subplot(131)
 				ax.imshow(np.log10(img), origin='lower')
