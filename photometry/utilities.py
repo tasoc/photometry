@@ -31,7 +31,7 @@ def move_median_central(x, width_points, axis=0):
 def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	"""
 	Project coordinates (ra,dec) with proper motions to new epoch.
-	
+
 	Parameters:
 		ra (float) : Right ascension.
 		dec (float) : Declination.
@@ -39,7 +39,7 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 		pm_dec (float) : Proper motion in Declination (mas/year).
 		bjd (float) : Julian date to calculate coordinates for.
 		epoch (float, optional) : Epoch of ``ra`` and ``dec``. Default=2000.
-		
+
 	Returns:
 		(float, float) : RA and Declination at the specified date.
 	"""
@@ -65,7 +65,7 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 	'''
 	Evaluate a 2D symmetrical Gaussian integrated in pixels.
-	
+
 	Parameters:
 		x (numpy array) : x coordinates at which to evaluate the PSF.
 		y (numpy array) : y coordinates at which to evaluate the PSF.
@@ -73,16 +73,16 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		x_0 (float) : Centroid position.
 		y_0 (float) : Centroid position.
 		sigma (float, optional) : Standard deviation of Gaussian. Default=1.
-	
+
 	Returns:
 		numpy array : 2D Gaussian integrated pixel values at (x,y).
-	
+
 	Note:
 		Inspired by
 		https://github.com/astropy/photutils/blob/master/photutils/psf/models.py
-	
+
 	Example:
-	
+
 	>>> import numpy as np
 	>>> X, Y = np.meshgrid(np.arange(-1,2), np.arange(-1,2))
 	>>> integratedGaussian(X, Y, 10, 0, 0)
@@ -97,15 +97,15 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		  erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
 
 #------------------------------------------------------------------------------
-	def mag2flux(self, mag):
-		"""
-		Convert from magnitude to flux using scaling relation from 
-		aperture photometry. This is an estimate.
-		
-		Parameters:
-			mag (float) : Magnitude
+def mag2flux(mag):
+	"""
+	Convert from magnitude to flux using scaling relation from
+	aperture photometry. This is an estimate.
 
-		Returns:
-			float : Corresponding flux value
-		"""
-		return 10**(-0.4*(mag - 28.24))
+	Parameters:
+		mag (float) : Magnitude in TESS band.
+
+	Returns:
+		float : Corresponding flux value
+	"""
+	return 10**(-0.4*(mag - 28.24))

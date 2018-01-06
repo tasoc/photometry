@@ -14,6 +14,7 @@ from copy import deepcopy
 from scipy.optimize import minimize
 from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
+from .utilities import mag2flux
 
 class PSFPhotometry(BasePhotometry):
 
@@ -37,16 +38,15 @@ class PSFPhotometry(BasePhotometry):
 		minweight = 1e-9
 		minvar = 1e-9
 		# Calculate the likelihood value:
-		out = None
-		if lhood_stat[0:8] == 'Gaussian':			
+		if lhood_stat[0:8] == 'Gaussian':
 			if lhood_stat == 'Gaussian_m':
 				var = np.abs(img + self.background) # can be outside _lhood
 			elif lhood_stat == 'Gaussian_d':
 				var = np.abs(mdl + self.background) # has to be in _lhood
 			# Add 2nd term of Erwin (2015), eq. (13):
-			var += self.nreads * self.readnoise**2 / self.gain**2
+			var += self.n_readout * self.readnoise**2 / self.gain**2
 			var[var<minvar] = minvar
-			weightmap = 1 / var 
+			weightmap = 1 / var
 			weightmap[weightmap<minweight] = minweight
 			# Return the chi2:
 			return np.nansum( weightmap * (img - mdl)**2 )
@@ -57,10 +57,10 @@ class PSFPhotometry(BasePhotometry):
 			return 2 * np.nansum( mdl - img * np.log(mdlforlog) )
 		elif lhood_stat == 'old_Gaussian':
 			# Return the chi2:
-			out = np.nansum( (img - mdl)**2 / img )
-		return out
+			return np.nansum( (img - mdl)**2 / img )
 
 	def do_photometry(self):
+		"""PSF Photometry"""
 
 		logger = logging.getLogger(__name__)
 
@@ -84,9 +84,7 @@ class PSFPhotometry(BasePhotometry):
 		# we have to restructure the catalog:
 		params0 = np.empty((len(cat), 3), dtype='float64')
 		for k, target in enumerate(cat):
-			# TODO: use mag2flux from utilities instead of the following:
-			flux = 10**(-0.4*(target['tmag'] - 28.24)) # Scaling relation from aperture photometry
-			params0[k,:] = [target['row_stamp'], target['column_stamp'], flux]
+			params0[k,:] = [target['row_stamp'], target['column_stamp'], mag2flux(target['tmag'])]
 		params_start = deepcopy(params0) # Save the starting parameters for later
 		params0 = params0.flatten() # Make the parameters into a 1D array
 
