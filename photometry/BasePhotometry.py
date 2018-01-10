@@ -118,7 +118,7 @@ class BasePhotometry(object):
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
 			self._max_stamp_size = self.hdf['sumimage'].shape
-			self.n_readout = 900 #: Number of frames co-added in each timestamp.
+			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) #: Number of frames co-added in each timestamp.
 
 		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
