@@ -17,6 +17,7 @@ import logging
 import datetime
 import os.path
 from glob import glob
+from copy import deepcopy
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
 import enum
@@ -127,7 +128,7 @@ class BasePhotometry(object):
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
 			self._max_stamp_size = self.hdf['sumimage'].shape
-			self.n_readout = 900 #: Number of frames co-added in each timestamp.
+			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) #: Number of frames co-added in each timestamp.
 
 		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
@@ -321,7 +322,6 @@ class BasePhotometry(object):
 		self.target_pos_column_stamp = self.target_pos_column - self._stamp[2]
 
 		# Force sum-image and catalog to be recalculated next time:
-		# TODO: Do not reset these if nothing has changed
 		self._sumimage = None
 		self._catalog = None
 		return True
@@ -446,13 +446,16 @@ class BasePhotometry(object):
 		 * column_stamp: Pixel column relative to the stamp.
 
 		Returns:
-			astropy.table.Table: Table with all known stars falling within the current stamp.
+			`astropy.table.Table`: Table with all known stars falling within the current stamp.
 
 		Example:
 			If ``pho`` is an instance of BasePhotometry:
 
 			>>> pho.catalog['tmag']
 			>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
+
+		See Also:
+			:py:func:`catalog_attime`
 		"""
 
 		if not self._catalog:
@@ -552,6 +555,39 @@ class BasePhotometry(object):
 			self._catalog.add_columns([col_x, col_y, col_x_stamp, col_y_stamp])
 
 		return self._catalog
+
+	def catalog_attime(self, time):
+		"""
+		Catalog of stars, calculated at a given timestamp, so CCD positions are
+		modified acording to the measured spacecraft jitter.
+
+		Parameters:
+			time (float): Time in MJD when to calculate catalog.
+
+		Returns:
+			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`,
+			                       but with `column`, `row`, `column_stamp` and `row_stamp`
+								   calculated at the given timestamp.
+
+		See Also:
+			:py:func:`catalog`
+		"""
+
+		# Get the reference catalog:
+		cat = deepcopy(self.catalog)
+
+		# Lookup the position corrections in CCD coordinates:
+		# TODO: Implement this!
+		col_jitter = 0.0
+		row_jitter = 0.0
+
+		# Modify the reference catalog:
+		cat['column'] += col_jitter
+		cat['row'] += row_jitter
+		cat['column_stamp'] += col_jitter
+		cat['row_stamp'] += row_jitter
+
+		return cat
 
 	def report_details(self, error=None, skip_targets=None):
 		"""
