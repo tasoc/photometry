@@ -40,9 +40,13 @@ class PSFPhotometry(BasePhotometry):
 		# Calculate the likelihood value:
 		if lhood_stat[0:8] == 'Gaussian':
 			if lhood_stat == 'Gaussian_m':
-				var = np.abs(img + self.background) # can be outside _lhood
+				# FIXME: Include background here:
+#				var = np.abs(img + self.background) # can be outside _lhood
+				var = np.abs(img) # can be outside _lhood
 			elif lhood_stat == 'Gaussian_d':
-				var = np.abs(mdl + self.background) # has to be in _lhood
+				# FIXME: Include background here:
+#				var = np.abs(mdl + self.background) # has to be in _lhood
+				var = np.abs(mdl) # has to be in _lhood
 			# Add 2nd term of Erwin (2015), eq. (13):
 			var += self.n_readout * self.readnoise**2 / self.gain**2
 			var[var<minvar] = minvar
