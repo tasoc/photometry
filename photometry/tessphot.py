@@ -6,7 +6,7 @@
 
 from __future__ import division, print_function, with_statement, absolute_import
 import logging
-from . import STATUS, AperturePhotometry, PSFPhotometry
+from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 
 #------------------------------------------------------------------------------
 def _try_photometry(PhotClass, starid, input_folder, output_folder):
@@ -60,6 +60,9 @@ def tessphot(starid=None, method=None, input_folder=None, output_folder=None):
 
 	elif method == 'psf':
 		pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder)
+
+	elif method == 'linpsf':
+		pho = _try_photometry(LinPSFPhotometry, starid, input_folder, output_folder)
 
 	else:
 		raise ValueError("Invalid method: '{0}'".format(method))
