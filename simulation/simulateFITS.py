@@ -35,7 +35,7 @@ class simulateFITS(object):
 		# Set random number generator seed:
 		random.seed(0)
 
-		""" Set image parameters """
+		# Set image parameters:
 		self.pixel_scale = 21.1 # Size of single pixel in arcsecs
 		self.Nrows = 200
 		self.Ncols = 200
@@ -45,70 +45,96 @@ class simulateFITS(object):
 						self.Nrows//2,
 						- self.Ncols//2,
 						self.Ncols//2)
+		self.Nstars = 5 # Number of stars in image
 
-		""" Make catalog """
-		# Set number of stars in image:
-		Nstars = 5
+		# Make catalog:
+		self.catalog = self.make_catalog()
+
+		# Make stars from catalog:
+		self.stars, self.KPSF = self.make_stars()
+
+		# Make uniform background:
+		self.bkg = self.make_background()
+
+		# Make Gaussian noise:
+		self.noise = self.make_noise()
+
+		# Sum image from its parts:
+		self.img = self.stars + self.bkg + self.noise
+
+		# Output image to FITS file:
+		hdu = fits.PrimaryHDU(self.img)
+		hdu.writeto(os.path.join(output_folder, 'test.fits'))
+
+
+	def make_catalog(self):
 		# Set star identification:
-		starids = np.arange(Nstars, dtype=int)
+		starids = np.arange(self.Nstars, dtype=int)
+		
 		# Set buffer pixel size around edge where not to put stars:
 		bufferpx = 3
+		
 		# Draw uniform row positions:
 		starrows = np.asarray([random.uniform(bufferpx, self.Nrows-bufferpx) \
-							for i in range(Nstars)])
+							for i in range(self.Nstars)])
+	
 		# Draw uniform column positions:
 		starcols = np.asarray([random.uniform(bufferpx, self.Ncols-bufferpx) \
-							for i in range(Nstars)])
+							for i in range(self.Nstars)])
+	
 		# Draw stellar fluxes:
-		starmag = np.asarray([random.uniform(5,10) for i in range(Nstars)])
+		starmag = np.asarray([random.uniform(5,10) for i in range(self.Nstars)])
+		
 		# Collect star parameters in list for catalog:
 		cat = [starids, starrows, starcols, starmag, mag2flux(starmag)]
+		
 		# Make astropy table with catalog:
-		self.catalog = Table(
+		return Table(
 			cat,
 			names=('starid', 'row', 'col', 'tmag', 'flux'),
 			dtype=('int64', 'float64', 'float64', 'float32', 'float64')
 		)
 
-		""" Make stars from catalog """
-		# Preallocate array for stars:
-		stars = np.zeros([self.Nrows, self.Ncols])
+
+	def make_stars(self):
 		# Create PSF class instance:
 		KPSF = PSF(camera=20, ccd=1, stamp=self.stamp)
+		
 		# Make list with parameter arrays for the pixel integrater:
 		params = [np.array(
 					[self.catalog['row'][i], 
 					self.catalog['col'][i], 
 					self.catalog['flux'][i]]
 				) 
-				for i in range(Nstars)]
-		stars += KPSF.integrate_to_image(params, cutoff_radius=20)
-#			stars += integratedGaussian(X, Y, flux, col, row, sigma)
+				for i in range(self.Nstars)]
+		
+		# Integrate stars to image:
+		stars = KPSF.integrate_to_image(params, cutoff_radius=20)
+		
+		return stars, KPSF
 
-		""" Make uniform background """
+
+	def make_background(self):
+		# Set background level:
 		bkg_level = 1e3
-		bkg = bkg_level * np.ones_like(stars)
+		
+		# Apply background level by multiplying:
+		return bkg_level * np.ones_like(self.stars)
 
-		""" Make Gaussian noise """
-		# Set full width at half maximum in pixels:
-		fwhm = 1.5
-		# Infer sigma value from this:
-		sigma = fwhm / (2*np.sqrt(2*np.log(2)))
+	def make_noise(self):
+		# Set sigma value:
+		sigma = 10
+		
 		# Preallocate noise array:
-		noise = np.zeros_like(stars)
+		noise = np.zeros_like(self.stars)
+		
 		# Loop over each pixel:
 		for row in range(self.Nrows):
 			for col in range(self.Ncols):
 				# Draw a random value from a Gaussian (normal) distribution:
 				noise[row,col] = random.gauss(mu=0, sigma=sigma)
-
-		""" Sum image from its parts """
-		self.img = stars + bkg + noise
-
-		""" Output image to FITS file """
-		hdu = fits.PrimaryHDU(self.img)
-		hdu.writeto(os.path.join(output_folder, 'test.fits'))
-
+		
+		return noise
 
 
 if __name__ == '__main__':
