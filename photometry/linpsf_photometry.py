@@ -8,6 +8,7 @@ Created on Thu Jan 18 14:08:36 2018
 
 from __future__ import division, with_statement, print_function, absolute_import
 import numpy as np
+import scipy
 import matplotlib.pyplot as plt
 import logging
 from .BasePhotometry import BasePhotometry, STATUS
@@ -105,7 +106,13 @@ class LinPSFPhotometry(BasePhotometry):
 
 			# Do linear least squares fit to solve Ax=b:
 			try:
+				# Linear least squares:
 				res = np.linalg.lstsq(A,b)
+				fluxes = res[0]
+
+				# Non-negative linear least squares:
+#				fluxes, rnorm = scipy.optimize.nnls(A,b)
+#				res = 'notfailed'
 			except:
 				res = 'failed'
 			logger.debug(res)
@@ -113,7 +120,6 @@ class LinPSFPhotometry(BasePhotometry):
 			# Pass result if fit did not fail:
 			if res is not 'failed':
 				# Get flux of target star:
-				fluxes = res[0]
 				result = fluxes[staridx]
 				logger.debug(fluxes)
 
