@@ -29,8 +29,8 @@ class LinPSFPhotometry(BasePhotometry):
 			Inspired by the :py:class:`psf_photometry` class set up by 
 			Rasmus Handberg <rasmush@phys.au.dk>. The code in this 
 			:py:func:`__init__` function as well as the logging, catalog call,
-			time domain loop structure and lightcurve output is copied from 
-			that class.
+			time domain loop structure, catalog star limits and lightcurve 
+			output is copied from that class.
 		
 		.. code author:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
@@ -56,7 +56,12 @@ class LinPSFPhotometry(BasePhotometry):
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
-			# TODO: limit amount of stars to fit here if necessary
+			# Calculate distance from main target:
+			cat['dist'] = np.sqrt((self.target_pos_row_stamp - cat['row_stamp'])**2 + (self.target_pos_column_stamp - cat['column_stamp'])**2)
+			print(cat)
+	
+			# Only include stars that are close to the main target and that are not much fainter:
+			cat = cat[(cat['dist'] < 5) & (self.target_tmag-cat['tmag'] > -5)]
 
 			# Get info about the image:
 			npx = img.size
