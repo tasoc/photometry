@@ -6,11 +6,12 @@ Created on Mon Jan 22 17:21:56 2018
 .. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 """
 
+import os
 import numpy as np
-import matplotlib.pyplot as plt
 import random
 from astropy.io import fits
-from astropy.table import Table, Column
+from astropy.table import Table
+
 
 # Import stuff from the photometry directory:
 if __package__ is None:
@@ -28,11 +29,14 @@ class simulateFITS(object):
 		"""
 		Simulate a FITS image with stars, background and noise
 		"""
+		# Get output folder from enviroment variables:
+		output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
+
 		# Set random number generator seed:
 		random.seed(0)
-		
+
 		""" Set image parameters """
-		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
+		self.pixel_scale = 21.1 # Size of single pixel in arcsecs
 		self.Nrows = 200
 		self.Ncols = 200
 		# TODO: check that the following stamp definition is correct
@@ -102,7 +106,8 @@ class simulateFITS(object):
 		self.img = stars + bkg + noise
 
 		""" Output image to FITS file """
-		
+		hdu = fits.PrimaryHDU(self.img)
+		hdu.writeto(os.path.join(output_folder, 'test.fits'))
 
 
 
