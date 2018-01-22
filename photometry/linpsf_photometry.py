@@ -67,38 +67,43 @@ class LinPSFPhotometry(BasePhotometry):
 			# Set up parameters for PSF integration to PRF:
 			params = np.empty((len(cat), 3), dtype='float64')
 			for k, target in enumerate(cat):
-				params[k,:] = [target['row_stamp'], target['column_stamp'], mag2flux(target['tmag'])]
-		
+				params[k,:] = [target['row_stamp'], target['column_stamp'], 
+								mag2flux(target['tmag'])]
 
-			# Preallocate A:
+			# Create A, the 2D of vertically reshaped PRF 1D arrays:
 			A = np.empty([npx, nstars])
-			# Set up A and b:
-			for col in range(nstars):
-				# Reshape the parameters into a 2D array:
-				params = params.reshape(len(params)//3, 3)
+			for star,col in enumerate(range(nstars)):
+				# Reshape the parameters of each single star in the loop:
+				params0 = params[star,:].reshape(1, 3)
 
-				# Fill out column of A with reshaped PRF:
-				A[:,col] = np.reshape(self.psf.integrate_to_image(params, 
+				# Fill out column of A with reshaped PRF array from one star:
+				A[:,col] = np.reshape(self.psf.integrate_to_image(params0, 
 										cutoff_radius=20), npx)
+			
+			# Crate b, the solution array by reshaping the image to a 1D array:
 			b = np.reshape(img, npx)
 
-			# Do linear least squares fit:
+			# Do linear least squares fit to solve Ax=b:
 			try:
 				res = np.linalg.lstsq(A,b)
 			except:
 				res = 'failed'
 			logger.debug(res)
 
+			# Pass result if fit did not fail:
 			if res is not 'failed':
 				result = res[0][currentstar]
 				logger.debug(result)
 
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result
-				self.lightcurve['pos_centroid'][k] = result[0,0:2]
+				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
+#				self.lightcurve['pos_centroid'][k] = params[k,0:2]
 				self.lightcurve['quality'][k] = 0
 
-				#TODO: do a debugging plot
+				#TODO: do a debugging plot, check current star
+
+			# Pass result if fit failed:
 			else:
 				logger.warning("We should flag that this has not gone well.")
 
