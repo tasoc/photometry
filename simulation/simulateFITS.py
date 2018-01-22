@@ -13,6 +13,7 @@ import random
 from astropy.io import fits
 from astropy.table import Table, Column
 
+# Import stuff from the photometry directory:
 if __package__ is None:
 	import sys
 	from os import path
@@ -20,6 +21,7 @@ if __package__ is None:
 	
 	from photometry.psf import PSF
 	from photometry.utilities import mag2flux
+
 
 class simulateFITS(object):
 	def __init__(self):
@@ -33,11 +35,12 @@ class simulateFITS(object):
 		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
 		self.Nrows = 200
 		self.Ncols = 200
+		# TODO: check that the following stamp definition is correct
 		self.stamp = (
 						- self.Nrows//2,
-						self.Nrows//2 + 1,
+						self.Nrows//2,
 						- self.Ncols//2,
-						self.Ncols//2 + 1)
+						self.Ncols//2)
 
 		""" Make catalog """
 		# Set number of stars in image:
@@ -54,7 +57,9 @@ class simulateFITS(object):
 							for i in range(Nstars)])
 		# Draw stellar fluxes:
 		starflux = np.asarray([random.uniform(1e4,1e6) for i in range(Nstars)])
+		# Collect star parameters in list for catalog:
 		cat = [starids, starrows, starcols, starflux]
+		# Make astropy table with catalog:
 		self.catalog = Table(
 			cat,
 			names=('starid', 'row', 'col', 'tmag'),
@@ -62,8 +67,15 @@ class simulateFITS(object):
 		)
 
 		""" Make stars from catalog """
+		# Preallocate array for stars:
 		stars = np.zeros([self.Nrows, self.Ncols])
-#		for (row,col,flux) in zip(starrows,starcols,starflux):
+		# Create PSF class instance:
+		KPSF = PSF(camera=20, ccd=1, stamp=self.stamp)
+		# Convert catalog to parameters for the pixel integrater:
+		params = np.empty([len(cat), 3], dtype='float64')
+		# Add PRF of each star to the image:
+		for (row,col,flux) in zip(starrows,starcols,starflux):
+			stars += KPSF.integrate_to_image(params, cutoff_radius=20)
 #			stars += integratedGaussian(X, Y, flux, col, row, sigma)
 
 		""" Make uniform background """
