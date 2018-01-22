@@ -12,6 +12,7 @@ import scipy
 import random
 from astropy.io import fits
 from astropy.table import Table, Column
+import time
 
 # Import stuff from the photometry directory:
 if __package__ is None:
@@ -21,6 +22,7 @@ if __package__ is None:
 	
 	from photometry.psf import PSF
 	from photometry.utilities import mag2flux
+	from photometry.plots import plot_image
 
 
 class simulateFITS(object):
@@ -56,14 +58,14 @@ class simulateFITS(object):
 		starcols = np.asarray([random.uniform(bufferpx, self.Ncols-bufferpx) \
 							for i in range(Nstars)])
 		# Draw stellar fluxes:
-		starflux = np.asarray([random.uniform(1e4,1e6) for i in range(Nstars)])
+		starmag = np.asarray([random.uniform(5,10) for i in range(Nstars)])
 		# Collect star parameters in list for catalog:
-		cat = [starids, starrows, starcols, starflux]
+		cat = [starids, starrows, starcols, starmag, mag2flux(starmag)]
 		# Make astropy table with catalog:
 		self.catalog = Table(
 			cat,
-			names=('starid', 'row', 'col', 'tmag'),
-			dtype=('int64', 'float64', 'float64', 'float32')
+			names=('starid', 'row', 'col', 'tmag', 'flux'),
+			dtype=('int64', 'float64', 'float64', 'float32', 'float64')
 		)
 
 		""" Make stars from catalog """
@@ -71,11 +73,14 @@ class simulateFITS(object):
 		stars = np.zeros([self.Nrows, self.Ncols])
 		# Create PSF class instance:
 		KPSF = PSF(camera=20, ccd=1, stamp=self.stamp)
-		# Convert catalog to parameters for the pixel integrater:
-		params = np.empty([len(cat), 3], dtype='float64')
-		# Add PRF of each star to the image:
-		for (row,col,flux) in zip(starrows,starcols,starflux):
-			stars += KPSF.integrate_to_image(params, cutoff_radius=20)
+		# Make list with parameter arrays for the pixel integrater:
+		params = [np.array(
+					[self.catalog['row'][i], 
+					self.catalog['col'][i], 
+					self.catalog['flux'][i]]
+				) 
+				for i in range(Nstars)]
+		stars += KPSF.integrate_to_image(params, cutoff_radius=np.Inf)
 #			stars += integratedGaussian(X, Y, flux, col, row, sigma)
 
 		""" Make uniform background """
@@ -86,7 +91,7 @@ class simulateFITS(object):
 		noise = np.zeros_like(stars)
 
 		""" Sum image from its parts """
-		img = stars + bkg + noise
+		self.img = stars + bkg + noise
 
 		""" Output image to FITS file """
 
@@ -97,6 +102,8 @@ if __name__ == '__main__':
 	KPSF = PSF(20, 1, sim.stamp)
 #	KPSF.plot()
 	
-	print(sim.catalog)
-
+	catalog = sim.catalog
+	
+	print(catalog)
+	plot_image(sim.img)
 

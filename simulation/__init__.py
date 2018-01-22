@@ -7,4 +7,5 @@ from ..photometry.AperturePhotometry import AperturePhotometry
 from ..photometry.psf_photometry import PSFPhotometry
 from ..photometry.linpsf_photometry import LinPSFPhotometry
 from ..photometry.tessphot import tessphot
+from ..photometry.plots import plot_image
 from ..photometry.utilities import *
