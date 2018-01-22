@@ -68,13 +68,13 @@ class LinPSFPhotometry(BasePhotometry):
 			logger.debug(cat)
 	
 			# Only include stars that are close to the main target and that are not much fainter:
-			cat = cat[(cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -10)]
+			cat = cat[(cat['dist'] < 1) & (cat['tmag'][staridx]-cat['tmag'] > -5)]
 
 			# Log reduced catalog for current stamp:
 			logger.debug(cat)
 
 			# Update target star index in the reduced catalog:
-			staridx_cut = np.where(cat['starid']==self.starid)[0][0]
+			staridx = np.where(cat['starid']==self.starid)[0][0]
 
 			# Get info about the image:
 			npx = img.size
@@ -104,14 +104,13 @@ class LinPSFPhotometry(BasePhotometry):
 				res = np.linalg.lstsq(A,b)
 			except:
 				res = 'failed'
-			logger.debug(res)
 
 			# Pass result if fit did not fail:
 			if res is not 'failed':
 				# Get flux of target star:
 				fluxes = res[0]
-				result = fluxes[staridx_cut]
-				logger.debug(result)
+				result = fluxes[staridx]
+				logger.debug(fluxes)
 
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result
@@ -125,17 +124,22 @@ class LinPSFPhotometry(BasePhotometry):
 					result4plot.append(np.array([params[star,0], 
 												params[star,1],
 												fluxes[star]]))
+				logger.debug(result4plot)
 				# Plot image:
 				ax = fig.add_subplot(131)
-				ax.imshow(np.log10(img), origin='lower')
+				im = ax.imshow(np.log10(img), origin='lower')
+				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
+				plt.colorbar(im)
 				# Plot least squares fit:
 				ax = fig.add_subplot(132)
-				ax.imshow(np.log10(self.psf.integrate_to_image(result4plot)), origin='lower')
+				im = ax.imshow(np.log10(self.psf.integrate_to_image(result4plot)), origin='lower')
+				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
+				plt.colorbar(im)
 				# Plot the residuals:
 				ax = fig.add_subplot(133)
-				ax.imshow(img - self.psf.integrate_to_image(result4plot), origin='lower')
-#				plt.show()
-
+				im = ax.imshow(img - self.psf.integrate_to_image(result4plot), origin='lower')
+				plt.colorbar(im)
+				plt.show()
 
 			# Pass result if fit failed:
 			else:
