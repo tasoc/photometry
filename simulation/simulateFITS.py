@@ -12,7 +12,6 @@ import random
 from astropy.io import fits
 from astropy.table import Table
 
-
 # Import stuff from the photometry directory:
 if __package__ is None:
 	import sys
@@ -21,16 +20,20 @@ if __package__ is None:
 	
 	from photometry.psf import PSF
 	from photometry.utilities import mag2flux
-	from photometry.plots import plot_image
+#	from photometry.plots import plot_image
 
 
 class simulateFITS(object):
-	def __init__(self):
+	def __init__(self, Nstars = 5, Ntimes = 5, save_images=True):
 		"""
 		Simulate a FITS image with stars, background and noise
 		"""
+		self.Nstars = Nstars # Number of stars in image
+		self.Ntimes = Ntimes # Number of images in time series
+		
 		# Get output folder from enviroment variables:
-		output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
+		self.output_folder = os.environ.get('TESSPHOT_OUTPUT', 
+									os.path.abspath('.'))
 
 		# Set random number generator seed:
 		random.seed(0)
@@ -44,30 +47,65 @@ class simulateFITS(object):
 						- self.Nrows//2,
 						self.Nrows//2,
 						- self.Ncols//2,
-						self.Ncols//2)
-		self.Nstars = 5 # Number of stars in image
+						self.Ncols//2
+		)
 
-		# Make catalog:
-		self.catalog = self.make_catalog()
+		# Define time stamps:
+		self.times = self.make_times()
 
-		# Make stars from catalog:
-		self.stars, self.KPSF = self.make_stars()
+		# Run through the time stamps:
+		for i, timestamp in enumerate(self.times):
+			# Make catalog:
+			self.catalog = self.make_catalog()
+			
+			# Change catalog:
+			# TODO: apply time-dependent changes to catalog parameters
+	
+			# Make stars from catalog:
+			# FIXME: move catalog flux calculation to here
+			stars = self.make_stars()
+	
+			# Make uniform background:
+			bkg = self.make_background()
+	
+			# Make Gaussian noise:
+			noise = self.make_noise()
+	
+			# Sum image from its parts:
+			img = stars + bkg + noise
+	
+			if save_images:
+				# Output image to FITS file:
+				hdu = fits.PrimaryHDU(img)
+				hdu.header['TIME'] = (timestamp/3600/24, 'time in days')
+				# TODO: write target info to header
+				hdu.writeto(os.path.join(self.output_folder, 'test%02d.fits' % i))
 
-		# Make uniform background:
-		self.bkg = self.make_background()
 
-		# Make Gaussian noise:
-		self.noise = self.make_noise()
 
-		# Sum image from its parts:
-		self.img = self.stars + self.bkg + self.noise
-
-		# Output image to FITS file:
-		hdu = fits.PrimaryHDU(self.img)
-		hdu.writeto(os.path.join(output_folder, 'test.fits'))
+	def make_times(self, cadence = 1800.0):
+		"""
+		Make the time stamps
+		
+		Parameters:
+			cadence (float): Time difference between frames. Default is 1800 
+			seconds.
+		"""
+		# Define time stamps:
+		times = np.arange(0, cadence*self.Ntimes, cadence)
+		
+		# Ensure correct number of time steps:
+		if len(times) > self.Ntimes:
+			times = times[0:10]
+		
+		return times
 
 
 	def make_catalog(self):
+		"""
+		Returns:
+			`astropy.table.Table`: Table with stars in the image.
+		"""
 		# Set star identification:
 		starids = np.arange(self.Nstars, dtype=int)
 		
@@ -111,7 +149,7 @@ class simulateFITS(object):
 		# Integrate stars to image:
 		stars = KPSF.integrate_to_image(params, cutoff_radius=20)
 		
-		return stars, KPSF
+		return stars
 
 
 	def make_background(self):
@@ -119,14 +157,15 @@ class simulateFITS(object):
 		bkg_level = 1e3
 		
 		# Apply background level by multiplying:
-		return bkg_level * np.ones_like(self.stars)
+		return bkg_level * np.ones([self.Nrows, self.Ncols])
+
 
 	def make_noise(self):
 		# Set sigma value:
 		sigma = 10
 		
 		# Preallocate noise array:
-		noise = np.zeros_like(self.stars)
+		noise = np.zeros([self.Nrows, self.Ncols])
 		
 		# Loop over each pixel:
 		for row in range(self.Nrows):
@@ -139,11 +178,6 @@ class simulateFITS(object):
 
 if __name__ == '__main__':
 	sim = simulateFITS()
-	KPSF = PSF(20, 1, sim.stamp)
-#	KPSF.plot()
-	
 	catalog = sim.catalog
-	
 	print(catalog)
-	plot_image(sim.img)
 
