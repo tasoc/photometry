@@ -56,23 +56,34 @@ class LinPSFPhotometry(BasePhotometry):
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
+			# Get target star index in the catalog:
+			staridx = np.where(cat['starid']==self.starid)[0][0]
+
 			# Calculate distance from main target:
-			cat['dist'] = np.sqrt((self.target_pos_row_stamp - cat['row_stamp'])**2 + (self.target_pos_column_stamp - cat['column_stamp'])**2)
-			print(cat)
+			# FIXME: the target_pos_row_stamp is not at the right time!
+			cat['dist'] = np.sqrt((cat['row_stamp'][staridx] - cat['row_stamp'])**2 + \
+							(cat['column_stamp'][staridx] - cat['column_stamp'])**2)
+
+			# Log full catalog for current stamp:
+			logger.debug(cat)
 	
 			# Only include stars that are close to the main target and that are not much fainter:
-			cat = cat[(cat['dist'] < 5) & (self.target_tmag-cat['tmag'] > -5)]
+			cat = cat[(cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -10)]
+
+			# Log reduced catalog for current stamp:
+			logger.debug(cat)
+
+			# Update target star index in the reduced catalog:
+			staridx_cut = np.where(cat['starid']==self.starid)[0][0]
 
 			# Get info about the image:
 			npx = img.size
 			nstars = len(cat['tmag'])
-			currentstar = 0
-			# FIXME: check that this is the right star!
 
 			# Set up parameters for PSF integration to PRF:
 			params = np.empty((len(cat), 3), dtype='float64')
-			for k, target in enumerate(cat):
-				params[k,:] = [target['row_stamp'], target['column_stamp'], 
+			for row, target in enumerate(cat):
+				params[row,:] = [target['row_stamp'], target['column_stamp'], 
 								mag2flux(target['tmag'])]
 
 			# Create A, the 2D of vertically reshaped PRF 1D arrays:
@@ -97,7 +108,9 @@ class LinPSFPhotometry(BasePhotometry):
 
 			# Pass result if fit did not fail:
 			if res is not 'failed':
-				result = res[0][currentstar]
+				# Get flux of target star:
+				fluxes = res[0]
+				result = fluxes[staridx_cut]
 				logger.debug(result)
 
 				# Add the result of the main star to the lightcurve:
@@ -106,7 +119,23 @@ class LinPSFPhotometry(BasePhotometry):
 #				self.lightcurve['pos_centroid'][k] = params[k,0:2]
 				self.lightcurve['quality'][k] = 0
 
-				#TODO: do a debugging plot, check current star
+				fig = plt.figure()
+				result4plot = []
+				for star in range(nstars):
+					result4plot.append(np.array([params[star,0], 
+												params[star,1],
+												fluxes[star]]))
+				# Plot image:
+				ax = fig.add_subplot(131)
+				ax.imshow(np.log10(img), origin='lower')
+				# Plot least squares fit:
+				ax = fig.add_subplot(132)
+				ax.imshow(np.log10(self.psf.integrate_to_image(result4plot)), origin='lower')
+				# Plot the residuals:
+				ax = fig.add_subplot(133)
+				ax.imshow(img - self.psf.integrate_to_image(result4plot), origin='lower')
+#				plt.show()
+
 
 			# Pass result if fit failed:
 			else:
