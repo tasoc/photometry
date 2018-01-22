@@ -8,11 +8,9 @@ Created on Mon Jan 22 17:21:56 2018
 
 import numpy as np
 import matplotlib.pyplot as plt
-import scipy
 import random
 from astropy.io import fits
 from astropy.table import Table, Column
-import time
 
 # Import stuff from the photometry directory:
 if __package__ is None:
@@ -46,7 +44,7 @@ class simulateFITS(object):
 
 		""" Make catalog """
 		# Set number of stars in image:
-		Nstars = 2
+		Nstars = 5
 		# Set star identification:
 		starids = np.arange(Nstars, dtype=int)
 		# Set buffer pixel size around edge where not to put stars:
@@ -80,7 +78,7 @@ class simulateFITS(object):
 					self.catalog['flux'][i]]
 				) 
 				for i in range(Nstars)]
-		stars += KPSF.integrate_to_image(params, cutoff_radius=np.Inf)
+		stars += KPSF.integrate_to_image(params, cutoff_radius=20)
 #			stars += integratedGaussian(X, Y, flux, col, row, sigma)
 
 		""" Make uniform background """
@@ -88,12 +86,23 @@ class simulateFITS(object):
 		bkg = bkg_level * np.ones_like(stars)
 
 		""" Make Gaussian noise """
+		# Set full width at half maximum in pixels:
+		fwhm = 1.5
+		# Infer sigma value from this:
+		sigma = fwhm / (2*np.sqrt(2*np.log(2)))
+		# Preallocate noise array:
 		noise = np.zeros_like(stars)
+		# Loop over each pixel:
+		for row in range(self.Nrows):
+			for col in range(self.Ncols):
+				# Draw a random value from a Gaussian (normal) distribution:
+				noise[row,col] = random.gauss(mu=0, sigma=sigma)
 
 		""" Sum image from its parts """
 		self.img = stars + bkg + noise
 
 		""" Output image to FITS file """
+		
 
 
 
