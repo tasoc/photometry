@@ -65,16 +65,17 @@ class LinPSFPhotometry(BasePhotometry):
 							(cat['column_stamp'][staridx] - cat['column_stamp'])**2)
 
 			# Log full catalog for current stamp:
-			logger.debug(cat)
+#			logger.debug(cat)
 	
 			# Only include stars that are close to the main target and that are not much fainter:
-			cat = cat[(cat['dist'] < 1) & (cat['tmag'][staridx]-cat['tmag'] > -5)]
+			cat = cat[(cat['dist'] < 1) & (cat['tmag'][staridx]-cat['tmag'] > -10)]
 
 			# Log reduced catalog for current stamp:
 			logger.debug(cat)
 
 			# Update target star index in the reduced catalog:
 			staridx = np.where(cat['starid']==self.starid)[0][0]
+			logger.debug('Target star index: '+np.str(staridx))
 
 			# Get info about the image:
 			npx = img.size
@@ -86,6 +87,9 @@ class LinPSFPhotometry(BasePhotometry):
 				params[row,:] = [target['row_stamp'], target['column_stamp'], 
 								mag2flux(target['tmag'])]
 
+#			# Change target star location for debugging:
+#			params[staridx][0:2] += np.array([0.0, 0.5])
+
 			# Create A, the 2D of vertically reshaped PRF 1D arrays:
 			A = np.empty([npx, nstars])
 			for star,col in enumerate(range(nstars)):
@@ -95,7 +99,7 @@ class LinPSFPhotometry(BasePhotometry):
 				# Fill out column of A with reshaped PRF array from one star:
 				A[:,col] = np.reshape(self.psf.integrate_to_image(params0, 
 										cutoff_radius=20), npx)
-			
+
 			# Crate b, the solution array by reshaping the image to a 1D array:
 			b = np.reshape(img, npx)
 
@@ -104,6 +108,7 @@ class LinPSFPhotometry(BasePhotometry):
 				res = np.linalg.lstsq(A,b)
 			except:
 				res = 'failed'
+			logger.debug(res)
 
 			# Pass result if fit did not fail:
 			if res is not 'failed':
@@ -118,6 +123,7 @@ class LinPSFPhotometry(BasePhotometry):
 #				self.lightcurve['pos_centroid'][k] = params[k,0:2]
 				self.lightcurve['quality'][k] = 0
 
+				# Make plot for debugging:
 				fig = plt.figure()
 				result4plot = []
 				for star in range(nstars):
@@ -127,17 +133,17 @@ class LinPSFPhotometry(BasePhotometry):
 				logger.debug(result4plot)
 				# Plot image:
 				ax = fig.add_subplot(131)
-				im = ax.imshow(np.log10(img), origin='lower')
+				im = ax.imshow(img, origin='lower')
 				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
 				plt.colorbar(im)
 				# Plot least squares fit:
 				ax = fig.add_subplot(132)
-				im = ax.imshow(np.log10(self.psf.integrate_to_image(result4plot)), origin='lower')
+				im = ax.imshow(self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
 				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
 				plt.colorbar(im)
 				# Plot the residuals:
 				ax = fig.add_subplot(133)
-				im = ax.imshow(img - self.psf.integrate_to_image(result4plot), origin='lower')
+				im = ax.imshow(img - self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
 				plt.colorbar(im)
 				plt.show()
 
