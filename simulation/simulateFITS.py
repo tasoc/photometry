@@ -29,6 +29,11 @@ class simulateFITS(object):
 		"""
 		Simulate FITS images with stars, background and noise.
 		
+		The purpose of this code is not to replace SPyFFI, but to supplement it
+		in making simulated images simpler and more customizable. The aim is to
+		supply simulated images that can illustrate the performance of various
+		photometry methods in the photometry pipeline.
+		
 		Parameters:
 			Nstars (int): Number of stars in image. Default is 5.
 			Ntimes (int): Number of time steps in timeseries. Default is 5.
@@ -43,6 +48,8 @@ class simulateFITS(object):
 			TESSPHOT_OUTPUT environment variable:
 				
 			>>> sim = simulateFITS()
+		
+		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
 		self.Nstars = Nstars # Number of stars in image
 		self.Ntimes = Ntimes # Number of images in time series
