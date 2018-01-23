@@ -108,7 +108,6 @@ class PSFPhotometry(BasePhotometry):
 				self.lightcurve['pos_centroid'][k] = result[0,0:2]
 				self.lightcurve['quality'][k] = 0
 
-				# TODO: outcomment this plotting feature eventually?
 				fig = plt.figure()
 				ax = fig.add_subplot(131)
 				ax.imshow(np.log10(img), origin='lower')
@@ -118,6 +117,7 @@ class PSFPhotometry(BasePhotometry):
 				ax.imshow(np.log10(self.psf.integrate_to_image(result)), origin='lower')
 				ax = fig.add_subplot(133)
 				ax.imshow(img - self.psf.integrate_to_image(result, cutoff_radius=10), origin='lower')
+#				plt.show()
 
 				# In the next iteration, start from the current solution:
 				params0 = res.x
