@@ -57,7 +57,7 @@ class simulateFITS(object):
 		random.seed(0)
 
 		# Set image parameters:
-		self.pixel_scale = 21.1 # Size of single pixel in arcsecs
+		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
 		self.Nrows = 200
 		self.Ncols = 200
 		self.stamp = (0,200,0,200)
