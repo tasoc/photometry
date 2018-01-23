@@ -177,17 +177,12 @@ class simulateFITS(object):
 		# Create PSF class instance:
 		KPSF = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
 		
-		# Append flux column to catalog:
-		starflux = mag2flux(self.catalog['tmag'])
-		Col = Column(data=starflux, name='flux', dtype='float64')
-		self.catalog.add_column(Col)
-		
 		# Make list with parameter numpy arrays for the pixel integrater:
 		params = [
 					np.array(
 						[self.catalog['row'][i], 
 						self.catalog['col'][i], 
-						self.catalog['flux'][i]]
+						mag2flux(self.catalog['tmag'][i])]
 					) 
 				for i in range(self.Nstars)
 				]
@@ -264,6 +259,6 @@ class simulateFITS(object):
 
 
 if __name__ == '__main__':
-	sim = simulateFITS()
+	sim = simulateFITS(save_images=False)
 	print(sim.catalog)
 
