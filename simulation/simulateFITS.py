@@ -27,7 +27,7 @@ class simulateFITS(object):
 	def __init__(self, Nstars = 5, Ntimes = 5, 
 			save_images=True, overwrite_images=True):
 		"""
-		Simulate a FITS image with stars, background and noise.
+		Simulate FITS images with stars, background and noise.
 		
 		Parameters:
 			Nstars (int): Number of stars in image. Default is 5.
@@ -39,8 +39,8 @@ class simulateFITS(object):
 		
 		Example:
 			Default use. Write 5 FITS images of shape 200x200px with 5 stars in
-			them to the directory specified by the TESSPHOT_OUTPUT environment 
-			variable:
+			them to five separate files in the directory specified by the 
+			TESSPHOT_OUTPUT environment variable:
 				
 			>>> sim = simulateFITS()
 		"""
