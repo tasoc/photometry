@@ -95,7 +95,7 @@ class simulateFITS(object):
 				# Write img to FITS file:
 				# TODO: Add possibility to write to custom directory
 				self.make_fits(img, timestamp, i)
-
+				# TODO: Save catalog somehow
 
 
 	def make_times(self, cadence = 1800.0):
