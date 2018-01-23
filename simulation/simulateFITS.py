@@ -66,10 +66,14 @@ class simulateFITS(object):
 		# Define time stamps:
 		self.times = self.make_times()
 
+		# Make catalog:
+		self.catalog = self.make_catalog()
+		
+		# Change catalog:
+		# TODO: apply time-independent changes to catalog
+		
 		# Loop through the time stamps:
 		for i, timestamp in enumerate(self.times):
-			# Make catalog:
-			self.catalog = self.make_catalog()
 			
 			# Change catalog:
 			# TODO: apply time-dependent changes to catalog parameters
@@ -132,6 +136,7 @@ class simulateFITS(object):
 		starids = np.arange(self.Nstars, dtype=int)
 		
 		# Set buffer pixel size around edge where not to put stars:
+		# TODO: Add possibility of stars on the edges
 		bufferpx = 3
 		
 		# Draw uniform row positions:
@@ -207,13 +212,13 @@ class simulateFITS(object):
 		return bkg_level * np.ones([self.Nrows, self.Ncols])
 
 
-	def make_noise(self, sigma=10.0):
+	def make_noise(self, sigma=500.0):
 		"""
 		Make Gaussian noise uniformily across the image.
 		
 		Parameters:
 			sigma (float): Sigma parameter of Gaussian distribution for noise.
-			Default is 10.0.
+			Default is 500.0.
 		
 		Returns:
 			noise (numpy array): Noise array of the same shape as image.
