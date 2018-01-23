@@ -50,7 +50,7 @@ class simulateFITS(object):
 		self.overwrite_images = overwrite_images # True if overwrite in saving
 		
 		# Get output directory from enviroment variable:
-		self.output_folder = os.environ.get('TESSPHOT_OUTPUT', 
+		self.output_folder = os.environ.get('TESSPHOT_INPUT', 
 									os.path.abspath('.'))
 
 		# Set random number generator seed:
@@ -60,7 +60,7 @@ class simulateFITS(object):
 		self.pixel_scale = 21.1 # Size of single pixel in arcsecs
 		self.Nrows = 200
 		self.Ncols = 200
-		# TODO: check that the following stamp definition is correct
+		# TODO: change to 0 to 200 for each dim
 		self.stamp = (
 						- self.Nrows//2,
 						self.Nrows//2,
@@ -95,7 +95,7 @@ class simulateFITS(object):
 				# Write img to FITS file:
 				# TODO: Add possibility to write to custom directory
 				self.make_fits(img, timestamp, i)
-				# TODO: Save catalog somehow
+				# TODO: Save catalog as txt file to output_folder
 
 
 	def make_times(self, cadence = 1800.0):
@@ -255,7 +255,7 @@ class simulateFITS(object):
 		
 		if outdir is None:
 			# Specify output directory:
-			outdir = self.output_folder
+			outdir = os.path.join(self.output_folder, 'images')
 		
 		# Write FITS file to output directory:
 		hdu.writeto(os.path.join(outdir, 'test%02d.fits' % i),
