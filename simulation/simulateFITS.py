@@ -10,7 +10,7 @@ import os
 import numpy as np
 import random
 from astropy.io import fits
-from astropy.table import Table
+from astropy.table import Table, Column
 
 # Import stuff from the photometry directory:
 if __package__ is None:
@@ -24,14 +24,32 @@ if __package__ is None:
 
 
 class simulateFITS(object):
-	def __init__(self, Nstars = 5, Ntimes = 5, save_images=True):
+	def __init__(self, Nstars = 5, Ntimes = 5, 
+			save_images=True, overwrite_images=True):
 		"""
-		Simulate a FITS image with stars, background and noise
+		Simulate a FITS image with stars, background and noise.
+		
+		Parameters:
+			Nstars (int): Number of stars in image. Default is 5.
+			Ntimes (int): Number of time steps in timeseries. Default is 5.
+			save_images (boolean): True if images should be saved. Default is
+			True.
+			overwrite_images (boolean): True if image files with the same name
+			as the ones to be written should be overwritten.
+		
+		Example:
+			Default use. Write 5 FITS images of shape 200x200px with 5 stars in
+			them to the directory specified by the TESSPHOT_OUTPUT environment 
+			variable:
+				
+			>>> sim = simulateFITS()
 		"""
 		self.Nstars = Nstars # Number of stars in image
 		self.Ntimes = Ntimes # Number of images in time series
+		self.save_images = save_images # True if images should be saved
+		self.overwrite_images = overwrite_images # True if overwrite in saving
 		
-		# Get output folder from enviroment variables:
+		# Get output directory from enviroment variable:
 		self.output_folder = os.environ.get('TESSPHOT_OUTPUT', 
 									os.path.abspath('.'))
 
@@ -53,7 +71,7 @@ class simulateFITS(object):
 		# Define time stamps:
 		self.times = self.make_times()
 
-		# Run through the time stamps:
+		# Loop through the time stamps:
 		for i, timestamp in enumerate(self.times):
 			# Make catalog:
 			self.catalog = self.make_catalog()
@@ -62,7 +80,6 @@ class simulateFITS(object):
 			# TODO: apply time-dependent changes to catalog parameters
 	
 			# Make stars from catalog:
-			# FIXME: move catalog flux calculation to here
 			stars = self.make_stars()
 	
 			# Make uniform background:
@@ -74,27 +91,29 @@ class simulateFITS(object):
 			# Sum image from its parts:
 			img = stars + bkg + noise
 	
-			if save_images:
-				# Output image to FITS file:
-				hdu = fits.PrimaryHDU(img)
-				hdu.header['TIME'] = (timestamp/3600/24, 'time in days')
-				# TODO: write target info to header
-				hdu.writeto(os.path.join(self.output_folder, 'test%02d.fits' % i))
+			if self.save_images:
+				# Write img to FITS file:
+				# TODO: Add possibility to write to custom directory
+				self.make_fits(img, timestamp, i)
 
 
 
 	def make_times(self, cadence = 1800.0):
 		"""
-		Make the time stamps
+		Make the time stamps.
 		
 		Parameters:
 			cadence (float): Time difference between frames. Default is 1800 
 			seconds.
+		
+		Returns:
+			times (numpy array): Timestamps of all images to be made.
 		"""
 		# Define time stamps:
 		times = np.arange(0, cadence*self.Ntimes, cadence)
 		
-		# Ensure correct number of time steps:
+		# Force correct number of time steps:
+		# (this is necessary because cadence is not an int)
 		if len(times) > self.Ntimes:
 			times = times[0:10]
 		
@@ -103,8 +122,16 @@ class simulateFITS(object):
 
 	def make_catalog(self):
 		"""
+		Make catalog of stars in the current image.
+		
+		The table contains the following columns:
+		 * starid: Identifier. Starts at 0.
+		 * row:    Pixel row in image.
+		 * col:    Pixel column in image.
+		 * tmag:   TESS magnitude.
+		
 		Returns:
-			`astropy.table.Table`: Table with stars in the image.
+			`astropy.table.Table`: Table with stars in the current image.
 		"""
 		# Set star identification:
 		starids = np.arange(self.Nstars, dtype=int)
@@ -120,49 +147,82 @@ class simulateFITS(object):
 		starcols = np.asarray([random.uniform(bufferpx, self.Ncols-bufferpx) \
 							for i in range(self.Nstars)])
 	
-		# Draw stellar fluxes:
+		# Draw stellar magnitudes:
 		starmag = np.asarray([random.uniform(5,10) for i in range(self.Nstars)])
 		
 		# Collect star parameters in list for catalog:
-		cat = [starids, starrows, starcols, starmag, mag2flux(starmag)]
+		cat = [starids, starrows, starcols, starmag]
 		
 		# Make astropy table with catalog:
 		return Table(
 			cat,
-			names=('starid', 'row', 'col', 'tmag', 'flux'),
-			dtype=('int64', 'float64', 'float64', 'float32', 'float64')
+			names=('starid', 'row', 'col', 'tmag'),
+			dtype=('int64', 'float64', 'float64', 'float32')
 		)
 
 
-	def make_stars(self):
-		# Create PSF class instance:
-		KPSF = PSF(camera=20, ccd=1, stamp=self.stamp)
+	def make_stars(self, camera=20, ccd=1):
+		"""
+		Make stars for the image and append catalog with flux column.
 		
-		# Make list with parameter arrays for the pixel integrater:
-		params = [np.array(
-					[self.catalog['row'][i], 
-					self.catalog['col'][i], 
-					self.catalog['flux'][i]]
-				) 
-				for i in range(self.Nstars)]
+		Parameters:
+			camera (int): Kepler camera. Used to get PSF. Default is 20.
+			ccd (int): Kepler CCD. Used to get PSF. Default is 1.
+		
+		Returns:
+			stars (numpy array): Summed PRFs of stars in the image of the same
+			shape as image.
+		"""
+		
+		# Create PSF class instance:
+		KPSF = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
+		
+		# Append flux column to catalog:
+		starflux = mag2flux(self.catalog['tmag'])
+		Col = Column(data=starflux, name='flux', dtype='float64')
+		self.catalog.add_column(Col)
+		
+		# Make list with parameter numpy arrays for the pixel integrater:
+		params = [
+					np.array(
+						[self.catalog['row'][i], 
+						self.catalog['col'][i], 
+						self.catalog['flux'][i]]
+					) 
+				for i in range(self.Nstars)
+				]
 		
 		# Integrate stars to image:
-		stars = KPSF.integrate_to_image(params, cutoff_radius=20)
+		return KPSF.integrate_to_image(params, cutoff_radius=20)
+
+
+	def make_background(self, bkg_level=1e3):
+		"""
+		Make a background for the image.
 		
-		return stars
-
-
-	def make_background(self):
-		# Set background level:
-		bkg_level = 1e3
+		Parameters:
+			bkg_level (float): Background level of uniform background. Default
+			is 1000.
+		
+		Returns:
+			bkg (numpy array): Background array of the same shape as image.
+		"""
 		
 		# Apply background level by multiplying:
 		return bkg_level * np.ones([self.Nrows, self.Ncols])
 
 
-	def make_noise(self):
-		# Set sigma value:
-		sigma = 10
+	def make_noise(self, sigma=10.0):
+		"""
+		Make Gaussian noise uniformily across the image.
+		
+		Parameters:
+			sigma (float): Sigma parameter of Gaussian distribution for noise.
+			Default is 10.0.
+		
+		Returns:
+			noise (numpy array): Noise array of the same shape as image.
+		"""
 		
 		# Preallocate noise array:
 		noise = np.zeros([self.Nrows, self.Ncols])
@@ -176,8 +236,34 @@ class simulateFITS(object):
 		return noise
 
 
+	def make_fits(self, img, timestamp, i, outdir=None):
+		"""
+		Write image to FITS file.
+		
+		Parameters:
+			img (numpy array): Image to write to file.
+			timestamp (float): Timestamp in seconds of image.
+			i (int): Timestamp index that is used in filename.
+		"""
+		
+		# Instantiate primary header data unit:
+		hdu = fits.PrimaryHDU(img)
+		
+		# Add timestamp to header with a unit of days:
+		hdu.header['TIME'] = (timestamp/3600/24, 'time in days')
+		# TODO: write more info to header
+		
+		if outdir is None:
+			# Specify output directory:
+			outdir = self.output_folder
+		
+		# Write FITS file to output directory:
+		hdu.writeto(os.path.join(outdir, 'test%02d.fits' % i),
+					overwrite=self.overwrite_images)
+
+
+
 if __name__ == '__main__':
 	sim = simulateFITS()
-	catalog = sim.catalog
-	print(catalog)
+	print(sim.catalog)
 
