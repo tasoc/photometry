@@ -60,14 +60,9 @@ class simulateFITS(object):
 		self.pixel_scale = 21.1 # Size of single pixel in arcsecs
 		self.Nrows = 200
 		self.Ncols = 200
-		# TODO: change to 0 to 200 for each dim
-		self.stamp = (
-						- self.Nrows//2,
-						self.Nrows//2,
-						- self.Ncols//2,
-						self.Ncols//2
-		)
+		self.stamp = (0,200,0,200)
 
+		# TODO: move the rest of __init__ to a run_simulateFITS in parent dir
 		# Define time stamps:
 		self.times = self.make_times()
 
