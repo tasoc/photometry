@@ -9,6 +9,7 @@ Created on Mon Jan 22 17:21:56 2018
 import os
 import numpy as np
 import random
+from copy import deepcopy
 from astropy.io import fits
 from astropy.table import Table, Column
 
@@ -37,15 +38,15 @@ class simulateFITS(object):
 		Parameters:
 			Nstars (int): Number of stars in image. Default is 5.
 			Ntimes (int): Number of time steps in timeseries. Default is 5.
-			save_images (boolean): True if images should be saved. Default is
-			True.
-			overwrite_images (boolean): True if image files with the same name
-			as the ones to be written should be overwritten.
+			save_images (boolean): True if images and catalog should be saved. 
+			Default is True.
+			overwrite_images (boolean): True if image and catalog files should 
+			be overwritten.
 		
 		Example:
 			Default use. Write 5 FITS images of shape 200x200px with 5 stars in
-			them to five separate files in the directory specified by the 
-			TESSPHOT_OUTPUT environment variable:
+			them to five separate files in a subdirectory called images in the 
+			directory specified by the TESSPHOT_INPUT environment variable:
 				
 			>>> sim = simulateFITS()
 		
@@ -53,7 +54,7 @@ class simulateFITS(object):
 		"""
 		self.Nstars = Nstars # Number of stars in image
 		self.Ntimes = Ntimes # Number of images in time series
-		self.save_images = save_images # True if images should be saved
+		self.save_images = save_images # True if images+catalog should be saved
 		self.overwrite_images = overwrite_images # True if overwrite in saving
 		
 		# Get output directory from enviroment variable:
@@ -75,6 +76,7 @@ class simulateFITS(object):
 
 		# Make catalog:
 		self.catalog = self.make_catalog()
+		self.make_catalog_file(self.catalog)
 		
 		# Change catalog:
 		# TODO: apply time-independent changes to catalog
@@ -137,7 +139,8 @@ class simulateFITS(object):
 		 * tmag:   TESS magnitude.
 		
 		Returns:
-			`astropy.table.Table`: Table with stars in the current image.
+			catalog (`astropy.table.Table`): Table with stars in the current 
+			image.
 		"""
 		# Set star identification:
 		starids = np.arange(self.Nstars, dtype=int)
@@ -166,6 +169,59 @@ class simulateFITS(object):
 			names=('starid', 'row', 'col', 'tmag'),
 			dtype=('int64', 'float64', 'float64', 'float32')
 		)
+
+
+	def make_catalog_file(self, catalog, fname='catalog', compress=True):
+		"""
+		Write catalog to an ASCII file.
+		
+		Parameters:
+			catalog (`astropy.table.Table`): Table with stars in the current 
+			image. Columns must be starid, row, col, tmag.
+			fname (string): Filename of catalog. Default is catalog.
+			compress (boolean): True if catalog txt file is to be compressed
+			and the uncompressed version deleted. Default is True
+		"""
+		if self.save_images:
+			# Set ra and dec positions:
+			# TODO: Convert (row, col) to (ra, dec)
+			ra = None
+			dec = None
+			
+			# Set proper motion:
+			prop_mot_ra = np.zeros_like(catalog['tmag'])
+			prop_mot_dec = np.zeros_like(catalog['tmag'])
+			
+			# Define extra columns:
+			Col_ra = Column(ra, dtype=np.float64)
+			Col_dec = Column(dec, dtype=np.float64)
+			Col_prop_mot_ra = Column(prop_mot_ra, dtype=np.float32)
+			Col_prop_mot_dec = Column(prop_mot_dec, dtype=np.float32)
+			
+			# Add extra columns to catalog:
+			catalog.add_columns([Col_ra, Col_dec, 
+								Col_prop_mot_ra, Col_prop_mot_dec],
+								indexes=[0,0,0,0],
+								names=['ra', 'dec', 
+									'prop_mot_ra', 'prop_mot_dec'])
+			
+			# Convert catalog to numpy array:
+			catalog_out = np.asarray(catalog)
+			
+			if self.overwrite_images:
+				# Directory with filename of catalog output file:
+				if compress:
+					fextension = '.txt.gz'
+				else:
+					fextension = '.txt'
+				txtfiledir = os.path.join(self.output_folder, fname+fextension)
+				
+				# Write catalog to txt file:
+				np.savetxt(txtfiledir, np.column_stack(catalog_out), 
+							delimiter='\t', header=catalog.colnames)
+			else:
+				# TODO: add check and error if file exists
+				pass
 
 
 	def make_stars(self, camera=20, ccd=1):
