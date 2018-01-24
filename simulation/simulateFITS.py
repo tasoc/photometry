@@ -9,7 +9,6 @@ Created on Mon Jan 22 17:21:56 2018
 import os
 import numpy as np
 import random
-from copy import deepcopy
 from astropy.io import fits
 from astropy.table import Table, Column
 
@@ -49,6 +48,18 @@ class simulateFITS(object):
 			directory specified by the TESSPHOT_INPUT environment variable:
 				
 			>>> sim = simulateFITS()
+			
+			Print catalog. This call does not save images or a catalog file, 
+			but will print the catalog.
+			
+			>>> sim = simulateFITS(save_images=False)
+			      ra           dec      prop_mot_ra ...      row           col        tmag 
+			------------- ------------- ----------- ... ------------- ------------- -------
+			13981.2381712 28597.3438621         0.0 ... 166.817839196 81.5572226654 9.54056
+			 26581.187361 25721.6835721         0.0 ...  150.04315417 155.056926273 7.52343
+			10601.6003759 14501.2948596         0.0 ... 84.5908866812 61.8426688593 6.40919
+			16364.5387038 9125.11706689         0.0 ... 53.2298495568 95.4598091056 8.77902
+			19915.9055407 17517.8221621         0.0 ... 102.187295946 116.176115654 8.09184
 		
 		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
@@ -193,30 +204,31 @@ class simulateFITS(object):
 			compress (boolean): True if catalog txt file is to be compressed
 			and the uncompressed version deleted. Default is True
 		"""
+		
+		# Set arbitrary ra and dec from pixel coordinates:
+		# (neglect spacial transformation to spherical coordinates)
+		zero_point = [0,0]
+		ra = catalog['col'] * self.pixel_scale/3600 + zero_point[0]
+		dec = catalog['row'] * self.pixel_scale/3600 + zero_point[1]
+		
+		# Set proper motion:
+		prop_mot_ra = np.zeros_like(catalog['tmag'])
+		prop_mot_dec = np.zeros_like(catalog['tmag'])
+		
+		# Define extra columns:
+		Col_ra = Column(data=ra, name='ra', dtype=np.float64)
+		Col_dec = Column(data=dec, name='dec', dtype=np.float64)
+		Col_prop_mot_ra = Column(data=prop_mot_ra, name='prop_mot_ra',
+							dtype=np.float64)
+		Col_prop_mot_dec = Column(data=prop_mot_dec, name='prop_mot_dec',
+							dtype=np.float64)
+		
+		# Add extra columns to catalog:
+		catalog.add_columns([Col_ra, Col_dec, 
+							Col_prop_mot_ra, Col_prop_mot_dec],
+							indexes=[0,0,0,0])
+		
 		if self.save_images:
-			# Set arbitrary ra and dec from pixel coordinates:
-			# (neglect spacial transformations to spherical coordinates)
-			zero_point = [0,0]
-			ra = catalog['col'] / self.pixel_scale*3600 + zero_point[0]
-			dec = catalog['row'] / self.pixel_scale*3600 + zero_point[1]
-			
-			# Set proper motion:
-			prop_mot_ra = np.zeros_like(catalog['tmag'])
-			prop_mot_dec = np.zeros_like(catalog['tmag'])
-			
-			# Define extra columns:
-			Col_ra = Column(ra, dtype=np.float64)
-			Col_dec = Column(dec, dtype=np.float64)
-			Col_prop_mot_ra = Column(prop_mot_ra, dtype=np.float32)
-			Col_prop_mot_dec = Column(prop_mot_dec, dtype=np.float32)
-			
-			# Add extra columns to catalog:
-			catalog.add_columns([Col_ra, Col_dec, 
-								Col_prop_mot_ra, Col_prop_mot_dec],
-								indexes=[0,0,0,0],
-								names=['ra', 'dec', 
-									'prop_mot_ra', 'prop_mot_dec'])
-			
 			# Convert catalog to numpy array:
 			catalog_out = np.asarray(catalog)
 			
@@ -235,7 +247,7 @@ class simulateFITS(object):
 				# TODO: add check and error if file exists
 				pass
 		else:
-			pass
+			print(catalog)
 
 
 	def make_stars(self, camera=20, ccd=1):
@@ -338,5 +350,4 @@ class simulateFITS(object):
 
 if __name__ == '__main__':
 	sim = simulateFITS(save_images=False)
-	print(sim.catalog)
 
