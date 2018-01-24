@@ -13,14 +13,13 @@ from astropy.io import fits
 from astropy.table import Table, Column
 
 # Import stuff from the photometry directory:
-if __package__ is None:
-	import sys
-	from os import path
-	sys.path.append( path.dirname( path.dirname( path.abspath(__file__))))
-	
-	from photometry.psf import PSF
-	from photometry.utilities import mag2flux
-	from photometry.plots import plot_image
+import sys
+from os import path
+sys.path.append( path.dirname( path.dirname( path.abspath(__file__))))
+
+from photometry.psf import PSF
+from photometry.utilities import mag2flux
+#from photometry.plots import plot_image
 
 
 class simulateFITS(object):
@@ -70,8 +69,8 @@ class simulateFITS(object):
 		
 		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
-		self.Nstars = Nstars # Number of stars in image
-		self.Ntimes = Ntimes # Number of images in time series
+		self.Nstars = np.int(Nstars) # Number of stars in image
+		self.Ntimes = np.int(Ntimes) # Number of images in time series
 		self.save_images = save_images # True if images+catalog should be saved
 		self.overwrite_images = overwrite_images # True if overwrite in saving
 		

@@ -11,8 +11,7 @@ Structure inspired by `run_tessphot` by Rasmus Handberg.
 #import os
 import argparse
 #import logging
-from simulation import simulateFITS
-
+from simulation.simulateFITS import simulateFITS
 
 if __name__ == '__main__':
 	
@@ -23,9 +22,9 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description=
 		'Simulate FITS images to be used by the photometry pipeline.')
 	parser.add_argument('-s', '--Nstars',
-					help='Number of stars in image', default=None)
+					help='Number of stars in image', default=5)
 	parser.add_argument('-t', '--Ntimes', 
-					help='Number of time steps and FITS images', default=None)
+					help='Number of time steps and FITS images', default=5)
 #	parser.add_argument('-d', '--debug', 
 #					help='Print debug messages.',
 #					action='store_true')
