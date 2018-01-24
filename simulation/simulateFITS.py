@@ -249,8 +249,9 @@ class simulateFITS(object):
 				txtfiledir = os.path.join(self.output_folder, fname+fextension)
 				
 				# Write catalog to txt file:
-				np.savetxt(txtfiledir, np.column_stack(catalog_out), 
-							delimiter='\t', header=catalog.colnames)
+				np.savetxt(txtfiledir, catalog_out, 
+							delimiter='\t', 
+							header='    '.join(catalog.colnames))
 			else:
 				# TODO: add check and error if file exists
 				pass
