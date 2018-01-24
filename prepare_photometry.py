@@ -298,4 +298,4 @@ if __name__ == '__main__':
 
 	create_todo(sector)
 	create_catalog(sector, camera, ccd)
-	#create_hdf5(camera, ccd)
+	create_hdf5(camera, ccd)
