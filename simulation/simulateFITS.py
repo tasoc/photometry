@@ -51,7 +51,7 @@ class simulateFITS(object):
 		
 		Example:
 			Default use. Write 5 FITS images of shape 200x200px with 5 stars in
-			them to five separate files in a subdirectory called images in the 
+			them to 5 separate files in a subdirectory called images in the 
 			directory specified by the TESSPHOT_INPUT environment variable:
 				
 			>>> sim = simulateFITS()
@@ -79,25 +79,25 @@ class simulateFITS(object):
 		self.output_folder = os.environ.get('TESSPHOT_INPUT', 
 									os.path.abspath('.'))
 
-		# Set random number generator seed:
-		random.seed(0)
-
 		# Set image parameters:
 		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
 		self.Nrows = 200
 		self.Ncols = 200
 		self.stamp = (0,200,0,200)
 
-		# TODO: move the rest of __init__ to a run_simulateFITS in parent dir
+		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
 		self.times = self.make_times()
+
+		# Set random number generator seed:
+		random.seed(0)
 
 		# Make catalog:
 		self.catalog = self.make_catalog()
 		self.make_catalog_file(self.catalog)
 		
-		# Change catalog:
-		# TODO: apply time-independent changes to catalog
+		# Apply time-independent changes to catalog:
+#		self.catalog = self.apply_inaccurate_catalog(self.catalog)
 		
 		# Loop through the time stamps:
 		for i, timestamp in enumerate(self.times):
@@ -255,6 +255,49 @@ class simulateFITS(object):
 				pass
 		else:
 			print(catalog)
+
+
+	def apply_inaccurate_catalog(self, catalog):
+		"""
+		Modify the input catalog to simulate inaccurate catalog information 
+		independent of time.
+		
+		It is assumed that the right ascension and declination uncertainties 
+		apply directly to pixel row and column positions. Thus, the spacial 
+		transformation from spherical coordinates is neglected.
+		
+		Parameters:
+			catalog (`astropy.table.Table`): Table with stars in the current 
+			image. Columns must be starid, row, col, tmag.
+		
+		Returns:
+			catalog (`astropy.table.Table`): Table formatted like the catalog
+			parameter, but with changes to its numbers.
+		"""
+		
+		# Scatter of Gaia band to TESS band calibration (Stassun, 28 Jun 2017):
+		sigma_tmag = 0.015 # (magnitudes)
+		
+		# Median RA std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
+		sigma_RA = 0.254 # (milliarcsec)
+		sigma_col = self.pixel_scale * sigma_RA / 1e3
+		
+		# Median DEC std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
+		sigma_DEC = 0.233 # (milliarcsec)
+		sigma_row = self.pixel_scale * sigma_DEC / 1e3
+		
+		# Loop through each star in the catalog:
+		for star in range(len(catalog['tmag'])):
+			# Modify TESS magnitude:
+			catalog['tmag'][star] += random.gauss(0, sigma_tmag)
+			
+			# Modify column pixel positions:
+			catalog['col'][star] += random.gauss(0, sigma_col)
+			
+			# Modify row pixel positions:
+			catalog['row'][star] += random.gauss(0, sigma_row)
+		
+		return catalog
 
 
 	def make_stars(self, camera=20, ccd=1):
