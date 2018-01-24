@@ -40,7 +40,14 @@ class simulateFITS(object):
 			save_images (boolean): True if images and catalog should be saved. 
 			Default is True.
 			overwrite_images (boolean): True if image and catalog files should 
-			be overwritten.
+			be overwritten. Default is True
+			
+		Output:
+			The output FITS images are saved to a subdirectory images in the 
+			parent directory specified by the environment variable 
+			TESSPHOT_INPUT. An ASCII file named catalog.txt.gz with the 
+			simulated catalog, prepared in the format read by 
+			`prepare_photometry`, is written to this parent directory.
 		
 		Example:
 			Default use. Write 5 FITS images of shape 200x200px with 5 stars in
@@ -53,13 +60,13 @@ class simulateFITS(object):
 			but will print the catalog.
 			
 			>>> sim = simulateFITS(save_images=False)
-			      ra           dec      prop_mot_ra ...      row           col        tmag 
-			------------- ------------- ----------- ... ------------- ------------- -------
-			13981.2381712 28597.3438621         0.0 ... 166.817839196 81.5572226654 9.54056
-			 26581.187361 25721.6835721         0.0 ...  150.04315417 155.056926273 7.52343
-			10601.6003759 14501.2948596         0.0 ... 84.5908866812 61.8426688593 6.40919
-			16364.5387038 9125.11706689         0.0 ... 53.2298495568 95.4598091056 8.77902
-			19915.9055407 17517.8221621         0.0 ... 102.187295946 116.176115654 8.09184
+			      ra            dec       prop_mot_ra ...      col        tmag 
+			-------------- -------------- ----------- ... ------------- -------
+			0.475750465548 0.973104061976         0.0 ... 81.5572226654 9.54056
+			0.904498736591 0.875251732661         0.0 ... 155.056926273 7.52343
+			0.360748901679 0.493446838974         0.0 ... 61.8426688593 6.40919
+			0.556848886449 0.310507455748         0.0 ... 95.4598091056 8.77902
+			0.677694007983 0.596092559682         0.0 ... 116.176115654 8.09184
 		
 		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
