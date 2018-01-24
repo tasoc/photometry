@@ -20,7 +20,7 @@ if __package__ is None:
 	
 	from photometry.psf import PSF
 	from photometry.utilities import mag2flux
-#	from photometry.plots import plot_image
+	from photometry.plots import plot_image
 
 
 class simulateFITS(object):
@@ -102,8 +102,9 @@ class simulateFITS(object):
 		# Loop through the time stamps:
 		for i, timestamp in enumerate(self.times):
 			
-			# Change catalog:
-			# TODO: apply time-dependent changes to catalog parameters
+			# Apply time-dependent changes to catalog:
+#			self.catalog = self.apply_variable_magnitudes(self.catalog, 
+#														timestamp)
 	
 			# Make stars from catalog:
 			stars = self.make_stars()
@@ -272,7 +273,7 @@ class simulateFITS(object):
 		
 		Returns:
 			catalog (`astropy.table.Table`): Table formatted like the catalog
-			parameter, but with changes to its numbers.
+			parameter, but with changes to its entries.
 		"""
 		
 		# Scatter of Gaia band to TESS band calibration (Stassun, 28 Jun 2017):
@@ -296,6 +297,24 @@ class simulateFITS(object):
 			
 			# Modify row pixel positions:
 			catalog['row'][star] += random.gauss(0, sigma_row)
+		
+		return catalog
+
+
+	def apply_variable_magnitudes(self, catalog, timestamp):
+		"""
+		Modify the input catalog to simulate variable stars.
+		
+		Parameters:
+			catalog (`astropy.table.Table`): Table with stars in the current 
+			image. Columns must be starid, row, col, tmag.
+		
+		Returns:
+			catalog (`astropy.table.Table`): Table formatted like the catalog
+			parameter, but with changes to its entries.
+		"""
+		
+		# TODO: Introduce some variation in the TESS magnitude here
 		
 		return catalog
 
@@ -400,4 +419,3 @@ class simulateFITS(object):
 
 if __name__ == '__main__':
 	sim = simulateFITS(save_images=False)
-
