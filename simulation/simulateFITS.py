@@ -173,7 +173,17 @@ class simulateFITS(object):
 
 	def make_catalog_file(self, catalog, fname='catalog', compress=True):
 		"""
-		Write catalog to an ASCII file.
+		Write simulated catalog to an ASCII file.
+		
+		The name of each column in the catalog is written as a header in the 
+		first line of the catalog file. The following columns will be written:
+		 * ra:           Right ascension coordinate.
+		 * dec:          Declination coordinate.
+		 * prop_mot_ra:  Proper motion in right ascension. Is set to 0.
+		 * prop_mot_dec: Proper motion in declination. Is set to 0.
+		 * row:          Pixel row in 200x200px full frame image.
+		 * col:          Pixel column in 200x200px full frame image.
+		 * tmag:         TESS magnitude.
 		
 		Parameters:
 			catalog (`astropy.table.Table`): Table with stars in the current 
@@ -183,7 +193,8 @@ class simulateFITS(object):
 			and the uncompressed version deleted. Default is True
 		"""
 		if self.save_images:
-			# Set ra and dec positions:
+			# Set arbitrary ra and dec positions from pixel positions:
+			
 			# TODO: Convert (row, col) to (ra, dec)
 			ra = None
 			dec = None
@@ -222,6 +233,8 @@ class simulateFITS(object):
 			else:
 				# TODO: add check and error if file exists
 				pass
+		else:
+			pass
 
 
 	def make_stars(self, camera=20, ccd=1):
@@ -308,7 +321,8 @@ class simulateFITS(object):
 		hdu = fits.PrimaryHDU(img)
 		
 		# Add timestamp to header with a unit of days:
-		hdu.header['TIME'] = (timestamp/3600/24, 'time in days')
+		hdu.header['BJD'] = (timestamp/3600/24, 
+			'time in days (arb. starting point)')
 		# TODO: write more info to header
 		
 		if outdir is None:
