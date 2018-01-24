@@ -173,7 +173,8 @@ class simulateFITS(object):
 
 	def make_catalog_file(self, catalog, fname='catalog', compress=True):
 		"""
-		Write simulated catalog to an ASCII file.
+		Write simulated catalog to an ASCII file in the format used by 
+		`prepare_photometry`.
 		
 		The name of each column in the catalog is written as a header in the 
 		first line of the catalog file. The following columns will be written:
@@ -193,11 +194,11 @@ class simulateFITS(object):
 			and the uncompressed version deleted. Default is True
 		"""
 		if self.save_images:
-			# Set arbitrary ra and dec positions from pixel positions:
-			
-			# TODO: Convert (row, col) to (ra, dec)
-			ra = None
-			dec = None
+			# Set arbitrary ra and dec from pixel coordinates:
+			# (neglect spacial transformations to spherical coordinates)
+			zero_point = [0,0]
+			ra = catalog['col'] / self.pixel_scale*3600 + zero_point[0]
+			dec = catalog['row'] / self.pixel_scale*3600 + zero_point[1]
 			
 			# Set proper motion:
 			prop_mot_ra = np.zeros_like(catalog['tmag'])
