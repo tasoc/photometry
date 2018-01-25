@@ -176,7 +176,7 @@ def create_hdf5(camera, ccd):
 				else:
 					m = map
 
-				last_bck_fit = int(masks.keys()[-1])
+				last_bck_fit = int(list(masks.keys())[-1])
 				k = last_bck_fit+1
 				for bck, mask in m(fit_background, files[k:]):
 					dset_name = '%04d' % k
