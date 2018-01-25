@@ -80,9 +80,9 @@ class simulateFITS(object):
 
 		# Set image parameters:
 		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
-		self.Nrows = 200
-		self.Ncols = 200
-		self.stamp = (0,200,0,200)
+		self.Nrows = 256
+		self.Ncols = 256
+		self.stamp = (0,self.Nrows,0,self.Ncols)
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
