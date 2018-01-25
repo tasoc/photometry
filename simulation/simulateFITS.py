@@ -212,6 +212,9 @@ class simulateFITS(object):
 			Default is True.
 		"""
 		
+		# Remove starid in input catalog:
+		catalog.remove_column('starid')
+		
 		# Set arbitrary ra and dec from pixel coordinates:
 		# (neglect spacial transformation to spherical coordinates)
 		zero_point = [0,0]
