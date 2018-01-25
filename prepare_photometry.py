@@ -13,12 +13,24 @@ from astropy.wcs import WCS
 import sqlite3
 from astropy.table import Table
 import multiprocessing
-from bottleneck import replace, nanmedian
+from bottleneck import replace, nanmean
 from photometry.backgrounds import fit_background
 from photometry.utilities import add_proper_motion
 from timeit import default_timer
 
+#------------------------------------------------------------------------------
 def create_todo(sector):
+	"""Create the TODO list which is used by the pipeline to keep track of the
+	targets that needs to be processed.
+	
+	Will create the file `todo.sqlite` in the `TESSPHOT_INPUT` directory.
+	It will be overwritten if it already exists.
+	
+	Parameters:
+		sector (integer): The TESS observing sector.
+		
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
 
 	logger = logging.getLogger(__name__)
 
@@ -69,7 +81,7 @@ def create_todo(sector):
 
 	logger.info("TODO done.")
 
-
+#------------------------------------------------------------------------------
 def create_catalog(sector, camera, ccd):
 
 	logger = logging.getLogger(__name__)
@@ -124,16 +136,31 @@ def create_catalog(sector, camera, ccd):
 
 	logger.info("Catalog done.")
 
+#------------------------------------------------------------------------------
+def create_hdf5(sector, camera, ccd):
+	"""
+	Restructure individual FFI images (in FITS format) into
+	a combined HDF5 file which is used in the photometry
+	pipeline.
+	
+	In this process the background flux in each FFI is
+	estimated using the `backgrounds.fit_background` function.
+	
+	Parameters:
+		sector (integer): The TESS observing sector.
+		camera (integer): TESS camera number (1-4).
+		ccd (integer): TESS CCD number (1-4).
 
-
-def create_hdf5(camera, ccd):
-
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+	
 	logger = logging.getLogger(__name__)
 
+	# Settings that should depend on sector at some point:
+	sector_reference_time = 2457827.0 + 13.5	
+	
+	
 	input_folder = os.environ['TESSPHOT_INPUT']
-
-	sector_reference_time = 2457827.0 + 13.5
-
 	hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
 
 	files = glob.glob(os.path.join(input_folder, 'images', '*.fits'))
@@ -207,7 +234,7 @@ def create_hdf5(camera, ccd):
 				indx2 = min(k+w+1, numfiles)
 				logger.info("%d: %d -> %d", k, indx1, indx2)
 
-				bck = nanmedian(dset_bck_us[:, :, indx1:indx2], axis=2)
+				bck = nanmean(dset_bck_us[:, :, indx1:indx2], axis=2)
 
 				backgrounds.create_dataset(dset_name, data=bck, **args)
 
@@ -260,6 +287,7 @@ def create_hdf5(camera, ccd):
 			with pyfits.open(files[refindx], mode='readonly', memmap=True) as hdu:
 				# Store FITS header for later use:
 				hdr = hdu[0].header
+				ref_image = hdu[0].data
 
 			dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
 			dset[0] = WCS(hdr).to_header_string().strip().encode('ascii', 'strict')
@@ -298,4 +326,4 @@ if __name__ == '__main__':
 
 	create_todo(sector)
 	create_catalog(sector, camera, ccd)
-	create_hdf5(camera, ccd)
+	create_hdf5(sector, camera, ccd)
