@@ -137,7 +137,7 @@ def create_catalog(sector, camera, ccd):
 	logger.info("Catalog done.")
 
 #------------------------------------------------------------------------------
-def create_hdf5(sector, camera, ccd):
+def create_hdf5(sector, camera, ccd, imgshape=(2048,2048)):
 	"""
 	Restructure individual FFI images (in FITS format) into
 	a combined HDF5 file which is used in the photometry
@@ -150,6 +150,8 @@ def create_hdf5(sector, camera, ccd):
 		sector (integer): The TESS observing sector.
 		camera (integer): TESS camera number (1-4).
 		ccd (integer): TESS CCD number (1-4).
+		imgshape (tuple, integer): Image shape in pixels (row, col). Default
+		is (2048,2048) pixels, the TESS image size.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -194,7 +196,7 @@ def create_hdf5(sector, camera, ccd):
 
 			if len(masks) < numfiles:
 
-				dset_bck_us = hdf.require_dataset('backgrounds_unsmoothed', (2048, 2048, numfiles), dtype='float32')
+				dset_bck_us = hdf.require_dataset('backgrounds_unsmoothed', (imgshape[0], imgshape[1], numfiles), dtype='float32')
 
 				tic = default_timer()
 				if threads > 1:
@@ -245,7 +247,7 @@ def create_hdf5(sector, camera, ccd):
 
 
 		if len(images) < numfiles:
-			SumImage = np.zeros((2048, 2048), dtype='float64')
+			SumImage = np.zeros((imgshape[0], imgshape[1]), dtype='float64')
 			time = np.empty(numfiles, dtype='float64')
 			cadenceno = np.empty(numfiles, dtype='int32')
 
@@ -326,4 +328,4 @@ if __name__ == '__main__':
 
 	create_todo(sector)
 	create_catalog(sector, camera, ccd)
-	create_hdf5(sector, camera, ccd)
+	create_hdf5(sector, camera, ccd, imgshape=(200,200))
