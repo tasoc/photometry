@@ -408,6 +408,9 @@ class simulateFITS(object):
 		# Add timestamp to header with a unit of days:
 		hdu.header['BJD'] = (timestamp/3600/24, 
 			'time in days (arb. starting point)')
+		hdu.header['NAXIS'] = (2, 'Number of data dimension')
+		hdu.header['NAXIS1'] = (self.Ncols, 'Number of pixel columns')
+		hdu.header['NAXIS2'] = (self.Nrows, 'Number of pixel rows')
 		# TODO: write more info to header
 		
 		if outdir is None:
