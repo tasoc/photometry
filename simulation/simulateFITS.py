@@ -168,15 +168,15 @@ class simulateFITS(object):
 		bufferpx = 3
 		
 		# Draw uniform row positions:
-		starrows = np.asarray([random.uniform(bufferpx, self.Nrows-bufferpx) \
-							for i in range(self.Nstars)])
-	
+		starrows =  np.random.uniform(bufferpx, self.Nrows-bufferpx,
+								self.Nstars)
+		
 		# Draw uniform column positions:
-		starcols = np.asarray([random.uniform(bufferpx, self.Ncols-bufferpx) \
-							for i in range(self.Nstars)])
-	
+		starcols =  np.random.uniform(bufferpx, self.Ncols-bufferpx,
+								self.Nstars)
+		
 		# Draw stellar magnitudes:
-		starmag = np.asarray([random.uniform(5,10) for i in range(self.Nstars)])
+		starmag = np.random.uniform(5, 10, self.Nstars)
 		
 		# Collect star parameters in list for catalog:
 		cat = [starids, starrows, starcols, starmag]
