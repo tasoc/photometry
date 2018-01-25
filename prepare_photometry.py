@@ -174,6 +174,11 @@ def create_hdf5(sector, camera, ccd, imgshape=(2048,2048)):
 	if numfiles == 0:
 		return
 
+	# Get image shape from the first file:
+	with pyfits.open(files[0]) as hdulist:
+		prihdr = hdulist[0].header
+		imgshape = (prihdr['NAXIS1'], prihdr['NAXIS2'])
+
 	args = {
 		'compression': 'lzf',
 		'shuffle': True,
