@@ -176,7 +176,7 @@ class simulateFITS(object):
 								self.Nstars)
 		
 		# Draw stellar magnitudes:
-		starmag = np.random.uniform(5, 10, self.Nstars)
+		starmag = np.random.uniform(5, 15, self.Nstars)
 		
 		# Collect star parameters in list for catalog:
 		cat = [starids, starrows, starcols, starmag]
