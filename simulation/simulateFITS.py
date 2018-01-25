@@ -59,13 +59,13 @@ class simulateFITS(object):
 			but will print the catalog.
 			
 			>>> sim = simulateFITS(save_images=False)
-			      ra            dec       prop_mot_ra ...      col        tmag 
-			-------------- -------------- ----------- ... ------------- -------
-			0.475750465548 0.973104061976         0.0 ... 81.5572226654 9.54056
-			0.904498736591 0.875251732661         0.0 ... 155.056926273 7.52343
-			0.360748901679 0.493446838974         0.0 ... 61.8426688593 6.40919
-			0.556848886449 0.310507455748         0.0 ... 95.4598091056 8.77902
-			0.677694007983 0.596092559682         0.0 ... 116.176115654 8.09184
+			      ra           decl     prop_mot_ra ...      row           col        tmag 
+			------------- ------------- ----------- ... ------------- ------------- -------
+			270.716384023 70.9372838761         0.0 ... 160.677235898 122.808689591 10.9172
+			271.180687154 71.3017293747         0.0 ... 223.153607096 202.403512165 12.2769
+			270.130745849 70.2307010608         0.0 ... 39.5487532881 22.4135741004 6.20194
+			270.758411808 70.3848787145         0.0 ... 65.9792081998 130.013452875 9.15367
+			270.176254552 71.2696763302         0.0 ... 217.658799459  30.215066031  14.109
 		
 		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
@@ -196,13 +196,13 @@ class simulateFITS(object):
 		
 		The name of each column in the catalog is written as a header in the 
 		first line of the catalog file. The following columns will be written:
-		 * ra:           Right ascension coordinate.
-		 * dec:          Declination coordinate.
-		 * prop_mot_ra:  Proper motion in right ascension. Is set to 0.
-		 * prop_mot_dec: Proper motion in declination. Is set to 0.
-		 * row:          Pixel row in 200x200px full frame image.
-		 * col:          Pixel column in 200x200px full frame image.
-		 * tmag:         TESS magnitude.
+		 * ra:            Right ascension coordinate.
+		 * decl:          Declination coordinate.
+		 * prop_mot_ra:   Proper motion in right ascension. Is set to 0.
+		 * prop_mot_decl: Proper motion in declination. Is set to 0.
+		 * row:           Pixel row in 200x200px full frame image.
+		 * col:           Pixel column in 200x200px full frame image.
+		 * tmag:          TESS magnitude.
 		
 		Parameters:
 			catalog (`astropy.table.Table`): Table with stars in the current 
@@ -217,9 +217,9 @@ class simulateFITS(object):
 		
 		# Set arbitrary ra and dec from pixel coordinates:
 		# (neglect spacial transformation to spherical coordinates)
-		zero_point = [0,0]
+		zero_point = [270,70]
 		ra = catalog['col'] * self.pixel_scale/3600 + zero_point[0]
-		dec = catalog['row'] * self.pixel_scale/3600 + zero_point[1]
+		decl = catalog['row'] * self.pixel_scale/3600 + zero_point[1]
 		
 		# Set proper motion:
 		prop_mot_ra = np.zeros_like(catalog['tmag'])
@@ -227,15 +227,15 @@ class simulateFITS(object):
 		
 		# Define extra columns:
 		Col_ra = Column(data=ra, name='ra', dtype=np.float64)
-		Col_dec = Column(data=dec, name='dec', dtype=np.float64)
+		Col_decl = Column(data=decl, name='decl', dtype=np.float64)
 		Col_prop_mot_ra = Column(data=prop_mot_ra, name='prop_mot_ra',
 							dtype=np.float64)
-		Col_prop_mot_dec = Column(data=prop_mot_dec, name='prop_mot_dec',
+		Col_prop_mot_decl = Column(data=prop_mot_dec, name='prop_mot_dec',
 							dtype=np.float64)
 		
 		# Add extra columns to catalog:
-		catalog.add_columns([Col_ra, Col_dec, 
-							Col_prop_mot_ra, Col_prop_mot_dec],
+		catalog.add_columns([Col_ra, Col_decl, 
+							Col_prop_mot_ra, Col_prop_mot_decl],
 							indexes=[0,0,0,0])
 		
 		if self.save_images:
