@@ -322,12 +322,12 @@ class simulateFITS(object):
 		return catalog
 
 
-	def make_stars(self, camera=20, ccd=1):
+	def make_stars(self, camera=1, ccd=1):
 		"""
 		Make stars for the image and append catalog with flux column.
 		
 		Parameters:
-			camera (int): Kepler camera. Used to get PSF. Default is 20.
+			camera (int): Kepler camera. Used to get PSF. Default is 1.
 			ccd (int): Kepler CCD. Used to get PSF. Default is 1.
 		
 		Returns:
