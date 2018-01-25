@@ -137,7 +137,7 @@ def create_catalog(sector, camera, ccd):
 	logger.info("Catalog done.")
 
 #------------------------------------------------------------------------------
-def create_hdf5(sector, camera, ccd, imgshape=(2048,2048)):
+def create_hdf5(sector, camera, ccd):
 	"""
 	Restructure individual FFI images (in FITS format) into
 	a combined HDF5 file which is used in the photometry
@@ -150,8 +150,6 @@ def create_hdf5(sector, camera, ccd, imgshape=(2048,2048)):
 		sector (integer): The TESS observing sector.
 		camera (integer): TESS camera number (1-4).
 		ccd (integer): TESS CCD number (1-4).
-		imgshape (tuple, integer): Image shape in pixels (row, col). Default
-		is (2048,2048) pixels, the TESS image size.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -177,7 +175,7 @@ def create_hdf5(sector, camera, ccd, imgshape=(2048,2048)):
 	# Get image shape from the first file:
 	with pyfits.open(files[0]) as hdulist:
 		prihdr = hdulist[0].header
-		imgshape = (prihdr['NAXIS1'], prihdr['NAXIS2'])
+		img_shape = (prihdr['NAXIS1'], prihdr['NAXIS2'])
 
 	args = {
 		'compression': 'lzf',
@@ -201,7 +199,7 @@ def create_hdf5(sector, camera, ccd, imgshape=(2048,2048)):
 
 			if len(masks) < numfiles:
 
-				dset_bck_us = hdf.require_dataset('backgrounds_unsmoothed', (imgshape[0], imgshape[1], numfiles), dtype='float32')
+				dset_bck_us = hdf.require_dataset('backgrounds_unsmoothed', (img_shape[0], img_shape[1], numfiles), dtype='float32')
 
 				tic = default_timer()
 				if threads > 1:
@@ -252,7 +250,7 @@ def create_hdf5(sector, camera, ccd, imgshape=(2048,2048)):
 
 
 		if len(images) < numfiles:
-			SumImage = np.zeros((imgshape[0], imgshape[1]), dtype='float64')
+			SumImage = np.zeros((img_shape[0], img_shape[1]), dtype='float64')
 			time = np.empty(numfiles, dtype='float64')
 			cadenceno = np.empty(numfiles, dtype='int32')
 
