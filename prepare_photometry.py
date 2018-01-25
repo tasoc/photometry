@@ -331,4 +331,4 @@ if __name__ == '__main__':
 
 	create_todo(sector)
 	create_catalog(sector, camera, ccd)
-	create_hdf5(sector, camera, ccd, imgshape=(200,200))
+	create_hdf5(sector, camera, ccd)
