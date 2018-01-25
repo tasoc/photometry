@@ -293,7 +293,7 @@ if __name__ == '__main__':
 	#logger_parent.setLevel(logging.INFO)
 
 	sector = 0
-	camera = 1
+	camera = 20
 	ccd = 1
 
 	create_todo(sector)
