@@ -208,8 +208,8 @@ class simulateFITS(object):
 			catalog (`astropy.table.Table`): Table with stars in the current 
 			image. Columns must be starid, row, col, tmag.
 			fname (string): Filename of catalog. Default is catalog.
-			compress (boolean): True if catalog txt file is to be compressed
-			and the uncompressed version deleted. Default is True
+			compress (boolean): True if catalog txt file is to be compressed. 
+			Default is True.
 		"""
 		
 		# Set arbitrary ra and dec from pixel coordinates:
