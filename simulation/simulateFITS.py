@@ -56,16 +56,17 @@ class simulateFITS(object):
 			>>> sim = simulateFITS()
 			
 			Print catalog. This call does not save images or a catalog file, 
-			but will print the catalog.
+			but will just print the catalog.
 			
 			>>> sim = simulateFITS(save_images=False)
-			      ra           decl     prop_mot_ra ...      row           col        tmag 
-			------------- ------------- ----------- ... ------------- ------------- -------
-			270.716384023 70.9372838761         0.0 ... 160.677235898 122.808689591 10.9172
-			271.180687154 71.3017293747         0.0 ... 223.153607096 202.403512165 12.2769
-			270.130745849 70.2307010608         0.0 ... 39.5487532881 22.4135741004 6.20194
-			270.758411808 70.3848787145         0.0 ... 65.9792081998 130.013452875 9.15367
-			270.176254552 71.2696763302         0.0 ... 217.658799459  30.215066031  14.109
+			      ra             decl      prop_mot_ra prop_mot_dec      row           col        tmag 
+			-------------- --------------- ----------- ------------ ------------- ------------- -------
+			0.029851440263   0.68646339125         0.0          0.0   117.6794385 5.11738975937 12.5627
+			 0.42553055972   1.00578707012         0.0          0.0 172.420640592  72.948095952 14.4416
+			 1.32855128151  0.643677266712         0.0          0.0 110.344674294 227.751648259 11.5697
+			 1.23209768011 0.0831070155292         0.0          0.0 14.2469169479 211.216745161 13.4081
+			0.451164111667  0.512332559648         0.0          0.0 87.8284387967  77.342419143 7.69913
+		
 		
 		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
@@ -258,7 +259,10 @@ class simulateFITS(object):
 				# TODO: add check and error if file exists
 				pass
 		else:
-			print(catalog)
+			pass
+		
+		# Print the catalog:
+		print(catalog)
 
 
 	def apply_inaccurate_catalog(self, catalog):
