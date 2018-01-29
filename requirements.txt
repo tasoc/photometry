@@ -4,7 +4,7 @@ numpy
 scipy
 matplotlib
 astropy>=2.0
-photutils
+photutils>=0.4
 Bottleneck
 h5py
 enum-compat

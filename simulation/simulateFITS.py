@@ -11,6 +11,7 @@ import numpy as np
 import random
 from astropy.io import fits
 from astropy.table import Table, Column
+from astropy.wcs import WCS
 
 # Import stuff from the photometry directory:
 import sys
@@ -56,16 +57,17 @@ class simulateFITS(object):
 			>>> sim = simulateFITS()
 			
 			Print catalog. This call does not save images or a catalog file, 
-			but will print the catalog.
+			but will just print the catalog.
 			
 			>>> sim = simulateFITS(save_images=False)
-			      ra            dec       prop_mot_ra ...      col        tmag 
-			-------------- -------------- ----------- ... ------------- -------
-			0.475750465548 0.973104061976         0.0 ... 81.5572226654 9.54056
-			0.904498736591 0.875251732661         0.0 ... 155.056926273 7.52343
-			0.360748901679 0.493446838974         0.0 ... 61.8426688593 6.40919
-			0.556848886449 0.310507455748         0.0 ... 95.4598091056 8.77902
-			0.677694007983 0.596092559682         0.0 ... 116.176115654 8.09184
+			      ra             decl      prop_mot_ra prop_mot_dec      row           col        tmag 
+			-------------- --------------- ----------- ------------ ------------- ------------- -------
+			0.029851440263   0.68646339125         0.0          0.0   117.6794385 5.11738975937 12.5627
+			 0.42553055972   1.00578707012         0.0          0.0 172.420640592  72.948095952 14.4416
+			 1.32855128151  0.643677266712         0.0          0.0 110.344674294 227.751648259 11.5697
+			 1.23209768011 0.0831070155292         0.0          0.0 14.2469169479 211.216745161 13.4081
+			0.451164111667  0.512332559648         0.0          0.0 87.8284387967  77.342419143 7.69913
+		
 		
 		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
@@ -80,9 +82,10 @@ class simulateFITS(object):
 
 		# Set image parameters:
 		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
-		self.Nrows = 200
-		self.Ncols = 200
-		self.stamp = (0,200,0,200)
+		self.Nrows = 256
+		self.Ncols = 256
+		self.stamp = (0,self.Nrows,0,self.Ncols)
+		self.coord_zero_point = [0.,0.] # Zero point
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
@@ -176,7 +179,7 @@ class simulateFITS(object):
 								self.Nstars)
 		
 		# Draw stellar magnitudes:
-		starmag = np.random.uniform(5, 10, self.Nstars)
+		starmag = np.random.uniform(5, 15, self.Nstars)
 		
 		# Collect star parameters in list for catalog:
 		cat = [starids, starrows, starcols, starmag]
@@ -196,13 +199,13 @@ class simulateFITS(object):
 		
 		The name of each column in the catalog is written as a header in the 
 		first line of the catalog file. The following columns will be written:
-		 * ra:           Right ascension coordinate.
-		 * dec:          Declination coordinate.
-		 * prop_mot_ra:  Proper motion in right ascension. Is set to 0.
-		 * prop_mot_dec: Proper motion in declination. Is set to 0.
-		 * row:          Pixel row in 200x200px full frame image.
-		 * col:          Pixel column in 200x200px full frame image.
-		 * tmag:         TESS magnitude.
+		 * ra:            Right ascension coordinate.
+		 * decl:          Declination coordinate.
+		 * prop_mot_ra:   Proper motion in right ascension. Is set to 0.
+		 * prop_mot_decl: Proper motion in declination. Is set to 0.
+		 * row:           Pixel row in 200x200px full frame image.
+		 * col:           Pixel column in 200x200px full frame image.
+		 * tmag:          TESS magnitude.
 		
 		Parameters:
 			catalog (`astropy.table.Table`): Table with stars in the current 
@@ -217,9 +220,8 @@ class simulateFITS(object):
 		
 		# Set arbitrary ra and dec from pixel coordinates:
 		# (neglect spacial transformation to spherical coordinates)
-		zero_point = [0,0]
-		ra = catalog['col'] * self.pixel_scale/3600 + zero_point[0]
-		dec = catalog['row'] * self.pixel_scale/3600 + zero_point[1]
+		ra = catalog['col'] * self.pixel_scale/3600 + self.coord_zero_point[0]
+		decl = catalog['row'] * self.pixel_scale/3600 + self.coord_zero_point[1]
 		
 		# Set proper motion:
 		prop_mot_ra = np.zeros_like(catalog['tmag'])
@@ -227,15 +229,15 @@ class simulateFITS(object):
 		
 		# Define extra columns:
 		Col_ra = Column(data=ra, name='ra', dtype=np.float64)
-		Col_dec = Column(data=dec, name='dec', dtype=np.float64)
+		Col_decl = Column(data=decl, name='decl', dtype=np.float64)
 		Col_prop_mot_ra = Column(data=prop_mot_ra, name='prop_mot_ra',
 							dtype=np.float64)
-		Col_prop_mot_dec = Column(data=prop_mot_dec, name='prop_mot_dec',
+		Col_prop_mot_decl = Column(data=prop_mot_dec, name='prop_mot_dec',
 							dtype=np.float64)
 		
 		# Add extra columns to catalog:
-		catalog.add_columns([Col_ra, Col_dec, 
-							Col_prop_mot_ra, Col_prop_mot_dec],
+		catalog.add_columns([Col_ra, Col_decl, 
+							Col_prop_mot_ra, Col_prop_mot_decl],
 							indexes=[0,0,0,0])
 		
 		if self.save_images:
@@ -258,7 +260,10 @@ class simulateFITS(object):
 				# TODO: add check and error if file exists
 				pass
 		else:
-			print(catalog)
+			pass
+		
+		# Print the catalog:
+		print(catalog)
 
 
 	def apply_inaccurate_catalog(self, catalog):
@@ -322,12 +327,12 @@ class simulateFITS(object):
 		return catalog
 
 
-	def make_stars(self, camera=20, ccd=1):
+	def make_stars(self, camera=1, ccd=1):
 		"""
 		Make stars for the image and append catalog with flux column.
 		
 		Parameters:
-			camera (int): Kepler camera. Used to get PSF. Default is 20.
+			camera (int): Kepler camera. Used to get PSF. Default is 1.
 			ccd (int): Kepler CCD. Used to get PSF. Default is 1.
 		
 		Returns:
@@ -402,17 +407,36 @@ class simulateFITS(object):
 			i (int): Timestamp index that is used in filename.
 		"""
 		
+		# Make WCS solution parameters:
+		w = WCS(naxis=2)
+		w.wcs.crpix = [0,0]
+		w.wcs.cdelt = [self.pixel_scale/3600, self.pixel_scale/3600]
+		w.wcs.crval = self.coord_zero_point # [0.,0.]
+#		w.wcs.ctype = ["RA---AIR", "DEC--AIR"]
+		header = w.to_header()
+		
 		# Instantiate primary header data unit:
-		hdu = fits.PrimaryHDU(img)
+		hdu = fits.PrimaryHDU(data=img, header=header)
 		
 		# Add timestamp to header with a unit of days:
 		hdu.header['BJD'] = (timestamp/3600/24, 
 			'time in days (arb. starting point)')
+		hdu.header['NAXIS'] = (2, 'Number of data dimension')
+		hdu.header['NAXIS1'] = (self.Ncols, 'Number of pixel columns')
+		hdu.header['NAXIS2'] = (self.Nrows, 'Number of pixel rows')
 		# TODO: write more info to header
 		
+		
+		# Specify output directory:
 		if outdir is None:
-			# Specify output directory:
 			outdir = os.path.join(self.output_folder, 'images')
+		
+		# Remove any previous hdf5 file made by prepare_photometry:
+		try:
+			hdf5filename = 'camera1_ccd1.hdf5'
+			os.remove(os.path.join(self.output_folder,hdf5filename))
+		except:
+			pass
 		
 		# Write FITS file to output directory:
 		hdu.writeto(os.path.join(outdir, 'test%02d.fits' % i),
