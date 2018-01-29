@@ -11,6 +11,7 @@ import numpy as np
 import random
 from astropy.io import fits
 from astropy.table import Table, Column
+from astropy.wcs import WCS
 
 # Import stuff from the photometry directory:
 import sys
@@ -84,6 +85,7 @@ class simulateFITS(object):
 		self.Nrows = 256
 		self.Ncols = 256
 		self.stamp = (0,self.Nrows,0,self.Ncols)
+		self.coord_zero_point = [0.,0.] # Zero point
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
@@ -218,9 +220,8 @@ class simulateFITS(object):
 		
 		# Set arbitrary ra and dec from pixel coordinates:
 		# (neglect spacial transformation to spherical coordinates)
-		zero_point = [270,70]
-		ra = catalog['col'] * self.pixel_scale/3600 + zero_point[0]
-		decl = catalog['row'] * self.pixel_scale/3600 + zero_point[1]
+		ra = catalog['col'] * self.pixel_scale/3600 + self.coord_zero_point[0]
+		decl = catalog['row'] * self.pixel_scale/3600 + self.coord_zero_point[1]
 		
 		# Set proper motion:
 		prop_mot_ra = np.zeros_like(catalog['tmag'])
@@ -406,8 +407,16 @@ class simulateFITS(object):
 			i (int): Timestamp index that is used in filename.
 		"""
 		
+		# Make WCS solution parameters:
+		w = WCS(naxis=2)
+		w.wcs.crpix = [0,0]
+		w.wcs.cdelt = [self.pixel_scale/3600, self.pixel_scale/3600]
+		w.wcs.crval = self.coord_zero_point # [0.,0.]
+#		w.wcs.ctype = ["RA---AIR", "DEC--AIR"]
+		header = w.to_header()
+		
 		# Instantiate primary header data unit:
-		hdu = fits.PrimaryHDU(img)
+		hdu = fits.PrimaryHDU(data=img, header=header)
 		
 		# Add timestamp to header with a unit of days:
 		hdu.header['BJD'] = (timestamp/3600/24, 
@@ -417,9 +426,17 @@ class simulateFITS(object):
 		hdu.header['NAXIS2'] = (self.Nrows, 'Number of pixel rows')
 		# TODO: write more info to header
 		
+		
+		# Specify output directory:
 		if outdir is None:
-			# Specify output directory:
 			outdir = os.path.join(self.output_folder, 'images')
+		
+		# Remove any previous hdf5 file made by prepare_photometry:
+		try:
+			hdf5filename = 'camera1_ccd1.hdf5'
+			os.remove(os.path.join(self.output_folder,hdf5filename))
+		except:
+			pass
 		
 		# Write FITS file to output directory:
 		hdu.writeto(os.path.join(outdir, 'test%02d.fits' % i),
