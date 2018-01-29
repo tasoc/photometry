@@ -118,13 +118,14 @@ class LinPSFPhotometry(BasePhotometry):
 #				res = 'notfailed'
 			except:
 				res = 'failed'
-			logger.debug(res)
+			logger.debug('Result of linear psf photometry: ' + np.str(res))
 
 			# Pass result if fit did not fail:
 			if res is not 'failed':
 				# Get flux of target star:
 				result = fluxes[staridx]
-				logger.debug(fluxes)
+				logger.debug('Fluxes are: ' + np.str(fluxes))
+				logger.debug('Result is: ' + np.str(result))
 
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result
