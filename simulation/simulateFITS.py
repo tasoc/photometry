@@ -412,7 +412,7 @@ class simulateFITS(object):
 		w.wcs.crpix = [0,0]
 		w.wcs.cdelt = [self.pixel_scale/3600, self.pixel_scale/3600]
 		w.wcs.crval = self.coord_zero_point # [0.,0.]
-#		w.wcs.ctype = ["RA---AIR", "DEC--AIR"]
+		w.wcs.ctype = ["RA---AIR", "DEC--AIR"]
 		header = w.to_header()
 		
 		# Instantiate primary header data unit:
