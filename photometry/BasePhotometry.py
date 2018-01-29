@@ -540,7 +540,7 @@ class BasePhotometry(object):
 			)
 
 			# Use the WCS to find pixel coordinates of stars in mask:
-			pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)
+			pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 1, ra_dec_order=True)
 			col_x = Column(data=pixel_coords[:,0], name='column', dtype='float32')
 			col_y = Column(data=pixel_coords[:,1], name='row', dtype='float32')
 
