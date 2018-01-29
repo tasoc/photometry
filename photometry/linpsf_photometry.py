@@ -97,6 +97,9 @@ class LinPSFPhotometry(BasePhotometry):
 				# Reshape the parameters of each single star in the loop:
 				params0 = params[star,:].reshape(1, 3)
 
+				# Set flux to 1:
+				params0[0][2] = 1.
+
 				# Fill out column of A with reshaped PRF array from one star:
 				A[:,col] = np.reshape(self.psf.integrate_to_image(params0, 
 										cutoff_radius=20), npx)
