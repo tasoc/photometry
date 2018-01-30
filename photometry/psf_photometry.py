@@ -107,16 +107,16 @@ class PSFPhotometry(BasePhotometry):
 				self.lightcurve['pos_centroid'][k] = result[0,0:2]
 				self.lightcurve['quality'][k] = 0
 
-				fig = plt.figure()
-				ax = fig.add_subplot(131)
-				ax.imshow(np.log10(img), origin='lower')
-				ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
-				ax.scatter(result[:,1], result[:,0], c='r', alpha=0.5)
-				ax = fig.add_subplot(132)
-				ax.imshow(np.log10(self.psf.integrate_to_image(result)), origin='lower')
-				ax = fig.add_subplot(133)
-				ax.imshow(img - self.psf.integrate_to_image(result, cutoff_radius=10), origin='lower')
-#				plt.show()
+#				fig = plt.figure()
+#				ax = fig.add_subplot(131)
+#				ax.imshow(np.log10(img), origin='lower')
+#				ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
+#				ax.scatter(result[:,1], result[:,0], c='r', alpha=0.5)
+#				ax = fig.add_subplot(132)
+#				ax.imshow(np.log10(self.psf.integrate_to_image(result)), origin='lower')
+#				ax = fig.add_subplot(133)
+#				ax.imshow(img - self.psf.integrate_to_image(result, cutoff_radius=10), origin='lower')
+##				plt.show()
 
 				# In the next iteration, start from the current solution:
 				params0 = res.x
