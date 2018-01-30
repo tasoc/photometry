@@ -104,6 +104,7 @@ class simulateFITS(object):
 		
 		# Loop through the time stamps:
 		for i, timestamp in enumerate(self.times):
+			print("Making timestamp: "+str(timestamp))
 			
 			# Apply time-dependent changes to catalog:
 #			self.catalog = self.apply_variable_magnitudes(self.catalog, 
@@ -263,6 +264,7 @@ class simulateFITS(object):
 			pass
 		
 		# Print the catalog:
+		print("Writing catalog to file: "+txtfiledir)
 		print(catalog)
 
 
