@@ -93,6 +93,7 @@ class simulateFITS(object):
 
 		# Set random number generator seed:
 		random.seed(0)
+		np.random.seed(0)
 
 		# Make catalog:
 		self.catalog = self.make_catalog()
