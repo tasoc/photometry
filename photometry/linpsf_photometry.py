@@ -84,7 +84,7 @@ class LinPSFPhotometry(BasePhotometry):
 
 			# Create A, the 2D of vertically reshaped PRF 1D arrays:
 			A = np.empty([npx, nstars])
-			for star,(col,target) in enumerate(zip(range(nstars),cat)):
+			for col,target in enumerate(cat):
 				# Get star parameters with flux set to 1 and reshape:
 				params0 = np.array(
 						[target['row_stamp'], target['column_stamp'], 1.]
@@ -120,31 +120,30 @@ class LinPSFPhotometry(BasePhotometry):
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
-#				self.lightcurve['pos_centroid'][k] = params[k,0:2]
 				self.lightcurve['quality'][k] = 0
 
-#				# Make plot for debugging:
-#				fig = plt.figure()
-#				result4plot = []
-#				for star in range(nstars):
-#					result4plot.append(np.array([params[star,0], 
-#												params[star,1],
-#												fluxes[star]]))
-#				# Plot image:
-#				ax = fig.add_subplot(131)
-#				im = ax.imshow(img, origin='lower')
-#				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
-#				plt.colorbar(im)
-#				# Plot least squares fit:
-#				ax = fig.add_subplot(132)
-#				im = ax.imshow(self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
-#				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
-#				plt.colorbar(im)
-#				# Plot the residuals:
-#				ax = fig.add_subplot(133)
-#				im = ax.imshow(img - self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
-#				plt.colorbar(im)
-#				plt.show()
+				# Make plot for debugging:
+				fig = plt.figure()
+				result4plot = []
+				for star, target in enumerate(cat):
+					result4plot.append(np.array([target['row_stamp'], 
+												target['column_stamp'],
+												fluxes[star]]))
+				# Plot image:
+				ax = fig.add_subplot(131)
+				im = ax.imshow(img, origin='lower')
+				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
+				plt.colorbar(im)
+				# Plot least squares fit:
+				ax = fig.add_subplot(132)
+				im = ax.imshow(self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
+				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
+				plt.colorbar(im)
+				# Plot the residuals:
+				ax = fig.add_subplot(133)
+				im = ax.imshow(img - self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
+				plt.colorbar(im)
+				plt.show()
 
 			# Pass result if fit failed:
 			else:
