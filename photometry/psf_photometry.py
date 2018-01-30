@@ -73,7 +73,6 @@ class PSFPhotometry(BasePhotometry):
 
 		# Calculate distance from main target:
 		cat['dist'] = np.sqrt((self.target_pos_row_stamp - cat['row_stamp'])**2 + (self.target_pos_column_stamp - cat['column_stamp'])**2)
-		print(cat)
 
 		# Only include stars that are close to the main target and that are not much fainter:
 		cat = cat[(cat['dist'] < 5) & (self.target_tmag-cat['tmag'] > -5)]
