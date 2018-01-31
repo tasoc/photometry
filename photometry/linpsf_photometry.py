@@ -82,20 +82,13 @@ class LinPSFPhotometry(BasePhotometry):
 			npx = img.size
 			nstars = len(cat['tmag'])
 
-			# Set up parameters for PSF integration to PRF:
-			params = np.empty((len(cat), 3), dtype='float64')
-			for row, target in enumerate(cat):
-				params[row,:] = [target['row_stamp'], target['column_stamp'], 
-								mag2flux(target['tmag'])]
-
-#			# Change target star location for debugging:
-#			params[staridx][0:2] += np.array([0.0, 0.5])
-
 			# Create A, the 2D of vertically reshaped PRF 1D arrays:
 			A = np.empty([npx, nstars])
-			for star,col in enumerate(range(nstars)):
-				# Reshape the parameters of each single star in the loop:
-				params0 = params[star,:].reshape(1, 3)
+			for col,target in enumerate(cat):
+				# Get star parameters with flux set to 1 and reshape:
+				params0 = np.array(
+						[target['row_stamp'], target['column_stamp'], 1.]
+						).reshape(1, 3)
 
 				# Fill out column of A with reshaped PRF array from one star:
 				A[:,col] = np.reshape(self.psf.integrate_to_image(params0, 
@@ -115,28 +108,27 @@ class LinPSFPhotometry(BasePhotometry):
 #				res = 'notfailed'
 			except:
 				res = 'failed'
-			logger.debug(res)
+			logger.debug('Result of linear psf photometry: ' + np.str(res))
 
 			# Pass result if fit did not fail:
 			if res is not 'failed':
 				# Get flux of target star:
 				result = fluxes[staridx]
-				logger.debug(fluxes)
+				logger.debug('Fluxes are: ' + np.str(fluxes))
+				logger.debug('Result is: ' + np.str(result))
 
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
-#				self.lightcurve['pos_centroid'][k] = params[k,0:2]
 				self.lightcurve['quality'][k] = 0
 
 				# Make plot for debugging:
 				fig = plt.figure()
 				result4plot = []
-				for star in range(nstars):
-					result4plot.append(np.array([params[star,0], 
-												params[star,1],
+				for star, target in enumerate(cat):
+					result4plot.append(np.array([target['row_stamp'], 
+												target['column_stamp'],
 												fluxes[star]]))
-				logger.debug(result4plot)
 				# Plot image:
 				ax = fig.add_subplot(131)
 				im = ax.imshow(img, origin='lower')

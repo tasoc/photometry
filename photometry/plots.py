@@ -36,7 +36,9 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	else:
 		raise ValueError("scale {} is not available.".format(scale))
 
-	plt.imshow(image, origin=origin, norm=norm, **kwargs)
+	extent = (0, image.shape[0], 0, image.shape[1])
+	
+	plt.imshow(image, origin=origin, norm=norm, extent=extent, **kwargs)
 	plt.xlabel(xlabel)
 	plt.ylabel(ylabel)
 	plt.title(title)
