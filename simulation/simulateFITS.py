@@ -97,6 +97,12 @@ class simulateFITS(object):
 
 		# Make catalog:
 		self.catalog = self.make_catalog()
+		
+		# Adjust catalog for debugging purposes:
+#		self.catalog['row'][4] = 13
+#		self.catalog['col'][4] = 13
+		
+		# Save catalog to file:
 		self.make_catalog_file(self.catalog)
 		
 		# Apply time-independent changes to catalog:
