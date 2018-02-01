@@ -504,18 +504,18 @@ class BasePhotometry(object):
 					'dec_max': 90
 				})
 			elif ra_min < 0:
-				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra <= :ra_max AND de BETWEEN :dec_min AND :dec_max
+				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra <= :ra_max AND decl BETWEEN :dec_min AND :dec_max
 				UNION
-				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND 360 AND de BETWEEN :dec_min AND :dec_max;""", {
+				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND 360 AND decl BETWEEN :dec_min AND :dec_max;""", {
 					'ra_min': 360 - abs(ra_min),
 					'ra_max': ra_max,
 					'dec_min': dec_min,
 					'dec_max': dec_max
 				})
 			elif ra_max > 360:
-				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra >= :ra_min AND de BETWEEN :dec_min AND :dec_max
+				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra >= :ra_min AND decl BETWEEN :dec_min AND :dec_max
 				UNION
-				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN 0 AND :ra_max AND de BETWEEN :dec_min AND :dec_max;""", {
+				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN 0 AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;""", {
 					'ra_min': ra_min,
 					'ra_max': ra_max - 360,
 					'dec_min': dec_min,
