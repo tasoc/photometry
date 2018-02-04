@@ -122,28 +122,28 @@ class LinPSFPhotometry(BasePhotometry):
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
 				self.lightcurve['quality'][k] = 0
 
-				# Make plot for debugging:
-				fig = plt.figure()
-				result4plot = []
-				for star, target in enumerate(cat):
-					result4plot.append(np.array([target['row_stamp'], 
-												target['column_stamp'],
-												fluxes[star]]))
-				# Plot image:
-				ax = fig.add_subplot(131)
-				im = ax.imshow(img, origin='lower')
-				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
-				plt.colorbar(im)
-				# Plot least squares fit:
-				ax = fig.add_subplot(132)
-				im = ax.imshow(self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
-				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
-				plt.colorbar(im)
-				# Plot the residuals:
-				ax = fig.add_subplot(133)
-				im = ax.imshow(img - self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
-				plt.colorbar(im)
-				plt.show()
+#				# Make plot for debugging:
+#				fig = plt.figure()
+#				result4plot = []
+#				for star, target in enumerate(cat):
+#					result4plot.append(np.array([target['row_stamp'], 
+#												target['column_stamp'],
+#												fluxes[star]]))
+#				# Plot image:
+#				ax = fig.add_subplot(131)
+#				im = ax.imshow(img, origin='lower')
+#				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
+#				plt.colorbar(im)
+#				# Plot least squares fit:
+#				ax = fig.add_subplot(132)
+#				im = ax.imshow(self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
+#				ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
+#				plt.colorbar(im)
+#				# Plot the residuals:
+#				ax = fig.add_subplot(133)
+#				im = ax.imshow(img - self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
+#				plt.colorbar(im)
+#				plt.show()
 
 			# Pass result if fit failed:
 			else:
