@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+Point Spread Function (PSF).
+
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+"""
 
 from __future__ import division, print_function, with_statement, absolute_import
 from six.moves import range
@@ -9,16 +14,25 @@ from astropy.io import fits
 from scipy.interpolate import RectBivariateSpline
 import glob
 import matplotlib.pyplot as plt
-from astropy.visualization import LogStretch
-from astropy.visualization.mpl_normalize import ImageNormalize
+from .plots import plot_image
 
 class PSF(object):
 
 	def __init__(self, camera, ccd, stamp):
+		"""
+		Point Spread Function (PSF).
+		
+		Parameters:
+			camera (integer): TESS camera number (1-4).
+			ccd (integer): TESS CCD number (1-4).
+			stamp (4-tuple): Sub-stamp on CCD to load PSF for.
 
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+		"""
+	
 		# Store information given in call:
-		self.camera = 20
-		self.ccd = 1
+		self.camera = camera
+		self.ccd = ccd
 		self.stamp = stamp
 
 		# Target pixel file shape in pixels:
@@ -29,7 +43,7 @@ class PSF(object):
 
 		# Get path to corresponding Kepler PSF file:
 		PSFdir = os.path.join(os.path.dirname(__file__), 'data', 'psf')
-		PSFglob = os.path.join(PSFdir, 'kplr{0:02d}.{1:d}*_prf.fits'.format(20, 1))
+		PSFglob = os.path.join(PSFdir, 'kplr{0:02d}.{1:d}*_prf.fits'.format(11, 2))
 		self.PSFfile = glob.glob(PSFglob)[0]
 
 		# Set minimum PRF weight to avoid dividing by almost 0 somewhere:
@@ -66,10 +80,10 @@ class PSF(object):
 				# Add the weighted values to the PRF array:
 				prf += prfn / prfWeight
 
-		# Normalise the PRF:
+		# Normalize the PRF:
 		prf /= (np.nansum(prf) * cdelt1p * cdelt2p)
 
-		# Define pixel centered index arrays for the interpolater:
+		# Define pixel centered index arrays for the interpolator:
 		PRFx = np.arange(0.5, xdim + 0.5)
 		PRFy = np.arange(0.5, ydim + 0.5)
 		# Center around 0 and convert to PSF subpixel resolution:
@@ -77,23 +91,19 @@ class PSF(object):
 		PRFy = (PRFy - np.size(PRFy) / 2) * cdelt2p
 
 		# Interpolation function over the PRF:
-		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf)
+		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf) #: 2D-interpolation of PSF (RectBivariateSpline).
 
 
 	def integrate_to_image(self, params, cutoff_radius=5):
 		"""
 		Integrate the underlying high-res PSF onto pixels.
 
-		Parameters
-		----------
-		params : iterator, numpy.array
-			List of stars to add to image. Should be an interator where each element is an numpy array with three elements: row, column and flux.
-		cutoff_radius : float, optional
-			Maximal radius away from center of star in pixels to integrate PSF model.
+		Parameters:
+			params (iterator, numpy.array): List of stars to add to image. Should be an iterator where each element is an numpy array with three elements: row, column and flux.
+			cutoff_radius (float, optional): Maximal radius away from center of star in pixels to integrate PSF model.
 
-		Returns
-		-------
-		numpy.array : Image
+		Returns:
+			numpy.array: Image
 		"""
 
 		img = np.zeros(self.shape, dtype='float64')
@@ -124,8 +134,6 @@ class PSF(object):
 		x = np.linspace(-5, 5, 500)
 		xx, yy = np.meshgrid(y, x)
 
-		norm = ImageNormalize(stretch=LogStretch())
-
 		spline = self.splineInterpolation(x, y, grid=True)
 		spline += np.abs(spline.min()) + 1e-14
 		spline = np.sqrt(spline)
@@ -139,6 +147,6 @@ class PSF(object):
 		ax.set_xlim(-5, 5)
 		ax.set_ylim(-5, 5)
 		ax = fig.add_subplot(122)
-		ax.imshow(img, origin='lower', cmap='bone', norm=norm)
+		plot_image(img)
 		ax.scatter(stars[:,1], stars[:,0], c='r', alpha=0.5)
 		plt.show()
