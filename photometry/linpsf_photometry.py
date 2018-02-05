@@ -69,7 +69,7 @@ class LinPSFPhotometry(BasePhotometry):
 #			logger.debug(cat)
 	
 			# Only include stars that are close to the main target and that are not much fainter:
-			cat = cat[(cat['dist'] < 1) & (cat['tmag'][staridx]-cat['tmag'] > -10)]
+			cat = cat[(cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -5)]
 
 			# Log reduced catalog for current stamp:
 			logger.debug(cat)
