@@ -57,16 +57,15 @@ class LinPSFPhotometry(BasePhotometry):
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
+			# Log full catalog for current stamp:
+			logger.debug(cat)
+
 			# Get target star index in the catalog:
-			staridx = np.where(cat['starid']==self.starid)[0][0]
+			staridx = np.squeeze(np.where(cat['starid']==self.starid))
 
 			# Calculate distance from main target:
-			# FIXME: the target_pos_row_stamp is not at the right time!
 			cat['dist'] = np.sqrt((cat['row_stamp'][staridx] - cat['row_stamp'])**2 + \
 							(cat['column_stamp'][staridx] - cat['column_stamp'])**2)
-
-			# Log full catalog for current stamp:
-#			logger.debug(cat)
 	
 			# Only include stars that are close to the main target and that are not much fainter:
 			cat = cat[(cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -5)]
@@ -75,7 +74,7 @@ class LinPSFPhotometry(BasePhotometry):
 			logger.debug(cat)
 
 			# Update target star index in the reduced catalog:
-			staridx = np.where(cat['starid']==self.starid)[0][0]
+			staridx = np.squeeze(np.where(cat['starid']==self.starid))
 			logger.debug('Target star index: '+np.str(staridx))
 
 			# Get info about the image:
