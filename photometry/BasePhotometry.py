@@ -22,6 +22,7 @@ from copy import deepcopy
 from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian
+from .image_motion import MovementKernel
 
 __docformat__ = 'restructuredtext'
 
@@ -558,8 +559,8 @@ class BasePhotometry(object):
 
 	def catalog_attime(self, time):
 		"""
-		Catalog of stars, calculated at a given timestamp, so CCD positions are
-		modified acording to the measured spacecraft jitter.
+		Catalog of stars, calculated at a given time-stamp, so CCD positions are
+		modified according to the measured spacecraft jitter.
 
 		Parameters:
 			time (float): Time in MJD when to calculate catalog.
@@ -573,19 +574,27 @@ class BasePhotometry(object):
 			:py:func:`catalog`
 		"""
 
+		self._MovementKernel = None
+		if self._MovementKernel is None:
+			from scipy.interpolate import interp1d
+			#jitter = self.hdf['jitter']
+			jitter = np.zeros((len(self.lightcurve['time']), 2), dtype='float32')
+			self._warpmetric_interpolator = interp1d(self.lightcurve['time'], jitter, axis=0, assume_sorted=True)
+			self._MovementKernel = MovementKernel(warpmode='translation')
+
 		# Get the reference catalog:
-		cat = deepcopy(self.catalog)
+		xy = np.column_stack((self.catalog['column'], self.catalog['row']))
 
 		# Lookup the position corrections in CCD coordinates:
-		# TODO: Implement this!
-		col_jitter = 0.0
-		row_jitter = 0.0
+		kernel = self._warpmetric_interpolator(time)
+		jitter = self._MovementKernel(xy, kernel)
 
 		# Modify the reference catalog:
-		cat['column'] += col_jitter
-		cat['row'] += row_jitter
-		cat['column_stamp'] += col_jitter
-		cat['row_stamp'] += row_jitter
+		cat = deepcopy(self.catalog)
+		cat['column'] += jitter[:, 0]
+		cat['row'] += jitter[:, 1]
+		cat['column_stamp'] += jitter[:, 0]
+		cat['row_stamp'] += jitter[:, 1]
 
 		return cat
 
