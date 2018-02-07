@@ -111,14 +111,6 @@ class BasePhotometry(object):
 			hdr = fits.Header().fromstring(hdr_string)
 			self.wcs = WCS(header=hdr) #: World Coordinate system solution.
 
-			# Get info for psf fit Gaussian statistic:
-			self.readnoise = 10 # hardcoded from test files
-			self.gain = 100 # hardcoded estimate from selected Kepler value
-			# TODO: get values from header instead:
-#			with pf.open(os.path.join(input_folder, ), mode='readonly', memmap=True) as hdu:
-#				self.readnoise = hdu[0].header['readnoise']
-#				self.nreads = hdu[0].header['nreads']
-#				self.gain = hdu[0].header['gain']
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
@@ -128,7 +120,12 @@ class BasePhotometry(object):
 			#self.lightcurve['timecorr'] = times.light_travel_time(star_coord, ephemeris='jpl')
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
+			# Get shape of sumimage from hdf5 file:
 			self._max_stamp_size = self.hdf['sumimage'].shape
+
+			# Get info for psf fit Gaussian statistic:
+			self.readnoise = self.hdf['images'].attrs.get('READNOIS', 10)
+			self.gain = self.hdf['images'].attrs.get('GAIN', 100)
 			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) #: Number of frames co-added in each timestamp.
 
 		elif self.datasource == 'tpf':
