@@ -6,6 +6,8 @@ Plotting utilities.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
+import logging
+import os
 import matplotlib.pyplot as plt
 from astropy.visualization import (PercentileInterval, ImageNormalize,
 								   SqrtStretch, LogStretch, LinearStretch)
@@ -44,3 +46,21 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	plt.title(title)
 	cbar = plt.colorbar(norm=norm)
 	cbar.set_label(clabel)
+
+
+def save_figure(self, output_folder, fig_name, ftype='png'):
+	"""
+	Write current figure to file.
+	
+	Parameters:
+		output_folder (string): Path to directory where to save figure.
+		fig_name (string): Figure name.
+		ftype (string): Figure file type. Default is ``'png'``.
+	
+	"""
+
+	logger = logging.getLogger(__name__)
+	logger.info('Saving figure'+fig_name+'.'+ftype+' to '+output_folder)
+
+	# Write current figure to file:
+	plt.savefig(os.path.join(output_folder, fig_name+'.'+ftype))

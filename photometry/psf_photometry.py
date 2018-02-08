@@ -15,6 +15,7 @@ from scipy.optimize import minimize
 from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
+from .plots import save_figure
 
 class PSFPhotometry(BasePhotometry):
 
@@ -157,7 +158,7 @@ class PSFPhotometry(BasePhotometry):
 					fig_name = 'psf_photometry_'+np.str(self.sector)+'_'+ \
 								np.str(self.starid)+'_'+np.str(k)
 					ftype = 'png'
-					self.save_figure(output_folder, fig_name, ftype)
+					save_figure(output_folder, fig_name, ftype)
 
 				# In the next iteration, start from the current solution:
 				params0 = res.x
