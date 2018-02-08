@@ -152,6 +152,13 @@ class PSFPhotometry(BasePhotometry):
 					ax.imshow(img - self.psf.integrate_to_image(result, cutoff_radius=10), origin='lower')
 					plt.show()
 
+					# Export figure to file:
+					output_folder = 'TODO'
+					fig_name = 'psf_photometry_'+np.str(self.sector)+'_'+ \
+								np.str(self.starid)+'_'+np.str(k)
+					ftype = 'png'
+					self.save_figure(output_folder, fig_name, ftype)
+
 				# In the next iteration, start from the current solution:
 				params0 = res.x
 			else:
