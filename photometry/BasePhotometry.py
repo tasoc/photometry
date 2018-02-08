@@ -11,6 +11,7 @@ from six.moves import range
 import numpy as np
 from astropy.io import fits
 from astropy.table import Table, Column
+import matplotlib.pyplot as plt
 import h5py
 import sqlite3
 import logging
@@ -773,3 +774,21 @@ class BasePhotometry(object):
 		# Write to file:
 		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
 			hdulist.writeto(os.path.join(output_folder, 'tess{0:09d}.fits'.format(self.starid)), checksum=True, overwrite=True)
+
+
+	def save_figure(self, output_folder, fig_name, ftype='png'):
+		"""
+		Write current figure to file.
+		
+		Parameters:
+			output_folder (string): Path to directory where to save figure.
+			fig_name (string): Figure name.
+			ftype (string): Figure file type. Default is ``'png'``.
+		
+		"""
+
+		logger = logging.getLogger(__name__)
+		logger.info('Saving figure'+fig_name+'.'+ftype+' to '+output_folder)
+
+		# Write current figure to file:
+		plt.savefig(os.path.join(output_folder, fig_name+'.'+ftype))
