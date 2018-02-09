@@ -21,6 +21,7 @@ if __name__ == '__main__':
 	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf', 'linpsf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
 	parser.add_argument('starid', type=int, help='TIC identifier of target.')
 	args = parser.parse_args()
 	starid = args.starid
@@ -49,7 +50,7 @@ if __name__ == '__main__':
 	logger.info("Putting output data in '%s'", output_folder)
 
 	# Run the program:
-	pho = tessphot(starid, method, input_folder=input_folder, output_folder=output_folder)
+	pho = tessphot(starid, method, input_folder=input_folder, output_folder=output_folder, plot=args.plot)
 
 	# TODO: Write out the results?
 	if not args.quiet:

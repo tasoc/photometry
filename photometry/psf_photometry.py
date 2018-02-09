@@ -141,7 +141,7 @@ class PSFPhotometry(BasePhotometry):
 				self.lightcurve['quality'][k] = 0
 
 				# TODO: use debug figure toggle to decide if to plot and export
-				if False:
+				if self.plot:
 					fig = plt.figure()
 					ax = fig.add_subplot(131)
 					ax.imshow(np.log10(img), origin='lower')
@@ -154,7 +154,7 @@ class PSFPhotometry(BasePhotometry):
 					plt.show()
 
 					# Export figure to file:
-					output_folder = 'TODO'
+					output_folder = self.output_folder
 					fig_name = 'psf_photometry_'+np.str(self.sector)+'_'+ \
 								np.str(self.starid)+'_'+np.str(k)
 					ftype = 'png'

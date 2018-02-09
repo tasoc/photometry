@@ -9,9 +9,9 @@ import logging
 from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 
 #------------------------------------------------------------------------------
-def _try_photometry(PhotClass, starid, input_folder, output_folder):
+def _try_photometry(PhotClass, starid, input_folder, output_folder, plot):
 	logger = logging.getLogger(__name__)
-	with PhotClass(starid, input_folder) as pho:
+	with PhotClass(starid, input_folder, output_folder, plot) as pho:
 		try:
 			pho.photometry()
 			status = pho.status
@@ -36,7 +36,7 @@ def _try_photometry(PhotClass, starid, input_folder, output_folder):
 	return pho
 
 #------------------------------------------------------------------------------
-def tessphot(starid=None, method=None, input_folder=None, output_folder=None):
+def tessphot(starid=None, method=None, input_folder=None, output_folder=None, plot=None):
 	"""
 	Run the photometry pipeline on a single star.
 
@@ -48,21 +48,21 @@ def tessphot(starid=None, method=None, input_folder=None, output_folder=None):
 	logger = logging.getLogger(__name__)
 
 	if method is None:
-		pho = _try_photometry(AperturePhotometry, starid, input_folder, output_folder)
+		pho = _try_photometry(AperturePhotometry, starid, input_folder, output_folder, plot)
 
 		if pho.status == STATUS.WARNING:
 			logger.warning("Try something else?")
 			# TODO: If too crowded:
-			# pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder)
+			# pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder, plot)
 
 	elif method == 'aperture':
-		pho = _try_photometry(AperturePhotometry, starid, input_folder, output_folder)
+		pho = _try_photometry(AperturePhotometry, starid, input_folder, output_folder, plot)
 
 	elif method == 'psf':
-		pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder)
+		pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder, plot)
 
 	elif method == 'linpsf':
-		pho = _try_photometry(LinPSFPhotometry, starid, input_folder, output_folder)
+		pho = _try_photometry(LinPSFPhotometry, starid, input_folder, output_folder, plot)
 
 	else:
 		raise ValueError("Invalid method: '{0}'".format(method))

@@ -126,7 +126,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 
 def save_figure(output_folder, fig_name, ftype='png'):
 	"""
-	Write current figure to file.
+	Write current figure to file. Creates directory to place it in if needed.
 	
 	Parameters:
 		output_folder (string): Path to directory where to save figure.
@@ -138,5 +138,12 @@ def save_figure(output_folder, fig_name, ftype='png'):
 	logger = logging.getLogger(__name__)
 	logger.info('Saving figure'+fig_name+'.'+ftype+' to '+output_folder)
 
-	# Write current figure to file:
-	plt.savefig(os.path.join(output_folder, fig_name+'.'+ftype))
+	# Make figure output directory if it doesn't exist:
+	fig_output_folder = os.path.join(output_folder, 'figures')
+	if not os.path.exists(fig_output_folder):
+		os.makedirs(fig_output_folder)
+
+	# Write current figure to file if it doesn't exist:
+	file_dir = os.path.join(fig_output_folder, fig_name+'.'+ftype)
+	if not os.path.exists(file_dir):
+		plt.savefig(file_dir)

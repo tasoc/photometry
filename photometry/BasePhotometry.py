@@ -48,7 +48,7 @@ class BasePhotometry(object):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	def __init__(self, starid, input_folder, datasource='ffi'):
+	def __init__(self, starid, input_folder, output_folder, plot, datasource='ffi'):
 		"""
 		Initialize the photometry object.
 
@@ -62,6 +62,8 @@ class BasePhotometry(object):
 
 		self.starid = starid
 		self.input_folder = input_folder
+		self.output_folder = output_folder
+		self.plot = plot
 		self.datasource = datasource
 
 		# TODO: These should also come from the catalog somehow

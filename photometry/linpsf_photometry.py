@@ -14,7 +14,7 @@ import logging
 from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
-from .plots import plot_image_fit_residuals
+from .plots import plot_image_fit_residuals, save_figure
 
 class LinPSFPhotometry(BasePhotometry):
 
@@ -123,7 +123,7 @@ class LinPSFPhotometry(BasePhotometry):
 				self.lightcurve['quality'][k] = 0
 
 				# TODO: use debug figure toggle to decide if to plot and export
-				if False:
+				if self.plot:
 					# Make plot for debugging:
 					fig = plt.figure()
 					result4plot = []
@@ -146,7 +146,9 @@ class LinPSFPhotometry(BasePhotometry):
 					for ax, title in zip(ax_list, title_list):
 						ax.set_title(title)
 
-					plt.show()
+					# Save figure to file:
+					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
+					save_figure(self.output_folder, fig_name)
 
 			# Pass result if fit failed:
 			else:
