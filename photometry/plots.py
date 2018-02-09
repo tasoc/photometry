@@ -117,7 +117,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 	
 	# Set titles:
 	ax_list = [ax1, ax2, ax3]
-	title_list = ['Simulated image', 'PSF fit', 'Residual image']
+	title_list = ['Image', 'PSF fit', 'Residuals']
 	for ax, title in zip(ax_list, title_list):
 		ax.set_title(title)
 
