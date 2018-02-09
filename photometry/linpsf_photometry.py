@@ -14,6 +14,7 @@ import logging
 from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
+from .plots import plot_image_fit_residuals
 
 class LinPSFPhotometry(BasePhotometry):
 
@@ -130,20 +131,21 @@ class LinPSFPhotometry(BasePhotometry):
 						result4plot.append(np.array([target['row_stamp'], 
 													target['column_stamp'],
 													fluxes[star]]))
-					# Plot image:
-					ax = fig.add_subplot(131)
-					im = ax.imshow(img, origin='lower')
-					ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
-					plt.colorbar(im)
-					# Plot least squares fit:
-					ax = fig.add_subplot(132)
-					im = ax.imshow(self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
-					ax.scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
-					plt.colorbar(im)
-					# Plot the residuals:
-					ax = fig.add_subplot(133)
-					im = ax.imshow(img - self.psf.integrate_to_image(result4plot, cutoff_radius=20), origin='lower')
-					plt.colorbar(im)
+
+					# Add subplots with the image, fit and residuals:
+					ax_list = plot_image_fit_residuals(fig=fig,
+							image=img,
+							fit=self.psf.integrate_to_image(result4plot, cutoff_radius=20),
+							residuals=img - self.psf.integrate_to_image(result4plot, cutoff_radius=20))
+
+					# Add star position to the first plot:
+					ax_list[0].scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
+
+					# Add subplot titles:
+					title_list = ['Simulated image', 'Least squares PSF fit', 'Residual image']
+					for ax, title in zip(ax_list, title_list):
+						ax.set_title(title)
+
 					plt.show()
 
 			# Pass result if fit failed:

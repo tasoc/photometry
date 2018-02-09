@@ -80,8 +80,8 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 	# Calculate common normalization for the first two subplots:
 	vmin_image, vmax_image = PercentileInterval(95.).get_limits(image)
 	vmin_fit, vmax_fit = PercentileInterval(95.).get_limits(fit)
-	vmin = np.nanmin(vmin_image, vmin_fit)
-	vmax = np.nanmax(vmax_image, vmax_fit)
+	vmin = np.nanmin([vmin_image, vmin_fit])
+	vmax = np.nanmax([vmax_image, vmax_fit])
 	norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=LogStretch())
 
 	# Add subplot with the image:
