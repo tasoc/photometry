@@ -47,14 +47,16 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 
 	extent = (0, image.shape[0], 0, image.shape[1])
 	
-	plt.imshow(image, origin=origin, norm=norm, extent=extent, **kwargs)
+	im = plt.imshow(image, origin=origin, norm=norm, extent=extent, **kwargs)
 	plt.xlabel(xlabel)
 	plt.ylabel(ylabel)
 	plt.title(title)
-	
+
 	if make_cbar:
 		cbar = plt.colorbar(norm=norm)
 		cbar.set_label(clabel)
+
+	return im
 
 
 def plot_image_fit_residuals(fig, image, fit, residuals):
@@ -86,7 +88,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 
 	# Add subplot with the image:
 	ax1 = fig.add_subplot(131)
-	plot_image(image, norm=norm, make_cbar=False)
+	im1 = plot_image(image, norm=norm, make_cbar=False)
 
 	# Add subplot with the fit:
 	ax2 = fig.add_subplot(132)
@@ -94,7 +96,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 
 	# Make the common colorbar for image and fit subplots:
 	cbar_ax12 = fig.add_axes([0.125, 0.2, 0.494, 0.03])
-	fig.colorbar(norm=norm, cax=cbar_ax12, orientation='horizontal')
+	fig.colorbar(im1, norm=norm, cax=cbar_ax12, orientation='horizontal')
 	cbar_ax12.set_xticklabels(cbar_ax12.get_xticklabels(), rotation='vertical')
 
 	# Calculate the normalization for the third subplot:
@@ -103,11 +105,11 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 
 	# Add subplot with the residauls:
 	ax3 = fig.add_subplot(133)
-	plot_image(residuals, scale='linear', make_cbar=False)
+	im3 = plot_image(residuals, scale='linear', make_cbar=False)
 
 	# Make the colorbar for the residuals subplot:
 	cbar_ax3 = fig.add_axes([0.7, 0.2, 0.205, 0.03])
-	fig.colorbar(norm=norm, cax=cbar_ax3, orientation='horizontal')
+	fig.colorbar(im3, norm=norm, cax=cbar_ax3, orientation='horizontal')
 	cbar_ax3.set_xticklabels(cbar_ax3.get_xticklabels(), rotation='vertical')
 
 	# Add more space between subplots:
@@ -115,7 +117,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 	
 	# Set titles:
 	ax_list = [ax1, ax2, ax3]
-	title_list = ['Simulated image', 'Least squares PSF fit', 'Residual image']
+	title_list = ['Simulated image', 'PSF fit', 'Residual image']
 	for ax, title in zip(ax_list, title_list):
 		ax.set_title(title)
 
