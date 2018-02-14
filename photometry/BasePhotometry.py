@@ -48,7 +48,7 @@ class BasePhotometry(object):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	def __init__(self, starid, input_folder, output_folder, plot, datasource='ffi'):
+	def __init__(self, starid, input_folder, output_folder, datasource='ffi', plot=False):
 		"""
 		Initialize the photometry object.
 
@@ -56,6 +56,9 @@ class BasePhotometry(object):
 			starid (int): TIC number of star to be processed.
 			datasource (string): Source of the data. Can be either ``ffi`` or ``tpf``.
 			input_folder (string): Root directory where files are loaded from.
+			output_folder (string): Root directory where output files are saved.
+			datasource (string, optional): Options are 'ffi' or 'tpf'. Default is 'ffi'.
+			plot (boolean, optional): Create plots as part of the output. Default is ``False``.
 		"""
 
 		logger = logging.getLogger(__name__)
@@ -77,6 +80,12 @@ class BasePhotometry(object):
 		self.tpf = None
 		self.hdf = None
 
+		# Set directory where diagnostics plots should be saved to:
+		self.plot_folder = None #: Directory where plots are saved to.
+		if self.plot:
+			self.plot_folder = os.path.join(self.output_folder, 'plots', '{0:011d}'.format(self.starid))
+			os.makedirs(self.plot_folder, exist_ok=True)
+		
 		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
 		self._catalog = None

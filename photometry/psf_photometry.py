@@ -154,11 +154,9 @@ class PSFPhotometry(BasePhotometry):
 					plt.show()
 
 					# Export figure to file:
-					output_folder = self.output_folder
 					fig_name = 'psf_photometry_'+np.str(self.sector)+'_'+ \
 								np.str(self.starid)+'_'+np.str(k)
-					ftype = 'png'
-					save_figure(output_folder, fig_name, ftype)
+					save_figure(os.path.join(self.plot_folder, fig_name))
 
 				# In the next iteration, start from the current solution:
 				params0 = res.x
