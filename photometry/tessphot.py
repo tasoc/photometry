@@ -11,7 +11,7 @@ from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 #------------------------------------------------------------------------------
 def _try_photometry(PhotClass, starid, input_folder, output_folder, plot):
 	logger = logging.getLogger(__name__)
-	with PhotClass(starid, input_folder, output_folder, plot) as pho:
+	with PhotClass(starid, input_folder, output_folder, plot=plot) as pho:
 		try:
 			pho.photometry()
 			status = pho.status

@@ -54,7 +54,6 @@ class BasePhotometry(object):
 
 		Parameters:
 			starid (int): TIC number of star to be processed.
-			datasource (string): Source of the data. Can be either ``ffi`` or ``tpf``.
 			input_folder (string): Root directory where files are loaded from.
 			output_folder (string): Root directory where output files are saved.
 			datasource (string, optional): Options are 'ffi' or 'tpf'. Default is 'ffi'.
