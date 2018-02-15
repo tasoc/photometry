@@ -9,41 +9,40 @@ Plotting utilities.
 import logging
 import os
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from astropy.visualization import (PercentileInterval, ImageNormalize,
 								   SqrtStretch, LogStretch, LinearStretch)
 
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 			   ylabel='Pixel Row Number', make_cbar=True, clabel='Flux ($e^{-}s^{-1}$)', 
-			   title=None, norm=None,**kwargs):
+			   title=None, **kwargs):
 	"""Utility function to plot a 2D image.
 
 	Parameters:
 		image (2d array): Image data.
-		scale (str, optional): Scale used to stretch the colormap. Options: 'linear', 'sqrt', or 'log'.
+		scale (str or astropy.visualization.ImageNormalize object, optional): Normalization used to stretch the colormap. Options: 'linear', 'sqrt', or 'log'. Can also be a `astropy.visualization.ImageNormalize` object. Default is `log`.
 		origin (str, optional): The origin of the coordinate system.
 		xlabel (str, optional): Label for the x-axis.
 		ylabel (str, optional): Label for the y-axis.
-		make_cbar (boolean): ``False`` if plot without colorbar. Default is ``True``.
+		make_cbar (boolean): Create colorbar? Default is ``True``.
 		clabel (str, optional): Label for the color bar.
 		title (str or None, optional): Title for the plot.
-		norm (astropy.visualization.mpl_normalize.ImageNormalize object): Output 
-		from `astropy.visualization.ImageNormalize`. Default is ``None`` in which 
-		case the normalization is derived from the image.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.imshow`.
 	"""
 
-	if norm is None:
-		vmin, vmax = PercentileInterval(95.).get_limits(image)
-	
-		if scale == 'linear':
-			norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=LinearStretch())
-		elif scale == 'sqrt':
-			norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=SqrtStretch())
-		elif scale == 'log':
-			norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=LogStretch())
-		else:
-			raise ValueError("scale {} is not available.".format(scale))
+	vmin, vmax = PercentileInterval(95.).get_limits(image)
+
+	if scale == 'log':
+		norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=LogStretch())
+	elif scale == 'linear':
+		norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=LinearStretch())
+	elif scale == 'sqrt':
+		norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=SqrtStretch())
+	elif issubclass(scale, matplotlib.colors.Normalize):
+		norm = scale
+	else:
+		raise ValueError("scale {} is not available.".format(scale))
 
 	extent = (0, image.shape[0], 0, image.shape[1])
 	
@@ -88,11 +87,11 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 
 	# Add subplot with the image:
 	ax1 = fig.add_subplot(131)
-	im1 = plot_image(image, norm=norm, make_cbar=False)
+	im1 = plot_image(image, scale=norm, make_cbar=False)
 
 	# Add subplot with the fit:
 	ax2 = fig.add_subplot(132)
-	plot_image(fit, norm=norm, make_cbar=False)
+	plot_image(fit, scale=norm, make_cbar=False)
 
 	# Make the common colorbar for image and fit subplots:
 	cbar_ax12 = fig.add_axes([0.125, 0.2, 0.494, 0.03])
@@ -124,26 +123,20 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 	return ax_list
 
 
-def save_figure(output_folder, fig_name, ftype='png'):
+def save_figure(path, format='png', **kwargs):
 	"""
 	Write current figure to file. Creates directory to place it in if needed.
 	
 	Parameters:
 		output_folder (string): Path to directory where to save figure.
 		fig_name (string): Figure name.
-		ftype (string): Figure file type. Default is ``'png'``.
+		format (string): Figure file type. Default is ``'png'``.
+		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
 	
 	"""
 
 	logger = logging.getLogger(__name__)
-	logger.info('Saving figure'+fig_name+'.'+ftype+' to '+output_folder)
-
-	# Make figure output directory if it doesn't exist:
-	fig_output_folder = os.path.join(output_folder, 'figures')
-	if not os.path.exists(fig_output_folder):
-		os.makedirs(fig_output_folder)
+	logger.debug("Saving figure '%s' to '%s'.", os.path.basename(path), os.path.dirname(path))
 
 	# Write current figure to file if it doesn't exist:
-	file_dir = os.path.join(fig_output_folder, fig_name+'.'+ftype)
-	if not os.path.exists(file_dir):
-		plt.savefig(file_dir)
+	plt.savefig(fig_name, format=format, bbox_inches='tight', **kwargs)

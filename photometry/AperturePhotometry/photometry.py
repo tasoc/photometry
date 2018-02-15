@@ -8,6 +8,7 @@ Simple Aperture Photometry using K2P2 to define masks.
 
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
+import os
 import numpy as np
 import logging
 from .. import BasePhotometry, STATUS
@@ -58,11 +59,11 @@ class AperturePhotometry(BasePhotometry):
 
 			logger.info("Creating new masks...")
 			k2p2_settings = {
-				'thresh': 5,
+				'thresh': 1,
 				'min_no_pixels_in_mask': 4
 			}
 
-			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, None, plot_folder=None, catalog=cat, **k2p2_settings)
+			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, None, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
 			masks = np.asarray(masks, dtype='bool')
 
 			if len(masks.shape) == 0:

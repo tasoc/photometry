@@ -148,7 +148,7 @@ class LinPSFPhotometry(BasePhotometry):
 
 					# Save figure to file:
 					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
-					save_figure(self.output_folder, fig_name)
+					save_figure(os.path.join(self.plot_folder, fig_name))
 
 			# Pass result if fit failed:
 			else:
