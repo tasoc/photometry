@@ -38,32 +38,55 @@ def load_starids():
 	return [np.str(star[1]) for star in stars]
 
 
-def call_run_tessphot(method='aperture'):
+def loop_through_starids(starids, method='aperture'):
 	""" 
 	Call run_tessphot in a multiprocessing loop inspired by prepare_photometry.
 	
 	Parameters:
+		starids (list of strings): Priority-sorted list with starids as strings.
 		method (string): Photometry method. Can be either ``'aperture'`` 
 		(default), ``'psf'`` or ``'linpsf'``.
 	"""
+	
+	logger = logging.getLogger(__name__)
+	
 	# Get number of available threads on CPU. Use 1 if not accessible:
 	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', 1))
-	
+
 	# Set up multiprocessing if multiple threads are available:
 	if threads > 1:
 		pool = multiprocessing.Pool(threads)
 		m = pool.imap
 	else:
 		m = map
-	
-	# Set common parts of the run_tessphot command:
-	cmd = "python run_tessphot.py "
+
+	# Set up run_tessphot commands:
+	base_cmd = "python run_tessphot.py "
 	args = " --method='"+method+"' --quiet"
-	
+	cmds = [base_cmd+starid+args for starid in starids]
+
 	# Call run_tessphot using multiprocess mapping for each starid:
-	for starid in m(starids):
-		print('Doing '+method+' photometry on '+starid)
-		os.system(cmd+starid+args)
+	for cmd in m(run_cmd, cmds):
+		logger.info(cmd)
+
+	if threads > 1:
+		# Close multithreading:
+		pool.close()
+		pool.join()
+
+
+def run_cmd(cmd):
+	"""
+	Run command. Designed to be used in a multiprocessing call.
+	
+	Parameters:
+		cmd (string): Command to run.
+	
+	Returns:
+		cmd (string): Command that has been run.
+	"""
+	os.system(cmd)
+	return cmd
 
 
 
@@ -89,4 +112,4 @@ if __name__ == '__main__':
 	starids = load_starids()
 	
 	# Call run_tessphot on each starid:
-	call_run_tessphot(method=method)
+	loop_through_starids(starids, method=method)
