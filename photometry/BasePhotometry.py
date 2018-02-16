@@ -56,7 +56,7 @@ class BasePhotometry(object):
 			starid (int): TIC number of star to be processed.
 			input_folder (string): Root directory where files are loaded from.
 			output_folder (string): Root directory where output files are saved.
-			datasource (string, optional): Options are 'ffi' or 'tpf'. Default is 'ffi'.
+			datasource (string, optional): Source of the data. Options are ``'ffi'`` or ``'tpf'``. Default is ``'ffi'``.
 			plot (boolean, optional): Create plots as part of the output. Default is ``False``.
 		"""
 
@@ -574,9 +574,7 @@ class BasePhotometry(object):
 			time (float): Time in MJD when to calculate catalog.
 
 		Returns:
-			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`,
-			                       but with `column`, `row`, `column_stamp` and `row_stamp`
-								   calculated at the given timestamp.
+			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`, but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated at the given timestamp.
 
 		See Also:
 			:py:func:`catalog`

@@ -10,7 +10,8 @@ from __future__ import with_statement, print_function
 import os
 import argparse
 import logging
-from photometry import tessphot
+import multiprocessing
+from photometry import tessphot, TaskManager
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -22,10 +23,13 @@ if __name__ == '__main__':
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
-	parser.add_argument('starid', type=int, help='TIC identifier of target.')
+	parser.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
+	parser.add_argument('-a', '--all', help='Run on all targets from TODO-list.', action='store_true')
+	parser.add_argument('starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
 	args = parser.parse_args()
-	starid = args.starid
-	method = args.method
+
+	if args.starid is None and not args.random and not args.all:
+		parser.error("Please select either a specific STARID, RANDOM or ALL.")
 
 	if args.quiet:
 		logging_level = logging.WARNING
@@ -50,7 +54,27 @@ if __name__ == '__main__':
 	logger.info("Putting output data in '%s'", output_folder)
 
 	# Run the program:
-	pho = tessphot(starid, method, input_folder=input_folder, output_folder=output_folder, plot=args.plot)
+	with TaskManager(input_folder) as tm:
+		if args.starid is not None:
+			task = {'starid': args.starid, 'method': args.method}
+			pho = tessphot(input_folder=input_folder, output_folder=output_folder, plot=args.plot, **task)
+
+		elif args.random:
+			task = tm.get_random_task()
+			del task['priority']
+			pho = tessphot(input_folder=input_folder, output_folder=output_folder, plot=args.plot, **task)
+
+		elif args.all:
+			# TODO: Put up a multiprocessing Pool and run this in parallel
+			pool = multiprocessing.Pool()
+
+			task = tm.get_task()
+			del task['priority']
+			pho = tessphot(input_folder=input_folder, output_folder=output_folder, plot=args.plot, **task)
+
+			# Close multiprocessing pool:
+			pool.close()
+			pool.join()
 
 	# TODO: Write out the results?
 	if not args.quiet:

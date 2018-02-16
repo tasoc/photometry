@@ -22,97 +22,8 @@ Example
 
 from __future__ import with_statement, print_function
 from mpi4py import MPI
-import sys
 import os
 import enum
-import logging
-
-#------------------------------------------------------------------------------
-class TaskManager(object):
-	def __init__(self, todo_file):
-		self.conn = sqlite3.connect(todo_file)
-		self.conn.row_factory = sqlite3.Row
-		self.cursor = self.conn.cursor()
-
-		# Reset the status of everything for a new run:
-		# TODO: This should obviously be removed once we start running for real
-		self.cursor.execute("UPDATE todolist SET status=NULL,elaptime=NULL;")
-		self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
-		self.conn.commit()
-
-		# Create table for diagnostics:
-		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
-			priority INT PRIMARY KEY NOT NULL,
-			starid BIGINT NOT NULL,
-			mean_flux DOUBLE PRECISION,
-			mask_size INT,
-			pos_row REAL,
-			pos_column REAL,
-			contamination REAL,
-			stamp_resizes INT,
-			errors TEXT
-		)""")
-		self.conn.commit()
-
-		# Setup logging:
-		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-		console = logging.StreamHandler()
-		console.setFormatter(formatter)
-		self.logger = logging.getLogger(__name__)
-		self.logger.addHandler(console)
-		self.logger.setLevel(logging.INFO)
-
-	def close(self):
-		self.cursor.close()
-		self.conn.close()
-
-	def __exit__(self, *args):
-		self.close()
-
-	def __enter__(self):
-		return self
-
-	def get_number_tasks(self):
-		self.cursor.execute("SELECT COUNT(*) AS num FROM todolist WHERE status IS NULL;")
-		num = int(self.cursor.fetchone()['num'])
-		return num
-
-	def get_task(self):
-		self.cursor.execute("SELECT priority,starid,method FROM todolist WHERE status IS NULL ORDER BY priority LIMIT 1;")
-		task = self.cursor.fetchone()
-		if task: return dict(task)
-		return None
-
-	def save_result(self, result):
-		self.cursor.execute("UPDATE todolist SET status=?,elaptime=? WHERE priority=?;", (result['status'].value, result['time'], result['priority']))
-
-		if 'skip_targets' in result['details'] and len(result['details']['skip_targets']) > 0:
-			# Create unique list of starids to be masked as skipped:
-			skip_starids = [str(starid) for starid in set(result['details']['skip_targets'])]
-			skip_starids = ','.join(skip_starids)
-			# Mark them as SKIPPED in the database:
-			self.cursor.execute("UPDATE todolist SET status=5 WHERE status IS NULL AND starid IN (" + skip_starids + ");")
-
-		# Save diagnostics:
-		error_msg = result['details'].get('errors', None)
-		if error_msg: error_msg = '\n'.join(error_msg)
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, pos_column, pos_row, mean_flux, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?);", (
-			result['priority'],
-			result['starid'],
-			result['details'].get('pos_centroid', (None, None))[0],
-			result['details'].get('pos_centroid', (None, None))[1],
-			result['details'].get('mean_flux', None),
-			result['details'].get('mask_size', None),
-			result['details'].get('contamination', None),
-			result['details'].get('stamp_resizes', 0),
-			error_msg
-		))
-		self.conn.commit()
-
-	def start_task(self, taskid):
-		self.cursor.execute("UPDATE todolist SET status=6 WHERE priority=?;", (taskid,))
-		self.conn.commit()
-
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -133,7 +44,7 @@ if __name__ == '__main__':
 
 	if rank == 0:
 		# Master process executes code below
-		import sqlite3
+		from photometry import TaskManager
 
 		with TaskManager(todo_file) as tm:
 			# Get list of tasks:
