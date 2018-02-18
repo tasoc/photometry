@@ -7,12 +7,13 @@ Created on Wed Nov  8 16:37:12 2017
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
+import os.path
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
 from copy import deepcopy
 from scipy.optimize import minimize
-from .BasePhotometry import BasePhotometry, STATUS
+from . import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
 from .plots import save_figure
@@ -33,11 +34,11 @@ class PSFPhotometry(BasePhotometry):
 	def _lhood(self, params, img_bkg, lhood_stat='Gaussian_d', include_bkg=True):
 		"""
 		Log-likelihood function to be minimized for the PSF fit.
-		
+
 		Parameters:
 			params (numpy array): Parameters for the PSF integrator.
 			img_bkg (list): List containing the image and background numpy arrays.
-			lhood_stat (string): Determines what statistic to use. Default is 
+			lhood_stat (string): Determines what statistic to use. Default is
 			``Gaussian_d``. Can also be ``Gaussian_m`` or ``Poisson``.
 			include_bkg (boolean): Determine whether to include background. Default
 			is ``True``.
@@ -124,7 +125,7 @@ class PSFPhotometry(BasePhotometry):
 				maxiter = 500
 			else: # The first step requires more iterations due to bad starting guess
 				maxiter = 1500
-				
+
 			# Run the fitting routine for this image:
 			res = minimize(self._lhood, params0, args=[img,bkg], method='Nelder-Mead',
 						options={'maxiter': maxiter})
