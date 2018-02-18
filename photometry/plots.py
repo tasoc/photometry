@@ -15,8 +15,8 @@ from astropy.visualization import (PercentileInterval, ImageNormalize,
 								   SqrtStretch, LogStretch, LinearStretch)
 
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
-			   ylabel='Pixel Row Number', make_cbar=True, clabel='Flux ($e^{-}s^{-1}$)', 
-			   title=None, **kwargs):
+			   ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)',
+			   title=None, percentile=95.0, ax=None, cmap=plt.cm.Blues, **kwargs):
 	"""Utility function to plot a 2D image.
 
 	Parameters:
@@ -25,13 +25,14 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		origin (str, optional): The origin of the coordinate system.
 		xlabel (str, optional): Label for the x-axis.
 		ylabel (str, optional): Label for the y-axis.
-		make_cbar (boolean): Create colorbar? Default is ``True``.
+		make_cbar (boolean): Create colorbar? Default is ``False``.
 		clabel (str, optional): Label for the color bar.
 		title (str or None, optional): Title for the plot.
+		percentile (float, optional): The fraction of pixels to keep in color-trim. The same fraction of pixels is eliminated from both ends. Default=95.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.imshow`.
 	"""
 
-	vmin, vmax = PercentileInterval(95.).get_limits(image)
+	vmin, vmax = PercentileInterval(percentile).get_limits(image)
 
 	if scale == 'log':
 		norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=LogStretch())
@@ -45,35 +46,49 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		raise ValueError("scale {} is not available.".format(scale))
 
 	extent = (0, image.shape[0], 0, image.shape[1])
-	
-	im = plt.imshow(image, origin=origin, norm=norm, extent=extent, **kwargs)
-	plt.xlabel(xlabel)
-	plt.ylabel(ylabel)
-	plt.title(title)
+
+	if ax is None:
+		ax = plt.gca()
+
+	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, **kwargs)
+	if not xlabel is None: ax.set_xlabel(xlabel)
+	if not ylabel is None: ax.set_ylabel(ylabel)
+	ax.set_title(title)
+	ax.set_xlim([0, image.shape[0]])
+	ax.set_ylim([0, image.shape[1]])
 
 	if make_cbar:
-		cbar = plt.colorbar(norm=norm)
+		cbar = plt.colorbar(im, norm=norm)
 		cbar.set_label(clabel)
+
+	# Settings for ticks (to make Mikkel happy):
+	#ax.xaxis.set_major_locator(MultipleLocator(5))
+	#ax.xaxis.set_minor_locator(MultipleLocator(1))
+	#ax.yaxis.set_major_locator(MultipleLocator(5))
+	#ax.yaxis.set_minor_locator(MultipleLocator(1))
+	ax.tick_params(direction='out', which='both', pad=5)
+	ax.xaxis.tick_bottom()
+	#ax.set_aspect(aspect)
 
 	return im
 
 
 def plot_image_fit_residuals(fig, image, fit, residuals):
 	"""
-	Make a figure with three subplots showing the image, the fit and the 
+	Make a figure with three subplots showing the image, the fit and the
 	residuals. The image and the fit are shown with logarithmic scaling and a
 	common colorbar. The residuals are shown with linear scaling and a seperate
 	colorbar.
-	
+
 	Parameters:
 		fig (fig object): Figure object in which to make the subplots.
 		image (2D array): Image numpy array.
 		fit (2D array): Fitted image numpy array.
 		residuals (2D array): Fitted image subtracted from image numpy array.
-		positions (list of arrays): List with the catalog and PSF fitted 
+		positions (list of arrays): List with the catalog and PSF fitted
 		centroid positions. Format is (row,col). Default is ``None`` which does
 		not plot the positions.
-	
+
 	Returns:
 		axes (list): List with Matplotlib subplot axes objects for each subplot.
 	"""
@@ -113,7 +128,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 
 	# Add more space between subplots:
 	plt.subplots_adjust(wspace=0.4, hspace=0.4)
-	
+
 	# Set titles:
 	ax_list = [ax1, ax2, ax3]
 	title_list = ['Image', 'PSF fit', 'Residuals']
@@ -126,17 +141,20 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 def save_figure(path, format='png', **kwargs):
 	"""
 	Write current figure to file. Creates directory to place it in if needed.
-	
+
 	Parameters:
 		output_folder (string): Path to directory where to save figure.
 		fig_name (string): Figure name.
 		format (string): Figure file type. Default is ``'png'``.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
-	
+
 	"""
 
 	logger = logging.getLogger(__name__)
 	logger.debug("Saving figure '%s' to '%s'.", os.path.basename(path), os.path.dirname(path))
 
+	if not path.endswith('.' + format):
+		path += '.' + format
+
 	# Write current figure to file if it doesn't exist:
-	plt.savefig(fig_name, format=format, bbox_inches='tight', **kwargs)
+	plt.savefig(path, format=format, bbox_inches='tight', **kwargs)
