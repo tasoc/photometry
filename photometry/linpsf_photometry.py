@@ -110,6 +110,22 @@ class LinPSFPhotometry(BasePhotometry):
 				res = 'failed'
 			logger.debug('Result of linear psf photometry: ' + np.str(res))
 
+			# Calculate contamination:
+			if nstars == 1:
+				contamination = 0
+			else:
+				# Calculate contamination from the other targets in the PSF:
+				contamination = np.sum(A[:,1:-1].dot(mag2flux(cat['tmag'][1:-1])) * A[:,0]) / mag2flux(cat['tmag'][0])
+			# TODO: export contamination like in aperture photometry
+
+			logger.info("Contamination: %f", contamination)
+			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
+
+			# If contamination is high, return a warning:
+			if contamination > 0.1:
+				self.report_details(error='High contamination')
+				return STATUS.WARNING
+
 			# Pass result if fit did not fail:
 			if res is not 'failed':
 				# Get flux of target star:
