@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+The basic photometry class for the TASOC Photometry pipeline.
+All other specific photometric algorithms will inherit from BasePhotometry.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -9,9 +11,10 @@ from __future__ import division, with_statement, print_function, absolute_import
 import six
 from six.moves import range
 import numpy as np
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
 from astropy.io import fits
 from astropy.table import Table, Column
-import matplotlib.pyplot as plt
 import h5py
 import sqlite3
 import logging
@@ -45,6 +48,33 @@ class BasePhotometry(object):
 	The basic photometry class for the TASOC Photometry pipeline.
 	All other specific photometric algorithms will inherit from this.
 
+	Attributes:
+		starid (integer): TIC number of star being processed.
+		input_folder (string): Root directory where files are loaded from.
+		output_folder (string): Root directory where output files are saved.
+		plot (boolean): Indicates wheter plots should be created as part of the output.
+		plot_folder (string): Directory where plots are saved to.
+
+		sector (integer): TESS observing sector.
+		camera (integer): TESS camera (1-4).
+		ccd (integer): TESS CCD (1-4).
+		n_readout (integer): Number of frames co-added in each timestamp.
+
+		target_mag (float): TESS magnitude of the main target.
+		target_pos_ra (float): Right ascension of the main target at time of observation.
+		target_pos_dec (float): Declination of the main target at time of observation.
+		target_pos_ra_J2000 (float): Right ascension of the main target at J2000.
+		target_pos_dec_J2000 (float): Declination of the main target at J2000.
+		target_pos_column (flat): Main target CCD column position.
+		target_pos_row (float): Main target CCD row position.
+		target_pos_column_stamp (float): Main target CCD column position in stamp.
+		target_pos_row_stamp (float): Main target CCD row position in stamp.
+		wcs (``astropy.wcs.WCS`` object): World Coordinate system solution.
+
+		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
+		final_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
+		additional_headers (dict): Additional headers to be included in FITS files.
+
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
@@ -56,8 +86,13 @@ class BasePhotometry(object):
 			starid (int): TIC number of star to be processed.
 			input_folder (string): Root directory where files are loaded from.
 			output_folder (string): Root directory where output files are saved.
-			datasource (string, optional): Options are 'ffi' or 'tpf'. Default is 'ffi'.
+			datasource (string, optional): Source of the data. Options are ``'ffi'`` or ``'tpf'``. Default is ``'ffi'``.
 			plot (boolean, optional): Create plots as part of the output. Default is ``False``.
+
+		Raises:
+			IOError: If starid could not be found in catalog.
+			ValueError: On invalid datasource.
+
 		"""
 
 		logger = logging.getLogger(__name__)
@@ -70,9 +105,9 @@ class BasePhotometry(object):
 
 		# TODO: These should also come from the catalog somehow
 		#       They will be needed to find the correct input files
-		self.sector = 0 #: TESS observing sector.
-		self.camera = 1 #: TESS camera.
-		self.ccd = 1 #: TESS CCD.
+		self.sector = 0 # TESS observing sector.
+		self.camera = 1 # TESS camera.
+		self.ccd = 1 # TESS CCD.
 
 		self._status = STATUS.UNKNOWN
 		self._details = {}
@@ -80,11 +115,11 @@ class BasePhotometry(object):
 		self.hdf = None
 
 		# Set directory where diagnostics plots should be saved to:
-		self.plot_folder = None #: Directory where plots are saved to.
+		self.plot_folder = None
 		if self.plot:
 			self.plot_folder = os.path.join(self.output_folder, 'plots', '{0:011d}'.format(self.starid))
 			os.makedirs(self.plot_folder, exist_ok=True)
-		
+
 		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
 		self._catalog = None
@@ -97,16 +132,16 @@ class BasePhotometry(object):
 		target = cursor.fetchone()
 		if target is None:
 			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
-		self.target_tmag = target['tmag'] #: TESS magnitude of the main target.
-		self.target_pos_ra = target['ra'] #: Right ascension of the main target at time of observation.
-		self.target_pos_dec = target['decl'] #: Declination of the main target at time of observation.
-		self.target_pos_ra_J2000 = target['ra_J2000'] #: Right ascension of the main target at J2000.
-		self.target_pos_dec_J2000 = target['decl_J2000'] #: Declination of the main target at J2000.
+		self.target_tmag = target['tmag'] # TESS magnitude of the main target.
+		self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
+		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
+		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
+		self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
 		cursor.close()
 		conn.close()
 
 		# Init table that will be filled with lightcurve stuff:
-		self.lightcurve = Table() #: Table to be filled with an extracted lightcurve
+		self.lightcurve = Table() # Table to be filled with an extracted lightcurve
 
 		if self.datasource == 'ffi':
 			# Load stuff from the common HDF5 file:
@@ -120,8 +155,7 @@ class BasePhotometry(object):
 			hdr_string = self.hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
 			hdr = fits.Header().fromstring(hdr_string)
-			self.wcs = WCS(header=hdr) #: World Coordinate system solution.
-
+			self.wcs = WCS(header=hdr) # World Coordinate system solution.
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
@@ -137,7 +171,7 @@ class BasePhotometry(object):
 			# Get info for psf fit Gaussian statistic:
 			self.readnoise = self.hdf['images'].attrs.get('READNOIS', 10)
 			self.gain = self.hdf['images'].attrs.get('GAIN', 100)
-			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) #: Number of frames co-added in each timestamp.
+			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
 
 		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
@@ -162,10 +196,10 @@ class BasePhotometry(object):
 			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 
-			self.wcs = WCS(header=self.tpf[2].header) #: World Coordinate system solution
+			self.wcs = WCS(header=self.tpf[2].header) # World Coordinate system solution
 
 			self._max_stamp_size = (self.tpf[2].header['NAXIS1'], self.tpf[2].header['NAXIS2'])
-			self.n_readout = self.tpf[1].header['NUM_FRM'] #: Number of frames co-added in each timestamp.
+			self.n_readout = self.tpf[1].header['NUM_FRM'] # Number of frames co-added in each timestamp.
 
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)
@@ -178,14 +212,14 @@ class BasePhotometry(object):
 		self.lightcurve['pos_centroid'] = Column(length=N, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
 
 		# Init arrays that will be filled with lightcurve stuff:
-		self.final_mask = None #: Mask indicating which pixels were used in extraction of lightcurve.
-		self.additional_headers = {} #: Additional headers to be included in FITS files.
+		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
+		self.additional_headers = {} # Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
-		self.target_pos_column = None #: Main target CCD column position.
-		self.target_pos_row = None #: Main target CCD row position.
-		self.target_pos_column_stamp = None #: Main target CCD column position in stamp.
-		self.target_pos_row_stamp = None #: Main target CCD row position in stamp.
+		self.target_pos_column = None # Main target CCD column position.
+		self.target_pos_row = None # Main target CCD row position.
+		self.target_pos_column_stamp = None # Main target CCD column position in stamp.
+		self.target_pos_row_stamp = None # Main target CCD row position in stamp.
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
 		logger.info("Target column: %f", self.target_pos_column)
 		logger.info("Target row: %f", self.target_pos_row)
@@ -210,7 +244,7 @@ class BasePhotometry(object):
 
 	@property
 	def status(self):
-		"""The status of the photometry."""
+		"""The status of the photometry. From :py:class:`STATUS`."""
 		return self._status
 
 	def default_stamp(self):
@@ -349,6 +383,12 @@ class BasePhotometry(object):
 
 	@property
 	def stamp(self):
+		"""
+		Tuple indicating the stamps position within the larger image.
+
+		Returns:
+			tuple: Tuple of (row_min, row_max, col_min, col_max).
+		"""
 		return self._stamp
 
 	@property
@@ -445,20 +485,20 @@ class BasePhotometry(object):
 		Catalog of stars in the current stamp.
 
 		The table contains the following columns:
-		 * starid:       TIC identifier.
-		 * tmag:         TESS magnitude.
-		 * ra:           Right ascension in degrees at time of observation.
-		 * dec:          Declination in degrees at time of observation.
-		 * row:          Pixel row on CCD.
-		 * column:       Pixel column on CCD.
-		 * row_stamp:    Pixel row relative to the stamp.
-		 * column_stamp: Pixel column relative to the stamp.
+		 * ``starid``:       TIC identifier.
+		 * ``tmag``:         TESS magnitude.
+		 * ``ra``:           Right ascension in degrees at time of observation.
+		 * ``dec``:          Declination in degrees at time of observation.
+		 * ``row``:          Pixel row on CCD.
+		 * ``column``:       Pixel column on CCD.
+		 * ``row_stamp``:    Pixel row relative to the stamp.
+		 * ``column_stamp``: Pixel column relative to the stamp.
 
 		Returns:
-			`astropy.table.Table`: Table with all known stars falling within the current stamp.
+			``astropy.table.Table``: Table with all known stars falling within the current stamp.
 
 		Example:
-			If ``pho`` is an instance of BasePhotometry:
+			If ``pho`` is an instance of :py:class:`BasePhotometry`:
 
 			>>> pho.catalog['tmag']
 			>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
@@ -574,9 +614,7 @@ class BasePhotometry(object):
 			time (float): Time in MJD when to calculate catalog.
 
 		Returns:
-			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`,
-			                       but with `column`, `row`, `column_stamp` and `row_stamp`
-								   calculated at the given timestamp.
+			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`, but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated at the given timestamp.
 
 		See Also:
 			:py:func:`catalog`
