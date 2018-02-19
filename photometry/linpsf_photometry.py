@@ -53,6 +53,8 @@ class LinPSFPhotometry(BasePhotometry):
 
 		logger = logging.getLogger(__name__)
 
+		contamination = []
+
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
 			# Get catalog at current time in MJD:
@@ -110,22 +112,6 @@ class LinPSFPhotometry(BasePhotometry):
 				res = 'failed'
 			logger.debug('Result of linear psf photometry: ' + np.str(res))
 
-			# Calculate contamination:
-			if nstars == 1:
-				contamination = 0
-			else:
-				# Calculate contamination from the other targets in the PSF:
-				contamination = np.sum(A[:,1:-1].dot(mag2flux(cat['tmag'][1:-1])) * A[:,0]) / mag2flux(cat['tmag'][0])
-			# TODO: export contamination like in aperture photometry
-
-			logger.info("Contamination: %f", contamination)
-			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
-
-			# If contamination is high, return a warning:
-			if contamination > 0.1:
-				self.report_details(error='High contamination')
-				return STATUS.WARNING
-
 			# Pass result if fit did not fail:
 			if res is not 'failed':
 				# Get flux of target star:
@@ -173,6 +159,23 @@ class LinPSFPhotometry(BasePhotometry):
 				self.lightcurve['flux'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
 				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
+
+			# Calculate contamination:
+			if nstars == 1:
+				contamination.append(0)
+			else:
+				# Calculate contamination from the other targets in the PSF:
+				# FIXME: error in the following definition
+				contamination.append(np.sum(A[:,1:-1].dot(fluxes[np.arange(len(fluxes))!=staridx]) * A[:,0]) / result)
+
+		contamination = np.median(np.array(contamination))
+		logger.info("Contamination: %f", contamination)
+		self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
+
+		# If contamination is high, return a warning:
+		if contamination > 0.1:
+			self.report_details(error='High contamination')
+			return STATUS.WARNING
 
 		# Return whether you think it went well:
 		return STATUS.OK
