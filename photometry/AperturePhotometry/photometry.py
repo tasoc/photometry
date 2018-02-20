@@ -122,7 +122,7 @@ class AperturePhotometry(BasePhotometry):
 		# Loop through the images and backgrounds together:
 		for k, (img, bck) in enumerate(zip(self.images, self.backgrounds)):
 
-			flux_in_cluster = img[mask_main] - bck[mask_main]
+			flux_in_cluster = img[mask_main]
 
 			# Calculate flux in mask:
 			self.lightcurve['flux'][k] = np.sum(flux_in_cluster)

@@ -11,6 +11,7 @@ import numpy as np
 import scipy
 import matplotlib.pyplot as plt
 import logging
+import os
 from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
@@ -53,34 +54,43 @@ class LinPSFPhotometry(BasePhotometry):
 
 		logger = logging.getLogger(__name__)
 
+		# Load catalog to determine what stars to fit:
+		cat = self.catalog
+		staridx = np.squeeze(np.where(cat['starid']==self.starid))
+
+		# Log full catalog for current stamp:
+		logger.debug(cat)
+
+		# Calculate distance from main target:
+		cat['dist'] = np.sqrt((cat['row_stamp'][staridx] - cat['row_stamp'])**2 + \
+						(cat['column_stamp'][staridx] - cat['column_stamp'])**2)
+
+		# Find indices of stars in catalog to fit:
+		# (only include stars that are close to the main target and that are 
+		# not much fainter)
+		indx = (cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -5)
+		nstars = np.sum(indx)
+
+		# Get target star index in the reduced catalog of stars to fit:
+		staridx = np.squeeze(np.where(cat[indx]['starid']==self.starid))
+		logger.debug('Target star index: %s', np.str(staridx))
+
+		# Preallocate flux sum array for contamination calculation:
+		fluxes_sum = np.zeros(nstars)
+
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
-			# Log full catalog for current stamp:
+			# Reduce catalog to only include stars that should be fitted:
+			cat = cat[indx]
+
+			# Log reduced catalog for the stamp at the current time:
 			logger.debug(cat)
 
-			# Get target star index in the catalog:
-			staridx = np.squeeze(np.where(cat['starid']==self.starid))
-
-			# Calculate distance from main target:
-			cat['dist'] = np.sqrt((cat['row_stamp'][staridx] - cat['row_stamp'])**2 + \
-							(cat['column_stamp'][staridx] - cat['column_stamp'])**2)
-	
-			# Only include stars that are close to the main target and that are not much fainter:
-			cat = cat[(cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -5)]
-
-			# Log reduced catalog for current stamp:
-			logger.debug(cat)
-
-			# Update target star index in the reduced catalog:
-			staridx = np.squeeze(np.where(cat['starid']==self.starid))
-			logger.debug('Target star index: '+np.str(staridx))
-
-			# Get info about the image:
+			# Get the number of pixels in the image:
 			npx = img.size
-			nstars = len(cat['tmag'])
 
 			# Create A, the 2D of vertically reshaped PRF 1D arrays:
 			A = np.empty([npx, nstars])
@@ -114,6 +124,7 @@ class LinPSFPhotometry(BasePhotometry):
 			if res is not 'failed':
 				# Get flux of target star:
 				result = fluxes[staridx]
+
 				logger.debug('Fluxes are: ' + np.str(fluxes))
 				logger.debug('Result is: ' + np.str(result))
 
@@ -122,7 +133,9 @@ class LinPSFPhotometry(BasePhotometry):
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
 				self.lightcurve['quality'][k] = 0
 
-				# TODO: use debug figure toggle to decide if to plot and export
+				# Add current fitted fluxes for contamination calculation:
+				fluxes_sum += fluxes
+
 				if self.plot:
 					# Make plot for debugging:
 					fig = plt.figure()
@@ -157,6 +170,31 @@ class LinPSFPhotometry(BasePhotometry):
 				self.lightcurve['flux'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
 				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
+
+		
+		if np.sum(np.isnan(self.lightcurve['flux'])) == len(self.lightcurve['flux']):
+			# Set contamination to NaN if all flux values are NaN:
+			self.report_details(error='All target flux values are NaN.')
+			return STATUS.ERROR
+		else:
+			# Divide by number of added fluxes to get the mean flux:
+			fluxes_mean =  fluxes_sum / np.sum(~np.isnan(self.lightcurve['flux']))
+			logger.debug('Mean fluxes are: '+np.str(fluxes_mean))
+			
+			# Calculate contamination from other stars in target PSF using latest A:
+			not_target_star = np.arange(len(fluxes_mean))!=staridx
+			contamination = \
+				np.sum(A[:,not_target_star].dot(fluxes_mean[not_target_star]) * A[:,staridx]) \
+				/fluxes_mean[staridx]
+
+			logger.info("Contamination: %f", contamination)
+			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
+
+			# If contamination is high, return a warning:
+			if contamination > 0.1:
+				self.report_details(error='High contamination')
+				return STATUS.WARNING
+
 
 		# Return whether you think it went well:
 		return STATUS.OK
