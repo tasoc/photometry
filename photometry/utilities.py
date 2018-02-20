@@ -10,9 +10,29 @@ the photometry package.
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range
 import numpy as np
+from astropy.io import fits
 from bottleneck import move_median, nanmedian
 import logging
 from scipy.special import erf
+
+def load_ffi_fits(fname, return_header=False):
+
+	with fits.open(fname, memmap=True, mode='readonly') as hdu:
+		hdr = hdu[0].header
+		if hdr.get('TELESCOP', '') == 'TESS':
+			img = hdu[1].data[0:2048, 44:2092]
+			headers = [hdu[0].header, hdu[1].header]
+		else:
+			img = hdu[0].data
+			headers = [hdu[0].header]
+
+	img = np.array(img, dtype='float32')
+
+	if return_header:
+		return img, headers
+	else:
+		return img
+
 
 #------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):
