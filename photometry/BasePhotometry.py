@@ -26,7 +26,7 @@ from copy import deepcopy
 from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian
-from .image_motion import MovementKernel
+from .image_motion import ImageMovementKernel
 
 __docformat__ = 'restructuredtext'
 

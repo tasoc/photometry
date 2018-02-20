@@ -1,6 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+Calculate image shifts between images.
+
+Example
+-------
+To calculate the image shifts between the reference image (``ref_image``) and another image (``image``):
+
+	>>> imk = ImageMotionKernel(ref_image=ref_image, warpmode='translation')
+	>>> kernel = img.calc_kernel(image)
+	>>> print(kernel)
 
 
 .. codeauthor:: Mikkel N. Lund
@@ -16,17 +25,31 @@ import math
 from bottleneck import replace
 from skimage.filters import scharr
 
-class MovementKernel(object):
+class ImageMovementKernel(object):
 
+	N_PARAMS = {
+		'translation': 2,
+		'euclidian': 3
+	}
+
+	#==============================================================================
 	def __init__(self, warpmode='euclidian', image_ref=None):
+		"""
+		Initialize ImageMovementKernel.
+
+		Parameters:
+			warpmode (string): Options are ``'translation'`` and ``'euclidian'``. Default is ``'euclidian'``.
+			image_ref (2D ndarray): Reference image used
+		"""
 
 		if warpmode not in ('translation', 'euclidian'):
 			raise ValueError("Invalid warpmode")
 
 		self.warpmode = warpmode
 		self.image_ref = image_ref
+		self.n_params = ImageMovementKernel.N_PARAMS[self.warpmode]
 
-		if self.image_ref:
+		if self.image_ref is not None:
 			self.image_ref = self._prepare_flux(self.image_ref)
 
 	#==============================================================================
@@ -84,7 +107,7 @@ class MovementKernel(object):
 		"""
 
 		xy = np.atleast_2d(xy)
-		New_pos = np.empty_like(xy)
+		delta_pos = np.empty_like(xy)
 
 		if self.warpmode == 'euclidian':
 			dx = kernel[0]
@@ -100,16 +123,16 @@ class MovementKernel(object):
 			for i in range(xy.shape[0]):
 				x = xy[i, 0]
 				y = xy[i, 1]
-				New_pos[i, :] = np.dot(R, [x, y, 1])
+				delta_pos[i, :] = np.dot(R, [x, y, 1])
 
 			# Subtract the reference positions to return the change in positions:
-			New_pos -= xy
+			delta_pos -= xy
 
 		elif self.warpmode == 'translation':
-			New_pos[:, 0] = kernel[0]
-			New_pos[:, 1] = kernel[1]
+			delta_pos[:, 0] = kernel[0]
+			delta_pos[:, 1] = kernel[1]
 
-		return New_pos
+		return delta_pos
 
 	#==============================================================================
 	def calc_kernel(self, image, number_of_iterations=10000, termination_eps=1e-5):
@@ -152,7 +175,10 @@ class MovementKernel(object):
 		criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations, termination_eps)
 
 		# Run the ECC algorithm. The results are stored in warp_matrix.
-		(cc, warp_matrix) = cv2.findTransformECC(self.image_ref, image, warp_matrix, warp_mode, criteria)
+		try:
+			cc, warp_matrix = cv2.findTransformECC(self.image_ref, image, warp_matrix, warp_mode, criteria)
+		except:
+			return np.NaN*np.ones(self.n_params)
 
 		# Extract movement in pixel units in x- and y direction
 		dx = warp_matrix[0,2]

@@ -53,7 +53,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, **kwargs)
 	if not xlabel is None: ax.set_xlabel(xlabel)
 	if not ylabel is None: ax.set_ylabel(ylabel)
-	ax.set_title(title)
+	if not title is None: ax.set_title(title)
 	ax.set_xlim([0, image.shape[0]])
 	ax.set_ylim([0, image.shape[1]])
 
