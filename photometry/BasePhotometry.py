@@ -15,6 +15,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
 from astropy.io import fits
 from astropy.table import Table, Column
+from scipy.interpolate import interp1d
 import h5py
 import sqlite3
 import logging
@@ -622,7 +623,6 @@ class BasePhotometry(object):
 
 		self._MovementKernel = None
 		if self._MovementKernel is None:
-			from scipy.interpolate import interp1d
 			#jitter = self.hdf['jitter']
 			jitter = np.zeros((len(self.lightcurve['time']), 2), dtype='float32')
 			self._warpmetric_interpolator = interp1d(self.lightcurve['time'], jitter, axis=0, assume_sorted=True)

@@ -72,14 +72,14 @@ class ImageMovementKernel(object):
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
-		# Convert to logarithmic units
-		flux = np.log10(flux)
+		# Convert to logarithmic units, avoiding taking log if zero:
+		flux = np.log10(np.asarray(flux) - np.nanmin(flux) + 1.0)
 
 		# Convert image to flux in range -1 to 1 (for gradient determination)
 		fmax = np.nanmax(flux)
 		fmin = np.nanmin(flux)
 		ran = np.abs(fmax - fmin)
-		flux1 = -1 + ((flux - fmin)/ran)*2
+		flux1 = -1 + 2*((flux - fmin)/ran)
 
 		# Calculate Scharr gradient
 		flux1 = scharr(flux1)
@@ -135,7 +135,7 @@ class ImageMovementKernel(object):
 		return delta_pos
 
 	#==============================================================================
-	def calc_kernel(self, image, number_of_iterations=10000, termination_eps=1e-5):
+	def calc_kernel(self, image, number_of_iterations=100000, termination_eps=1e-5):
 		"""
 		Calculates the position movement kernel for a given image. This kernel is
 		a set of numbers that can be passed to `apply_kernel` to calculate the movement
