@@ -15,7 +15,6 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
 from astropy.io import fits
 from astropy.table import Table, Column
-from scipy.interpolate import interp1d
 import h5py
 import sqlite3
 import logging
@@ -229,6 +228,7 @@ class BasePhotometry(object):
 		self._stamp = None
 		self._set_stamp()
 		self._sumimage = None
+		self._MovementKernel = None
 
 	def __enter__(self):
 		return self
@@ -621,19 +621,30 @@ class BasePhotometry(object):
 			:py:func:`catalog`
 		"""
 
-		self._MovementKernel = None
 		if self._MovementKernel is None:
-			#jitter = self.hdf['jitter']
-			jitter = np.zeros((len(self.lightcurve['time']), 2), dtype='float32')
-			self._warpmetric_interpolator = interp1d(self.lightcurve['time'], jitter, axis=0, assume_sorted=True)
-			self._MovementKernel = MovementKernel(warpmode='translation')
+			if self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
+				self._MovementKernel = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
+				self._MovementKernel.load_series(self.lightcurve['time'], self.hdf['movement_kernel'])
+			elif self.datasource == 'tpf':
+				# Create translation kernel from the positions provided in the
+				# target pixel file. The first timestamp is used as the reference:
+				# FIXME: Should use the same reference as self.catalog!
+				kernels = self.tpf[1].data[('POS_CORR1', 'POS_CORR2')]
+				kernels[:, 0] -= kernels[0, 0]
+				kernels[:, 1] -= kernels[0, 1]
+				self._MovementKernel = ImageMovementKernel(warpmode='translation')
+				self._MovementKernel.load_series(self.lightcurve['time'], kernels)
+			else:
+				# If we reached this point, we dont have enough information to
+				# define the ImageMovementKernel, so we should just return the
+				# unaltered catalog:
+				return self.catalog
 
 		# Get the reference catalog:
 		xy = np.column_stack((self.catalog['column'], self.catalog['row']))
 
 		# Lookup the position corrections in CCD coordinates:
-		kernel = self._warpmetric_interpolator(time)
-		jitter = self._MovementKernel(xy, kernel)
+		jitter = self._MovementKernel.interpolate(time, xy)
 
 		# Modify the reference catalog:
 		cat = deepcopy(self.catalog)

@@ -24,6 +24,7 @@ import cv2
 import math
 from bottleneck import replace
 from skimage.filters import scharr
+from scipy.interpolate import interp1d
 
 class ImageMovementKernel(object):
 
@@ -51,6 +52,8 @@ class ImageMovementKernel(object):
 
 		if self.image_ref is not None:
 			self.image_ref = self._prepare_flux(self.image_ref)
+
+		self._interpolator = None
 
 	#==============================================================================
 	def __call__(self, *args, **kwargs):
@@ -135,7 +138,7 @@ class ImageMovementKernel(object):
 		return delta_pos
 
 	#==============================================================================
-	def calc_kernel(self, image, number_of_iterations=100000, termination_eps=1e-5):
+	def calc_kernel(self, image, number_of_iterations=10000, termination_eps=1e-6):
 		"""
 		Calculates the position movement kernel for a given image. This kernel is
 		a set of numbers that can be passed to `apply_kernel` to calculate the movement
@@ -191,3 +194,52 @@ class ImageMovementKernel(object):
 		else:
 			# Translation only:
 			return [dx, dy]
+
+	#==============================================================================
+	def load_series(self, times, kernels):
+		"""
+		Load time-series of kernels and create interpolator.
+
+		The interpolator (:py:func:`interpolator`) can be used to obtain movements
+		at a arbitrery timestamp within the timestamps provided in ``times``.
+
+		Parameters:
+			time (1D array): Timestamps to be interpolated against. Timestamps must be sorted.
+			kernels (2D array): List of kernels.
+
+		Raises:
+			ValueError: If kernels have the wrong shape.
+		"""
+
+		if kernels.shape != (len(times), self.n_params):
+			raise ValueError()
+
+		self._interpolator = interp1d(times, kernels, axis=0, assume_sorted=True)
+
+	#==============================================================================
+	def interpolate(self, time, xy):
+		"""
+		Interpolate in the kernel time-series provided in :py:func:`load_series`
+		to obtain movment a arbitrery time.
+
+		Parameters:
+			time (float): Timestamp to return movement for.
+			xy (2D array): row and column positions to be modified.
+
+		Returns:
+			``numpy.ndarray``: Array with the same size as `xy` containing the
+			                   changes to rows and columns. These can be added
+							   to `xy` to yield the new positions.
+
+		Raises:
+			ValueError: If timeseries has not been provided.
+		"""
+
+		#
+		if self._interpolator is None:
+			raise ValueError("Interpolator is not defined. ")
+
+		# Get the kernel parameters for the timestamp:
+		kernel = self._interpolator(time)
+
+		return self.apply_kernel(xy, kernel)
