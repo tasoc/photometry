@@ -23,6 +23,7 @@ if __name__ == '__main__':
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
 	parser.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
+	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
 	parser.add_argument('starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
 	args = parser.parse_args()
 
@@ -49,7 +50,11 @@ if __name__ == '__main__':
 	logger_parent.setLevel(logging_level)
 
 	# Get input and output folder from environment variables:
-	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.abspath(os.path.join(os.path.dirname(__file__), 'tests', 'input')))
+	test_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tests', 'input'))
+	if args.test:
+		input_folder = test_folder
+	else:
+		input_folder = os.environ.get('TESSPHOT_INPUT', test_folder)
 	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
 	logger.info("Loading input data from '%s'", input_folder)
 	logger.info("Putting output data in '%s'", output_folder)

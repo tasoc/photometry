@@ -44,6 +44,7 @@ from skimage.feature import peak_local_max
 from skimage.morphology import watershed
 from bottleneck import nanmedian
 import logging
+from ..plots import plot_image, save_figure
 
 #==============================================================================
 # Constants and settings
@@ -94,24 +95,6 @@ def k2p2maks(frame, no_combined_images, threshold=0.5):
 	segments[:,1] = y0 + (y1-y0) * segments[:,1] / mapimg.shape[0]
 
 	return segments
-
-#==============================================================================
-# Configure pixel plots
-#==============================================================================
-def config_pixel_plot(ax, size=None, aspect='auto'):
-	"""Utility function for configuring axes when plotting pixel images."""
-
-	if size is not None:
-		ax.set_xlim([-0.5, size[1]-0.5])
-		ax.set_ylim([-0.5, size[0]-0.5])
-
-	ax.xaxis.set_major_locator(MultipleLocator(5))
-	ax.xaxis.set_minor_locator(MultipleLocator(1))
-	ax.yaxis.set_major_locator(MultipleLocator(5))
-	ax.yaxis.set_minor_locator(MultipleLocator(1))
-	ax.tick_params(direction='out', which='both', pad=5)
-	ax.xaxis.tick_bottom()
-	ax.set_aspect(aspect)
 
 #==============================================================================
 # DBSCAN subroutine
@@ -273,25 +256,21 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			fig.subplots_adjust(hspace=0.12, wspace=0.12)
 			ax0, ax1, ax2 = axes
 
-			ax0.imshow(np.log10(Z), cmap=plt.cm.Blues, interpolation='none', origin='lower')
-			ax0.set_title('Overlapping objects')
+			plot_image(Z, ax=ax0, scale='log', title='Overlapping objects', xlabel=None, ylabel=None)
 
-			ax1.imshow(np.log10(distance), cmap=plt.cm.Blues, interpolation='nearest', origin='lower')
+			plot_image(distance, ax=ax1, scale='log', title='Basin', xlabel=None, ylabel=None)
 			if not catalog is None:
-				ax1.scatter(catalog[:,0], catalog[:,1], color='y', s=5, alpha=0.3)
-			ax1.scatter(X[local_maxi], Y[local_maxi], color='r', s=5, alpha=0.5)
-			ax1.set_title('Basin')
+				ax1.scatter(catalog[:,0]+0.5, catalog[:,1]+0.5, color='y', s=5, alpha=0.3)
+			ax1.scatter(X[local_maxi]+0.5, Y[local_maxi]+0.5, color='r', s=5, alpha=0.5)
 
-			ax2.imshow(labels_ws, cmap=plt.cm.spectral, interpolation='nearest', origin='lower')
-			ax2.set_title('Separated objects')
+			plot_image(labels_ws, scale='linear', percentile=100, cmap=plt.cm.spectral, title='Separated objects', xlabel=None, ylabel=None)
 
 			for ax in axes:
-				config_pixel_plot(ax, size=flux0.shape, aspect='equal')
 				ax.set_xticklabels([])
 				ax.set_yticklabels([])
 
-			figname = 'seperated_cluster_%d.png' % i
-			fig.savefig(os.path.join(output_folder, figname), format='png', bbox_inches='tight', dpi=200)
+			figname = 'seperated_cluster_%d' % i
+			save_figure(os.path.join(output_folder, figname))
 			plt.close(fig)
 
 	return labels_new, unique_labels, NoCluster
@@ -413,7 +392,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 		ax.axvline(CUT, color='r')
 		ax.set_xlabel('Flux')
 		ax.set_ylabel('Distribution')
-		fig.savefig(os.path.join(plot_folder, 'flux_distribution.png'), format='png', bbox_inches='tight')
+		save_figure(os.path.join(plot_folder, 'flux_distribution'))
 		plt.close(fig)
 
 	#==========================================================================
@@ -520,18 +499,15 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 				# Plot everything together:
 				fig = plt.figure()
 				ax = fig.add_subplot(111)
-				ax.matshow(img, origin='lower', cmap=cm.Spectral, interpolation='none')
-				ax.set_xlabel("X pixels")
-				ax.set_ylabel("Y pixels")
-				ax.set_title("Holes in mask filled")
-				config_pixel_plot(ax, size=img.shape, aspect='equal')
+				plot_image(img, ax=ax, scale='linear', percentile=100, cmap=cm.Spectral, title='Holes in mask filled')
 
 				# Create outline of filled holes:
 				for hole in np.transpose(np.where(mask_holes_indx)):
 					cen = (hole[2]-0.5, hole[1]-0.5)
 					ax.add_patch(mpl.patches.Rectangle(cen, 1, 1, color='k', lw=2, fill=False, hatch='//'))
 
-				fig.savefig(os.path.join(plot_folder, 'mask_filled_holes.png'), format='png', bbox_inches='tight')
+				#fig.savefig(os.path.join(plot_folder, 'mask_filled_holes.png'), format='png', bbox_inches='tight')
+				save_figure(os.path.join(plot_folder, 'mask_filled_holes'))
 				plt.close(fig)
 
 		#==========================================================================
@@ -547,8 +523,8 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 
 			# If we are going to plot later on, make a note
 			# of how the outline of the masks looked before
-			# changinng anything:
-			if logger.isEnabledFor(logging.DEBUG):
+			# changing anything:
+			if plot_folder is not None and logger.isEnabledFor(logging.DEBUG):
 				outline_before = []
 				for u in range(no_masks):
 					outline_before.append( k2p2maks(MASKS[u,:,:], 1, 0.5) )
@@ -589,11 +565,10 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 							ax1.set_xlim(-0.5, NY-0.5)
 
 							ax2 = fig.add_subplot(122)
-							ax2.imshow(np.log10(SumImage), origin='lower', interpolation='none', cmap=cm.Blues)
+							plot_image(SumImage, ax=ax2, scale='log')
 							ax2.plot(outline_before[u][:,0], outline_before[u][:,1], 'r:')
 							ax2.plot(outline[:,0], outline[:,1], 'r-')
 							ax2.axvline(c, color='r', ls='--')
-							config_pixel_plot(ax2, size=SumImage.shape)
 
 							pdf.savefig(fig)
 							plt.close(fig)
@@ -621,15 +596,8 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 
 		# ---------------
 		# PLOT 1
-		color_max = np.nanmax(Flux)
-		color_min = np.nanmin(Flux)
-		Flux_mat = np.log10(SumImage)/np.log10((color_max-color_min))*1.2
-		Flux_mat[Flux_mat < 0] = 0
-
 		ax0 = fig0.add_subplot(151)
-		ax0.matshow(Flux_mat, origin='lower', cmap=cm.Blues, interpolation='none')
-		ax0.set_title("Sum-image")
-		config_pixel_plot(ax0, size=SumImage.shape)
+		plot_image(SumImage, ax=ax0, scale='log', title='Sum-image', xlabel=None, ylabel=None)
 
 		# ---------------
 		# PLOT 2
@@ -639,15 +607,11 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 		Flux_mat2[ori_mask == 0] = 0
 
 		ax2 = fig0.add_subplot(152)
-		ax2.matshow(Flux_mat2, origin='lower', cmap=cm.Spectral, interpolation='none')
-		ax2.set_title("Significant flux")
-		config_pixel_plot(ax2, size=SumImage.shape)
+		plot_image(Flux_mat2, ax=ax2, scale='linear', percentile=100, cmap=cm.Spectral, title='Significant flux', xlabel=None, ylabel=None)
 
 		# ---------------
 		# PLOT 3
 		ax2 = fig0.add_subplot(153)
-		ax2.set_title("Clustering + Watershed")
-		config_pixel_plot(ax2, size=SumImage.shape)
 
 		Flux_mat4 = np.zeros_like(SumImage)
 		for u,lab in enumerate(unique_labels):
@@ -663,19 +627,18 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 				ax2.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(colors[u]),
 						 markeredgecolor='k', markersize=5)
 
+		ax2.set_title("Clustering + Watershed")
+		ax2.set_aspect('equal')
+
 		# ---------------
 		# PLOT 4
 		ax4 = fig0.add_subplot(154)
-		ax4.matshow(Flux_mat4, origin='lower', cmap=cm.Spectral, interpolation='none')
-		ax4.set_title("Extracted clusters")
-		config_pixel_plot(ax4, size=SumImage.shape)
+		plot_image(Flux_mat4, ax=ax4, scale='linear', percentile=100, cmap=cm.Spectral, title='Extracted clusters', xlabel=None, ylabel=None)
 
 		# ---------------
-		# PLOT 5un
-		ax1 = fig0.add_subplot(155)
-		ax1.matshow(Flux_mat, origin='lower', cmap=cm.Blues, interpolation='none')
-		ax1.set_title("Final masks")
-		config_pixel_plot(ax1, size=SumImage.shape)
+		# PLOT 5
+		ax5 = fig0.add_subplot(155)
+		plot_image(SumImage, ax=ax5, scale='log', title='Final masks', xlabel=None, ylabel=None)
 
 		# Plot outlines of selected masks:
 		for u in range(no_masks):
@@ -684,11 +647,11 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 			# Make mask outline:
 			outline = k2p2maks(MASKS[u, :, :], 1, threshold=0.5)
 			# Plot outlines:
-			ax1.plot(outline[:, 0], outline[:, 1], color=col, zorder=10, lw=2.5)
-			ax4.plot(outline[:, 0], outline[:, 1], color='k', zorder=10, lw=1.5)
+			ax5.plot(outline[:, 0]+0.5, outline[:, 1]+0.5, color=col, zorder=10, lw=2.5)
+			ax4.plot(outline[:, 0]+0.5, outline[:, 1]+0.5, color='k', zorder=10, lw=1.5)
 
 		# Save the figure and close it:
-		fig0.savefig(os.path.join(plot_folder, 'masks_'+ws_alg+'.png'), format='png', bbox_inches='tight')
+		save_figure(os.path.join(plot_folder, 'masks_'+ws_alg))
 		if show_plot:
 			plt.show()
 		else:

@@ -17,18 +17,21 @@ from astropy.visualization import (PercentileInterval, ImageNormalize,
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 			   ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)',
 			   title=None, percentile=95.0, ax=None, cmap=plt.cm.Blues, **kwargs):
-	"""Utility function to plot a 2D image.
+	"""
+	Utility function to plot a 2D image.
 
 	Parameters:
 		image (2d array): Image data.
-		scale (str or astropy.visualization.ImageNormalize object, optional): Normalization used to stretch the colormap. Options: 'linear', 'sqrt', or 'log'. Can also be a `astropy.visualization.ImageNormalize` object. Default is `log`.
+		scale (str or astropy.visualization.ImageNormalize object, optional): Normalization used to stretch the colormap. Options: ``'linear'``, ``'sqrt'``, or ``'log'``. Can also be a `astropy.visualization.ImageNormalize` object. Default is ``'log'``.
 		origin (str, optional): The origin of the coordinate system.
 		xlabel (str, optional): Label for the x-axis.
 		ylabel (str, optional): Label for the y-axis.
-		make_cbar (boolean): Create colorbar? Default is ``False``.
+		make_cbar (boolean, optional): Create colorbar? Default is ``False``.
 		clabel (str, optional): Label for the color bar.
 		title (str or None, optional): Title for the plot.
 		percentile (float, optional): The fraction of pixels to keep in color-trim. The same fraction of pixels is eliminated from both ends. Default=95.
+		ax (matplotlib.pyplot.axes, optional): Axes in which to plot. Default (None) is to use current active axes.
+		cmap (matplotlib colormap, optional): Colormap to use. Default is the ``Blues`` colormap.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.imshow`.
 	"""
 
@@ -50,7 +53,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if ax is None:
 		ax = plt.gca()
 
-	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, **kwargs)
+	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, interpolation='none', **kwargs)
 	if not xlabel is None: ax.set_xlabel(xlabel)
 	if not ylabel is None: ax.set_ylabel(ylabel)
 	if not title is None: ax.set_title(title)
@@ -62,6 +65,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		cbar.set_label(clabel)
 
 	# Settings for ticks (to make Mikkel happy):
+	# Are these needed if we demand matplotlib 2.0?
 	#ax.xaxis.set_major_locator(MultipleLocator(5))
 	#ax.xaxis.set_minor_locator(MultipleLocator(1))
 	#ax.yaxis.set_major_locator(MultipleLocator(5))
@@ -77,7 +81,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 	"""
 	Make a figure with three subplots showing the image, the fit and the
 	residuals. The image and the fit are shown with logarithmic scaling and a
-	common colorbar. The residuals are shown with linear scaling and a seperate
+	common colorbar. The residuals are shown with linear scaling and a separate
 	colorbar.
 
 	Parameters:
@@ -117,7 +121,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 	vmin, vmax = PercentileInterval(95.).get_limits(residuals)
 	norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=LinearStretch())
 
-	# Add subplot with the residauls:
+	# Add subplot with the residuals:
 	ax3 = fig.add_subplot(133)
 	im3 = plot_image(residuals, scale='linear', make_cbar=False)
 
