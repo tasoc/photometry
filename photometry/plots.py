@@ -10,6 +10,7 @@ import logging
 import os
 import numpy as np
 import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from astropy.visualization import (PercentileInterval, ImageNormalize,
 								   SqrtStretch, LogStretch, LinearStretch)

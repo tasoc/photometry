@@ -26,8 +26,9 @@ using clustering algorithms.
 
 from __future__ import division, with_statement
 from six.moves import range, zip
-import matplotlib as mpl
 import numpy as np
+from ..plots import plot_image, save_figure
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, ScalarFormatter
 y_formatter = ScalarFormatter(useOffset=False)
@@ -44,7 +45,6 @@ from skimage.feature import peak_local_max
 from skimage.morphology import watershed
 from bottleneck import nanmedian
 import logging
-from ..plots import plot_image, save_figure
 
 #==============================================================================
 # Constants and settings
