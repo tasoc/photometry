@@ -118,7 +118,8 @@ class BasePhotometry(object):
 		self.plot_folder = None
 		if self.plot:
 			self.plot_folder = os.path.join(self.output_folder, 'plots', '{0:011d}'.format(self.starid))
-			os.makedirs(self.plot_folder, exist_ok=True)
+			if not os.path.exists(self.plot_folder):
+				os.makedirs(self.plot_folder) # "exists_ok=True" doesn't work in Python 2.7
 
 		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
