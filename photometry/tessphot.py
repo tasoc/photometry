@@ -6,27 +6,22 @@
 
 from __future__ import division, print_function, with_statement, absolute_import
 import logging
-from . import STATUS, AperturePhotometry
+from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 
 #------------------------------------------------------------------------------
-def tessphot(starid=None, method='aperture', input_folder=None, output_folder=None):
-	"""
-	Run the photometry pipeline on a single star.
-
-	This function will run the specified photometry or perform the dynamical
-	scheme of trying simple aperture photometry, evaluating its performance
-	and if nessacery try another algorithm.
-	"""
-
+def _try_photometry(PhotClass, starid, input_folder, output_folder, plot):
 	logger = logging.getLogger(__name__)
-
-	with AperturePhotometry(starid, input_folder) as pho:
+	with PhotClass(starid, input_folder, output_folder, plot=plot) as pho:
 		try:
 			pho.photometry()
 			status = pho.status
 		except (KeyboardInterrupt, SystemExit):
 			status = STATUS.ABORT
 			logger.info("Stopped by user or system")
+			try:
+				pho._status = STATUS.ABORT
+			except:
+				pass
 		except:
 			logger.exception("Something happened")
 			status = STATUS.ERROR
@@ -38,8 +33,39 @@ def tessphot(starid=None, method='aperture', input_folder=None, output_folder=No
 		if status == STATUS.OK:
 			pho.save_lightcurve(output_folder)
 
-	if status == STATUS.WARNING:
-		logger.warning("Try something else?")
+	return pho
+
+#------------------------------------------------------------------------------
+def tessphot(starid=None, method=None, input_folder=None, output_folder=None, plot=None):
+	"""
+	Run the photometry pipeline on a single star.
+
+	This function will run the specified photometry or perform the dynamical
+	scheme of trying simple aperture photometry, evaluating its performance
+	and if nessacery try another algorithm.
+	"""
+
+	logger = logging.getLogger(__name__)
+
+	if method is None:
+		pho = _try_photometry(AperturePhotometry, starid, input_folder, output_folder, plot)
+
+		if pho.status == STATUS.WARNING:
+			logger.warning("Try something else?")
+			# TODO: If too crowded:
+			# pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder, plot)
+
+	elif method == 'aperture':
+		pho = _try_photometry(AperturePhotometry, starid, input_folder, output_folder, plot)
+
+	elif method == 'psf':
+		pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder, plot)
+
+	elif method == 'linpsf':
+		pho = _try_photometry(LinPSFPhotometry, starid, input_folder, output_folder, plot)
+
+	else:
+		raise ValueError("Invalid method: '{0}'".format(method))
 
 	logger.info("Done")
 	return pho

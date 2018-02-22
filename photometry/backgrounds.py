@@ -10,10 +10,9 @@ Estimation of sky background in TESS Full Frame Images.
 from __future__ import division, with_statement, print_function, absolute_import
 import six
 import numpy as np
-from astropy.io import fits
 from astropy.stats import SigmaClip
 from photutils import Background2D, SExtractorBackground
-#import matplotlib.pyplot as plt
+from photometry.utilities import load_ffi_fits
 
 def fit_background(image):
 	"""
@@ -36,8 +35,7 @@ def fit_background(image):
 		if image.endswith('.npy'):
 			img = np.load(image)
 		else:
-			with fits.open(image, memmap=True, mode='readonly') as hdu:
-				img = hdu[0].data
+			img = load_ffi_fits(image)
 	else:
 		raise ValueError("Input image must be either 2D ndarray or path to file.")
 

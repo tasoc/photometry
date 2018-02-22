@@ -1,1 +1,2 @@
 tests/input/** filter=lfs diff=lfs merge=lfs -text
+photometry/data/** filter=lfs diff=lfs merge=lfs -text
