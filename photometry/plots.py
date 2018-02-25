@@ -10,7 +10,9 @@ import logging
 import os
 import numpy as np
 import matplotlib
-matplotlib.use('agg')
+matplotlib.use('Agg', warn=False)
+#from matplotlib.ticker import MultipleLocator, ScalarFormatter
+#y_formatter = ScalarFormatter(useOffset=False)
 import matplotlib.pyplot as plt
 from astropy.visualization import (PercentileInterval, ImageNormalize,
 								   SqrtStretch, LogStretch, LinearStretch)
