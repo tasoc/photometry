@@ -211,10 +211,20 @@ class ImageMovementKernel(object):
 			ValueError: If kernels have the wrong shape.
 		"""
 
+		# Check shape of the input:
 		if kernels.shape != (len(times), self.n_params):
-			raise ValueError()
+			raise ValueError("Wrong shape of kernels. Anticipated ({0},{1}), but got {2}".format(
+					len(times),
+					self.n_params,
+					kernels.shape
+				))
 
-		self._interpolator = interp1d(times, kernels, axis=0, assume_sorted=True)
+		# Only take the kernels that are well-defined:
+		# TODO: Should we raise a warning if there are many undefined?
+		indx = np.all(np.isfinite(kernels), axis=1)
+
+		# Create interpolator:
+		self._interpolator = interp1d(times[indx], kernels[indx, :], axis=0, assume_sorted=True)
 
 	#==============================================================================
 	def interpolate(self, time, xy):
