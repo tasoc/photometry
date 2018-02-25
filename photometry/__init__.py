@@ -9,3 +9,4 @@ from .linpsf_photometry import LinPSFPhotometry
 from .tessphot import tessphot
 from .taskmanager import TaskManager
 from .image_motion import ImageMovementKernel
+from .quality import TESSQualityFlags

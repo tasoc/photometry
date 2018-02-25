@@ -14,25 +14,86 @@ from astropy.io import fits
 from bottleneck import move_median, nanmedian
 import logging
 from scipy.special import erf
+import json
+import os.path
+import fnmatch
 
-def load_ffi_fits(fname, return_header=False):
+def load_settings(sector=None):
 
-	with fits.open(fname, memmap=True, mode='readonly') as hdu:
+	with open(os.path.join(os.path.dirname(__file__), 'data', 'settings.json'), 'r') as fid:
+		settings = json.load(fid)
+
+	if sector is not None:
+		return settings['sectors'][str(sector)]
+
+	return settings
+
+#------------------------------------------------------------------------------
+def find_ffi_files(rootdir, camera=None, ccd=None):
+	"""
+	Search directory recursively for TESS FFI images in FITS format.
+
+	Parameters:
+		rootdir (string): Directory to search recursively for TESS FFI images.
+		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
+		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
+
+	Returns:
+		list: List of full paths to FFI FITS files found in directory. The list will
+		      be sorted accoridng to the filename of the files, e.g. primarily by time.
+	"""
+
+	logger = logging.getLogger(__name__)
+
+	# Create the filename pattern to search for:
+	camera = '?' if camera is None else str(camera)
+	ccd = '?' if ccd is None else str(ccd)
+	filename_pattern = 'tess*-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(camera=camera, ccd=ccd)
+	logger.info("Searching for FFIs in '%s'", os.path.join(rootdir, filename_pattern))
+
+	# Do a recursive search in the directory, finding all files that match the pattern:
+	matches = []
+	for root, dirnames, filenames in os.walk(rootdir):
+		for filename in fnmatch.filter(filenames, filename_pattern):
+			matches.append(os.path.join(root, filename))
+
+	# Sort the list of files by thir filename:
+	matches.sort(key = lambda x: os.path.basename(x))
+
+	return matches
+
+#------------------------------------------------------------------------------
+def load_ffi_fits(path, return_header=False):
+	"""
+	Load FFI FITS file.
+
+	Calibrations columns and rows are trimmed from the image.
+
+	Parameters:
+		path (str): Path to FITS file.
+		return_header (boolean, optional): Return FITS headers as well. Default is ``False``.
+
+	Returns:
+		numpy.ndarray: Full Frame Image.
+		list: If ``return_header`` is enabled, will return a list of the FITS headers.
+	"""
+
+	with fits.open(path, memmap=True, mode='readonly') as hdu:
 		hdr = hdu[0].header
-		if hdr.get('TELESCOP', '') == 'TESS':
+		if hdr.get('TELESCOP') == 'TESS' and hdu[1].header.get('NAXIS1') == 2136 and hdu[1].header.get('NAXIS2') == 2078:
 			img = hdu[1].data[0:2048, 44:2092]
 			headers = [hdu[0].header, hdu[1].header]
 		else:
 			img = hdu[0].data
 			headers = [hdu[0].header]
 
-	img = np.array(img, dtype='float32')
+	# Make sure its an numpy array with the correct data type:
+	img = np.asarray(img, dtype='float32')
 
 	if return_header:
 		return img, headers
 	else:
 		return img
-
 
 #------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):
@@ -83,7 +144,7 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 
 #------------------------------------------------------------------------------
 def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
-	'''
+	"""
 	Evaluate a 2D symmetrical Gaussian integrated in pixels.
 
 	Parameters:
@@ -109,7 +170,7 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 	array([[ 0.58433556,  0.92564571,  0.58433556],
 		[ 0.92564571,  1.46631496,  0.92564571],
 		[ 0.58433556,  0.92564571,  0.58433556]])
-	'''
+	"""
 	return (flux / 4 *
 		((erf((x - x_0 + 0.5) / (np.sqrt(2) * sigma)) -
 		  erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma))) *

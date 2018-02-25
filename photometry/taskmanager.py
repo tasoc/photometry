@@ -114,8 +114,16 @@ class TaskManager(object):
 		return None
 
 	def save_result(self, result):
+		"""
+		Save results and diagnostics. This will update the TODO list.
+		
+		Parameters:
+			results (dict): Dictionary of results and diagnostics.
+		"""
+		# Update the status in the TODO list:
 		self.cursor.execute("UPDATE todolist SET status=?,elaptime=? WHERE priority=?;", (result['status'].value, result['time'], result['priority']))
 
+		# Also set status of targets that were marked as "SKIPPED" by this target:
 		if 'skip_targets' in result['details'] and len(result['details']['skip_targets']) > 0:
 			# Create unique list of starids to be masked as skipped:
 			skip_starids = [str(starid) for starid in set(result['details']['skip_targets'])]
@@ -123,10 +131,10 @@ class TaskManager(object):
 			# Mark them as SKIPPED in the database:
 			self.cursor.execute("UPDATE todolist SET status=5 WHERE status IS NULL AND starid IN (" + skip_starids + ");")
 
-		# Save diagnostics:
+		# Save additional diagnostics:
 		error_msg = result['details'].get('errors', None)
 		if error_msg: error_msg = '\n'.join(error_msg)
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT INTO diagnostics (priority, starid, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			result['details'].get('pos_centroid', (None, None))[0],

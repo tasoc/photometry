@@ -3,15 +3,14 @@
 """
 Handling of TESS data quality flags.
 
-@author: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
 
 class TESSQualityFlags(object):
 	"""
-	This class encodes the meaning of the various Kepler QUALITY bitmask flags,
-	as documented in the Kepler Archive Manual (Table 2.3).
+	This class encodes the meaning of the various TESS QUALITY bitmask flags.
 	"""
 	AttitudeTweak = 1
 	SafeMode = 2
@@ -95,4 +94,15 @@ class TESSQualityFlags(object):
 
 	@staticmethod
 	def filter_quality(quality, flags=DEFAULT_BITMASK):
+		"""
+		Filter quality flags against a specific set of flags.
+		
+		Parameters:
+			quality (integer or ndarray): Quality flags.
+			flags (integer bitmask): Default=``TESSQualityFlags.DEFAULT_BITMASK``.
+		
+		Returns:
+			ndarray: ``True`` if quality matches any of the ``flags``, ``False`` otherwise.
+		
+		"""
 		return (quality & flags > 0)

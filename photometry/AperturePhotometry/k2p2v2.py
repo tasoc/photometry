@@ -30,8 +30,6 @@ import numpy as np
 from ..plots import plot_image, save_figure
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-from matplotlib.ticker import MultipleLocator, ScalarFormatter
-y_formatter = ScalarFormatter(useOffset=False)
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.cm as cm
 from scipy import stats
