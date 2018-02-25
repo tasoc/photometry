@@ -25,7 +25,7 @@ from copy import deepcopy
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
 import enum
-from bottleneck import replace, nanmedian
+from bottleneck import replace, nanmedian, ss
 from .image_motion import ImageMovementKernel
 
 __docformat__ = 'restructuredtext'
@@ -113,6 +113,7 @@ class BasePhotometry(object):
 		self._details = {}
 		self.tpf = None
 		self.hdf = None
+		self._MovementKernel = None
 
 		# Set directory where diagnostics plots should be saved to:
 		self.plot_folder = None
@@ -229,7 +230,6 @@ class BasePhotometry(object):
 		self._stamp = None
 		self._set_stamp()
 		self._sumimage = None
-		self._MovementKernel = None
 
 	def __enter__(self):
 		return self
@@ -710,6 +710,7 @@ class BasePhotometry(object):
 		# TODO: Calculate performance metrics
 		if self._status in (STATUS.OK, STATUS.WARNING):
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
+			self._details['variance'] = ss(self.lightcurve['flux'] - self._details['mean_flux']) / (len(self.lightcurve['flux'])-1)
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
 			if self.final_mask is not None:
 				self._details['mask_size'] = int(np.sum(self.final_mask))

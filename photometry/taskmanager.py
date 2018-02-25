@@ -49,13 +49,14 @@ class TaskManager(object):
 			priority INT PRIMARY KEY NOT NULL,
 			starid BIGINT NOT NULL,
 			mean_flux DOUBLE PRECISION,
+			variance DOUBLE PRECISION,
 			mask_size INT,
 			pos_row REAL,
 			pos_column REAL,
 			contamination REAL,
 			stamp_resizes INT,
 			errors TEXT
-		)""")
+		);""")
 		self.conn.commit()
 
 		# Setup logging:
@@ -125,12 +126,13 @@ class TaskManager(object):
 		# Save diagnostics:
 		error_msg = result['details'].get('errors', None)
 		if error_msg: error_msg = '\n'.join(error_msg)
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, pos_column, pos_row, mean_flux, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT INTO diagnostics (priority, starid, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			result['details'].get('pos_centroid', (None, None))[0],
 			result['details'].get('pos_centroid', (None, None))[1],
 			result['details'].get('mean_flux', None),
+			result['details'].get('variance', None),
 			result['details'].get('mask_size', None),
 			result['details'].get('contamination', None),
 			result['details'].get('stamp_resizes', 0),
