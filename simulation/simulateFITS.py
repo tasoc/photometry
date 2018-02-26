@@ -86,6 +86,8 @@ class simulateFITS(object):
 		self.Ncols = 256
 		self.stamp = (0,self.Nrows,0,self.Ncols)
 		self.coord_zero_point = [0.,0.] # Zero point
+		self.camera = 1
+		self.ccd = 1
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
@@ -452,7 +454,8 @@ class simulateFITS(object):
 			os.makedirs(outdir)
 		
 		# Write FITS file to output directory:
-		hdu.writeto(os.path.join(outdir, 'test%02d.fits' % i),
+		filename = 'tess-simulation-{camera:d}-{ccd:d}-%04d-s_ffic.fits'.format(camera=self.camera, ccd=self.ccd) % i
+		hdu.writeto(os.path.join(outdir, filename),
 					overwrite=self.overwrite_images)
 
 
