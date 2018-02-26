@@ -53,6 +53,8 @@ def create_todo(sector):
 	input_folder = os.environ['TESSPHOT_INPUT']
 
 	cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(4,5,6), dtype='float64')
+	if cat.ndim == 1:
+		cat = np.expand_dims(cat, axis=0)
 	cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
 	# Convert data to astropy table for further use:
 	cat = Table(
@@ -111,6 +113,8 @@ def create_catalog(sector, camera, ccd):
 	# Load the catalog from file:
 	# TODO: In the future this will be loaded from the TASOC database:
 	cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,2,3,6), dtype='float64')
+	if cat.ndim == 1:
+		cat = np.expand_dims(cat, axis=0)
 	cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
 
 	# Create SQLite file:
