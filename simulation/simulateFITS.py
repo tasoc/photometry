@@ -112,7 +112,7 @@ class simulateFITS(object):
 		
 		# Loop through the time steps:
 		for i, timestep in enumerate(self.times):
-			print("Making time step: "+str(timestep))
+			print("Making time step: "+str(timestep/3600/24))
 			
 			# Apply time-dependent changes to catalog:
 #			self.catalog = self.apply_variable_magnitudes(self.catalog, 
@@ -136,7 +136,7 @@ class simulateFITS(object):
 				self.make_fits(img, timestep, i)
 
 
-	def make_times(self, cadence = 1800.0):
+	def make_times(self, cadence = 1800.0, offset=None):
 		"""
 		Make the time steps.
 		
@@ -144,6 +144,9 @@ class simulateFITS(object):
 			cadence (float): Time difference between frames. Default is 1800 
 			seconds corresponding the 30 minutes in long cadence data from 
 			TESS.
+			offset (float): Time offset to add to all times. Default is 
+			``None`` which uses 2451544.500000 converted to seconds 
+			corresponding to January 1st 2000 at 00:00:00.0.
 		
 		Returns:
 			times (numpy array): Timestamps of all images to be made.
@@ -155,6 +158,11 @@ class simulateFITS(object):
 		# (this is necessary because cadence is not an int)
 		if len(times) > self.Ntimes:
 			times = times[0:10]
+		
+		# Add time offset:
+		if offset is None:
+			offset = 3600*24*2451544.500000 # January 1st 2000 at 00:00:00.0
+		times += offset
 		
 		return times
 
@@ -429,14 +437,17 @@ class simulateFITS(object):
 		# Instantiate primary header data unit:
 		hdu = fits.PrimaryHDU(data=img, header=header)
 		
-		# Add timestamp to header with a unit of days:
-		hdu.header['BJD'] = (timestamp/3600/24, 
+		# Add info to header as used by prepare_photometry.py:
+		hdu.header['BJDREFI'] = (timestamp/3600/24, 
 			'time in days (arb. starting point)')
+		hdu.header['BJDREFF'] = (0, 'Unknown. Is added to BJDREFI')
 		hdu.header['NAXIS'] = (2, 'Number of data dimension')
 		hdu.header['NAXIS1'] = (self.Ncols, 'Number of pixel columns')
 		hdu.header['NAXIS2'] = (self.Nrows, 'Number of pixel rows')
-		# TODO: write more info to header
-		
+		hdu.header['DQUALITY'] = (0, 'Data quality')
+		hdu.header['NUM_FRM'] = (900, 'Number of frames added (true: 1)')
+		hdu.header['GAIN'] = (100, 'Gain. Arbitrary value')
+		hdu.header['READNOIS'] = (10, 'Readnoise. Arbitrary value')
 		
 		# Specify output directory:
 		if outdir is None:
