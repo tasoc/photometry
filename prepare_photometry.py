@@ -193,9 +193,9 @@ def create_hdf5(sector, camera, ccd):
 
 	# Get image shape from the first file:
 	with pyfits.open(files[0]) as hdulist:
-		prihdr = hdulist[1].header
+		prihdr = hdulist[0].header
 		img_shape = (prihdr['NAXIS1'], prihdr['NAXIS2'])
-		img_shape = (2048, 2048)
+#		img_shape = (2048, 2048)
 
 	args = {
 		'compression': 'lzf',
@@ -287,13 +287,13 @@ def create_hdf5(sector, camera, ccd):
 
 				flux0, hdr = load_ffi_fits(fname, return_header=True)
 
-				time[k] = hdr[1]['BJDREFI'] + hdr[1]['BJDREFF']
+				time[k] = hdr[0]['BJDREFI'] + hdr[0]['BJDREFF']
 				cadenceno[k] = k+1
-				quality[k] = hdr[1]['DQUALITY']
+				quality[k] = hdr[0]['DQUALITY']
 
 				if k == 0:
-					num_frm = hdr[1]['NUM_FRM']
-				elif hdr[1]['NUM_FRM'] != num_frm:
+					num_frm = hdr[0]['NUM_FRM']
+				elif hdr[0]['NUM_FRM'] != num_frm:
 					logger.error("NUM_FRM is not constant!")
 
 				# # Load background from HDF file and subtract background from image:
@@ -336,10 +336,10 @@ def create_hdf5(sector, camera, ccd):
 			ref_image, hdr = load_ffi_fits(files[refindx], return_header=True)
 
 			dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-			dset[0] = WCS(hdr[1]).to_header_string().strip().encode('ascii', 'strict')
+			dset[0] = WCS(hdr[0]).to_header_string().strip().encode('ascii', 'strict')
 			dset.attrs['ref_frame'] = refindx
 			
-			wcs = WCS(hdr[1])
+			wcs = WCS(hdr[0])
 			polygon = "(" + ",".join(["(%.12f,%.12f)" % tuple(c) for c in wcs.calc_footprint()]) + ")"
 			print("INSERT INTO tasoc.pointings (camera,ccd,poly) VALUES (%d,%d,'%s');" % (camera, ccd, polygon))
 
@@ -381,8 +381,8 @@ if __name__ == '__main__':
 	camera = 1
 	ccd = 1
 
-	#create_todo(sector)
-	#create_catalog(sector, camera, ccd)
+	create_todo(sector)
+	create_catalog(sector, camera, ccd)
 
 	create_hdf5(sector, 1, 1)
 	#create_hdf5(sector, 1, 2)
