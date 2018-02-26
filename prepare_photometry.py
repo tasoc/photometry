@@ -4,8 +4,6 @@
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range
 import os
-import glob
-import fnmatch
 import numpy as np
 import h5py
 import sqlite3
@@ -15,24 +13,12 @@ from astropy.wcs import WCS
 from astropy.table import Table
 import multiprocessing
 from bottleneck import replace, nanmean
-from photometry.backgrounds import fit_background
-from photometry.utilities import add_proper_motion, load_ffi_fits
 from photometry.plots import plot_image
+from photometry.backgrounds import fit_background
+from photometry.utilities import load_ffi_fits, load_settings, find_ffi_files
 from photometry.image_motion import ImageMovementKernel
+from photometry import TESSQualityFlags
 from timeit import default_timer
-
-def find_ffi_files(rootdir, camera, ccd):
-
-	filename_pattern = 'tess*-{camera:d}-{ccd:d}-????-s_ffic.fits*'.format(camera=camera, ccd=ccd)
-	#logger.info(os.path.join(input_folder, 'images', filename_pattern))
-
-	matches = []
-	for root, dirnames, filenames in os.walk(rootdir):
-		for filename in fnmatch.filter(filenames, filename_pattern):
-			matches.append(os.path.join(root, filename))
-			
-	return matches
-	
 
 #------------------------------------------------------------------------------
 def create_todo(sector):
@@ -98,61 +84,6 @@ def create_todo(sector):
 	logger.info("TODO done.")
 
 #------------------------------------------------------------------------------
-def create_catalog(sector, camera, ccd):
-
-	logger = logging.getLogger(__name__)
-
-	input_folder = os.environ['TESSPHOT_INPUT']
-
-	# We need a list of when the sectors are in time:
-	sector_reference_time = 2457827.0 + 13.5
-	logger.info('Projecting catalog {0:.3f} years relative to 2000'.format((sector_reference_time - 2451544.5)/365.25))
-
-	# Load the catalog from file:
-	# TODO: In the future this will be loaded from the TASOC database:
-	cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,2,3,6), dtype='float64')
-	cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
-
-	# Create SQLite file:
-	catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
-	if os.path.exists(catalog_file): os.remove(catalog_file)
-	conn = sqlite3.connect(catalog_file)
-	conn.row_factory = sqlite3.Row
-	cursor = conn.cursor()
-
-	cursor.execute("""CREATE TABLE catalog (
-		starid BIGINT PRIMARY KEY NOT NULL,
-		ra DOUBLE PRECISION NOT NULL,
-		decl DOUBLE PRECISION NOT NULL,
-		ra_J2000 DOUBLE PRECISION NOT NULL,
-		decl_J2000 DOUBLE PRECISION NOT NULL,
-		tmag REAL NOT NULL
-	);""")
-
-	for row in cat:
-		# Add the proper motion to each coordinate:
-		ra, dec = add_proper_motion(row[1], row[2], row[3], row[4], sector_reference_time, epoch=2000.0)
-		logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
-
-		# Save the coordinates in SQLite database:
-		cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,tmag) VALUES (?,?,?,?,?,?);", (
-			int(row[0]),
-			ra,
-			dec,
-			row[1],
-			row[2],
-			row[5]
-		))
-
-	cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
-	cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
-	conn.commit()
-	cursor.close()
-	conn.close()
-
-	logger.info("Catalog done.")
-
-#------------------------------------------------------------------------------
 def create_hdf5(sector, camera, ccd):
 	"""
 	Restructure individual FFI images (in FITS format) into
@@ -172,15 +103,13 @@ def create_hdf5(sector, camera, ccd):
 
 	logger = logging.getLogger(__name__)
 
+	settings = load_settings(sector=sector)
+	sector_reference_time = settings.get('reference_time')
+
 	input_folder = os.environ['TESSPHOT_INPUT']
 	hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
 
-	filename_pattern = 'tess*-{camera:d}-{ccd:d}-????-s_ffic.fits'.format(camera=camera, ccd=ccd)
-	logger.info(os.path.join(input_folder, 'images', filename_pattern))
-
-	files = glob.glob(os.path.join(input_folder, 'images', filename_pattern))
-	files += glob.glob(os.path.join(input_folder, 'images', filename_pattern + '.gz'))
-	files = sorted(files)
+	files = find_ffi_files(os.path.join(input_folder, 'images'), camera, ccd)
 	#files = files[0:2]
 	numfiles = len(files)
 	logger.info("Number of files: %d", numfiles)
@@ -283,7 +212,7 @@ def create_hdf5(sector, camera, ccd):
 
 				flux0, hdr = load_ffi_fits(fname, return_header=True)
 
-				time[k] = hdr[1]['BJDREFI'] + hdr[1]['BJDREFF']
+				time[k] = 0.5*(hdr[1]['TSTART'] + hdr[1]['TSTOP']) + hdr[1]['BJDREFI'] + hdr[1]['BJDREFF']
 				cadenceno[k] = k+1
 				quality[k] = hdr[1]['DQUALITY']
 
@@ -299,8 +228,9 @@ def create_hdf5(sector, camera, ccd):
 				images.create_dataset(dset_name, data=flux0, **args)
 
 				# Add together images for sum-image:
-				replace(flux0, np.nan, 0)
-				SumImage += flux0
+				if TESSQualityFlags.filter_quality(quality[k]):
+					replace(flux0, np.nan, 0)
+					SumImage += flux0
 
 			SumImage /= numfiles
 
@@ -313,48 +243,43 @@ def create_hdf5(sector, camera, ccd):
 			if 'cadenceno' in hdf: del hdf['cadenceno']
 			if 'quality' in hdf: del hdf['quality']
 			hdf.create_dataset('sumimage', data=SumImage, **args)
-			hdf.create_dataset('time', data=time)
+			hdf.create_dataset('time', data=time, **args)
 			hdf.create_dataset('cadenceno', data=cadenceno, **args)
 			hdf.create_dataset('quality', data=quality, **args)
 			hdf.flush()
 
-		if 1==1 or 'wcs' not in hdf or 'movement_kernel' not in hdf:
-			# TODO: Settings that should depend on sector at some point:
-			sector_reference_time = hdf['time'][len(hdf['time'])//2]
-
-			# Save WCS to the file:
+		if 'wcs' not in hdf or 'movement_kernel' not in hdf:
+			# Find the reference image:
 			refindx = np.searchsorted(hdf['time'], sector_reference_time, side='left')
 			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time - hdf['time'][refindx-1]) < abs(sector_reference_time - hdf['time'][refindx])):
 				refindx -= 1
-
 			logger.info("WCS reference frame: %d", refindx)
 
+			# Load the reference image and associated header:
 			ref_image, hdr = load_ffi_fits(files[refindx], return_header=True)
 
+			# Save WCS to the file:
 			dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-			dset[0] = WCS(hdr[1]).to_header_string().strip().encode('ascii', 'strict')
+			dset[0] = hdr[1].tostring().strip().encode('ascii', 'strict') # WCS(hdr[1]).to_header_string()
 			dset.attrs['ref_frame'] = refindx
-			
+
 			wcs = WCS(hdr[1])
 			polygon = "(" + ",".join(["(%.12f,%.12f)" % tuple(c) for c in wcs.calc_footprint()]) + ")"
-			print("INSERT INTO tasoc.pointings (camera,ccd,poly) VALUES (%d,%d,'%s');" % (camera, ccd, polygon))
+			print("INSERT INTO tasoc.pointings (sector,camera,ccd,footprint) VALUES (%d,%d,%d,'%s');" % (sector, camera, ccd, polygon))
 
 			# Calculate image motion:
 			imk = ImageMovementKernel(image_ref=ref_image, warpmode='translation')
 			kernel = np.empty((numfiles, imk.n_params), dtype='float64')
 			for k, dset in enumerate(images):
 				kernel[k, :] = imk.calc_kernel(images[dset])
-				print(kernel[k, :])
+				logger.info("Kernel: %s", kernel[k, :])
 
 			# Save Image Motion Kernel to HDF5 file:
 			if 'movement_kernel' in hdf: del hdf['movement_kernel']
-			dset = hdf.create_dataset('movement_kernel', data=kernel)
+			dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
 			dset.attrs['warpmode'] = imk.warpmode
 			dset.attrs['ref_frame'] = refindx
 
-		import cv2
-		print(cv2.__version__)
-		
 		logger.info("Done.")
 
 #------------------------------------------------------------------------------
@@ -365,22 +290,21 @@ if __name__ == '__main__':
 
 	logger = logging.getLogger(__name__)
 	logger.setLevel(logging.INFO)
-	if not logger.hasHandlers():
-		console = logging.StreamHandler()
-		console.setFormatter(formatter)
-		logger.addHandler(console)
-	#logger_parent = logging.getLogger('photometry')
-	#logger_parent.addHandler(console)
-	#logger_parent.setLevel(logging.INFO)
+	console = logging.StreamHandler()
+	console.setFormatter(formatter)
+	logger_parent = logging.getLogger('photometry')
+	logger_parent.setLevel(logging.INFO)
+	if not logger.hasHandlers(): logger.addHandler(console)
+	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
 
 	sector = 14
 	camera = 1
 	ccd = 1
 
 	#create_todo(sector)
-	#create_catalog(sector, camera, ccd)
-
-	create_hdf5(sector, 1, 1)
-	#create_hdf5(sector, 1, 2)
 	#create_hdf5(sector, 1, 3)
-	#create_hdf5(sector, 1, 4)
+
+	import itertools
+	for camera, ccd in itertools.product([1,2,3,4], [1,2,3,4]):
+		create_hdf5(sector, camera, ccd)
+
