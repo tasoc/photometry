@@ -5,30 +5,46 @@ from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range
 import os
 import glob
+import fnmatch
 import numpy as np
 import h5py
+import sqlite3
 import logging
 import astropy.io.fits as pyfits
 from astropy.wcs import WCS
-import sqlite3
 from astropy.table import Table
 import multiprocessing
 from bottleneck import replace, nanmean
 from photometry.backgrounds import fit_background
-from photometry.utilities import add_proper_motion
+from photometry.utilities import add_proper_motion, load_ffi_fits
+from photometry.plots import plot_image
+from photometry.image_motion import ImageMovementKernel
 from timeit import default_timer
+
+def find_ffi_files(rootdir, camera, ccd):
+
+	filename_pattern = 'tess*-{camera:d}-{ccd:d}-????-s_ffic.fits*'.format(camera=camera, ccd=ccd)
+	#logger.info(os.path.join(input_folder, 'images', filename_pattern))
+
+	matches = []
+	for root, dirnames, filenames in os.walk(rootdir):
+		for filename in fnmatch.filter(filenames, filename_pattern):
+			matches.append(os.path.join(root, filename))
+			
+	return matches
+	
 
 #------------------------------------------------------------------------------
 def create_todo(sector):
 	"""Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
-	
+
 	Will create the file `todo.sqlite` in the `TESSPHOT_INPUT` directory.
 	It will be overwritten if it already exists.
-	
+
 	Parameters:
 		sector (integer): The TESS observing sector.
-		
+
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
@@ -53,10 +69,10 @@ def create_todo(sector):
 	cursor.execute("""CREATE TABLE todolist (
 		priority BIGINT NOT NULL,
 		starid BIGINT NOT NULL,
-		datasource INT NOT NULL DEFAULT 0,
+		datasource TEXT NOT NULL DEFAULT 'ffi',
 		camera INT NOT NULL,
 		ccd INT NOT NULL,
-		method INT DEFAULT NULL,
+		method TEXT DEFAULT NULL,
 		status INT DEFAULT NULL,
 		elaptime REAL DEFAULT NULL,
 		x REAL,
@@ -142,10 +158,10 @@ def create_hdf5(sector, camera, ccd):
 	Restructure individual FFI images (in FITS format) into
 	a combined HDF5 file which is used in the photometry
 	pipeline.
-	
+
 	In this process the background flux in each FFI is
 	estimated using the `backgrounds.fit_background` function.
-	
+
 	Parameters:
 		sector (integer): The TESS observing sector.
 		camera (integer): TESS camera number (1-4).
@@ -153,18 +169,17 @@ def create_hdf5(sector, camera, ccd):
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
-	
+
 	logger = logging.getLogger(__name__)
 
-	# Settings that should depend on sector at some point:
-	sector_reference_time = 2457827.0 + 13.5	
-	
-	
 	input_folder = os.environ['TESSPHOT_INPUT']
 	hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
 
-	files = glob.glob(os.path.join(input_folder, 'images', '*.fits'))
-	files += glob.glob(os.path.join(input_folder, 'images', '*.fits.gz'))
+	filename_pattern = 'tess*-{camera:d}-{ccd:d}-????-s_ffic.fits'.format(camera=camera, ccd=ccd)
+	logger.info(os.path.join(input_folder, 'images', filename_pattern))
+
+	files = glob.glob(os.path.join(input_folder, 'images', filename_pattern))
+	files += glob.glob(os.path.join(input_folder, 'images', filename_pattern + '.gz'))
 	files = sorted(files)
 	#files = files[0:2]
 	numfiles = len(files)
@@ -174,8 +189,9 @@ def create_hdf5(sector, camera, ccd):
 
 	# Get image shape from the first file:
 	with pyfits.open(files[0]) as hdulist:
-		prihdr = hdulist[0].header
+		prihdr = hdulist[1].header
 		img_shape = (prihdr['NAXIS1'], prihdr['NAXIS2'])
+		img_shape = (2048, 2048)
 
 	args = {
 		'compression': 'lzf',
@@ -253,6 +269,7 @@ def create_hdf5(sector, camera, ccd):
 			SumImage = np.zeros((img_shape[0], img_shape[1]), dtype='float64')
 			time = np.empty(numfiles, dtype='float64')
 			cadenceno = np.empty(numfiles, dtype='int32')
+			quality = np.empty(numfiles, dtype='int32')
 
 			# Save list of file paths to the HDF5 file:
 			filenames = ['images/' + os.path.basename(fname).rstrip('.gz') for fname in files]
@@ -264,10 +281,16 @@ def create_hdf5(sector, camera, ccd):
 				dset_name ='%04d' % k
 				#if dset_name in hdf['images']: continue # Dont do this, because it will mess up the sumimage and time vector
 
-				with pyfits.open(fname, mode='readonly', memmap=True) as hdu:
-					time[k] = hdu[0].header['BJD']
-					cadenceno[k] = k+1
-					flux0 = np.asarray(hdu[0].data, dtype='float32')
+				flux0, hdr = load_ffi_fits(fname, return_header=True)
+
+				time[k] = hdr[1]['BJDREFI'] + hdr[1]['BJDREFF']
+				cadenceno[k] = k+1
+				quality[k] = hdr[1]['DQUALITY']
+
+				if k == 0:
+					num_frm = hdr[1]['NUM_FRM']
+				elif hdr[1]['NUM_FRM'] != num_frm:
+					logger.error("NUM_FRM is not constant!")
 
 				# # Load background from HDF file and subtract background from image:
 				flux0 -= backgrounds[dset_name]
@@ -281,32 +304,57 @@ def create_hdf5(sector, camera, ccd):
 
 			SumImage /= numfiles
 
-			logger.info("Saving file...")
-
-			# Save WCS to the file:
-			refindx = np.searchsorted(time, sector_reference_time, side='left')
-			if refindx > 0 and (refindx == len(time) or abs(sector_reference_time - time[refindx-1]) < abs(sector_reference_time - time[refindx])):
-				refindx -= 1
-
-			logger.info("WCS reference frame: %d", refindx)
-			with pyfits.open(files[refindx], mode='readonly', memmap=True) as hdu:
-				# Store FITS header for later use:
-				hdr = hdu[0].header
-				ref_image = hdu[0].data
-
-			dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-			dset[0] = WCS(hdr).to_header_string().strip().encode('ascii', 'strict')
-			dset.attrs['ref_frame'] = refindx
+			# Save attributes
+			images.attrs['NUM_FRM'] = num_frm
 
 			# Add other arrays to HDF5 file:
 			if 'time' in hdf: del hdf['time']
 			if 'sumimage' in hdf: del hdf['sumimage']
 			if 'cadenceno' in hdf: del hdf['cadenceno']
+			if 'quality' in hdf: del hdf['quality']
 			hdf.create_dataset('sumimage', data=SumImage, **args)
-			hdf.create_dataset('time', data=time, **args)
+			hdf.create_dataset('time', data=time)
 			hdf.create_dataset('cadenceno', data=cadenceno, **args)
+			hdf.create_dataset('quality', data=quality, **args)
 			hdf.flush()
 
+		if 1==1 or 'wcs' not in hdf or 'movement_kernel' not in hdf:
+			# TODO: Settings that should depend on sector at some point:
+			sector_reference_time = hdf['time'][len(hdf['time'])//2]
+
+			# Save WCS to the file:
+			refindx = np.searchsorted(hdf['time'], sector_reference_time, side='left')
+			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time - hdf['time'][refindx-1]) < abs(sector_reference_time - hdf['time'][refindx])):
+				refindx -= 1
+
+			logger.info("WCS reference frame: %d", refindx)
+
+			ref_image, hdr = load_ffi_fits(files[refindx], return_header=True)
+
+			dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
+			dset[0] = WCS(hdr[1]).to_header_string().strip().encode('ascii', 'strict')
+			dset.attrs['ref_frame'] = refindx
+			
+			wcs = WCS(hdr[1])
+			polygon = "(" + ",".join(["(%.12f,%.12f)" % tuple(c) for c in wcs.calc_footprint()]) + ")"
+			print("INSERT INTO tasoc.pointings (camera,ccd,poly) VALUES (%d,%d,'%s');" % (camera, ccd, polygon))
+
+			# Calculate image motion:
+			imk = ImageMovementKernel(image_ref=ref_image, warpmode='translation')
+			kernel = np.empty((numfiles, imk.n_params), dtype='float64')
+			for k, dset in enumerate(images):
+				kernel[k, :] = imk.calc_kernel(images[dset])
+				print(kernel[k, :])
+
+			# Save Image Motion Kernel to HDF5 file:
+			if 'movement_kernel' in hdf: del hdf['movement_kernel']
+			dset = hdf.create_dataset('movement_kernel', data=kernel)
+			dset.attrs['warpmode'] = imk.warpmode
+			dset.attrs['ref_frame'] = refindx
+
+		import cv2
+		print(cv2.__version__)
+		
 		logger.info("Done.")
 
 #------------------------------------------------------------------------------
@@ -325,10 +373,14 @@ if __name__ == '__main__':
 	#logger_parent.addHandler(console)
 	#logger_parent.setLevel(logging.INFO)
 
-	sector = 0
+	sector = 14
 	camera = 1
 	ccd = 1
 
-	create_todo(sector)
-	create_catalog(sector, camera, ccd)
-	create_hdf5(sector, camera, ccd)
+	#create_todo(sector)
+	#create_catalog(sector, camera, ccd)
+
+	create_hdf5(sector, 1, 1)
+	#create_hdf5(sector, 1, 2)
+	#create_hdf5(sector, 1, 3)
+	#create_hdf5(sector, 1, 4)

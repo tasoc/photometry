@@ -7,14 +7,16 @@ Created on Wed Nov  8 16:37:12 2017
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
+import os.path
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
 from copy import deepcopy
 from scipy.optimize import minimize
-from .BasePhotometry import BasePhotometry, STATUS
+from . import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
+from .plots import save_figure
 
 class PSFPhotometry(BasePhotometry):
 
@@ -29,39 +31,61 @@ class PSFPhotometry(BasePhotometry):
 		# TODO: Maybe we should move this into BasePhotometry?
 		self.psf = PSF(self.camera, self.ccd, self.stamp)
 
-	def _lhood(self, params, img, lhood_stat = 'Gaussian_d'):
+	def _lhood(self, params, img_bkg, lhood_stat='Gaussian_d', include_bkg=True):
+		"""
+		Log-likelihood function to be minimized for the PSF fit.
+
+		Parameters:
+			params (numpy array): Parameters for the PSF integrator.
+			img_bkg (list): List containing the image and background numpy arrays.
+			lhood_stat (string): Determines what statistic to use. Default is
+			``Gaussian_d``. Can also be ``Gaussian_m`` or ``Poisson``.
+			include_bkg (boolean): Determine whether to include background. Default
+			is ``True``.
+		"""
+
 		# Reshape the parameters into a 2D array:
 		params = params.reshape(len(params)//3, 3)
-		# Pass the list of stars to the PSF integrator to produce an artificial image:
-		mdl = self.psf.integrate_to_image(params, cutoff_radius=10)
+
 		# Define minimum weights to avoid dividing by 0:
 		minweight = 1e-9
 		minvar = 1e-9
+
+		# Pass the list of stars to the PSF integrator to produce an artificial image:
+		mdl = self.psf.integrate_to_image(params, cutoff_radius=10)
+
 		# Calculate the likelihood value:
 		if lhood_stat[0:8] == 'Gaussian':
-			if lhood_stat == 'Gaussian_m':
-				# FIXME: Include background here:
-#				var = np.abs(img + self.background) # can be outside _lhood
-				var = np.abs(img) # can be outside _lhood
-			elif lhood_stat == 'Gaussian_d':
-				# FIXME: Include background here:
-#				var = np.abs(mdl + self.background) # has to be in _lhood
-				var = np.abs(mdl) # has to be in _lhood
+			if lhood_stat == 'Gaussian_d':
+				if include_bkg:
+					var = np.abs(img_bkg[0] + img_bkg[1]) # can be outside _lhood
+				else:
+					var = np.abs(img_bkg[0]) # can be outside _lhood
+
+			elif lhood_stat == 'Gaussian_m':
+				if include_bkg:
+					var = np.abs(mdl + img_bkg[1]) # has to be in _lhood
+				else:
+					var = np.abs(mdl) # has to be in _lhood
 			# Add 2nd term of Erwin (2015), eq. (13):
 			var += self.n_readout * self.readnoise**2 / self.gain**2
 			var[var<minvar] = minvar
 			weightmap = 1 / var
 			weightmap[weightmap<minweight] = minweight
 			# Return the chi2:
-			return np.nansum( weightmap * (img - mdl)**2 )
+			return np.nansum( weightmap * (img_bkg[0] - mdl)**2 )
+
 		elif lhood_stat == 'Poisson':
+			# Prepare model for logarithmic expression by changing zeros to small values:
+			mdl_for_log = mdl
+			mdl_for_log[mdl_for_log < 1e-9] = 1e-9
 			# Return the Cash statistic:
-			mdlforlog = mdl
-			mdlforlog[mdlforlog < 1e-9] = 1e-9 # set 0 to low
-			return 2 * np.nansum( mdl - img * np.log(mdlforlog) )
+			return 2 * np.nansum( mdl - img_bkg[0] * np.log(mdl_for_log) )
+
 		elif lhood_stat == 'old_Gaussian':
 			# Return the chi2:
-			return np.nansum( (img - mdl)**2 / img )
+			return np.nansum( (img_bkg[0] - mdl)**2 / img_bkg[0] )
+
 
 	def do_photometry(self):
 		"""PSF Photometry"""
@@ -92,9 +116,19 @@ class PSFPhotometry(BasePhotometry):
 		params0 = params0.flatten() # Make the parameters into a 1D array
 
 		# Start looping through the images (time domain):
-		for k, img in enumerate(self.images):
+		for k, (img,bkg) in enumerate(zip(self.images, self.backgrounds)):
+			# Print timestep index to logger:
+			logger.info('Current timestep: %s' % k)
+
+			# Set the maximum number of iterations for the minimize routine:
+			if k>0:
+				maxiter = 500
+			else: # The first step requires more iterations due to bad starting guess
+				maxiter = 1500
+
 			# Run the fitting routine for this image:
-			res = minimize(self._lhood, params0, args=img, method='Nelder-Mead')
+			res = minimize(self._lhood, params0, args=[img,bkg], method='Nelder-Mead',
+						options={'maxiter': maxiter})
 			logger.debug(res)
 
 			if res.success:
@@ -107,16 +141,23 @@ class PSFPhotometry(BasePhotometry):
 				self.lightcurve['pos_centroid'][k] = result[0,0:2]
 				self.lightcurve['quality'][k] = 0
 
-#				fig = plt.figure()
-#				ax = fig.add_subplot(131)
-#				ax.imshow(np.log10(img), origin='lower')
-#				ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
-#				ax.scatter(result[:,1], result[:,0], c='r', alpha=0.5)
-#				ax = fig.add_subplot(132)
-#				ax.imshow(np.log10(self.psf.integrate_to_image(result)), origin='lower')
-#				ax = fig.add_subplot(133)
-#				ax.imshow(img - self.psf.integrate_to_image(result, cutoff_radius=10), origin='lower')
-##				plt.show()
+				# TODO: use debug figure toggle to decide if to plot and export
+				if self.plot:
+					fig = plt.figure()
+					ax = fig.add_subplot(131)
+					ax.imshow(np.log10(img), origin='lower')
+					ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
+					ax.scatter(result[:,1], result[:,0], c='r', alpha=0.5)
+					ax = fig.add_subplot(132)
+					ax.imshow(np.log10(self.psf.integrate_to_image(result)), origin='lower')
+					ax = fig.add_subplot(133)
+					ax.imshow(img - self.psf.integrate_to_image(result, cutoff_radius=10), origin='lower')
+					plt.show()
+
+					# Export figure to file:
+					fig_name = 'psf_photometry_'+np.str(self.sector)+'_'+ \
+								np.str(self.starid)+'_'+np.str(k)
+					save_figure(os.path.join(self.plot_folder, fig_name))
 
 				# In the next iteration, start from the current solution:
 				params0 = res.x

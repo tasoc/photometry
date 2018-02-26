@@ -40,7 +40,7 @@ class simulateFITS(object):
 			save_images (boolean): True if images and catalog should be saved. 
 			Default is True.
 			overwrite_images (boolean): True if image and catalog files should 
-			be overwritten. Default is True
+			be overwritten. Default is True.
 			
 		Output:
 			The output FITS images are saved to a subdirectory images in the 
@@ -86,6 +86,8 @@ class simulateFITS(object):
 		self.Ncols = 256
 		self.stamp = (0,self.Nrows,0,self.Ncols)
 		self.coord_zero_point = [0.,0.] # Zero point
+		self.camera = 1
+		self.ccd = 1
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
@@ -108,9 +110,9 @@ class simulateFITS(object):
 		# Apply time-independent changes to catalog:
 #		self.catalog = self.apply_inaccurate_catalog(self.catalog)
 		
-		# Loop through the time stamps:
-		for i, timestamp in enumerate(self.times):
-			print("Making timestamp: "+str(timestamp))
+		# Loop through the time steps:
+		for i, timestep in enumerate(self.times):
+			print("Making time step: "+str(timestep))
 			
 			# Apply time-dependent changes to catalog:
 #			self.catalog = self.apply_variable_magnitudes(self.catalog, 
@@ -131,16 +133,17 @@ class simulateFITS(object):
 			if self.save_images:
 				# Write img to FITS file:
 				# TODO: Add possibility to write to custom directory
-				self.make_fits(img, timestamp, i)
+				self.make_fits(img, timestep, i)
 
 
 	def make_times(self, cadence = 1800.0):
 		"""
-		Make the time stamps.
+		Make the time steps.
 		
 		Parameters:
 			cadence (float): Time difference between frames. Default is 1800 
-			seconds.
+			seconds corresponding the 30 minutes in long cadence data from 
+			TESS.
 		
 		Returns:
 			times (numpy array): Timestamps of all images to be made.
@@ -446,8 +449,13 @@ class simulateFITS(object):
 		except:
 			pass
 		
+		# Create image files directory if it doesn't already exist:
+		if not os.path.exists(outdir):
+			os.makedirs(outdir)
+		
 		# Write FITS file to output directory:
-		hdu.writeto(os.path.join(outdir, 'test%02d.fits' % i),
+		filename = 'tess-simulation-{camera:d}-{ccd:d}-%04d-s_ffic.fits'.format(camera=self.camera, ccd=self.ccd) % i
+		hdu.writeto(os.path.join(outdir, filename),
 					overwrite=self.overwrite_images)
 
 

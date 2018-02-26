@@ -7,4 +7,6 @@ from .AperturePhotometry import AperturePhotometry
 from .psf_photometry import PSFPhotometry
 from .linpsf_photometry import LinPSFPhotometry
 from .tessphot import tessphot
-from .utilities import *
+from .taskmanager import TaskManager
+from .image_motion import ImageMovementKernel
+from .quality import TESSQualityFlags
