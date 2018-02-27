@@ -12,6 +12,7 @@ import random
 from astropy.io import fits
 from astropy.table import Table, Column
 from astropy.wcs import WCS
+import sqlite3
 
 # Import stuff from the photometry directory:
 import sys
@@ -19,7 +20,7 @@ from os import path
 sys.path.append( path.dirname( path.dirname( path.abspath(__file__))))
 
 from photometry.psf import PSF
-from photometry.utilities import mag2flux
+from photometry.utilities import mag2flux, add_proper_motion
 #from photometry.plots import plot_image
 
 
@@ -86,6 +87,7 @@ class simulateFITS(object):
 		self.Ncols = 256
 		self.stamp = (0,self.Nrows,0,self.Ncols)
 		self.coord_zero_point = [0.,0.] # Zero point
+		self.sector = 0
 		self.camera = 1
 		self.ccd = 1
 		self.exposure_time = 1800. # 30 min
@@ -105,8 +107,14 @@ class simulateFITS(object):
 #		self.catalog['row'][4] = 13
 #		self.catalog['col'][4] = 13
 
-		# Save catalog to file:
+		# Save catalog to txt.gz file:
 		self.make_catalog_file(self.catalog)
+
+		# Generate sqlite catalog file from catalog.txt.gzfile:
+		self.create_catalog(self.sector, self.camera, self.ccd)
+
+		# Generate TODO list:
+		self.create_todo(sector=self.sector)
 
 		# Apply time-independent changes to catalog:
 #		self.catalog = self.apply_inaccurate_catalog(self.catalog)
@@ -276,6 +284,129 @@ class simulateFITS(object):
 		# Print the catalog:
 		print("Writing catalog to file: "+txtfiledir)
 		print(catalog)
+
+
+	def create_catalog(self, sector, camera, ccd):
+		""" Original function by Rasmus Handberg. Create sqlite file """
+	
+#			logger = logging.getLogger(__name__)
+	
+		input_folder = os.environ['TESSPHOT_INPUT']
+	
+		# We need a list of when the sectors are in time:
+		sector_reference_time = 2457827.0 + 13.5
+#			logger.info('Projecting catalog {0:.3f} years relative to 2000'.format((sector_reference_time - 2451544.5)/365.25))
+	
+		# Load the catalog from file:
+		# TODO: In the future this will be loaded from the TASOC database:
+		cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,2,3,6), dtype='float64')
+		if cat.ndim == 1:
+			cat = np.expand_dims(cat, axis=0)
+		cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
+	
+		# Create SQLite file:
+		catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
+		if os.path.exists(catalog_file): os.remove(catalog_file)
+		conn = sqlite3.connect(catalog_file)
+		conn.row_factory = sqlite3.Row
+		cursor = conn.cursor()
+	
+		cursor.execute("""CREATE TABLE catalog (
+			starid BIGINT PRIMARY KEY NOT NULL,
+			ra DOUBLE PRECISION NOT NULL,
+			decl DOUBLE PRECISION NOT NULL,
+			ra_J2000 DOUBLE PRECISION NOT NULL,
+			decl_J2000 DOUBLE PRECISION NOT NULL,
+			tmag REAL NOT NULL
+		);""")
+	
+		for row in cat:
+			# Add the proper motion to each coordinate:
+			ra, dec = add_proper_motion(row[1], row[2], row[3], row[4], sector_reference_time, epoch=2000.0)
+#				logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
+	
+			# Save the coordinates in SQLite database:
+			cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,tmag) VALUES (?,?,?,?,?,?);", (
+				int(row[0]),
+				ra,
+				dec,
+				row[1],
+				row[2],
+				row[5]
+			))
+	
+		cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
+		cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
+		conn.commit()
+		cursor.close()
+		conn.close()
+	
+#			logger.info("Catalog done.")
+
+
+	def create_todo(self, sector):
+		"""Create the TODO list which is used by the pipeline to keep track of the
+		targets that needs to be processed.
+	
+		Will create the file `todo.sqlite` in the `TESSPHOT_INPUT` directory.
+		It will be overwritten if it already exists.
+	
+		Parameters:
+			sector (integer): The TESS observing sector.
+	
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+		"""
+	
+	#	logger = logging.getLogger(__name__)
+	
+		input_folder = os.environ['TESSPHOT_INPUT']
+	
+		cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(4,5,6), dtype='float64')
+		if cat.ndim == 1:
+			cat = np.expand_dims(cat, axis=0)
+		cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
+		# Convert data to astropy table for further use:
+		cat = Table(
+			data=cat,
+			names=('starid', 'x', 'y', 'tmag'),
+			dtype=('int64', 'float64', 'float64', 'float32')
+		)
+	
+		todo_file = os.path.join(input_folder, 'todo.sqlite')
+		if os.path.exists(todo_file): os.remove(todo_file)
+		conn = sqlite3.connect(todo_file)
+		cursor = conn.cursor()
+	
+		cursor.execute("""CREATE TABLE todolist (
+			priority BIGINT NOT NULL,
+			starid BIGINT NOT NULL,
+			datasource TEXT NOT NULL DEFAULT 'ffi',
+			camera INT NOT NULL,
+			ccd INT NOT NULL,
+			method TEXT DEFAULT NULL,
+			status INT DEFAULT NULL,
+			elaptime REAL DEFAULT NULL,
+			x REAL,
+			y REAL,
+			tmag REAL
+		);""")
+	
+		indx = (cat['tmag'] <= 20) & (cat['x'] > 0) & (cat['x'] < 2048) & (cat['y'] > 0) & (cat['y'] < 2048)
+		cat = cat[indx]
+		cat.sort('tmag')
+		for pri, row in enumerate(cat):
+			starid = int(row['starid'])
+			tmag = float(row['tmag'])
+			cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,x,y,tmag) VALUES (?,?,?,?,?,?,?);", (pri+1, starid, 1, 1, row['x'], row['y'], tmag))
+	
+		cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
+		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
+		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
+		conn.commit()
+		cursor.close()
+		conn.close()
+	
+	#	logger.info("TODO done.")
 
 
 	def apply_inaccurate_catalog(self, catalog):
