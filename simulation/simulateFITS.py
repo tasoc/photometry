@@ -88,10 +88,11 @@ class simulateFITS(object):
 		self.coord_zero_point = [0.,0.] # Zero point
 		self.camera = 1
 		self.ccd = 1
+		self.exposure_time = 1800. # 30 min
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
-		self.times = self.make_times()
+		self.times = self.make_times(cadence=self.exposure_time)
 
 		# Set random number generator seed:
 		random.seed(0)
@@ -136,7 +137,7 @@ class simulateFITS(object):
 				self.make_fits(img, timestep, i)
 
 
-	def make_times(self, cadence = 1800.0, offset=None):
+	def make_times(self, cadence = 1800.0):
 		"""
 		Make the time steps.
 		
@@ -144,9 +145,6 @@ class simulateFITS(object):
 			cadence (float): Time difference between frames. Default is 1800 
 			seconds corresponding the 30 minutes in long cadence data from 
 			TESS.
-			offset (float): Time offset to add to all times. Default is 
-			``None`` which uses 2451544.500000 converted to seconds 
-			corresponding to January 1st 2000 at 00:00:00.0.
 		
 		Returns:
 			times (numpy array): Timestamps of all images to be made.
@@ -158,11 +156,6 @@ class simulateFITS(object):
 		# (this is necessary because cadence is not an int)
 		if len(times) > self.Ntimes:
 			times = times[0:10]
-		
-		# Add time offset:
-		if offset is None:
-			offset = 3600*24*2451544.500000 # January 1st 2000 at 00:00:00.0
-		times += offset
 		
 		return times
 
@@ -438,9 +431,10 @@ class simulateFITS(object):
 		hdu = fits.PrimaryHDU(data=img, header=header)
 		
 		# Add info to header as used by prepare_photometry.py:
-		hdu.header['BJDREFI'] = (timestamp/3600/24, 
-			'time in days (arb. starting point)')
-		hdu.header['BJDREFF'] = (0, 'Unknown. Is added to BJDREFI')
+		hdu.header['BJDREFI'] = (2457000, 'integer part of BTJD reference date')
+		hdu.header['BJDREFF'] = (0., 'fraction of the day in BTJD reference date')
+		hdu.header['TSTART'] = ((timestamp-0.5*self.exposure_time)/3600/24, 'time in days (arb. starting point)')
+		hdu.header['TSTOP'] = ((timestamp+0.5*self.exposure_time)/3600/24, 'time in days (arb. starting point)')
 		hdu.header['NAXIS'] = (2, 'Number of data dimension')
 		hdu.header['NAXIS1'] = (self.Ncols, 'Number of pixel columns')
 		hdu.header['NAXIS2'] = (self.Nrows, 'Number of pixel rows')
