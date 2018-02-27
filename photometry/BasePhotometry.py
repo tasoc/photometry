@@ -27,6 +27,7 @@ from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian, ss
 from .image_motion import ImageMovementKernel
+from .quality import TESSQualityFlags
 
 __docformat__ = 'restructuredtext'
 
@@ -473,10 +474,11 @@ class BasePhotometry(object):
 			else:
 				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
 				Nimg = np.zeros_like(self._sumimage, dtype='int32')
-				for img in self.images:
-					Nimg += np.isfinite(img)
-					replace(img, np.nan, 0)
-					self._sumimage += img
+				for k, img in enumerate(self.images):
+					if TESSQualityFlags.filter(self.lightcurve['quality'][k]):
+						Nimg += np.isfinite(img)
+						replace(img, np.nan, 0)
+						self._sumimage += img
 				self._sumimage /= Nimg
 
 		return self._sumimage

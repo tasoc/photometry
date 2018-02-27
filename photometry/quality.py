@@ -93,16 +93,16 @@ class TESSQualityFlags(object):
 		return result
 
 	@staticmethod
-	def filter_quality(quality, flags=DEFAULT_BITMASK):
+	def filter(quality, flags=DEFAULT_BITMASK):
 		"""
 		Filter quality flags against a specific set of flags.
-		
+
 		Parameters:
 			quality (integer or ndarray): Quality flags.
 			flags (integer bitmask): Default=``TESSQualityFlags.DEFAULT_BITMASK``.
-		
+
 		Returns:
-			ndarray: ``True`` if quality matches any of the ``flags``, ``False`` otherwise.
-		
+			ndarray: ``True`` if quality DOES NOT contain any of the specified ``flags``, ``False`` otherwise.
+
 		"""
-		return (quality & flags > 0)
+		return (quality & flags == 0)
