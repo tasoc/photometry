@@ -6,82 +6,15 @@ from six.moves import range
 import os
 import numpy as np
 import h5py
-import sqlite3
 import logging
-import astropy.io.fits as pyfits
 from astropy.wcs import WCS
-from astropy.table import Table
 import multiprocessing
 from bottleneck import replace, nanmean
-from photometry.plots import plot_image
 from photometry.backgrounds import fit_background
 from photometry.utilities import load_ffi_fits, load_settings, find_ffi_files
 from photometry.image_motion import ImageMovementKernel
 from photometry import TESSQualityFlags
 from timeit import default_timer
-
-#------------------------------------------------------------------------------
-def create_todo(sector):
-	"""Create the TODO list which is used by the pipeline to keep track of the
-	targets that needs to be processed.
-
-	Will create the file `todo.sqlite` in the `TESSPHOT_INPUT` directory.
-	It will be overwritten if it already exists.
-
-	Parameters:
-		sector (integer): The TESS observing sector.
-
-	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
-	"""
-
-	logger = logging.getLogger(__name__)
-
-	input_folder = os.environ['TESSPHOT_INPUT']
-
-	cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(4,5,6), dtype='float64')
-	cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
-	# Convert data to astropy table for further use:
-	cat = Table(
-		data=cat,
-		names=('starid', 'x', 'y', 'tmag'),
-		dtype=('int64', 'float64', 'float64', 'float32')
-	)
-
-	todo_file = os.path.join(input_folder, 'todo.sqlite')
-	if os.path.exists(todo_file): os.remove(todo_file)
-	conn = sqlite3.connect(todo_file)
-	cursor = conn.cursor()
-
-	cursor.execute("""CREATE TABLE todolist (
-		priority BIGINT NOT NULL,
-		starid BIGINT NOT NULL,
-		datasource TEXT NOT NULL DEFAULT 'ffi',
-		camera INT NOT NULL,
-		ccd INT NOT NULL,
-		method TEXT DEFAULT NULL,
-		status INT DEFAULT NULL,
-		elaptime REAL DEFAULT NULL,
-		x REAL,
-		y REAL,
-		tmag REAL
-	);""")
-
-	indx = (cat['tmag'] <= 20) & (cat['x'] > 0) & (cat['x'] < 2048) & (cat['y'] > 0) & (cat['y'] < 2048)
-	cat = cat[indx]
-	cat.sort('tmag')
-	for pri, row in enumerate(cat):
-		starid = int(row['starid'])
-		tmag = float(row['tmag'])
-		cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,x,y,tmag) VALUES (?,?,?,?,?,?,?);", (pri+1, starid, 1, 1, row['x'], row['y'], tmag))
-
-	cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
-	cursor.execute("CREATE INDEX status_idx ON todolist (status);")
-	cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
-	conn.commit()
-	cursor.close()
-	conn.close()
-
-	logger.info("TODO done.")
 
 #------------------------------------------------------------------------------
 def create_hdf5(sector, camera, ccd):
@@ -117,11 +50,10 @@ def create_hdf5(sector, camera, ccd):
 		return
 
 	# Get image shape from the first file:
-	with pyfits.open(files[0]) as hdulist:
-		prihdr = hdulist[1].header
-		img_shape = (prihdr['NAXIS1'], prihdr['NAXIS2'])
-		img_shape = (2048, 2048)
+	img = load_ffi_fits(files[0])
+	img_shape = img.shape
 
+	# Common settings for HDF5 datasets:
 	args = {
 		'compression': 'lzf',
 		'shuffle': True,
@@ -212,12 +144,12 @@ def create_hdf5(sector, camera, ccd):
 
 				flux0, hdr = load_ffi_fits(fname, return_header=True)
 
-				time[k] = 0.5*(hdr[1]['TSTART'] + hdr[1]['TSTOP']) + hdr[1]['BJDREFI'] + hdr[1]['BJDREFF']
+				time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP']) + hdr['BJDREFI'] + hdr['BJDREFF']
 				cadenceno[k] = k+1
-				quality[k] = hdr[1]['DQUALITY']
+				quality[k] = hdr['DQUALITY']
 
 				if k == 0:
-					num_frm = hdr[1]['NUM_FRM']
+					num_frm = hdr['NUM_FRM']
 				elif hdr[1]['NUM_FRM'] != num_frm:
 					logger.error("NUM_FRM is not constant!")
 
@@ -228,7 +160,7 @@ def create_hdf5(sector, camera, ccd):
 				images.create_dataset(dset_name, data=flux0, **args)
 
 				# Add together images for sum-image:
-				if TESSQualityFlags.filter_quality(quality[k]):
+				if TESSQualityFlags.filter(quality[k]):
 					replace(flux0, np.nan, 0)
 					SumImage += flux0
 
@@ -260,10 +192,10 @@ def create_hdf5(sector, camera, ccd):
 
 			# Save WCS to the file:
 			dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-			dset[0] = hdr[1].tostring().strip().encode('ascii', 'strict') # WCS(hdr[1]).to_header_string()
+			dset[0] = hdr.tostring().strip().encode('ascii', 'strict') # WCS(hdr[1]).to_header_string()
 			dset.attrs['ref_frame'] = refindx
 
-			wcs = WCS(hdr[1])
+			wcs = WCS(hdr)
 			polygon = "(" + ",".join(["(%.12f,%.12f)" % tuple(c) for c in wcs.calc_footprint()]) + ")"
 			print("INSERT INTO tasoc.pointings (sector,camera,ccd,footprint) VALUES (%d,%d,%d,'%s');" % (sector, camera, ccd, polygon))
 
@@ -298,11 +230,6 @@ if __name__ == '__main__':
 	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
 
 	sector = 14
-	camera = 1
-	ccd = 1
-
-	#create_todo(sector)
-	#create_hdf5(sector, 1, 3)
 
 	import itertools
 	for camera, ccd in itertools.product([1,2,3,4], [1,2,3,4]):
