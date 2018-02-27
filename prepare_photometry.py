@@ -150,7 +150,7 @@ def create_hdf5(sector, camera, ccd):
 
 				if k == 0:
 					num_frm = hdr['NUM_FRM']
-				elif hdr[1]['NUM_FRM'] != num_frm:
+				elif hdr['NUM_FRM'] != num_frm:
 					logger.error("NUM_FRM is not constant!")
 
 				# # Load background from HDF file and subtract background from image:
