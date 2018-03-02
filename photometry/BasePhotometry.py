@@ -732,13 +732,17 @@ class BasePhotometry(object):
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
-	def save_lightcurve(self, output_folder):
+	def save_lightcurve(self, output_folder=None):
 		"""
 		Save generated lightcurve to file.
 
 		Parameters:
-			output_folder (string): Path to directory where to save lightcurve.
+			output_folder (string, optional): Path to directory where to save lightcurve. If ``None`` the directory specified in the attribute ``output_folder`` is used.
 		"""
+		
+		# Check if another output folder was provided:
+		if output_folder is None:
+			output_folder = self.output_folder
 
 		# Get the current date for the files:
 		now = datetime.datetime.now()
