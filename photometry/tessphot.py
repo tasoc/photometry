@@ -9,9 +9,9 @@ import logging
 from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 
 #------------------------------------------------------------------------------
-def _try_photometry(PhotClass, starid, input_folder, output_folder, plot):
+def _try_photometry(PhotClass, *args, **kwargs):
 	logger = logging.getLogger(__name__)
-	with PhotClass(starid, input_folder, output_folder, plot=plot) as pho:
+	with PhotClass(*args, **kwargs) as pho:
 		try:
 			pho.photometry()
 			status = pho.status
@@ -31,38 +31,46 @@ def _try_photometry(PhotClass, starid, input_folder, output_folder, plot):
 				pass
 
 		if status == STATUS.OK:
-			pho.save_lightcurve(output_folder)
+			pho.save_lightcurve()
 
 	return pho
 
 #------------------------------------------------------------------------------
-def tessphot(starid=None, method=None, input_folder=None, output_folder=None, plot=None):
+def tessphot(method=None, *args, **kwargs):
 	"""
 	Run the photometry pipeline on a single star.
 
 	This function will run the specified photometry or perform the dynamical
 	scheme of trying simple aperture photometry, evaluating its performance
 	and if nessacery try another algorithm.
+	
+	Parameters:
+		method (string or None): 
+		*args: Arguments passed on to the photometry class init-function.
+		**kwargs: Keyword-arguments passed on to the photometry class init-function.
+		
+	Returns:
+		:py:class:`photometry.BasePhotometry`: Photometry object that inherits from :py:class:`photometry.BasePhotometry`.
 	"""
 
 	logger = logging.getLogger(__name__)
 
 	if method is None:
-		pho = _try_photometry(AperturePhotometry, starid, input_folder, output_folder, plot)
+		pho = _try_photometry(AperturePhotometry, *args, **kwargs)
 
 		if pho.status == STATUS.WARNING:
 			logger.warning("Try something else?")
 			# TODO: If too crowded:
-			# pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder, plot)
+			# pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder, datasource, plot)
 
 	elif method == 'aperture':
-		pho = _try_photometry(AperturePhotometry, starid, input_folder, output_folder, plot)
+		pho = _try_photometry(AperturePhotometry, *args, **kwargs)
 
 	elif method == 'psf':
-		pho = _try_photometry(PSFPhotometry, starid, input_folder, output_folder, plot)
+		pho = _try_photometry(PSFPhotometry, *args, **kwargs)
 
 	elif method == 'linpsf':
-		pho = _try_photometry(LinPSFPhotometry, starid, input_folder, output_folder, plot)
+		pho = _try_photometry(LinPSFPhotometry, *args, **kwargs)
 
 	else:
 		raise ValueError("Invalid method: '{0}'".format(method))

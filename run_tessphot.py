@@ -19,6 +19,7 @@ if __name__ == '__main__':
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
 	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf', 'linpsf'))
+	parser.add_argument('-s', '--source', help='Data-source to load.', default='ffi', choices=('ffi', 'tpf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
@@ -63,12 +64,10 @@ if __name__ == '__main__':
 	f = functools.partial(tessphot, input_folder=input_folder, output_folder=output_folder, plot=args.plot)
 
 	# Run the program:
-	with TaskManager(input_folder) as tm:
-		if args.starid is not None:
-			task = {'starid': args.starid, 'method': args.method}
-			pho = f(**task)
-
-		elif args.random:
+	if args.starid is not None:
+		pho = f(starid=args.starid, method=args.method, datasource=args.source)
+	elif args.random:
+		with TaskManager(input_folder) as tm:
 			task = tm.get_random_task()
 			del task['priority']
 			pho = f(**task)
