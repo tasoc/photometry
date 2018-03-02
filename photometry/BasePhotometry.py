@@ -140,6 +140,10 @@ class BasePhotometry(object):
 		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
 		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
 		self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
+		cursor.execute("SELECT reference_time FROM settings LIMIT 1;")
+		target = cursor.fetchone()
+		if target is not None:
+			self._catalog_reference_time = target['reference_time']
 		cursor.close()
 		conn.close()
 
@@ -630,18 +634,27 @@ class BasePhotometry(object):
 				self._MovementKernel.load_series(self.lightcurve['time'], self.hdf['movement_kernel'])
 			elif self.datasource == 'tpf':
 				# Create translation kernel from the positions provided in the
-				# target pixel file. The first timestamp is used as the reference:
-				# FIXME: Should use the same reference as self.catalog!
+				# target pixel file.
+				# Find the timestamp closest to the reference time:
+				refindx = np.searchsorted(self.lightcurve['time'], self._catalog_reference_time, side='left')
+				if refindx > 0 and (refindx == len(self.lightcurve['time']) or abs(self._catalog_reference_time - self.lightcurve['time'][refindx-1]) < abs(self._catalog_reference_time - self.lightcurve['time'][refindx])):
+					refindx -= 1
+				# Load kernels from FITS file, and rescale the reference point:
 				kernels = self.tpf[1].data[('POS_CORR1', 'POS_CORR2')]
-				kernels[:, 0] -= kernels[0, 0]
-				kernels[:, 1] -= kernels[0, 1]
+				kernels[:, 0] -= kernels[refindx, 0]
+				kernels[:, 1] -= kernels[refindx, 1]
+				# Create kernel:
 				self._MovementKernel = ImageMovementKernel(warpmode='translation')
 				self._MovementKernel.load_series(self.lightcurve['time'], kernels)
 			else:
 				# If we reached this point, we dont have enough information to
 				# define the ImageMovementKernel, so we should just return the
 				# unaltered catalog:
-				return self.catalog
+				self._MovementKernel = 'unchanged'
+
+		# If we didn't have enough information, just return the unchanged catalog:
+		if self._MovementKernel == 'unchanged':
+			return self.catalog
 
 		# Get the reference catalog:
 		xy = np.column_stack((self.catalog['column'], self.catalog['row']))
