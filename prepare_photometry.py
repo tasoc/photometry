@@ -3,18 +3,20 @@
 
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range
+import argparse
 import os
 import numpy as np
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
 import logging
-from astropy.wcs import WCS
 import multiprocessing
 from bottleneck import replace, nanmean
 from photometry.backgrounds import fit_background
 from photometry.utilities import load_ffi_fits, load_settings, find_ffi_files
-from photometry.image_motion import ImageMovementKernel
-from photometry import TESSQualityFlags
+from photometry import TESSQualityFlags, ImageMovementKernel
 from timeit import default_timer
+import itertools
 
 #------------------------------------------------------------------------------
 def create_hdf5(sector, camera, ccd):
@@ -150,7 +152,7 @@ def create_hdf5(sector, camera, ccd):
 
 				if k == 0:
 					num_frm = hdr['NUM_FRM']
-				elif hdr[1]['NUM_FRM'] != num_frm:
+				elif hdr['NUM_FRM'] != num_frm:
 					logger.error("NUM_FRM is not constant!")
 
 				# # Load background from HDF file and subtract background from image:
@@ -192,12 +194,8 @@ def create_hdf5(sector, camera, ccd):
 
 			# Save WCS to the file:
 			dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-			dset[0] = hdr.tostring().strip().encode('ascii', 'strict') # WCS(hdr[1]).to_header_string()
+			dset[0] = hdr.tostring().strip().encode('ascii', 'strict')
 			dset.attrs['ref_frame'] = refindx
-
-			wcs = WCS(hdr)
-			polygon = "(" + ",".join(["(%.12f,%.12f)" % tuple(c) for c in wcs.calc_footprint()]) + ")"
-			print("INSERT INTO tasoc.pointings (sector,camera,ccd,footprint) VALUES (%d,%d,%d,'%s');" % (sector, camera, ccd, polygon))
 
 			# Calculate image motion:
 			imk = ImageMovementKernel(image_ref=ref_image, warpmode='translation')
@@ -217,21 +215,33 @@ def create_hdf5(sector, camera, ccd):
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
 
+	# Parse command line arguments:
+	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
+	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
+	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
+	parser.add_argument('sector', type=int, help='TESS observing sector.')
+	args = parser.parse_args()
+
+	if args.quiet:
+		logging_level = logging.WARNING
+	elif args.debug:
+		logging_level = logging.DEBUG
+	else:
+		logging_level = logging.INFO
+
 	# Setup logging:
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-
 	logger = logging.getLogger(__name__)
-	logger.setLevel(logging.INFO)
+	logger.setLevel(logging_level)
 	console = logging.StreamHandler()
 	console.setFormatter(formatter)
 	logger_parent = logging.getLogger('photometry')
-	logger_parent.setLevel(logging.INFO)
+	logger_parent.setLevel(logging_level)
 	if not logger.hasHandlers(): logger.addHandler(console)
 	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
 
 	sector = 14
 
-	import itertools
 	for camera, ccd in itertools.product([1,2,3,4], [1,2,3,4]):
 		create_hdf5(sector, camera, ccd)
-
