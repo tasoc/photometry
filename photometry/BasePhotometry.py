@@ -20,7 +20,6 @@ import sqlite3
 import logging
 import datetime
 import os.path
-from glob import glob
 from copy import deepcopy
 #from astropy import time, coordinates, units
 from astropy.wcs import WCS
@@ -28,6 +27,7 @@ import enum
 from bottleneck import replace, nanmedian, ss
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
+from .utilities import find_tpf_files
 
 __docformat__ = 'restructuredtext'
 
@@ -98,17 +98,12 @@ class BasePhotometry(object):
 
 		logger = logging.getLogger(__name__)
 
+		# Store the input:
 		self.starid = starid
 		self.input_folder = input_folder
 		self.output_folder = output_folder
 		self.plot = plot
 		self.datasource = datasource
-
-		# TODO: These should also come from the catalog somehow
-		#       They will be needed to find the correct input files
-		self.sector = 0 # TESS observing sector.
-		self.camera = 1 # TESS camera.
-		self.ccd = 1 # TESS CCD.
 
 		self._status = STATUS.UNKNOWN
 		self._details = {}
@@ -123,34 +118,16 @@ class BasePhotometry(object):
 			if not os.path.exists(self.plot_folder):
 				os.makedirs(self.plot_folder) # "exists_ok=True" doesn't work in Python 2.7
 
-		# The file to load the star catalog from:
-		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
-		self._catalog = None
-
-		# Load information about main target:
-		conn = sqlite3.connect(self.catalog_file)
-		conn.row_factory = sqlite3.Row
-		cursor = conn.cursor()
-		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,tmag FROM catalog WHERE starid={0:d};".format(self.starid))
-		target = cursor.fetchone()
-		if target is None:
-			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
-		self.target_tmag = target['tmag'] # TESS magnitude of the main target.
-		self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
-		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
-		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
-		self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
-		cursor.execute("SELECT reference_time FROM settings LIMIT 1;")
-		target = cursor.fetchone()
-		if target is not None:
-			self._catalog_reference_time = target['reference_time']
-		cursor.close()
-		conn.close()
-
 		# Init table that will be filled with lightcurve stuff:
-		self.lightcurve = Table() # Table to be filled with an extracted lightcurve
+		self.lightcurve = Table()
 
 		if self.datasource == 'ffi':
+			# FIXME: These should also come from the catalog somehow
+			#        They will be needed to find the correct input files
+			self.sector = 0 # TESS observing sector.
+			self.camera = 1 # TESS camera.
+			self.ccd = 1 # TESS CCD.
+			
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
 			self.hdf = h5py.File(filepath_hdf5, 'r')
@@ -158,7 +135,9 @@ class BasePhotometry(object):
 			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
 			self.lightcurve['timecorr'] = Column(np.zeros(len(self.hdf['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
+			self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
 
+			# World Coordinate System solution:
 			hdr_string = self.hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
 			hdr = fits.Header().fromstring(hdr_string)
@@ -182,12 +161,7 @@ class BasePhotometry(object):
 
 		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
-			fname = glob(os.path.join(
-				input_folder,
-				'images',
-				'{0:011d}'.format(self.starid)[:6],
-				'tess??????????????-{0:011d}-????-[xsab]_tp.fits.gz'.format(self.starid)
-			))
+			fname = find_tpf_files(os.path.join(input_folder, 'images'), self.starid)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
@@ -198,24 +172,59 @@ class BasePhotometry(object):
 			# Open the FITS file:
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
 
+			# Load sector, camera and CCD from the FITS header:
+			self.sector = self.tpf[0].header['SECTOR']
+			self.camera = self.tpf[0].header['CAMERA']
+			self.ccd = self.tpf[0].header['CCD']
+
 			# Extract the relevant information from the FITS file:
 			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64')
 			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
+			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
 
-			self.wcs = WCS(header=self.tpf[2].header) # World Coordinate system solution
+			# World Coordinate System solution:
+			self.wcs = WCS(header=self.tpf[2].header)
 
 			self._max_stamp_size = (self.tpf[2].header['NAXIS1'], self.tpf[2].header['NAXIS2'])
-			self.n_readout = self.tpf[1].header['NUM_FRM'] # Number of frames co-added in each timestamp.
+			
+			# Get info for psf fit Gaussian statistic:
+			self.readnoise = self.hdf['images'].attrs.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
+			self.gain = self.tpf[1].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
+			self.n_readout = self.tpf[1].header.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
 
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)
+
+		# The file to load the star catalog from:
+		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
+		self._catalog = None
+		logger.debug('Catalog file: %s', self.catalog_file)
+
+		# Load information about main target:
+		conn = sqlite3.connect(self.catalog_file)
+		conn.row_factory = sqlite3.Row
+		cursor = conn.cursor()
+		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,tmag FROM catalog WHERE starid={0:d};".format(self.starid))
+		target = cursor.fetchone()
+		if target is None:
+			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
+		self.target_tmag = target['tmag'] # TESS magnitude of the main target.
+		self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
+		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
+		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
+		self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
+		cursor.execute("SELECT reference_time FROM settings LIMIT 1;")
+		target = cursor.fetchone()
+		if target is not None:
+			self._catalog_reference_time = target['reference_time']
+		cursor.close()
+		conn.close()
 
 		# Define the columns that have to be filled by the do_photometry method:
 		N = len(self.lightcurve['time'])
 		self.lightcurve['flux'] = Column(length=N, description='Flux', dtype='float64')
 		self.lightcurve['flux_background'] = Column(length=N, description='Background flux', dtype='float64')
-		self.lightcurve['quality'] = Column(length=N, description='Quality flags', dtype='int32')
 		self.lightcurve['pos_centroid'] = Column(length=N, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
 
 		# Init arrays that will be filled with lightcurve stuff:
@@ -223,16 +232,14 @@ class BasePhotometry(object):
 		self.additional_headers = {} # Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
-		self.target_pos_column = None # Main target CCD column position.
-		self.target_pos_row = None # Main target CCD row position.
-		self.target_pos_column_stamp = None # Main target CCD column position in stamp.
-		self.target_pos_row_stamp = None # Main target CCD row position in stamp.
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
 		logger.info("Target column: %f", self.target_pos_column)
 		logger.info("Target row: %f", self.target_pos_row)
 
 		# Init the stamp:
 		self._stamp = None
+		self.target_pos_column_stamp = None # Main target CCD column position in stamp.
+		self.target_pos_row_stamp = None # Main target CCD row position in stamp.
 		self._set_stamp()
 		self._sumimage = None
 

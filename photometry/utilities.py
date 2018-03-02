@@ -216,9 +216,9 @@ def mag2flux(mag):
 	aperture photometry. This is an estimate.
 
 	Parameters:
-		mag (float) : Magnitude in TESS band.
+		mag (float): Magnitude in TESS band.
 
 	Returns:
-		float : Corresponding flux value
+		float: Corresponding flux value
 	"""
 	return 10**(-0.4*(mag - 28.24))
