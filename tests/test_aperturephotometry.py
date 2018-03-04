@@ -18,12 +18,12 @@ def test_aperturephotometry():
 
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 	OUTPUT_DIR = tempfile.mkdtemp(prefix='tessphot_tests_aperture')
-	DUMMY_TARGET = 143159
+	DUMMY_TARGET = 471012650
 
 	with AperturePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, plot=True) as pho:
 
 		pho.photometry()
-		pho.save_lightcurve(OUTPUT_DIR)
+		pho.save_lightcurve()
 		print( pho.lightcurve )
 
 		# It should set the status to one of these:

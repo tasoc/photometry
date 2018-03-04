@@ -15,7 +15,7 @@ from photometry import BasePhotometry
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 OUTPUT_DIR = '.'
-DUMMY_TARGET = 143159
+DUMMY_TARGET = 471012650
 
 def test_stamp():
 	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR) as pho:
