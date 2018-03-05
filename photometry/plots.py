@@ -51,7 +51,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	else:
 		raise ValueError("scale {} is not available.".format(scale))
 
-	extent = (0, image.shape[0], 0, image.shape[1])
+	extent = (0, image.shape[1], 0, image.shape[0])
 
 	if ax is None:
 		ax = plt.gca()
@@ -60,8 +60,8 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if not xlabel is None: ax.set_xlabel(xlabel)
 	if not ylabel is None: ax.set_ylabel(ylabel)
 	if not title is None: ax.set_title(title)
-	ax.set_xlim([0, image.shape[0]])
-	ax.set_ylim([0, image.shape[1]])
+	ax.set_xlim([0, image.shape[1]])
+	ax.set_ylim([0, image.shape[0]])
 
 	if make_cbar:
 		cbar = plt.colorbar(im, norm=norm)
