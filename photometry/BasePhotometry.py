@@ -79,7 +79,8 @@ class BasePhotometry(object):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	def __init__(self, starid, input_folder, output_folder, datasource='ffi', plot=False):
+	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
+		camera=None, ccd=None, plot=False):
 		"""
 		Initialize the photometry object.
 
@@ -89,6 +90,8 @@ class BasePhotometry(object):
 			output_folder (string): Root directory where output files are saved.
 			datasource (string, optional): Source of the data. Options are ``'ffi'`` or ``'tpf'``. Default is ``'ffi'``.
 			plot (boolean, optional): Create plots as part of the output. Default is ``False``.
+			camera (integer, optional): TESS camera (1-4) to load target from (Only used for FFIs).
+			ccd (integer, optional): TESS CCD (1-4) to load target from (Only used for FFIs).
 
 		Raises:
 			IOError: If starid could not be found in catalog.
@@ -104,7 +107,9 @@ class BasePhotometry(object):
 		self.output_folder = output_folder
 		self.plot = plot
 		self.datasource = datasource
-
+		
+		logger.debug('DATASOURCE = %s', self.datasource)
+		
 		self._status = STATUS.UNKNOWN
 		self._details = {}
 		self.tpf = None
@@ -124,9 +129,14 @@ class BasePhotometry(object):
 		if self.datasource == 'ffi':
 			# FIXME: These should also come from the catalog somehow
 			#        They will be needed to find the correct input files
-			self.sector = 0 # TESS observing sector.
-			self.camera = 1 # TESS camera.
-			self.ccd = 1 # TESS CCD.
+			if camera is None or ccd is None:
+				raise ValueError("CAMERA and CCD keywords must be provided for FFI targets.")
+				
+			self.camera = camera # TESS camera.
+			self.ccd = ccd # TESS CCD.
+			
+			logger.debug('CAMERA = %s', self.camera)
+			logger.debug('CCD = %s', self.ccd)
 			
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
@@ -189,7 +199,7 @@ class BasePhotometry(object):
 			self._max_stamp_size = (self.tpf[2].header['NAXIS1'], self.tpf[2].header['NAXIS2'])
 			
 			# Get info for psf fit Gaussian statistic:
-			self.readnoise = self.hdf['images'].attrs.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
+			self.readnoise = self.tpf[1].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
 			self.gain = self.tpf[1].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
 			self.n_readout = self.tpf[1].header.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
 
@@ -214,10 +224,11 @@ class BasePhotometry(object):
 		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
 		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
 		self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
-		cursor.execute("SELECT reference_time FROM settings LIMIT 1;")
+		cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
 		target = cursor.fetchone()
 		if target is not None:
 			self._catalog_reference_time = target['reference_time']
+			self.sector = target['sector']
 		cursor.close()
 		conn.close()
 

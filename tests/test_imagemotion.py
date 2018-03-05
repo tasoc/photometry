@@ -11,15 +11,15 @@ import glob
 import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.image_motion import ImageMovementKernel
-from photometry.utilities import load_ffi_fits
+from photometry.utilities import find_ffi_files, load_ffi_fits
 
 def test_imagemotion():
 	"""Test of ImageMovementKernel"""
 
 	# Load the first image in the input directory:
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input', 'images')
-	files = glob.glob(os.path.join(INPUT_DIR, '*.fits.gz'))
-	fname = sorted(files)[0]
+	files = find_ffi_files(INPUT_DIR, camera=1, ccd=1)
+	fname = files[0]
 
 	# Load the image:
 	img = load_ffi_fits(fname)

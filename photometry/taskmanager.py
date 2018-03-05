@@ -40,7 +40,7 @@ class TaskManager(object):
 
 		# Reset the status of everything for a new run:
 		# TODO: This should obviously be removed once we start running for real
-		self.cursor.execute("UPDATE todolist SET status=NULL,elaptime=NULL;")
+		self.cursor.execute("UPDATE todolist SET status=NULL;")
 		self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
 		self.conn.commit()
 
@@ -48,6 +48,7 @@ class TaskManager(object):
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
 			priority INT PRIMARY KEY NOT NULL,
 			starid BIGINT NOT NULL,
+			elaptime REAL NOT NULL,
 			mean_flux DOUBLE PRECISION,
 			variance DOUBLE PRECISION,
 			mask_size INT,
@@ -96,7 +97,7 @@ class TaskManager(object):
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method FROM todolist WHERE status IS NULL ORDER BY priority LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,camera,ccd FROM todolist WHERE status IS NULL ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -108,7 +109,7 @@ class TaskManager(object):
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,camera,ccd FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -121,7 +122,7 @@ class TaskManager(object):
 			results (dict): Dictionary of results and diagnostics.
 		"""
 		# Update the status in the TODO list:
-		self.cursor.execute("UPDATE todolist SET status=?,elaptime=? WHERE priority=?;", (result['status'].value, result['time'], result['priority']))
+		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (result['status'].value, result['priority']))
 
 		# Also set status of targets that were marked as "SKIPPED" by this target:
 		if 'skip_targets' in result['details'] and len(result['details']['skip_targets']) > 0:
@@ -134,9 +135,10 @@ class TaskManager(object):
 		# Save additional diagnostics:
 		error_msg = result['details'].get('errors', None)
 		if error_msg: error_msg = '\n'.join(error_msg)
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT INTO diagnostics (priority, starid, elaptime, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
+			result['time'],
 			result['details'].get('pos_centroid', (None, None))[0],
 			result['details'].get('pos_centroid', (None, None))[1],
 			result['details'].get('mean_flux', None),

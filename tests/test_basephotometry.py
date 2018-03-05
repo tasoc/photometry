@@ -18,7 +18,7 @@ OUTPUT_DIR = '.'
 DUMMY_TARGET = 471012650
 
 def test_stamp():
-	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR) as pho:
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
 		pho._set_stamp()
@@ -52,7 +52,7 @@ def test_stamp():
 		assert(cols.shape == (22, 20))
 
 def test_images():
-	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR) as pho:
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
 		pho._set_stamp()
@@ -61,7 +61,7 @@ def test_images():
 			assert(img.shape == (10, 20))
 
 def test_backgrounds():
-	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR) as pho:
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
 		pho._stamp = (0, 10, 0, 20)
 		pho._set_stamp()
@@ -70,7 +70,7 @@ def test_backgrounds():
 			assert(img.shape == (10, 20))
 
 def test_catalog():
-	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR) as pho:
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 		print(pho.catalog)
 		assert(DUMMY_TARGET in pho.catalog['starid'])
 
@@ -80,7 +80,7 @@ def test_catalog():
 		assert(pho.target_pos_dec <= np.max(pho.catalog['dec']))
 
 def test_catalog_attime():
-	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR) as pho:
+	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
 		time = pho.lightcurve['time']
 

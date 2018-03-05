@@ -24,8 +24,10 @@ def test_taskmanager():
 		
 		# Check that it contains what we know it should:
 		assert(task['priority'] == 1)
-		assert(task['starid'] == 332979)	
+		assert(task['starid'] == 471012650)
+		assert(task['camera'] == 2)
+		assert(task['ccd'] == 2)
 	
-	
+
 if __name__ == '__main__':
 	test_taskmanager()
