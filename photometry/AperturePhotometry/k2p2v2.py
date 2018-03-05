@@ -564,9 +564,9 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 
 							ax2 = fig.add_subplot(122)
 							plot_image(SumImage, ax=ax2, scale='log')
-							ax2.plot(outline_before[u][:,0], outline_before[u][:,1], 'r:')
-							ax2.plot(outline[:,0], outline[:,1], 'r-')
-							ax2.axvline(c, color='r', ls='--')
+							ax2.plot(outline_before[u][:,0]+0.5, outline_before[u][:,1]+0.5, 'r:')
+							ax2.plot(outline[:,0]+0.5, outline[:,1]+0.5, 'r-')
+							ax2.axvline(c+0.5, color='r', ls='--')
 
 							pdf.savefig(fig)
 							plt.close(fig)
@@ -626,8 +626,10 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 						 markeredgecolor='k', markersize=5)
 
 		ax2.set_title("Clustering + Watershed")
+		ax2.set_xlim([-0.5, SumImage.shape[1]-0.5])
+		ax2.set_ylim([-0.5, SumImage.shape[0]-0.5])
 		ax2.set_aspect('equal')
-
+		
 		# ---------------
 		# PLOT 4
 		ax4 = fig0.add_subplot(154)
