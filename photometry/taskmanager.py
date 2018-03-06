@@ -90,14 +90,23 @@ class TaskManager(object):
 		num = int(self.cursor.fetchone()['num'])
 		return num
 
-	def get_task(self):
+	def get_task(self, starid=None):
 		"""
 		Get next task to be processed.
 
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd FROM todolist WHERE status IS NULL ORDER BY priority LIMIT 1;")
+		constraints = []
+		if starid is not None:
+			constraints.append("starid=%d" % starid)
+			
+		if constraints:
+			constraints = " AND " + " AND ".join(constraints)
+		else:
+			constraints = ''
+			
+		self.cursor.execute("SELECT priority,starid,method,camera,ccd FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
