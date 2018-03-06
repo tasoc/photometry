@@ -19,7 +19,7 @@ from astropy.visualization import (PercentileInterval, ImageNormalize,
 
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 			   ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)',
-			   title=None, percentile=95.0, ax=None, cmap=plt.cm.Blues, **kwargs):
+			   title=None, percentile=95.0, ax=None, cmap=plt.cm.Blues, offset_axes=None, **kwargs):
 	"""
 	Utility function to plot a 2D image.
 
@@ -51,7 +51,10 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	else:
 		raise ValueError("scale {} is not available.".format(scale))
 
-	extent = (0, image.shape[1], 0, image.shape[0])
+	if offset_axes:
+		extent = (offset_axes[0], offset_axes[0] + image.shape[1], offset_axes[1], offset_axes[1] + image.shape[0])	
+	else:
+		extent = (0, image.shape[1], 0, image.shape[0])
 
 	if ax is None:
 		ax = plt.gca()
@@ -60,8 +63,8 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if not xlabel is None: ax.set_xlabel(xlabel)
 	if not ylabel is None: ax.set_ylabel(ylabel)
 	if not title is None: ax.set_title(title)
-	ax.set_xlim([0, image.shape[1]])
-	ax.set_ylim([0, image.shape[0]])
+	ax.set_xlim([extent[0], extent[1]])
+	ax.set_ylim([extent[2], extent[3]])
 
 	if make_cbar:
 		cbar = plt.colorbar(im, norm=norm)
