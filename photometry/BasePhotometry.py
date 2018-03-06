@@ -28,6 +28,7 @@ from bottleneck import replace, nanmedian, ss
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
 from .utilities import find_tpf_files
+from .plots import plot_image, plt, save_figure
 
 __docformat__ = 'restructuredtext'
 
@@ -162,7 +163,9 @@ class BasePhotometry(object):
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
 			# Get shape of sumimage from hdf5 file:
-			self._max_stamp_size = self.hdf['sumimage'].shape
+			self._max_stamp = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
+			self.pixel_offset_row = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+			self.pixel_offset_col = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
 
 			# Get info for psf fit Gaussian statistic:
 			self.readnoise = self.hdf['images'].attrs.get('READNOIS', 10)
@@ -196,7 +199,19 @@ class BasePhotometry(object):
 			# World Coordinate System solution:
 			self.wcs = WCS(header=self.tpf[2].header)
 
-			self._max_stamp_size = (self.tpf[2].header['NAXIS1'], self.tpf[2].header['NAXIS2'])
+			self._max_stamp = (
+				self.tpf[2].header['CRVAL2P'] - 1,
+				self.tpf[2].header['CRVAL2P'] - 1 + self.tpf[2].header['NAXIS1'],
+				self.tpf[2].header['CRVAL1P'] - 1,
+				self.tpf[2].header['CRVAL1P'] - 1 + self.tpf[2].header['NAXIS2']
+			)
+			self.pixel_offset_row = self.tpf[2].header['CRVAL2P'] - 1
+			self.pixel_offset_col = self.tpf[2].header['CRVAL1P'] - 1
+					
+			logger.debug('Max stamp size: (%d, %d)',
+				self._max_stamp[1] - self._max_stamp[0], 
+				self._max_stamp[2] - self._max_stamp[3]
+			)
 			
 			# Get info for psf fit Gaussian statistic:
 			self.readnoise = self.tpf[1].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
@@ -244,6 +259,9 @@ class BasePhotometry(object):
 
 		# Project target position onto the pixel plane:
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
+		if self.datasource == 'tpf':
+			self.target_pos_column += self.pixel_offset_col
+			self.target_pos_row += self.pixel_offset_row
 		logger.info("Target column: %f", self.target_pos_column)
 		logger.info("Target row: %f", self.target_pos_row)
 
@@ -358,23 +376,25 @@ class BasePhotometry(object):
 		if not self._stamp:
 			if self.datasource == 'ffi':
 				Nrows, Ncolumns = self.default_stamp()
+				logger.info("Setting default stamp with sizes (%d,%d)", Nrows, Ncolumns)
+				self._stamp = (
+					int(self.target_pos_row) - Nrows//2,
+					int(self.target_pos_row) + Nrows//2 + 1,
+					int(self.target_pos_column) - Ncolumns//2,
+					int(self.target_pos_column) + Ncolumns//2 + 1
+				)
 			else:
-				Nrows, Ncolumns = self._max_stamp_size
-
-			logger.info("Setting default stamp with sizes (%d,%d)", Nrows, Ncolumns)
-			self._stamp = (
-				int(self.target_pos_row) - Nrows//2,
-				int(self.target_pos_row) + Nrows//2 + 1,
-				int(self.target_pos_column) - Ncolumns//2,
-				int(self.target_pos_column) + Ncolumns//2 + 1
-			)
+				Nrows = self._max_stamp[1] - self._max_stamp[0]
+				Ncolumns = self._max_stamp[3] - self._max_stamp[2]
+				logger.info("Setting default stamp with sizes (%d,%d)", Nrows, Ncolumns)
+				self._stamp = self._max_stamp
 
 		# Limit the stamp to not go outside the limits of the images:
 		self._stamp = list(self._stamp)
-		self._stamp[0] = int(np.maximum(self._stamp[0], 0))
-		self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp_size[0]))
-		self._stamp[2] = int(np.maximum(self._stamp[2], 0))
-		self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp_size[1]))
+		self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0]))
+		self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1]))
+		self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2]))
+		self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3]))
 		self._stamp = tuple(self._stamp)
 
 		# Sanity checks:
@@ -444,10 +464,11 @@ class BasePhotometry(object):
 		"""
 		if self.datasource == 'ffi':
 			for k in range(len(self.hdf['images'])):
-				yield self.hdf['images/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+				yield self.hdf['images/%04d' % k][self._stamp[0]:self._stamp[1], (self._stamp[2]-self.pixel_offset_col):(self._stamp[3]-self.pixel_offset_col)]
 		else:
 			for k in range(self.tpf[1].header['NAXIS2']):
-				yield self.tpf[1].data['FLUX'][k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+				# TODO: include stamp!
+				yield self.tpf[1].data['FLUX'][k][:, :]
 
 	@property
 	def backgrounds(self):
@@ -473,10 +494,11 @@ class BasePhotometry(object):
 		"""
 		if self.datasource == 'ffi':
 			for k in range(len(self.hdf['backgrounds'])):
-				yield self.hdf['backgrounds/%04d' % k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+				yield self.hdf['backgrounds/%04d' % k][self._stamp[0]:self._stamp[1], (self._stamp[2]-self.pixel_offset_col):(self._stamp[3]-self.pixel_offset_col)]
 		else:
+			# TODO: include stamp!
 			for k in range(self.tpf[1].header['NAXIS2']):
-				yield self.tpf[1].data['FLUX_BKG'][k][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+				yield self.tpf[1].data['FLUX_BKG'][k][:, :]
 
 	@property
 	def sumimage(self):
@@ -492,7 +514,7 @@ class BasePhotometry(object):
 		"""
 		if self._sumimage is None:
 			if self.datasource == 'ffi':
-				self._sumimage = self.hdf['sumimage'][self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+				self._sumimage = self.hdf['sumimage'][self._stamp[0]:self._stamp[1], (self._stamp[2]-self.pixel_offset_col):(self._stamp[3]-self.pixel_offset_col)]
 			else:
 				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
 				Nimg = np.zeros_like(self._sumimage, dtype='int32')
@@ -502,6 +524,14 @@ class BasePhotometry(object):
 						replace(img, np.nan, 0)
 						self._sumimage += img
 				self._sumimage /= Nimg
+				
+			if self.plot:
+				fig = plt.figure()
+				ax = fig.add_subplot(111)
+				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2], self._stamp[0]))
+				ax.plot(self.target_pos_column, self.target_pos_row, 'r+')
+				save_figure(os.path.join(self.plot_folder, 'sumimage'), fig=fig)
+				plt.close(fig)
 
 		return self._sumimage
 
@@ -541,6 +571,11 @@ class BasePhotometry(object):
 				[self._stamp[3], self._stamp[0]],
 				[self._stamp[3], self._stamp[1]]
 			], dtype='int32')
+			# Because the TPF world coordinate solution is relative to the stamp,
+			# add the pixel offset to these:
+			if self.datasource == 'tpf':
+				corners[:, 0] -= self.pixel_offset_col
+				corners[:, 1] -= self.pixel_offset_row
 
 			# Convert the corners into (ra, dec) coordinates and find the max and min values:
 			pixel_scale = 21.0 # Size of single pixel in arcsecs
@@ -607,27 +642,42 @@ class BasePhotometry(object):
 			cursor.close()
 			conn.close()
 
-			# Convert data to astropy table for further use:
-			self._catalog = Table(
-				rows=cat,
-				names=('starid', 'ra', 'dec', 'tmag'),
-				dtype=('int64', 'float64', 'float64', 'float32')
-			)
-
-			# Use the WCS to find pixel coordinates of stars in mask:
-			pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)
-			col_x = Column(data=pixel_coords[:,0], name='column', dtype='float32')
-			col_y = Column(data=pixel_coords[:,1], name='row', dtype='float32')
-
-			# Subtract the positions of the edge of the current stamp:
-			pixel_coords[:,0] -= self._stamp[2]
-			pixel_coords[:,1] -= self._stamp[0]
-
-			# Add the pixel positions to the catalog table:
-			col_x_stamp = Column(data=pixel_coords[:,0], name='column_stamp', dtype='float32')
-			col_y_stamp = Column(data=pixel_coords[:,1], name='row_stamp', dtype='float32')
-
-			self._catalog.add_columns([col_x, col_y, col_x_stamp, col_y_stamp])
+			if not cat:
+				# Nothing was found. Return an empty table with the correct format:
+				self._catalog = Table(
+					names=('starid', 'ra', 'dec', 'tmag', 'column', 'row', 'column_stamp', 'row_stamp'),
+					dtype=('int64', 'float64', 'float64', 'float32', 'float32', 'float32', 'float32', 'float32')
+				)
+			else:
+				# Convert data to astropy table for further use:
+				self._catalog = Table(
+					rows=cat,
+					names=('starid', 'ra', 'dec', 'tmag'),
+					dtype=('int64', 'float64', 'float64', 'float32')
+				)
+	
+				# Use the WCS to find pixel coordinates of stars in mask:
+				pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)
+				
+				# Because the TPF world coordinate solution is relative to the stamp,
+				# add the pixel offset to these:
+				if self.datasource == 'tpf':
+					pixel_coords[:,0] += self.pixel_offset_col
+					pixel_coords[:,1] += self.pixel_offset_row
+				
+				# Create columns with pixel coordinates:
+				col_x = Column(data=pixel_coords[:,0], name='column', dtype='float32')
+				col_y = Column(data=pixel_coords[:,1], name='row', dtype='float32')
+	
+				# Subtract the positions of the edge of the current stamp:
+				pixel_coords[:,0] -= self._stamp[2]
+				pixel_coords[:,1] -= self._stamp[0]
+	
+				# Add the pixel positions to the catalog table:
+				col_x_stamp = Column(data=pixel_coords[:,0], name='column_stamp', dtype='float32')
+				col_y_stamp = Column(data=pixel_coords[:,1], name='row_stamp', dtype='float32')
+	
+				self._catalog.add_columns([col_x, col_y, col_x_stamp, col_y_stamp])
 
 		return self._catalog
 
@@ -658,7 +708,7 @@ class BasePhotometry(object):
 				if refindx > 0 and (refindx == len(self.lightcurve['time']) or abs(self._catalog_reference_time - self.lightcurve['time'][refindx-1]) < abs(self._catalog_reference_time - self.lightcurve['time'][refindx])):
 					refindx -= 1
 				# Load kernels from FITS file, and rescale the reference point:
-				kernels = self.tpf[1].data[('POS_CORR1', 'POS_CORR2')]
+				kernels = np.column_stack((self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']))
 				kernels[:, 0] -= kernels[refindx, 0]
 				kernels[:, 1] -= kernels[refindx, 1]
 				# Create kernel:

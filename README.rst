@@ -34,7 +34,7 @@ Depending on your operating system and shell this is done in slightly different 
 
 The photometry program can by run on a single star by running the program::
 
-  >>> python run_tessphot.py 143159
+  >>> python run_tessphot.py 182092046
 
 Here, the number gives the TIC identifier of the star. The program accepts various other command-line parameters - Try running::
 

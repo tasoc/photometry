@@ -70,24 +70,36 @@ def test_backgrounds():
 			assert(img.shape == (10, 20))
 
 def test_catalog():
-	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
-		print(pho.catalog)
-		assert(DUMMY_TARGET in pho.catalog['starid'])
-
-		assert(pho.target_pos_ra >= np.min(pho.catalog['ra']))
-		assert(pho.target_pos_ra <= np.max(pho.catalog['ra']))
-		assert(pho.target_pos_dec >= np.min(pho.catalog['dec']))
-		assert(pho.target_pos_dec <= np.max(pho.catalog['dec']))
+	for datasource in ('ffi', 'tpf'):
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+			print(pho.catalog)
+			assert(DUMMY_TARGET in pho.catalog['starid'])
+	
+			assert(pho.target_pos_ra >= np.min(pho.catalog['ra']))
+			assert(pho.target_pos_ra <= np.max(pho.catalog['ra']))
+			assert(pho.target_pos_dec >= np.min(pho.catalog['dec']))
+			assert(pho.target_pos_dec <= np.max(pho.catalog['dec']))
+			
+			indx_main = (pho.catalog['starid'] == DUMMY_TARGET)
+			
+			# Test the real position - TODO: How do we find this?
+			#np.testing.assert_allclose(pho.target_pos_column, 1978.082)
+			#np.testing.assert_allclose(pho.target_pos_row, 652.5701)
+			
+			np.testing.assert_allclose(pho.catalog[indx_main]['column'], pho.target_pos_column)
+			np.testing.assert_allclose(pho.catalog[indx_main]['row'], pho.target_pos_row)
+		
 
 def test_catalog_attime():
-	with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
-
-		time = pho.lightcurve['time']
-
-		cat = pho.catalog_attime(time[0])
-
-		assert(cat.colnames == pho.catalog.colnames)
-		# TODO: Add more tests here, once we change the test input data
+	for datasource in ('ffi', 'tpf'):
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+	
+			time = pho.lightcurve['time']
+	
+			cat = pho.catalog_attime(time[0])
+	
+			assert(cat.colnames == pho.catalog.colnames)
+			# TODO: Add more tests here, once we change the test input data
 
 
 if __name__ == '__main__':
