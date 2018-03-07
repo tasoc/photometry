@@ -63,6 +63,38 @@ def find_ffi_files(rootdir, camera=None, ccd=None):
 	return matches
 
 #------------------------------------------------------------------------------
+def find_tpf_files(rootdir, starid=None):
+	"""
+	Search directory recursively for TESS Target Pixel Files.
+
+	Parameters:
+		rootdir (string): Directory to search recursively for TESS TPF files.
+		starid (integer or None, optional): Only return files from the TIC number. If ``None``, files from all TIC numbers are returned.
+
+	Returns:
+		list: List of full paths to TPF FITS files found in directory. The list will
+		      be sorted accoridng to the filename of the files, e.g. primarily by time.
+	"""
+
+	logger = logging.getLogger(__name__)
+
+	# Create the filename pattern to search for:
+	starid = '*' if starid is None else '{0:016d}'.format(starid)
+	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid)
+	logger.info("Searching for TPFs in '%s'", os.path.join(rootdir, filename_pattern))
+
+	# Do a recursive search in the directory, finding all files that match the pattern:
+	matches = []
+	for root, dirnames, filenames in os.walk(rootdir):
+		for filename in fnmatch.filter(filenames, filename_pattern):
+			matches.append(os.path.join(root, filename))
+
+	# Sort the list of files by thir filename:
+	matches.sort(key = lambda x: os.path.basename(x))
+
+	return matches
+
+#------------------------------------------------------------------------------
 def load_ffi_fits(path, return_header=False):
 	"""
 	Load FFI FITS file.
@@ -184,9 +216,9 @@ def mag2flux(mag):
 	aperture photometry. This is an estimate.
 
 	Parameters:
-		mag (float) : Magnitude in TESS band.
+		mag (float): Magnitude in TESS band.
 
 	Returns:
-		float : Corresponding flux value
+		float: Corresponding flux value
 	"""
 	return 10**(-0.4*(mag - 28.24))

@@ -23,9 +23,12 @@ def test_taskmanager():
 		print(task)
 		
 		# Check that it contains what we know it should:
+		# The first priority in the TODO file is the following:
 		assert(task['priority'] == 1)
-		assert(task['starid'] == 332979)	
+		assert(task['starid'] == 43255143)
+		assert(task['camera'] == 2)
+		assert(task['ccd'] == 2)
 	
-	
+
 if __name__ == '__main__':
 	test_taskmanager()

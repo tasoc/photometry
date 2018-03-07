@@ -11,7 +11,9 @@ import sys
 import os
 import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from photometry.utilities import move_median_central
+from photometry.utilities import move_median_central, find_ffi_files, load_ffi_fits
+
+INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
 def test_move_median_central():
 
@@ -26,5 +28,30 @@ def test_move_median_central():
 	np.testing.assert_allclose(result_2d, expected_2d)
 
 
+def test_find_ffi_files():
+	
+	files = find_ffi_files(INPUT_DIR)
+	assert(len(files) == 4)
+
+	files = find_ffi_files(INPUT_DIR, camera=1)
+	assert(len(files) == 2)
+	
+	files = find_ffi_files(INPUT_DIR, camera=2)
+	assert(len(files) == 2)
+
+
+def test_load_ffi_files():
+	
+	files = find_ffi_files(INPUT_DIR, camera=1)
+	
+	img = load_ffi_fits(files[0])
+	assert(img.shape == (2048, 2048))
+	
+	img, hdr = load_ffi_fits(files[0], return_header=True)
+	assert(img.shape == (2048, 2048))
+
+
 if __name__ == '__main__':
 	test_move_median_central()
+	test_find_ffi_files()
+	test_load_ffi_files()
