@@ -108,9 +108,9 @@ class BasePhotometry(object):
 		self.output_folder = output_folder
 		self.plot = plot
 		self.datasource = datasource
-		
+
 		logger.debug('DATASOURCE = %s', self.datasource)
-		
+
 		self._status = STATUS.UNKNOWN
 		self._details = {}
 		self.tpf = None
@@ -132,13 +132,13 @@ class BasePhotometry(object):
 			#        They will be needed to find the correct input files
 			if camera is None or ccd is None:
 				raise ValueError("CAMERA and CCD keywords must be provided for FFI targets.")
-				
+
 			self.camera = camera # TESS camera.
 			self.ccd = ccd # TESS CCD.
-			
+
 			logger.debug('CAMERA = %s', self.camera)
 			logger.debug('CCD = %s', self.ccd)
-			
+
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
 			self.hdf = h5py.File(filepath_hdf5, 'r')
@@ -199,6 +199,7 @@ class BasePhotometry(object):
 			# World Coordinate System solution:
 			self.wcs = WCS(header=self.tpf[2].header)
 
+			# Get the positions of the stamp from the FITS header:
 			self._max_stamp = (
 				self.tpf[2].header['CRVAL2P'] - 1,
 				self.tpf[2].header['CRVAL2P'] - 1 + self.tpf[2].header['NAXIS1'],
@@ -207,12 +208,12 @@ class BasePhotometry(object):
 			)
 			self.pixel_offset_row = self.tpf[2].header['CRVAL2P'] - 1
 			self.pixel_offset_col = self.tpf[2].header['CRVAL1P'] - 1
-					
+
 			logger.debug('Max stamp size: (%d, %d)',
-				self._max_stamp[1] - self._max_stamp[0], 
+				self._max_stamp[1] - self._max_stamp[0],
 				self._max_stamp[2] - self._max_stamp[3]
 			)
-			
+
 			# Get info for psf fit Gaussian statistic:
 			self.readnoise = self.tpf[1].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
 			self.gain = self.tpf[1].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
@@ -463,12 +464,19 @@ class BasePhotometry(object):
 			:py:func:`backgrounds`
 		"""
 		if self.datasource == 'ffi':
+			ir1 = self._stamp[0] - self.pixel_offset_row
+			ir2 = self._stamp[1] - self.pixel_offset_row
+			ic1 = self._stamp[2] - self.pixel_offset_col
+			ic2 = self._stamp[3] - self.pixel_offset_col
 			for k in range(len(self.hdf['images'])):
-				yield self.hdf['images/%04d' % k][self._stamp[0]:self._stamp[1], (self._stamp[2]-self.pixel_offset_col):(self._stamp[3]-self.pixel_offset_col)]
+				yield self.hdf['images/%04d' % k][ir1:ir2, ic1:ic2]
 		else:
+			ir1 = self._stamp[0] - self._max_stamp[0]
+			ir2 = self._stamp[1] - self._max_stamp[0]
+			ic1 = self._stamp[2] - self._max_stamp[2]
+			ic2 = self._stamp[3] - self._max_stamp[2]
 			for k in range(self.tpf[1].header['NAXIS2']):
-				# TODO: include stamp!
-				yield self.tpf[1].data['FLUX'][k][:, :]
+				yield self.tpf[1].data['FLUX'][k][ir1:ir2, ic1:ic2]
 
 	@property
 	def backgrounds(self):
@@ -493,12 +501,19 @@ class BasePhotometry(object):
 			:py:func:`images`
 		"""
 		if self.datasource == 'ffi':
+			ir1 = self._stamp[0] - self.pixel_offset_row
+			ir2 = self._stamp[1] - self.pixel_offset_row
+			ic1 = self._stamp[2] - self.pixel_offset_col
+			ic2 = self._stamp[3] - self.pixel_offset_col
 			for k in range(len(self.hdf['backgrounds'])):
-				yield self.hdf['backgrounds/%04d' % k][self._stamp[0]:self._stamp[1], (self._stamp[2]-self.pixel_offset_col):(self._stamp[3]-self.pixel_offset_col)]
+				yield self.hdf['backgrounds/%04d' % k][ir1:ir2, ic1:ic2]
 		else:
-			# TODO: include stamp!
+			ir1 = self._stamp[0] - self._max_stamp[0]
+			ir2 = self._stamp[1] - self._max_stamp[0]
+			ic1 = self._stamp[2] - self._max_stamp[2]
+			ic2 = self._stamp[3] - self._max_stamp[2]
 			for k in range(self.tpf[1].header['NAXIS2']):
-				yield self.tpf[1].data['FLUX_BKG'][k][:, :]
+				yield self.tpf[1].data['FLUX_BKG'][k][ir1:ir2, ic1:ic2]
 
 	@property
 	def sumimage(self):
@@ -514,7 +529,11 @@ class BasePhotometry(object):
 		"""
 		if self._sumimage is None:
 			if self.datasource == 'ffi':
-				self._sumimage = self.hdf['sumimage'][self._stamp[0]:self._stamp[1], (self._stamp[2]-self.pixel_offset_col):(self._stamp[3]-self.pixel_offset_col)]
+				ir1 = self._stamp[0] - self.pixel_offset_row
+				ir2 = self._stamp[1] - self.pixel_offset_row
+				ic1 = self._stamp[2] - self.pixel_offset_col
+				ic2 = self._stamp[3] - self.pixel_offset_col
+				self._sumimage = self.hdf['sumimage'][ir1:ir2, ic1:ic2]
 			else:
 				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
 				Nimg = np.zeros_like(self._sumimage, dtype='int32')
@@ -524,7 +543,7 @@ class BasePhotometry(object):
 						replace(img, np.nan, 0)
 						self._sumimage += img
 				self._sumimage /= Nimg
-				
+
 			if self.plot:
 				fig = plt.figure()
 				ax = fig.add_subplot(111)
@@ -655,28 +674,28 @@ class BasePhotometry(object):
 					names=('starid', 'ra', 'dec', 'tmag'),
 					dtype=('int64', 'float64', 'float64', 'float32')
 				)
-	
+
 				# Use the WCS to find pixel coordinates of stars in mask:
 				pixel_coords = self.wcs.all_world2pix(np.column_stack((self._catalog['ra'], self._catalog['dec'])), 0, ra_dec_order=True)
-				
+
 				# Because the TPF world coordinate solution is relative to the stamp,
 				# add the pixel offset to these:
 				if self.datasource == 'tpf':
 					pixel_coords[:,0] += self.pixel_offset_col
 					pixel_coords[:,1] += self.pixel_offset_row
-				
+
 				# Create columns with pixel coordinates:
 				col_x = Column(data=pixel_coords[:,0], name='column', dtype='float32')
 				col_y = Column(data=pixel_coords[:,1], name='row', dtype='float32')
-	
+
 				# Subtract the positions of the edge of the current stamp:
 				pixel_coords[:,0] -= self._stamp[2]
 				pixel_coords[:,1] -= self._stamp[0]
-	
+
 				# Add the pixel positions to the catalog table:
 				col_x_stamp = Column(data=pixel_coords[:,0], name='column_stamp', dtype='float32')
 				col_y_stamp = Column(data=pixel_coords[:,1], name='row_stamp', dtype='float32')
-	
+
 				self._catalog.add_columns([col_x, col_y, col_x_stamp, col_y_stamp])
 
 		return self._catalog
@@ -807,7 +826,7 @@ class BasePhotometry(object):
 		Parameters:
 			output_folder (string, optional): Path to directory where to save lightcurve. If ``None`` the directory specified in the attribute ``output_folder`` is used.
 		"""
-		
+
 		# Check if another output folder was provided:
 		if output_folder is None:
 			output_folder = self.output_folder
