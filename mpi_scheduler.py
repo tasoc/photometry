@@ -14,8 +14,9 @@ http://math.acadiau.ca/ACMMaC/Rmpi/index.html
 
 Example
 -------
-
->> mpiexec -n 4 python mpi_scheduler.py
+To run the program using four processes (one master and three workers) you can
+execute the following command:
+>>> mpiexec -n 4 python mpi_scheduler.py
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -29,8 +30,8 @@ import enum
 if __name__ == '__main__':
 
 	# Get paths to input and output files from environment variables:
-	input_folder = os.environ['TESSPHOT_INPUT']
-	output_folder = os.environ['TESSPHOT_OUTPUT']
+	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
+	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
 	todo_file = os.path.join(input_folder, 'todo.sqlite')
 
 	# Define MPI message tags
