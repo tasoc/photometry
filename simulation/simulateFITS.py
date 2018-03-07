@@ -40,9 +40,9 @@ class simulateFITS(object):
 			Ntimes (int): Number of time steps in timeseries. Default is 5.
 			save_images (boolean): True if images and catalog should be saved.
 			Default is True.
-			overwrite_images (boolean): True if image and catalog files should 
+			overwrite_images (boolean): True if image and catalog files should
 			be overwritten. Default is True.
-			
+
 		Output:
 			The output FITS images are saved to a subdirectory images in the
 			parent directory specified by the environment variable
@@ -91,6 +91,8 @@ class simulateFITS(object):
 		self.camera = 1
 		self.ccd = 1
 		self.exposure_time = 1800. # 30 min
+		self.reference_time = 2457000.+np.median(float(self.Ntimes)*self.exposure_time/24/3600)
+		self.epoch = self.reference_time - 2455200.5
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
@@ -118,11 +120,11 @@ class simulateFITS(object):
 
 		# Apply time-independent changes to catalog:
 #		self.catalog = self.apply_inaccurate_catalog(self.catalog)
-		
+
 		# Loop through the time steps:
 		for i, timestep in enumerate(self.times):
 			print("Making time step: "+str(timestep/3600/24))
-			
+
 			# Apply time-dependent changes to catalog:
 #			self.catalog = self.apply_variable_magnitudes(self.catalog,
 #														timestamp)
@@ -148,12 +150,12 @@ class simulateFITS(object):
 	def make_times(self, cadence = 1800.0):
 		"""
 		Make the time steps.
-		
+
 		Parameters:
-			cadence (float): Time difference between frames. Default is 1800 
-			seconds corresponding the 30 minutes in long cadence data from 
+			cadence (float): Time difference between frames. Default is 1800
+			seconds corresponding the 30 minutes in long cadence data from
 			TESS.
-		
+
 		Returns:
 			times (numpy array): Timestamps of all images to be made.
 		"""
@@ -164,7 +166,7 @@ class simulateFITS(object):
 		# (this is necessary because cadence is not an int)
 		if len(times) > self.Ntimes:
 			times = times[0:10]
-		
+
 		return times
 
 
@@ -288,29 +290,29 @@ class simulateFITS(object):
 
 	def create_catalog(self, sector, camera, ccd):
 		""" Original function by Rasmus Handberg. Create sqlite file """
-	
+
 #			logger = logging.getLogger(__name__)
-	
+
 		input_folder = os.environ['TESSPHOT_INPUT']
-	
+
 		# We need a list of when the sectors are in time:
 		sector_reference_time = 2457827.0 + 13.5
 #			logger.info('Projecting catalog {0:.3f} years relative to 2000'.format((sector_reference_time - 2451544.5)/365.25))
-	
+
 		# Load the catalog from file:
 		# TODO: In the future this will be loaded from the TASOC database:
 		cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,2,3,6), dtype='float64')
 		if cat.ndim == 1:
 			cat = np.expand_dims(cat, axis=0)
 		cat = np.column_stack((np.arange(1, cat.shape[0]+1, dtype='int64'), cat))
-	
+
 		# Create SQLite file:
 		catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
 		if os.path.exists(catalog_file): os.remove(catalog_file)
 		conn = sqlite3.connect(catalog_file)
 		conn.row_factory = sqlite3.Row
 		cursor = conn.cursor()
-	
+
 		cursor.execute("""CREATE TABLE catalog (
 			starid BIGINT PRIMARY KEY NOT NULL,
 			ra DOUBLE PRECISION NOT NULL,
@@ -319,12 +321,12 @@ class simulateFITS(object):
 			decl_J2000 DOUBLE PRECISION NOT NULL,
 			tmag REAL NOT NULL
 		);""")
-	
+
 		for row in cat:
 			# Add the proper motion to each coordinate:
 			ra, dec = add_proper_motion(row[1], row[2], row[3], row[4], sector_reference_time, epoch=2000.0)
 #				logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
-	
+
 			# Save the coordinates in SQLite database:
 			cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,tmag) VALUES (?,?,?,?,?,?);", (
 				int(row[0]),
@@ -334,33 +336,56 @@ class simulateFITS(object):
 				row[2],
 				row[5]
 			))
-	
+
 		cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
 		cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
+
+		# Add settings table:
+		cursor.execute("""CREATE TABLE settings (
+			sector INT NOT NULL,
+			camera INT NOT NULL,
+			ccd INT NOT NULL,
+			reference_time DOUBLE PRECISION NOT NULL,
+			epoch DOUBLE PRECISION NOT NULL,
+			coord_buffer DOUBLE PRECISION NOT NULL,
+			footprint TEXT NOT NULL
+		);""")
+
+		# Fill out settings table using arbitrary values for coord_buffer and footprint:
+		cursor.execute("INSERT INTO SETTINGS (sector,camera,ccd,reference_time,epoch,coord_buffer,footprint) VALUES (?,?,?,?,?,?,?);", (
+			self.sector,
+			self.camera,
+			self.ccd,
+			self.reference_time,
+			self.epoch,
+			0.,
+			"{256.99505428967007,6.459825950686631,255.0210912526594,-5.037571570922653,242.81585702674383,-2.6813989943029086,245.1973064137359,9.154168271446911}"
+		))
+
 		conn.commit()
 		cursor.close()
 		conn.close()
-	
+
 #			logger.info("Catalog done.")
 
 
 	def create_todo(self, sector):
 		"""Create the TODO list which is used by the pipeline to keep track of the
 		targets that needs to be processed.
-	
+
 		Will create the file `todo.sqlite` in the `TESSPHOT_INPUT` directory.
 		It will be overwritten if it already exists.
-	
+
 		Parameters:
 			sector (integer): The TESS observing sector.
-	
+
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
-	
+
 	#	logger = logging.getLogger(__name__)
-	
+
 		input_folder = os.environ['TESSPHOT_INPUT']
-	
+
 		cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(4,5,6), dtype='float64')
 		if cat.ndim == 1:
 			cat = np.expand_dims(cat, axis=0)
@@ -371,12 +396,12 @@ class simulateFITS(object):
 			names=('starid', 'x', 'y', 'tmag'),
 			dtype=('int64', 'float64', 'float64', 'float32')
 		)
-	
+
 		todo_file = os.path.join(input_folder, 'todo.sqlite')
 		if os.path.exists(todo_file): os.remove(todo_file)
 		conn = sqlite3.connect(todo_file)
 		cursor = conn.cursor()
-	
+
 		cursor.execute("""CREATE TABLE todolist (
 			priority BIGINT NOT NULL,
 			starid BIGINT NOT NULL,
@@ -390,7 +415,7 @@ class simulateFITS(object):
 			y REAL,
 			tmag REAL
 		);""")
-	
+
 		indx = (cat['tmag'] <= 20) & (cat['x'] > 0) & (cat['x'] < 2048) & (cat['y'] > 0) & (cat['y'] < 2048)
 		cat = cat[indx]
 		cat.sort('tmag')
@@ -398,14 +423,14 @@ class simulateFITS(object):
 			starid = int(row['starid'])
 			tmag = float(row['tmag'])
 			cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,x,y,tmag) VALUES (?,?,?,?,?,?,?);", (pri+1, starid, 1, 1, row['x'], row['y'], tmag))
-	
+
 		cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
 		cursor.close()
 		conn.close()
-	
+
 	#	logger.info("TODO done.")
 
 
@@ -560,10 +585,10 @@ class simulateFITS(object):
 
 		# Instantiate primary header data unit:
 		hdu = fits.PrimaryHDU(data=img, header=header)
-		
+
 		# Add info to header as used by prepare_photometry.py:
-		hdu.header['BJDREFI'] = (2457000, 'integer part of BTJD reference date')
-		hdu.header['BJDREFF'] = (0., 'fraction of the day in BTJD reference date')
+		hdu.header['BJDREFI'] = (int(self.reference_time), 'integer part of BTJD reference date')
+		hdu.header['BJDREFF'] = (np.asscalar(self.reference_time % 1), 'fraction of the day in BTJD reference date')
 		hdu.header['TSTART'] = ((timestamp-0.5*self.exposure_time)/3600/24, 'time in days (arb. starting point)')
 		hdu.header['TSTOP'] = ((timestamp+0.5*self.exposure_time)/3600/24, 'time in days (arb. starting point)')
 		hdu.header['NAXIS'] = (2, 'Number of data dimension')
@@ -573,7 +598,7 @@ class simulateFITS(object):
 		hdu.header['NUM_FRM'] = (900, 'Number of frames added (true: 1)')
 		hdu.header['GAIN'] = (100, 'Gain. Arbitrary value')
 		hdu.header['READNOIS'] = (10, 'Readnoise. Arbitrary value')
-		
+
 		# Specify output directory:
 		if outdir is None:
 			outdir = os.path.join(self.output_folder, 'images')
@@ -584,11 +609,11 @@ class simulateFITS(object):
 			os.remove(os.path.join(self.output_folder,hdf5filename))
 		except:
 			pass
-		
+
 		# Create image files directory if it doesn't already exist:
 		if not os.path.exists(outdir):
 			os.makedirs(outdir)
-		
+
 		# Write FITS file to output directory:
 		hdu.writeto(os.path.join(outdir, 'tess{time:011d}-{camera:d}-{ccd:d}-0000-s_ffic.fits'.format(time=i, camera=1, ccd=1)),
 					overwrite=self.overwrite_images)
