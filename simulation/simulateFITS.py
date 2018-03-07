@@ -98,6 +98,14 @@ class simulateFITS(object):
 		# Define time stamps:
 		self.times = self.make_times(cadence=self.exposure_time)
 
+		# Make WCS solution parameters:
+		self.w = WCS(naxis=2)
+		self.w.wcs.crpix = [0,0]
+		self.w.wcs.cdelt = [self.pixel_scale/3600, self.pixel_scale/3600]
+		self.w.wcs.crval = self.coord_zero_point # [0.,0.]
+		self.w.wcs.ctype = ["RA---AIR", "DEC--AIR"]
+		self.header = self.w.to_header()
+
 		# Set random number generator seed:
 		random.seed(0)
 		np.random.seed(0)
@@ -239,10 +247,8 @@ class simulateFITS(object):
 		# Remove starid in input catalog:
 		catalog.remove_column('starid')
 
-		# Set arbitrary ra and dec from pixel coordinates:
-		# (neglect spacial transformation to spherical coordinates)
-		ra = catalog['col'] * self.pixel_scale/3600 + self.coord_zero_point[0]
-		decl = catalog['row'] * self.pixel_scale/3600 + self.coord_zero_point[1]
+		# Set ra and dec from pixel coordinates using WCS solution:
+		ra, decl = self.w.all_pix2world(catalog['col'],catalog['row'],0,ra_dec_order=True)
 
 		# Set proper motion:
 		prop_mot_ra = np.zeros_like(catalog['tmag'])
@@ -575,16 +581,8 @@ class simulateFITS(object):
 			i (int): Timestamp index that is used in filename.
 		"""
 
-		# Make WCS solution parameters:
-		w = WCS(naxis=2)
-		w.wcs.crpix = [0,0]
-		w.wcs.cdelt = [self.pixel_scale/3600, self.pixel_scale/3600]
-		w.wcs.crval = self.coord_zero_point # [0.,0.]
-		w.wcs.ctype = ["RA---AIR", "DEC--AIR"]
-		header = w.to_header()
-
 		# Instantiate primary header data unit:
-		hdu = fits.PrimaryHDU(data=img, header=header)
+		hdu = fits.PrimaryHDU(data=img, header=self.header)
 
 		# Add info to header as used by prepare_photometry.py:
 		hdu.header['BJDREFI'] = (int(self.reference_time), 'integer part of BTJD reference date')
