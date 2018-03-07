@@ -6,6 +6,7 @@ Plotting utilities.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
+import six
 import logging
 import os
 import numpy as np
@@ -52,12 +53,15 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		raise ValueError("scale {} is not available.".format(scale))
 
 	if offset_axes:
-		extent = (offset_axes[0], offset_axes[0] + image.shape[1], offset_axes[1], offset_axes[1] + image.shape[0])	
+		extent = (offset_axes[0], offset_axes[0] + image.shape[1], offset_axes[1], offset_axes[1] + image.shape[0])
 	else:
 		extent = (0, image.shape[1], 0, image.shape[0])
 
 	if ax is None:
 		ax = plt.gca()
+
+	if isinstance(cmap, six.string_types):
+		cmap = plt.get_cmap(cmap)
 
 	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, interpolation='none', **kwargs)
 	if not xlabel is None: ax.set_xlabel(xlabel)
