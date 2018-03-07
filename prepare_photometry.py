@@ -41,11 +41,10 @@ def create_hdf5(sector, camera, ccd):
 	settings = load_settings(sector=sector)
 	sector_reference_time = settings.get('reference_time')
 
-	input_folder = os.environ['TESSPHOT_INPUT']
+	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
 	hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
 
 	files = find_ffi_files(os.path.join(input_folder, 'images'), camera, ccd)
-	#files = files[0:2]
 	numfiles = len(files)
 	logger.info("Number of files: %d", numfiles)
 	if numfiles == 0:
@@ -139,6 +138,7 @@ def create_hdf5(sector, camera, ccd):
 			filenames = [fname.encode('ascii', 'strict') for fname in filenames]
 			hdf.require_dataset('imagespaths', (numfiles,), data=filenames, dtype=h5py.special_dtype(vlen=bytes), **args)
 
+			is_tess = False
 			for k, fname in enumerate(files):
 				logger.info("%.2f%% - %s", 100*k/numfiles, fname)
 				dset_name ='%04d' % k
@@ -155,6 +155,11 @@ def create_hdf5(sector, camera, ccd):
 				elif hdr['NUM_FRM'] != num_frm:
 					logger.error("NUM_FRM is not constant!")
 
+				# Check if this is real TESS data:
+				# Could proberly be done more elegant, but if it works, it works...
+				if hdr.get('TELESCOP') == 'TESS' and hdr.get('NAXIS1') == 2136 and hdr.get('NAXIS2') == 2078:
+					is_tess = True
+
 				# # Load background from HDF file and subtract background from image:
 				flux0 -= backgrounds[dset_name]
 
@@ -170,6 +175,13 @@ def create_hdf5(sector, camera, ccd):
 
 			# Save attributes
 			images.attrs['NUM_FRM'] = num_frm
+			# Set pixel offsets:
+			if is_tess:
+				images.attrs['PIXEL_OFFSET_ROW'] = 0
+				images.attrs['PIXEL_OFFSET_COLUMN'] = 44
+			else:
+				images.attrs['PIXEL_OFFSET_ROW'] = 0
+				images.attrs['PIXEL_OFFSET_COLUMN'] = 0
 
 			# Add other arrays to HDF5 file:
 			if 'time' in hdf: del hdf['time']
@@ -181,6 +193,9 @@ def create_hdf5(sector, camera, ccd):
 			hdf.create_dataset('cadenceno', data=cadenceno, **args)
 			hdf.create_dataset('quality', data=quality, **args)
 			hdf.flush()
+
+		if sector_reference_time < hdf['time'][0] or sector_reference_time > hdf['time'][-1]:
+			logger.error("Sector reference time outside timespan of data")
 
 		if 'wcs' not in hdf or 'movement_kernel' not in hdf:
 			# Find the reference image:
@@ -219,7 +234,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
-	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
+	#parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
 	parser.add_argument('sector', type=int, help='TESS observing sector.')
 	args = parser.parse_args()
 
@@ -241,7 +256,5 @@ if __name__ == '__main__':
 	if not logger.hasHandlers(): logger.addHandler(console)
 	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
 
-	sector = 14
-
 	for camera, ccd in itertools.product([1,2,3,4], [1,2,3,4]):
-		create_hdf5(sector, camera, ccd)
+		create_hdf5(args.sector, camera, ccd)
