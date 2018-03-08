@@ -7,6 +7,7 @@ Created on Wed Nov  8 16:37:12 2017
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
+from six.moves import zip
 import os.path
 import numpy as np
 import matplotlib.pyplot as plt
@@ -16,7 +17,7 @@ from scipy.optimize import minimize
 from . import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
-from .plots import save_figure
+from .plots import plot_image, save_figure
 
 class PSFPhotometry(BasePhotometry):
 
@@ -31,7 +32,7 @@ class PSFPhotometry(BasePhotometry):
 		# TODO: Maybe we should move this into BasePhotometry?
 		self.psf = PSF(self.camera, self.ccd, self.stamp)
 
-	def _lhood(self, params, img_bkg, lhood_stat='Gaussian_d', include_bkg=True):
+	def _lhood(self, params, img, bkg, lhood_stat='Gaussian_d', include_bkg=True):
 		"""
 		Log-likelihood function to be minimized for the PSF fit.
 
@@ -55,16 +56,16 @@ class PSFPhotometry(BasePhotometry):
 		mdl = self.psf.integrate_to_image(params, cutoff_radius=10)
 
 		# Calculate the likelihood value:
-		if lhood_stat[0:8] == 'Gaussian':
+		if lhood_stat.startswith('Gaussian'):
 			if lhood_stat == 'Gaussian_d':
 				if include_bkg:
-					var = np.abs(img_bkg[0] + img_bkg[1]) # can be outside _lhood
+					var = np.abs(img + bkg) # can be outside _lhood
 				else:
-					var = np.abs(img_bkg[0]) # can be outside _lhood
+					var = np.abs(img) # can be outside _lhood
 
 			elif lhood_stat == 'Gaussian_m':
 				if include_bkg:
-					var = np.abs(mdl + img_bkg[1]) # has to be in _lhood
+					var = np.abs(mdl + bkg) # has to be in _lhood
 				else:
 					var = np.abs(mdl) # has to be in _lhood
 			# Add 2nd term of Erwin (2015), eq. (13):
@@ -73,18 +74,21 @@ class PSFPhotometry(BasePhotometry):
 			weightmap = 1 / var
 			weightmap[weightmap<minweight] = minweight
 			# Return the chi2:
-			return np.nansum( weightmap * (img_bkg[0] - mdl)**2 )
+			return np.nansum( weightmap * (img - mdl)**2 )
 
 		elif lhood_stat == 'Poisson':
 			# Prepare model for logarithmic expression by changing zeros to small values:
 			mdl_for_log = mdl
 			mdl_for_log[mdl_for_log < 1e-9] = 1e-9
 			# Return the Cash statistic:
-			return 2 * np.nansum( mdl - img_bkg[0] * np.log(mdl_for_log) )
+			return 2 * np.nansum( mdl - img * np.log(mdl_for_log) )
 
 		elif lhood_stat == 'old_Gaussian':
 			# Return the chi2:
-			return np.nansum( (img_bkg[0] - mdl)**2 / img_bkg[0] )
+			return np.nansum( (img - mdl)**2 / img )
+
+		else:
+			raise ValueError("Invalid statistic: '%s'" % lhood_stat)
 
 
 	def do_photometry(self):
@@ -116,18 +120,18 @@ class PSFPhotometry(BasePhotometry):
 		params0 = params0.flatten() # Make the parameters into a 1D array
 
 		# Start looping through the images (time domain):
-		for k, (img,bkg) in enumerate(zip(self.images, self.backgrounds)):
+		for k, (img, bkg) in enumerate(zip(self.images, self.backgrounds)):
 			# Print timestep index to logger:
 			logger.info('Current timestep: %s' % k)
 
 			# Set the maximum number of iterations for the minimize routine:
-			if k>0:
+			if k > 0:
 				maxiter = 500
 			else: # The first step requires more iterations due to bad starting guess
 				maxiter = 1500
 
 			# Run the fitting routine for this image:
-			res = minimize(self._lhood, params0, args=[img,bkg], method='Nelder-Mead',
+			res = minimize(self._lhood, params0, args=(img, bkg), method='Nelder-Mead',
 						options={'maxiter': maxiter})
 			logger.debug(res)
 
@@ -137,27 +141,33 @@ class PSFPhotometry(BasePhotometry):
 				logger.debug(result)
 
 				# Add the result of the main star to the lightcurve:
-				self.lightcurve['flux'][k] = result[0,2]
-				self.lightcurve['pos_centroid'][k] = result[0,0:2]
+				self.lightcurve['flux'][k] = result[0, 2]
+				self.lightcurve['pos_centroid'][k] = result[0, 0:2]
 				self.lightcurve['quality'][k] = 0
 
 				# TODO: use debug figure toggle to decide if to plot and export
-				if self.plot:
+				if self.plot and logger.isEnabledFor(logging.DEBUG):
+					# Calculate final model image:
+					mdl = self.psf.integrate_to_image(result, cutoff_radius=10)
+
 					fig = plt.figure()
 					ax = fig.add_subplot(131)
-					ax.imshow(np.log10(img), origin='lower')
+					plot_image(img, ax=ax, scale='log', xlabel=None, ylabel=None, title='Image')
 					ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
 					ax.scatter(result[:,1], result[:,0], c='r', alpha=0.5)
 					ax = fig.add_subplot(132)
-					ax.imshow(np.log10(self.psf.integrate_to_image(result)), origin='lower')
+					plot_image(mdl, ax=ax, scale='log', xlabel=None, ylabel=None, title='Model')
 					ax = fig.add_subplot(133)
-					ax.imshow(img - self.psf.integrate_to_image(result, cutoff_radius=10), origin='lower')
-					plt.show()
+					plot_image(img - mdl, ax=ax, scale='linear', xlabel=None, ylabel=None, title='Residuals')
 
 					# Export figure to file:
-					fig_name = 'psf_photometry_'+np.str(self.sector)+'_'+ \
-								np.str(self.starid)+'_'+np.str(k)
+					fig_name = 'psf_photometry_{sector:02d}_{starid:011d}_{time:05d}'.format(
+						sector=self.sector,
+						starid=self.starid,
+						time=k
+					)
 					save_figure(os.path.join(self.plot_folder, fig_name))
+					plt.close(fig)
 
 				# In the next iteration, start from the current solution:
 				params0 = res.x
