@@ -127,7 +127,7 @@ class simulateFITS(object):
 		self.create_todo(sector=self.sector)
 
 		# Apply time-independent changes to catalog:
-#		self.catalog = self.apply_inaccurate_catalog(self.catalog)
+		self.catalog = self.apply_inaccurate_catalog(self.catalog)
 
 		# Loop through the time steps:
 		for i, timestep in enumerate(self.times):
