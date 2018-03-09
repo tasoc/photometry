@@ -107,8 +107,7 @@ def make_todo(input_folder=None):
 
 	# Check the input folder, and load the default if not provided:
 	if input_folder is None:
-		#input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
-		input_folder = os.path.join(os.path.dirname(__file__), 'tests', 'input')
+		input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
 
 	# The TODO file that we want to create. Delete it if it already exits:
 	todo_file = os.path.join(input_folder, 'todo.sqlite')
