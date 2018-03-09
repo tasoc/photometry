@@ -95,6 +95,9 @@ class LinPSFPhotometry(BasePhotometry):
 			# Return change results:
 			PSF_position = res.x[staridx, 0:2]
 			logger.info('PSF fit to sumimage target [row,col] result: {0}'.format(PSF_position))
+			PSF_offset = np.linalg.norm(PSF_position - cat['row_stamp','column_stamp'][staridx])
+			if PSF_offset > 0.9:
+				self.report_details(error='Catalog position off by {0} pixel'.format(PSF_offset))
 
 		# Preallocate flux sum array for contamination calculation:
 		fluxes_sum = np.zeros(nstars)
