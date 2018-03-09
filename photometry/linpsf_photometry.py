@@ -131,8 +131,11 @@ class LinPSFPhotometry(BasePhotometry):
 		indx = (cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -5)
 		nstars = np.sum(indx)
 
+		# Reduce catalog to only include stars that should be fitted:
+		cat = cat[indx]
+
 		# Get target star index in the reduced catalog of stars to fit:
-		staridx = np.squeeze(np.where(cat[indx]['starid']==self.starid))
+		staridx = np.squeeze(np.where(cat['starid']==self.starid))
 		logger.debug('Target star index: %s', np.str(staridx))
 
 		# Find catalog inaccuracies by PSF fit to the sum image:
