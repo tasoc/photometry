@@ -100,12 +100,12 @@ class TaskManager(object):
 		constraints = []
 		if starid is not None:
 			constraints.append("starid=%d" % starid)
-			
+
 		if constraints:
 			constraints = " AND " + " AND ".join(constraints)
 		else:
 			constraints = ''
-			
+
 		self.cursor.execute("SELECT priority,starid,method,camera,ccd FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
@@ -126,7 +126,7 @@ class TaskManager(object):
 	def save_result(self, result):
 		"""
 		Save results and diagnostics. This will update the TODO list.
-		
+
 		Parameters:
 			results (dict): Dictionary of results and diagnostics.
 		"""
@@ -139,7 +139,9 @@ class TaskManager(object):
 			skip_starids = [str(starid) for starid in set(result['details']['skip_targets'])]
 			skip_starids = ','.join(skip_starids)
 			# Mark them as SKIPPED in the database:
-			self.cursor.execute("UPDATE todolist SET status=5 WHERE status IS NULL AND starid IN (" + skip_starids + ");")
+			self.cursor.execute("UPDATE todolist SET status=5 WHERE starid IN (" + skip_starids + ") AND datasource=? AND status IS NULL;", (
+				result['datasource'],
+			))
 
 		# Save additional diagnostics:
 		error_msg = result['details'].get('errors', None)
