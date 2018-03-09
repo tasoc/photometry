@@ -138,25 +138,43 @@ class LinPSFPhotometry(BasePhotometry):
 		# Find catalog inaccuracies by PSF fit to the sum image:
 		PSF_correction_factor = 1.
 		if PSF_correction_factor != 0:
+			# Prepare catalog for minimizer:
 			params0 = np.empty((len(cat), 3), dtype='float64')
 			for k, target in enumerate(cat):
 				params0[k,:] = [target['row_stamp'],
 								target['column_stamp'],
 								mag2flux(target['tmag'])]
 			params0 = params0.flatten() # Make the parameters into a 1D array
+
+			# Call minimizer with sumimage and zero background:
 			img = self.sumimage
 			bkg = np.zeros_like(img)
 			maxiter = 1500
-			res = minimize(self._lhood,
-				params0, args=(img, bkg), method='Nelder-Mead',
-				options={'maxiter': maxiter})
+			try:
+				res_PSF = minimize(self._lhood,
+					params0, args=(img, bkg), method='Nelder-Mead',
+					options={'maxiter': maxiter})
+			except:
+				res_PSF = 'failed'
+				logger.info('Initial PSF fit to determine location failed.')
 
-			# Return change results:
-			PSF_position = res.x[staridx, 0:2]
-			logger.info('PSF fit to sumimage target [row,col] result: {0}'.format(PSF_position))
-			PSF_offset = np.linalg.norm(PSF_position - cat['row_stamp','column_stamp'][staridx])
-			if PSF_offset > 0.9:
-				self.report_details(error='Catalog position off by {0} pixel'.format(PSF_offset))
+			# Get PSF-catalog offset results from minimize results object:
+			if res_PSF == 'failed':
+				pass
+			else:
+				if res_PSF.x.ndim > 1:
+					PSF_position = res_PSF.x[staridx, 0:2]
+				else:
+					PSF_position = res_PSF.x[0:2]
+				logger.info('PSF fit to sumimage target [row,col] result: {0}'.format(PSF_position))
+
+				# Determine offset magnitude:
+				PSF_offset = PSF_position - np.array([cat['row_stamp'][staridx],
+												cat['column_stamp'][staridx]])
+				PSF_offset_norm = np.linalg.norm(PSF_offset)
+				logger.info('Catalog off by {:3.12f} pixel'.format(PSF_offset_norm))
+				if PSF_offset_norm > 0.9:
+					self.report_details(error='Catalog position off by {0} pixel'.format(PSF_offset_norm))
 
 		# Preallocate flux sum array for contamination calculation:
 		fluxes_sum = np.zeros(nstars)
@@ -167,10 +185,11 @@ class LinPSFPhotometry(BasePhotometry):
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
 			# Modify catalog with PSF fit to sumimage to fix catalog errors:
-			if PSF_correction_factor != 0:
-				cat['row_stamp','column_stamp'][staridx] += \
-					PSF_correction_factor * \
-					(PSF_position - cat['row_stamp','column_stamp'][staridx])
+			if PSF_correction_factor != 0 and res_PSF != 'failed':
+				PSF_offset = PSF_position - np.array([cat['row_stamp'][staridx],
+											cat['column_stamp'][staridx]])
+				cat['row_stamp'][staridx] += PSF_correction_factor*PSF_offset[0]
+				cat['column_stamp'][staridx] += PSF_correction_factor*PSF_offset[1]
 
 			# Reduce catalog to only include stars that should be fitted:
 			cat = cat[indx]
