@@ -78,18 +78,23 @@ class LinPSFPhotometry(BasePhotometry):
 		logger.debug('Target star index: %s', np.str(staridx))
 
 		# Find catalog inaccuracies by PSF fit to the sum image:
-		params0 = np.empty((len(cat), 3), dtype='float64')
-		for k, target in enumerate(cat):
-			params0[k,:] = [target['row_stamp'], target['column_stamp'], mag2flux(target['tmag'])]
-		params0 = params0.flatten() # Make the parameters into a 1D array
-		img = self.sumimage
-		bkg = np.zeros_like(img)
-		maxiter = 1500
-		res = minimize(_lhood, params0, args=(img, bkg), method='Nelder-Mead',
-						options={'maxiter': maxiter})
+		PSF_correction_factor = 1.
+		if PSF_correction_factor != 0:
+			params0 = np.empty((len(cat), 3), dtype='float64')
+			for k, target in enumerate(cat):
+				params0[k,:] = [target['row_stamp'],
+								target['column_stamp'],
+								mag2flux(target['tmag'])]
+			params0 = params0.flatten() # Make the parameters into a 1D array
+			img = self.sumimage
+			bkg = np.zeros_like(img)
+			maxiter = 1500
+			res = minimize(_lhood, params0, args=(img, bkg), method='Nelder-Mead',
+							options={'maxiter': maxiter})
 
-		# Return position results:
-		PSF_position = res.x[0:2]
+			# Return change results:
+			PSF_position = res.x[staridx, 0:2]
+			logger.info('PSF fit to sumimage target [row,col] result: {0}'.format(PSF_position))
 
 		# Preallocate flux sum array for contamination calculation:
 		fluxes_sum = np.zeros(nstars)
@@ -99,8 +104,11 @@ class LinPSFPhotometry(BasePhotometry):
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
-			# Modify catalog with PSF fit to sumimage:
-			cat['row_stamp','column_stamp'] += PSF_position
+			# Modify catalog with PSF fit to sumimage to fix catalog errors:
+			if PSF_correction_factor != 0:
+				cat['row_stamp','column_stamp'][staridx] += \
+					PSF_correction_factor * \
+					(PSF_position - cat['row_stamp','column_stamp'][staridx])
 
 			# Reduce catalog to only include stars that should be fitted:
 			cat = cat[indx]
