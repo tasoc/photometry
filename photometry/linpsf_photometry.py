@@ -17,7 +17,6 @@ from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
 from .plots import plot_image_fit_residuals, save_figure
-from .psf_photometry import _lhood
 
 class LinPSFPhotometry(BasePhotometry):
 
@@ -48,6 +47,65 @@ class LinPSFPhotometry(BasePhotometry):
 		#       we should also update self.PSF.
 		# TODO: Maybe we should move this into BasePhotometry?
 		self.psf = PSF(self.camera, self.ccd, self.stamp)
+
+	def _lhood(self, params, img, bkg, lhood_stat='Gaussian_d', include_bkg=True):
+		"""
+		Log-likelihood function to be minimized for the PSF fit.
+
+		Parameters:
+			params (numpy array): Parameters for the PSF integrator.
+			img_bkg (list): List containing the image and background numpy arrays.
+			lhood_stat (string): Determines what statistic to use. Default is
+			``Gaussian_d``. Can also be ``Gaussian_m`` or ``Poisson``.
+			include_bkg (boolean): Determine whether to include background. Default
+			is ``True``.
+		"""
+
+		# Reshape the parameters into a 2D array:
+		params = params.reshape(len(params)//3, 3)
+
+		# Define minimum weights to avoid dividing by 0:
+		minweight = 1e-9
+		minvar = 1e-9
+
+		# Pass the list of stars to the PSF integrator to produce an artificial image:
+		mdl = self.psf.integrate_to_image(params, cutoff_radius=10)
+
+		# Calculate the likelihood value:
+		if lhood_stat.startswith('Gaussian'):
+			if lhood_stat == 'Gaussian_d':
+				if include_bkg:
+					var = np.abs(img + bkg) # can be outside _lhood
+				else:
+					var = np.abs(img) # can be outside _lhood
+
+			elif lhood_stat == 'Gaussian_m':
+				if include_bkg:
+					var = np.abs(mdl + bkg) # has to be in _lhood
+				else:
+					var = np.abs(mdl) # has to be in _lhood
+			# Add 2nd term of Erwin (2015), eq. (13):
+			var += self.n_readout * self.readnoise**2 / self.gain**2
+			var[var<minvar] = minvar
+			weightmap = 1 / var
+			weightmap[weightmap<minweight] = minweight
+			# Return the chi2:
+			return np.nansum( weightmap * (img - mdl)**2 )
+
+		elif lhood_stat == 'Poisson':
+			# Prepare model for logarithmic expression by changing zeros to small values:
+			mdl_for_log = mdl
+			mdl_for_log[mdl_for_log < 1e-9] = 1e-9
+			# Return the Cash statistic:
+			return 2 * np.nansum( mdl - img * np.log(mdl_for_log) )
+
+		elif lhood_stat == 'old_Gaussian':
+			# Return the chi2:
+			return np.nansum( (img - mdl)**2 / img )
+
+		else:
+			raise ValueError("Invalid statistic: '%s'" % lhood_stat)
+
 
 	def do_photometry(self):
 		"""Linear PSF Photometry
@@ -89,8 +147,9 @@ class LinPSFPhotometry(BasePhotometry):
 			img = self.sumimage
 			bkg = np.zeros_like(img)
 			maxiter = 1500
-			res = minimize(_lhood, params0, args=(img, bkg), method='Nelder-Mead',
-							options={'maxiter': maxiter})
+			res = minimize(self._lhood,
+				params0, args=(img, bkg), method='Nelder-Mead',
+				options={'maxiter': maxiter})
 
 			# Return change results:
 			PSF_position = res.x[staridx, 0:2]
