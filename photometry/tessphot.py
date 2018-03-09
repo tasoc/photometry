@@ -30,7 +30,7 @@ def _try_photometry(PhotClass, *args, **kwargs):
 			except:
 				pass
 
-		if status == STATUS.OK:
+		if status in (STATUS.OK, STATUS.WARNING):
 			pho.save_lightcurve()
 
 	return pho
@@ -43,12 +43,12 @@ def tessphot(method=None, *args, **kwargs):
 	This function will run the specified photometry or perform the dynamical
 	scheme of trying simple aperture photometry, evaluating its performance
 	and if nessacery try another algorithm.
-	
+
 	Parameters:
 		method (string or None): Type of photometry to run. Can be ``'aperture'``, ``'psf'``, ``'linpsf'`` or ``None``.
 		*args: Arguments passed on to the photometry class init-function.
 		**kwargs: Keyword-arguments passed on to the photometry class init-function.
-		
+
 	Returns:
 		:py:class:`photometry.BasePhotometry`: Photometry object that inherits from :py:class:`photometry.BasePhotometry`.
 	"""

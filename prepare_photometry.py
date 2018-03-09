@@ -11,6 +11,7 @@ warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
 import logging
 import multiprocessing
+from astropy.wcs import WCS
 from bottleneck import replace, nanmean
 from photometry.backgrounds import fit_background
 from photometry.utilities import load_ffi_fits, load_settings, find_ffi_files
@@ -209,7 +210,7 @@ def create_hdf5(sector, camera, ccd):
 
 			# Save WCS to the file:
 			dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-			dset[0] = hdr.tostring().strip().encode('ascii', 'strict')
+			dset[0] = WCS(hdr).to_header_string(relax=True).strip().encode('ascii', 'strict')
 			dset.attrs['ref_frame'] = refindx
 
 			# Calculate image motion:
