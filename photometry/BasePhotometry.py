@@ -847,6 +847,7 @@ class BasePhotometry(object):
 		hdu.header['CAMERA'] = (self.camera, 'Camera number')
 		hdu.header['CCD'] = (self.ccd, 'CCD number')
 		hdu.header['SECTOR'] = (self.sector, 'Observing sector')
+		#hdu.header['PHOTMET'] = ('aperture', 'Photometric method used')
 
 		# Versions:
 		#hdu.header['VERPIXEL'] = (__version__, 'version of K2P2 pipeline')
@@ -877,8 +878,7 @@ class BasePhotometry(object):
 		#c10 = fits.Column(name='POS_CORR1', format='E', unit='pixels', array=poscorr1) # column
 		#c11 = fits.Column(name='POS_CORR2', format='E', unit='pixels', array=poscorr2) # row
 
-		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8])
-		tbhdu.header['EXTNAME'] = ('LIGHTCURVE', 'name of extension')
+		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8], name='LIGHTCURVE')
 
 		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
 		tbhdu.header['TFORM1'] = ('D', 'column format: 64-bit floating point')
@@ -928,16 +928,31 @@ class BasePhotometry(object):
 		#tbhdu.header['TUNIT11'] = ('pixel', 'column units: pixels')
 		#tbhdu.header['TDISP11'] = ('F14.7', 'column display format')
 
+		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
+
 		# Make aperture image:
 		mask = np.asarray(np.isfinite(self.sumimage), dtype='int32')
 		if self.final_mask is not None:
 			mask[self.final_mask] += 2 + 8
 
-		img_aperture = fits.ImageHDU(data=mask, header=self.wcs.to_header(), name='APERTURE')
+		# Construct FITS header for image extensions:
+		header = self.wcs.to_header(relax=True)
+		header.set('INHERIT', True, 'inherit the primary header', before=0) # Add
+
+		# Create aperture image extension:
+		img_aperture = fits.ImageHDU(data=mask, header=header, name='APERTURE')
 
 		# Make sumimage image:
-		img_sumimage = fits.ImageHDU(data=self.sumimage, header=self.wcs.to_header(), name="SUMIMAGE") # header=ori_mask_header,
+		img_sumimage = fits.ImageHDU(data=self.sumimage, header=header, name="SUMIMAGE")
+
+		# File name to save the lightcurve under:
+		filename = 'tess{starid:011d}-s{sector:02d}-{cadence:s}-v{version:02d}-tasoc_lc.fits'.format(
+			starid=self.starid,
+			sector=self.sector,
+			cadence={'ffi': 'ffi', 'tpf': '120'}[self.datasource],
+			version=0 # FIXME: This needs to be set
+		)
 
 		# Write to file:
 		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
-			hdulist.writeto(os.path.join(output_folder, 'tess{0:09d}.fits'.format(self.starid)), checksum=True, overwrite=True)
+			hdulist.writeto(os.path.join(output_folder, filename), checksum=True, overwrite=True)
