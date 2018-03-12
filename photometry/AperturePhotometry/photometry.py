@@ -59,8 +59,15 @@ class AperturePhotometry(BasePhotometry):
 
 			logger.info("Creating new masks...")
 			k2p2_settings = {
-				'thresh': 1,
-				'min_no_pixels_in_mask': 4
+				'thresh': 1.0,
+				'min_no_pixels_in_mask': 4,
+				'min_for_cluster': 4,
+				'cluster_radius': np.sqrt(2),
+				'segmentation': True,
+				'ws_blur': 0.5,
+				'ws_thres': 0.05, # K2: 0.05
+				'ws_footprint': 3,
+				'extend_overflow': True # Turn this off for Tmag>7 targets?
 			}
 
 			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, None, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
@@ -142,14 +149,14 @@ class AperturePhotometry(BasePhotometry):
 		#self.additional_headers['KP_SUBKG'] = (bool(subtract_background), 'K2P2 subtract background?')
 		self.additional_headers['KP_THRES'] = (k2p2_settings['thresh'], 'K2P2 sum-image threshold')
 		self.additional_headers['KP_MIPIX'] = (k2p2_settings['min_no_pixels_in_mask'], 'K2P2 min pixels in mask')
-		#self.additional_headers['KP_MICLS'] = (k2p2_settings['min_for_cluster'], 'K2P2 min pix. for cluster')
-		#self.additional_headers['KP_CLSRA'] = (k2p2_settings['cluster_radius'], 'K2P2 cluster radius')
-		#self.additional_headers['KP_WS'] = (bool(ws), 'K2P2 watershed segmentation')
+		self.additional_headers['KP_MICLS'] = (k2p2_settings['min_for_cluster'], 'K2P2 min pix. for cluster')
+		self.additional_headers['KP_CLSRA'] = (k2p2_settings['cluster_radius'], 'K2P2 cluster radius')
+		self.additional_headers['KP_WS'] = (bool(k2p2_settings['segmentation']), 'K2P2 watershed segmentation')
 		#self.additional_headers['KP_WSALG'] = (k2p2_settings['ws_alg'], 'K2P2 watershed weighting')
-		#self.additional_headers['KP_WSBLR'] = (k2p2_settings['ws_blur'], 'K2P2 watershed blur')
-		#self.additional_headers['KP_WSTHR'] = (k2p2_settings['ws_threshold'], 'K2P2 watershed threshold')
-		#self.additional_headers['KP_WSFOT'] = (k2p2_settings['ws_footprint'], 'K2P2 watershed footprint')
-		#self.additional_headers['KP_EX'] = (bool(extend_overflow), 'K2P2 extend overflow')
+		self.additional_headers['KP_WSBLR'] = (k2p2_settings['ws_blur'], 'K2P2 watershed blur')
+		self.additional_headers['KP_WSTHR'] = (k2p2_settings['ws_threshold'], 'K2P2 watershed threshold')
+		self.additional_headers['KP_WSFOT'] = (k2p2_settings['ws_footprint'], 'K2P2 watershed footprint')
+		self.additional_headers['KP_EX'] = (bool(k2p2_settings['extend_overflow']), 'K2P2 extend overflow')
 
 		# Targets that are in the mask:
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['row'])+1 in rows[mask_main] and np.floor(t['column'])+1 in cols[mask_main]]
