@@ -46,6 +46,16 @@ if __name__ == '__main__':
 	""" Create dictionaries with simulations """
 	single_star = {
 		'name':				'single_star',
+		'ignore_mov_kernel': 	True,
+#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
+		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
+		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
+	}
+	single_star_mov_kernel = {
+		'name':				'single_star_mov_kernel',
+		'ignore_mov_kernel': 	False,
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
 		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
@@ -54,7 +64,7 @@ if __name__ == '__main__':
 	}
 
 	# Collect dictionaries in list:
-	simulations = [single_star]
+	simulations = [single_star, single_star_mov_kernel]
 	logger.info("Simulations being run: \n %s", simulations)
 
 
@@ -114,25 +124,26 @@ if __name__ == '__main__':
 		)
 
 		# Rewrite motion_kernel in hdf5 file:
-		logger.info("Rewriting motion_kernel in hdf5 file")
-		hdf_file = os.path.join(input_folder,
-			'camera{0:d}_ccd{1:d}.hdf5'.format(
-				simulation['create_hdf5'][1],
-				simulation['create_hdf5'][2]
-				)
-		)
-		with h5py.File(hdf_file) as hdf:
-			# Get movement kernel data:
-			data = hdf['movement_kernel']
-			data_np = np.array(data)
-			logger.debug("Original movement kernel: \n{}".format(data_np))
+		if simulation['ignore_mov_kernel'] is True:
+			logger.info("Rewriting motion_kernel in hdf5 file")
+			hdf_file = os.path.join(input_folder,
+				'camera{0:d}_ccd{1:d}.hdf5'.format(
+					simulation['create_hdf5'][1],
+					simulation['create_hdf5'][2]
+					)
+			)
+			with h5py.File(hdf_file) as hdf:
+				# Get movement kernel data:
+				data = hdf['movement_kernel']
+				data_np = np.array(data)
+				logger.debug("Original movement kernel: \n{}".format(data_np))
 
-			# Define new movement kernel:
-			movement_kernel_new = np.zeros_like(data_np)
+				# Define new movement kernel:
+				movement_kernel_new = np.zeros_like(data_np)
 
-			# Replace values of movement kernel in hdf5 file:
-			data[...] = movement_kernel_new
-			logger.debug("New movement kernel: \n{}".format(np.array(data)))
+				# Replace values of movement kernel in hdf5 file:
+				data[...] = movement_kernel_new
+				logger.debug("New movement kernel: \n{}".format(np.array(data)))
 
 
 		# Run run_tessphot for each method:
