@@ -8,7 +8,6 @@ Simple Aperture Photometry using K2P2 to define masks.
 
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
-import os
 import numpy as np
 import logging
 from .. import BasePhotometry, STATUS
@@ -154,7 +153,7 @@ class AperturePhotometry(BasePhotometry):
 		self.additional_headers['KP_WS'] = (bool(k2p2_settings['segmentation']), 'K2P2 watershed segmentation')
 		#self.additional_headers['KP_WSALG'] = (k2p2_settings['ws_alg'], 'K2P2 watershed weighting')
 		self.additional_headers['KP_WSBLR'] = (k2p2_settings['ws_blur'], 'K2P2 watershed blur')
-		self.additional_headers['KP_WSTHR'] = (k2p2_settings['ws_threshold'], 'K2P2 watershed threshold')
+		self.additional_headers['KP_WSTHR'] = (k2p2_settings['ws_thres'], 'K2P2 watershed threshold')
 		self.additional_headers['KP_WSFOT'] = (k2p2_settings['ws_footprint'], 'K2P2 watershed footprint')
 		self.additional_headers['KP_EX'] = (bool(k2p2_settings['extend_overflow']), 'K2P2 extend overflow')
 
