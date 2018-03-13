@@ -12,6 +12,7 @@ import random
 from astropy.io import fits
 from astropy.table import Table, Column
 from astropy.wcs import WCS
+from copy import deepcopy
 import sqlite3
 
 # Import stuff from the photometry directory:
@@ -128,6 +129,7 @@ class simulateFITS(object):
 
 		# Apply time-independent changes to catalog:
 		self.catalog = self.apply_inaccurate_catalog(self.catalog)
+		self.master_catalog = deepcopy(self.catalog)
 
 		# Loop through the time steps:
 		for i, timestep in enumerate(self.times):
@@ -136,6 +138,8 @@ class simulateFITS(object):
 			# Apply time-dependent changes to catalog:
 #			self.catalog = self.apply_variable_magnitudes(self.catalog,
 #														timestamp)
+			self.catalog, jitter = self.apply_jitter()
+			print(jitter)
 
 			# Make stars from catalog:
 			stars = self.make_stars()
@@ -499,6 +503,40 @@ class simulateFITS(object):
 		# TODO: Introduce some variation in the TESS magnitude here
 
 		return catalog
+
+
+	def apply_jitter(self, var=None, apply=True):
+		"""
+		Apply crude large-scale jitter by adjusting catalog position.
+
+		Parameters:
+			var (float): Variance of 2D Gaussian distribution in pixels.
+			Default is None which sets the variance to the value 1 arcsec from
+			Sullivan et al (2015).
+			apply (boolean): True if jitter should be applied (default), false
+			if else.
+
+		Returns:
+			catalog (`astropy.table.Table`): Table formatted like the catalog
+			parameter, but with changes to its entries.
+		"""
+
+		# Copy the master catalog:
+		catalog = self.master_catalog
+
+		# Define distribution properties:
+		if var is None:
+			var = 1.*self.pixel_scale/3600
+		cov_mat = np.array([[var, 0.],[0., var]])
+
+		# Create jitter:
+		jitter = np.random.multivariate_normal([0,0], cov_mat, self.Nstars)
+
+		# Modify catalog:
+		catalog['row'] += jitter[:,0]
+		catalog['col'] += jitter[:,1]
+
+		return catalog, jitter
 
 
 	def make_stars(self, camera=1, ccd=1):
