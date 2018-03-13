@@ -261,7 +261,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 				ax1.scatter(catalog[:,0]+0.5, catalog[:,1]+0.5, color='y', s=5, alpha=0.3)
 			ax1.scatter(X[local_maxi]+0.5, Y[local_maxi]+0.5, color='r', s=5, alpha=0.5)
 
-			plot_image(labels_ws, scale='linear', percentile=100, cmap='spectral', title='Separated objects', xlabel=None, ylabel=None)
+			plot_image(labels_ws, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects', xlabel=None, ylabel=None)
 
 			for ax in axes:
 				ax.set_xticklabels([])
@@ -605,7 +605,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 		Flux_mat2[ori_mask == 0] = 0
 
 		ax2 = fig0.add_subplot(152)
-		plot_image(Flux_mat2, ax=ax2, scale='linear', percentile=100, cmap='spectral', title='Significant flux', xlabel=None, ylabel=None)
+		plot_image(Flux_mat2, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Significant flux', xlabel=None, ylabel=None)
 
 		# ---------------
 		# PLOT 3
@@ -633,7 +633,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 		# ---------------
 		# PLOT 4
 		ax4 = fig0.add_subplot(154)
-		plot_image(Flux_mat4, ax=ax4, scale='linear', percentile=100, cmap='spectral', title='Extracted clusters', xlabel=None, ylabel=None)
+		plot_image(Flux_mat4, ax=ax4, scale='linear', percentile=100, cmap='nipy_spectral', title='Extracted clusters', xlabel=None, ylabel=None)
 
 		# ---------------
 		# PLOT 5

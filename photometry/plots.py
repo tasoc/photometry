@@ -9,11 +9,11 @@ Plotting utilities.
 import six
 import logging
 import os
+import warnings
 import numpy as np
 import matplotlib
 matplotlib.use('Agg', warn=False)
-#from matplotlib.ticker import MultipleLocator, ScalarFormatter
-#y_formatter = ScalarFormatter(useOffset=False)
+from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
 from astropy.visualization import (PercentileInterval, ImageNormalize,
 								   SqrtStretch, LogStretch, LinearStretch)
@@ -39,8 +39,21 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.imshow`.
 	"""
 
+	# Negative values will throw warnings, so add offset so we are above zero:
+	# TODO: Something weird is going on, and this doesn't work, so for now we ignore warnings?!
+	warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visualization", message="invalid value encountered in log")
+	warnings.filterwarnings("ignore", category=RuntimeWarning, module="matplotlib.colors", message="invalid value encountered in less")
+	if scale == 'log' or scale == 'sqrt':
+		img_min = np.nanmin(image)
+		if img_min <= 0:
+			image += np.abs(img_min) + 1.0
+
+	#print(np.all(np.isfinite(image)), np.all(image > 0), np.min(image), np.max(image))
+
+	# Calcualte limits of color scaling:
 	vmin, vmax = PercentileInterval(percentile).get_limits(image)
 
+	# Create ImageNormalize object with extracted limits:
 	if scale == 'log':
 		norm = ImageNormalize(vmin=vmin, vmax=vmax, stretch=LogStretch())
 	elif scale == 'linear':
@@ -71,15 +84,15 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	ax.set_ylim([extent[2], extent[3]])
 
 	if make_cbar:
+		# TODO: In cases where image was rescaled, should we change something here?
 		cbar = plt.colorbar(im, norm=norm)
 		cbar.set_label(clabel)
 
 	# Settings for ticks (to make Mikkel happy):
-	# Are these needed if we demand matplotlib 2.0?
-	#ax.xaxis.set_major_locator(MultipleLocator(5))
-	#ax.xaxis.set_minor_locator(MultipleLocator(1))
-	#ax.yaxis.set_major_locator(MultipleLocator(5))
-	#ax.yaxis.set_minor_locator(MultipleLocator(1))
+	ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+	ax.xaxis.set_minor_locator(MaxNLocator(integer=True))
+	ax.yaxis.set_major_locator(MaxNLocator(integer=True))
+	ax.yaxis.set_minor_locator(MaxNLocator(integer=True))
 	ax.tick_params(direction='out', which='both', pad=5)
 	ax.xaxis.tick_bottom()
 	#ax.set_aspect(aspect)
@@ -157,11 +170,10 @@ def save_figure(path, format='png', **kwargs):
 	Write current figure to file. Creates directory to place it in if needed.
 
 	Parameters:
-		output_folder (string): Path to directory where to save figure.
-		fig_name (string): Figure name.
+		path (string): Path where to save figure. If no file extension is provided, the extension of
+		               the format is automatically appended.
 		format (string): Figure file type. Default is ``'png'``.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
-
 	"""
 
 	logger = logging.getLogger(__name__)
