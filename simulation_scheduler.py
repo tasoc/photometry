@@ -10,6 +10,9 @@ import os
 import argparse
 import numpy as np
 import logging
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
+import h5py
 
 from prepare_photometry import create_hdf5
 
@@ -110,11 +113,27 @@ if __name__ == '__main__':
 			ccd    = simulation['create_hdf5'][2]
 		)
 
-		# TODO: Rewrite motion_kernel in hdf5 file:
+		# Rewrite motion_kernel in hdf5 file:
 		logger.info("Rewriting motion_kernel in hdf5 file")
-			# open hdf5 file
-			# rewrite motion_kernel to 0 or jitter
-			# close hdf5 file
+		hdf_file = os.path.join(input_folder,
+			'camera{0:d}_ccd{1:d}.hdf5'.format(
+				simulation['create_hdf5'][1],
+				simulation['create_hdf5'][2]
+				)
+		)
+		with h5py.File(hdf_file) as hdf:
+			# Get movement kernel data:
+			data = hdf['movement_kernel']
+			data_np = np.array(data)
+			logger.debug("Original movement kernel: \n{}".format(data_np))
+
+			# Define new movement kernel:
+			movement_kernel_new = np.zeros_like(data_np)
+
+			# Replace values of movement kernel in hdf5 file:
+			data[...] = movement_kernel_new
+			logger.debug("New movement kernel: \n{}".format(np.array(data)))
+
 
 		# Run run_tessphot for each method:
 		for i, method in enumerate(simulation['methods']):
@@ -127,8 +146,11 @@ if __name__ == '__main__':
 				run_tessphot_call = "python run_tessphot.py" \
 					+ ' ' + np.str(star) + ' ' \
 					+ ' --method ' + method \
-					+ ' --quiet ' \
-					+ ' --plot '
+					+ ' --plot'
+				if args.debug:
+					run_tessphot_call += ' --debug'
+				if args.quiet:
+					run_tessphot_call += ' --quiet'
 
 				logger.info("Doing %s photometry: %s", method, run_tessphot_call)
 				os.system(run_tessphot_call)
