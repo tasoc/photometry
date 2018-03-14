@@ -136,7 +136,7 @@ class simulateFITS(object):
 		print(self.jitter)
 
 		# Loop through the time steps:
-		for i, timestep in enumerate(self.times):
+		for t, timestep in enumerate(self.times):
 			print("Making time step: "+str(timestep/3600/24))
 
 			# Set catalog to master_catalog:
@@ -147,7 +147,7 @@ class simulateFITS(object):
 #														timestamp)
 
 			# Make stars from catalog:
-			stars = self.make_stars()
+			stars = self.make_stars(t)
 
 			# Make uniform background:
 			bkg = self.make_background()
@@ -161,7 +161,7 @@ class simulateFITS(object):
 			if self.save_images:
 				# Write img to FITS file:
 				# TODO: Add possibility to write to custom directory
-				self.make_fits(img, timestep, i)
+				self.make_fits(img, timestep, t)
 
 
 	def make_times(self, cadence = 1800.0):
@@ -537,11 +537,12 @@ class simulateFITS(object):
 		return jitter
 
 
-	def make_stars(self, camera=1, ccd=1):
+	def make_stars(self, t, camera=1, ccd=1):
 		"""
 		Make stars for the image and append catalog with flux column.
 
 		Parameters:
+			t (int): Time loop index.
 			camera (int): Kepler camera. Used to get PSF. Default is 1.
 			ccd (int): Kepler CCD. Used to get PSF. Default is 1.
 
@@ -556,8 +557,8 @@ class simulateFITS(object):
 		# Make list with parameter numpy arrays for the pixel integrater:
 		params = [
 					np.array(
-						[self.catalog['row'][i] + self.jitter[i][0],
-						self.catalog['col'][i] + self.jitter[i][1],
+						[self.catalog['row'][i] + self.jitter[t][0],
+						self.catalog['col'][i] + self.jitter[t][1],
 						mag2flux(self.catalog['tmag'][i])]
 					)
 				for i in range(self.Nstars)
