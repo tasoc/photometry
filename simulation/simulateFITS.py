@@ -91,13 +91,13 @@ class simulateFITS(object):
 		self.sector = 0
 		self.camera = 1
 		self.ccd = 1
-		self.exposure_time = 1800. # 30 min
-		self.reference_time = 2457000.+np.median(float(self.Ntimes)*self.exposure_time/24/3600)
-		self.epoch = self.reference_time - 2455200.5
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
+		self.exposure_time = 1800. # 30 min
 		self.times = self.make_times(cadence=self.exposure_time)
+		self.reference_time = 2457000.+np.mean(self.times)
+		self.epoch = self.reference_time - 2455200.5
 
 		# Make WCS solution parameters:
 		self.w = WCS(naxis=2)
