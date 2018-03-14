@@ -91,6 +91,8 @@ class simulateFITS(object):
 		self.sector = 0
 		self.camera = 1
 		self.ccd = 1
+		self.TmagLow = 7.
+		self.TmagHigh = 16.
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
@@ -217,7 +219,8 @@ class simulateFITS(object):
 								self.Nstars)
 
 		# Draw stellar magnitudes:
-		starmag = np.random.uniform(5, 15, self.Nstars)
+#		starmag = np.random.uniform(self.TmagLow, self.TmagHigh, self.Nstars)
+		starmag = np.random.triangular(self.TmagLow, self.TmagHigh, self.TmagHigh, self.Nstars)
 
 		# Collect star parameters in list for catalog:
 		cat = [starids, starrows, starcols, starmag]
