@@ -10,12 +10,13 @@ independent tasks when there are more tasks than processors, especially
 when the run times vary for each task.
 
 The basic example was inspired by
-http://math.acadiau.ca/ACMMaC/Rmpi/index.html
+https://github.com/jbornschein/mpi4py-examples/blob/master/09-task-pull.py
 
 Example
 -------
 To run the program using four processes (one master and three workers) you can
 execute the following command:
+
 >>> mpiexec -n 4 python mpi_scheduler.py
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
