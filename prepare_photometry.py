@@ -63,7 +63,7 @@ def create_hdf5(sector, camera, ccd):
 		'chunks': True
 	}
 
-	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', 1))
+	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
 	logger.info("Using %d processes.", threads)
 
 	with h5py.File(hdf_file, 'a') as hdf:
