@@ -49,7 +49,7 @@ def find_ffi_files(rootdir, camera=None, ccd=None):
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
 	filename_pattern = 'tess*-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(camera=camera, ccd=ccd)
-	logger.info("Searching for FFIs in '%s'", os.path.join(rootdir, filename_pattern))
+	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
@@ -81,7 +81,7 @@ def find_tpf_files(rootdir, starid=None):
 	# Create the filename pattern to search for:
 	starid = '*' if starid is None else '{0:016d}'.format(starid)
 	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid)
-	logger.info("Searching for TPFs in '%s'", os.path.join(rootdir, filename_pattern))
+	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []

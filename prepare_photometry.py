@@ -45,7 +45,7 @@ def create_hdf5(sector, camera, ccd):
 	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
 	hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
 
-	files = find_ffi_files(os.path.join(input_folder, 'images'), camera, ccd)
+	files = find_ffi_files(input_folder, camera, ccd)
 	numfiles = len(files)
 	logger.info("Number of files: %d", numfiles)
 	if numfiles == 0:

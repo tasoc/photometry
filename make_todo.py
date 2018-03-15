@@ -121,8 +121,9 @@ def make_todo(input_folder=None):
 
 	# Load list of all Target Pixel files in the directory:
 	tpf_files = find_tpf_files(input_folder)
+	logger.info("Number of TPF files: %d", len(tpf_files))
 	for fname in tpf_files:
-		logger.info(fname)
+		logger.debug("Processing TPF file: '%s'", fname)
 		with fits.open(fname, memmap=True, mode='readonly') as hdu:
 			starid = hdu[0].header['TICID']
 			camera = hdu[0].header['CAMERA']
@@ -147,7 +148,7 @@ def make_todo(input_folder=None):
 	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
 	threads = min(threads, 16) # No reason to use more than the number of jobs in total
 	logger.info("Using %d processes.", threads)
-
+	
 	pool = multiprocessing.Pool(threads)
 	ccds_done = 0
 	for cat2 in pool.imap_unordered(_ffi_todo_wrapper, inputs):

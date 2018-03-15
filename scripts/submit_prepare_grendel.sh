@@ -4,8 +4,10 @@
 #SBATCH --constraint=astro
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=20
+#SBATCH --mem=0
 #SBATCH --export=NONE
-#SBATCH --time=6:00:00
+#SBATCH --time=12:00:00
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=rasmush@phys.au.dk
 
@@ -25,15 +27,21 @@ export TESSPHOT_OUTPUT="/scratch/astro/tess/output"
 # Move the program to the scratch disk:
 rsync -a --delete ~/tasoc/photometry/ /scratch/astro/tess/program/
 
+rsync -a --stats ~/tasoc/input/ /scratch/astro/tess/input/
+
 # Change directory to the local scratch-directory:
 cd /scratch/astro/tess/program
 
 # Run the MPI job:
-python prepare_photometry.py > prepare-out.txt 2>&1
+echo "Running prepare..."
+python prepare_photometry.py --debug 14
+
+echo "Running make_todo..."
+python make_todo.py
 
 # Copy some of the output to the home directory:
-mv prepare-out.txt ~/tasoc/output-slurm/
-mv slurm-*.out ~/tasoc/output-slurm/
+#mv prepare-out.txt ~/tasoc/output-slurm/
+#mv slurm-*.out ~/tasoc/output-slurm/
 
 echo "========= Job finished at `date` =========="
 #
