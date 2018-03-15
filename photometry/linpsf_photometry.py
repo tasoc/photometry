@@ -139,7 +139,7 @@ class LinPSFPhotometry(BasePhotometry):
 		logger.debug('Target star index: %s', np.str(staridx))
 
 		# Find catalog inaccuracies by PSF fit to the sum image:
-		PSF_correction_factor = 1.
+		PSF_correction_factor = 0.
 		if PSF_correction_factor != 0:
 			# Prepare catalog for minimizer:
 			params0 = np.empty((len(cat), 3), dtype='float64')
