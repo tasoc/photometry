@@ -43,13 +43,16 @@ def create_hdf5(sector, camera, ccd):
 	sector_reference_time = settings.get('reference_time')
 
 	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
-	hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
 
 	files = find_ffi_files(input_folder, camera, ccd)
 	numfiles = len(files)
 	logger.info("Number of files: %d", numfiles)
 	if numfiles == 0:
 		return
+
+	# HDF5 file to be created/modified:
+	hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
+	logger.debug("HDF5 File: %s", hdf_file)
 
 	# Get image shape from the first file:
 	img = load_ffi_fits(files[0])
@@ -116,7 +119,7 @@ def create_hdf5(sector, camera, ccd):
 
 				indx1 = max(k-w, 0)
 				indx2 = min(k+w+1, numfiles)
-				logger.info("%d: %d -> %d", k, indx1, indx2)
+				logger.debug("Smoothing background %d: %d -> %d", k, indx1, indx2)
 
 				bck = nanmean(dset_bck_us[:, :, indx1:indx2], axis=2)
 
@@ -131,6 +134,7 @@ def create_hdf5(sector, camera, ccd):
 		if len(images) < numfiles:
 			SumImage = np.zeros((img_shape[0], img_shape[1]), dtype='float64')
 			time = np.empty(numfiles, dtype='float64')
+			timecorr = np.empty(numfiles, dtype='float32')
 			cadenceno = np.empty(numfiles, dtype='int32')
 			quality = np.empty(numfiles, dtype='int32')
 
@@ -141,19 +145,20 @@ def create_hdf5(sector, camera, ccd):
 
 			is_tess = False
 			for k, fname in enumerate(files):
-				logger.info("%.2f%% - %s", 100*k/numfiles, fname)
+				logger.debug("Processing image: %.2f%% - %s", 100*k/numfiles, fname)
 				dset_name ='%04d' % k
 				#if dset_name in hdf['images']: continue # Dont do this, because it will mess up the sumimage and time vector
 
 				flux0, hdr = load_ffi_fits(fname, return_header=True)
 
 				time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP']) + hdr['BJDREFI'] + hdr['BJDREFF']
+				timecorr[k] = hdr.get('BARYCORR', 0)
 				cadenceno[k] = k+1
-				quality[k] = hdr['DQUALITY']
+				quality[k] = hdr.get('DQUALITY', 0)
 
 				if k == 0:
-					num_frm = hdr['NUM_FRM']
-				elif hdr['NUM_FRM'] != num_frm:
+					num_frm = hdr.get('NUM_FRM')
+				elif hdr.get('NUM_FRM') != num_frm:
 					logger.error("NUM_FRM is not constant!")
 
 				# Check if this is real TESS data:
@@ -162,6 +167,7 @@ def create_hdf5(sector, camera, ccd):
 					is_tess = True
 
 				# # Load background from HDF file and subtract background from image:
+				if not hdr.get('BACKAPP', False):
 				flux0 -= backgrounds[dset_name]
 
 				# Save image subtracted the background in HDF5 file:
@@ -186,11 +192,13 @@ def create_hdf5(sector, camera, ccd):
 
 			# Add other arrays to HDF5 file:
 			if 'time' in hdf: del hdf['time']
+			if 'timecorr' in hdf: del hdf['timecorr']
 			if 'sumimage' in hdf: del hdf['sumimage']
 			if 'cadenceno' in hdf: del hdf['cadenceno']
 			if 'quality' in hdf: del hdf['quality']
 			hdf.create_dataset('sumimage', data=SumImage, **args)
 			hdf.create_dataset('time', data=time, **args)
+			hdf.create_dataset('timecorr', data=timecorr, **args)
 			hdf.create_dataset('cadenceno', data=cadenceno, **args)
 			hdf.create_dataset('quality', data=quality, **args)
 			hdf.flush()
