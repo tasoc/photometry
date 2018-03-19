@@ -139,8 +139,7 @@ def create_hdf5(sector, camera, ccd):
 			quality = np.empty(numfiles, dtype='int32')
 
 			# Save list of file paths to the HDF5 file:
-			filenames = ['images/' + os.path.basename(fname).rstrip('.gz') for fname in files]
-			filenames = [fname.encode('ascii', 'strict') for fname in filenames]
+			filenames = [os.path.basename(fname).rstrip('.gz').encode('ascii', 'strict') for fname in files]
 			hdf.require_dataset('imagespaths', (numfiles,), data=filenames, dtype=h5py.special_dtype(vlen=bytes), **args)
 
 			is_tess = False
@@ -149,8 +148,15 @@ def create_hdf5(sector, camera, ccd):
 				dset_name ='%04d' % k
 				#if dset_name in hdf['images']: continue # Dont do this, because it will mess up the sumimage and time vector
 
+				# Load the FITS file data and the header:
 				flux0, hdr = load_ffi_fits(fname, return_header=True)
 
+				# Check if this is real TESS data:
+				# Could proberly be done more elegant, but if it works, it works...
+				if not is_tess and hdr.get('TELESCOP') == 'TESS' and hdr.get('NAXIS1') == 2136 and hdr.get('NAXIS2') == 2078:
+					is_tess = True
+
+				# Pick out the important bits from the header:
 				time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP']) + hdr['BJDREFI'] + hdr['BJDREFF']
 				timecorr[k] = hdr.get('BARYCORR', 0)
 				cadenceno[k] = k+1
@@ -161,14 +167,10 @@ def create_hdf5(sector, camera, ccd):
 				elif hdr.get('NUM_FRM') != num_frm:
 					logger.error("NUM_FRM is not constant!")
 
-				# Check if this is real TESS data:
-				# Could proberly be done more elegant, but if it works, it works...
-				if hdr.get('TELESCOP') == 'TESS' and hdr.get('NAXIS1') == 2136 and hdr.get('NAXIS2') == 2078:
-					is_tess = True
-
-				# # Load background from HDF file and subtract background from image:
+				# Load background from HDF file and subtract background from image,
+				# if the background has not already been subtracted:
 				if not hdr.get('BACKAPP', False):
-				flux0 -= backgrounds[dset_name]
+					flux0 -= backgrounds[dset_name]
 
 				# Save image subtracted the background in HDF5 file:
 				images.create_dataset(dset_name, data=flux0, **args)
