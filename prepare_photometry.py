@@ -77,11 +77,10 @@ def create_hdf5(sector, camera, ccd):
 
 		if 'backgrounds_unsmoothed' in hdf or len(backgrounds) < numfiles:
 
+			dset_bck_us = hdf.require_group('backgrounds_unsmoothed')
 			masks = hdf.require_group('backgrounds_masks')
 
 			if len(masks) < numfiles:
-
-				dset_bck_us = hdf.require_dataset('backgrounds_unsmoothed', (img_shape[0], img_shape[1], numfiles), dtype='float32')
 
 				tic = default_timer()
 				if threads > 1:
@@ -91,12 +90,14 @@ def create_hdf5(sector, camera, ccd):
 					m = map
 
 				last_bck_fit = -1 if len(masks) == 0 else int(list(masks.keys())[-1])
+
 				k = last_bck_fit+1
 				for bck, mask in m(fit_background, files[k:]):
 					dset_name = '%04d' % k
-					logger.info(k)
+					logger.debug("Background %d complete", k)
+					logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k-last_bck_fit))
 
-					dset_bck_us[:,:,k] = bck
+					dset_bck_us.create_dataset(dset_name, data=bck)
 
 					indicies = np.asarray(np.nonzero(mask), dtype='uint16')
 					masks.create_dataset(dset_name, data=indicies, **args)
@@ -113,6 +114,7 @@ def create_hdf5(sector, camera, ccd):
 			# Smooth the backgrounds along the time axis:
 			backgrounds.attrs['time_smooth'] = time_smooth
 			w = time_smooth//2
+			tic = default_timer()
 			for k in range(numfiles):
 				dset_name = '%04d' % k
 				if dset_name in backgrounds: continue
@@ -121,9 +123,17 @@ def create_hdf5(sector, camera, ccd):
 				indx2 = min(k+w+1, numfiles)
 				logger.debug("Smoothing background %d: %d -> %d", k, indx1, indx2)
 
-				bck = nanmean(dset_bck_us[:, :, indx1:indx2], axis=2)
+				block = np.empty((img_shape[0], img_shape[1], indx2-indx1), dtype='float32')
+				logger.debug(block.shape)
+				for i, k in enumerate(range(indx1, indx2)):
+					block[:, :, i] = dset_bck_us['%04d' % k]
+
+				bck = nanmean(block, axis=2)
 
 				backgrounds.create_dataset(dset_name, data=bck, **args)
+
+			toc = default_timer()
+			logger.info("%f sec/image", (toc-tic)/(numfiles))
 
 			# FIXME: Because HDF5 is stupid, this might not actually delete the data
 			#        Maybe we need to run h5repack in the file at the end?
