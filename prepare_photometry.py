@@ -167,7 +167,7 @@ def create_hdf5(sector, camera, ccd):
 					is_tess = True
 
 				# Pick out the important bits from the header:
-				time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP']) + hdr['BJDREFI'] + hdr['BJDREFF']
+				time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP']) + hdr.get('BJDREFI', 0) + hdr.get('BJDREFF', 0)
 				timecorr[k] = hdr.get('BARYCORR', 0)
 				cadenceno[k] = k+1
 				quality[k] = hdr.get('DQUALITY', 0)
@@ -215,8 +215,15 @@ def create_hdf5(sector, camera, ccd):
 			hdf.create_dataset('quality', data=quality, **args)
 			hdf.flush()
 
+		# Check that the time vector is sorted:
+		if not np.all(hdf['time'][:-1] <= hdf['time'][1:]):
+			logger.error("Time vector is not sorted")
+			return
+
+		# Check that the sector reference time is within the timespan of the time vector:
 		if sector_reference_time < hdf['time'][0] or sector_reference_time > hdf['time'][-1]:
 			logger.error("Sector reference time outside timespan of data")
+			return
 
 		if 'wcs' not in hdf or 'movement_kernel' not in hdf:
 			# Find the reference image:
