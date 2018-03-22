@@ -3,6 +3,9 @@ The TASOC Photometry module
 ===========================
 .. image:: https://travis-ci.org/tasoc/photometry.svg?branch=devel
     :target: https://travis-ci.org/tasoc/photometry
+.. image:: https://img.shields.io/github/license/tasoc/photometry.svg
+    :alt: license
+    :target: https://github.com/tasoc/photometry/blob/devel/LICENSE
 
 This module provides the basic photometry setup for the TESS Asteroseismic Science Operations Center (TASOC).
 
