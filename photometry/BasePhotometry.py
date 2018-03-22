@@ -144,7 +144,10 @@ class BasePhotometry(object):
 			self.hdf = h5py.File(filepath_hdf5, 'r')
 
 			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
-			self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
+			if 'timecorr' in self.hdf:
+				self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
+			else:
+				self.lightcurve['timecorr'] = Column(np.zeros(len(self.lightcurve['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
 			self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
 
