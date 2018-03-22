@@ -14,7 +14,7 @@ from astropy.stats import SigmaClip
 from photutils import Background2D, SExtractorBackground
 from photometry.utilities import load_ffi_fits
 
-def fit_background(image, catalog=None, flux_cutoff=3e5):
+def fit_background(image, catalog=None, flux_cutoff=8e4):
 	"""
 	Estimate background in Full Frame Image.
 
