@@ -3,6 +3,15 @@
 """
 Create catalogs of stars in a given TESS observing sector.
 
+Example:
+	In order to create catalogs for sector 14 simple call this program from the
+	commandline like so:
+
+		>>> python make_catalog.py 14
+
+	This will create the catalog files (*.sqlite) corresponding to sector 14
+	in the directory defined in the ``TESSPHOT_INPUT`` envirnonment variable.
+
 Note:
 	This function requires the user to be connected to the TASOC network
 	at Aarhus University. It connects to the TASOC database to get a complete

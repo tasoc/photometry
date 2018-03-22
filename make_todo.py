@@ -4,6 +4,27 @@
 Create the TODO list which is used by the pipeline to keep track of the
 targets that needs to be processed.
 
+Example:
+	In order to create to TODO list for the directory in the ``TESSPHOT_INPUT``
+	envirnonment variable simply run the program without any further input:
+
+	>>> python make_todo.py
+
+	This will create the file ``todo.sqlite`` in the directory defined in the
+	``TESSPHOT_INPUT`` envirnonment variable.
+
+Example:
+	If you want to create the TODO file for a specific directory (ignoring the
+	``TESSPHOT_INPUT`` envirnonment variable), you can simply call the script
+	with the directory you want to process:
+
+	>>> python make_todo.py /where/ever/you/want/
+
+Note:
+	This program assumes that the directory already contains "catalog" files for
+	the given sector. These can be create using the :py:func:`make_catalog`
+	utility.
+
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
@@ -148,7 +169,7 @@ def make_todo(input_folder=None):
 	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
 	threads = min(threads, 16) # No reason to use more than the number of jobs in total
 	logger.info("Using %d processes.", threads)
-	
+
 	pool = multiprocessing.Pool(threads)
 	ccds_done = 0
 	for cat2 in pool.imap_unordered(_ffi_todo_wrapper, inputs):
