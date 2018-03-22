@@ -144,15 +144,14 @@ class BasePhotometry(object):
 			self.hdf = h5py.File(filepath_hdf5, 'r')
 
 			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
-			self.lightcurve['timecorr'] = Column(np.zeros(len(self.hdf['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+			self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
 			self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
 
 			# World Coordinate System solution:
 			hdr_string = self.hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-			hdr = fits.Header().fromstring(hdr_string)
-			self.wcs = WCS(header=hdr) # World Coordinate system solution.
+			self.wcs = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
@@ -165,12 +164,12 @@ class BasePhotometry(object):
 			# Get shape of sumimage from hdf5 file:
 			self._max_stamp = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
 			self.pixel_offset_row = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-			self.pixel_offset_col = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
+			self.pixel_offset_col = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
 
 			# Get info for psf fit Gaussian statistic:
 			self.readnoise = self.hdf['images'].attrs.get('READNOIS', 10)
 			self.gain = self.hdf['images'].attrs.get('GAIN', 100)
-			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
+			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
 
 		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
