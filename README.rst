@@ -55,15 +55,25 @@ The program is simply run as shown here for sector #14 (see full documentation f
 
 Prepare photometry
 ------------------
-*Something here...*
+The next part of the program is to prepare photometry on individual stars by doing all the operations which requires the full-size FFI images, like the following:
+
+* Estimating sky background for all images.
+* Estimating spacecraft jitter.
+* Creating average image.
+* Restructuring data into HDF5 files for efficient I/O operations.
+
+The program can simply be run like the following, which will create a number of HDF5 files (`*.hdf5`) in the ``TESSPHOT_INPUT`` directory.
 
 >>> python prepare_photometry.py
 
 Make TODO list
 --------------
-*Something here...*
+A TODO-list is a list of targets that should be processed by the photometry code. It includes information about which cameras and CCDs they fall on and which photometric methods they should be processed with. A TODO-list can be generated directly from the catalog files (since these contain all targets near the field-of-view) and the details stored in the HDF5 files.
+In order to create a full TODO list of all stars that can be observed, simply run the command:
 
 >>> python make_todo.py
+
+This will create the file ``todo.sqlite`` in the ``TESSPHOT_INPUT`` directory, which is needed for running the photometry. See the full documentation for more options.
 
 Running the photometry
 ----------------------
