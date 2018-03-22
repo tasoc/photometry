@@ -7,9 +7,9 @@ Example:
 	In order to create catalogs for sector 14 simple call this program from the
 	commandline like so:
 
-		>>> python make_catalog.py 14
+	>>> python make_catalog.py 14
 
-	This will create the catalog files (*.sqlite) corresponding to sector 14
+	This will create the catalog files (`*.sqlite`) corresponding to sector 14
 	in the directory defined in the ``TESSPHOT_INPUT`` envirnonment variable.
 
 Note:
