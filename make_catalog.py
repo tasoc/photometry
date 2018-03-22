@@ -26,20 +26,20 @@ from photometry.utilities import add_proper_motion, load_settings
 def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=False):
 	"""
 	Create catalogs of stars in a given TESS observing sector.
-	
+
 	Parameters:
 		sector (integer): TESS observing sector.
 		cameras (iterable or None): TESS cameras (1-4) to create catalogs for. If ``None`` all cameras are created.
 		ccds (iterable or None): TESS ccds (1-4) to create catalogs for. If ``None`` all ccds are created.
 		coord_buffer (float): Buffer in degrees around each CCD to include in catalogs. Default=0.1.
 		overwrite (boolean): Overwrite existing catalogs. Default=``False``.
-		
+
 	Note:
 		This function requires the user to be connected to the TASOC network
 		at Aarhus University. It connects to the TASOC database to get a complete
 		list of all stars in the TESS Input Catalog (TIC), which is a very large
 		table.
-		
+
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
@@ -164,11 +164,11 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 					row['Tmag']
 				))
 
-		cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
-		cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
-		conn.commit()
-		cursor.close()
-		conn.close()
+			cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
+			cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
+			conn.commit()
+			cursor.close()
+			conn.close()
 
 		logger.info("Catalog done.")
 
