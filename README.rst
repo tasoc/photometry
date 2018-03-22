@@ -1,12 +1,15 @@
+===========================
 The TASOC Photometry module
-===============================
+===========================
 .. image:: https://travis-ci.org/tasoc/photometry.svg?branch=devel
     :target: https://travis-ci.org/tasoc/photometry
 
-This module provides the basic photometry setup for TASOC
+This module provides the basic photometry setup for the TESS Asteroseismic Science Operations Center (TASOC).
+
+The code is available through our GitHub organisation (https://github.com/tasoc/photometry) and full documentation for this code can be found on https://tasoc.dk/code/.
 
 Installation instructions
--------------------------
+=========================
 * Start by making sure that you have `Git Large File Storage (LFS) <https://git-lfs.github.com/>`_ installed. You can verify that is installed by running the command:
 
   >>> git lfs version
@@ -19,19 +22,51 @@ Installation instructions
 
   >>> pip install -r requirements.txt
 
-
-
 How to run tests
-----------------
+================
 You can test your installation by going to the root directory where you cloned the repository and run the command::
 
- >>> pytest
+>>> pytest
 
 Running the program
--------------------
+===================
+
+Just trying it out
+------------------
+For simply trying out the code straight after installation, you can simply run the photometry code directly. This will automatically load some test input data and run the photometry (see more details in the full documentation or below).
+
+>>> python run_tessphot.py 182092046
+
+The number refers to the TIC-number of the star, and the above one can replaced with any TIC-number that is available in the TODO-list (see below).
+
+Set up directories
+------------------
 The next thing to do is to set up the directories where input data is stored, and where output data (e.g. lightcurves) should be put. This is done by setting the enviroment variables ``TESSPHOT_INPUT`` and ``TESSPHOT_OUTPUT``.
 Depending on your operating system and shell this is done in slightly different ways.
 
+The directory defined in ``TESSPHOT_INPUT`` should contain all the data in FITS files that needs to be processed. The FITS files can be structured into sub-directories as you wish and may also be GZIP compressed (*.fits.gz). When the different programs runs, some of them will also add some more files to the ``TESSPHOT_INPUT`` directory. The directory in ``TESSPHOT_OUTPUT`` is used to store all the lightcurve FITS file that will be generated at the end.
+
+Make star catalogs
+------------------
+The first program to be run is the ``make_catalog.py`` program, which will create full catalogs of all stars known to fall on or near the TESS detectors during a given observing sector. These catalogs are created directly from the TESS Input Catalog (TIC), and since this is such a huge table this program relies on internal databases running at TASOC at Aarhus University. You therefore need to be connected to the network at TASOC at Aarhus Univsity to run this program.
+The program is simply run as shown here for sector #14 (see full documentation for more options):
+
+>>> python make_catalog.py 14
+
+Prepare photometry
+------------------
+*Something here...*
+
+>>> python prepare_photometry.py
+
+Make TODO list
+--------------
+*Something here...*
+
+>>> python make_todo.py
+
+Running the photometry
+----------------------
 The photometry program can by run on a single star by running the program::
 
   >>> python run_tessphot.py 182092046
@@ -43,6 +78,6 @@ Here, the number gives the TIC identifier of the star. The program accepts vario
 This is very usefull for testing different methods and settings.
 
 Contributing to the code
-------------------------
+========================
 You are more than welcome to contribute to this code!
 Please contact `Rasmus Handberg <rasmush@phys.au.dk>`_ or `Mikkel Lund <mikkelnl@phys.au.dk>`_ if you wish to contribute.
