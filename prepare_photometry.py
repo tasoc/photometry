@@ -21,6 +21,11 @@ from timeit import default_timer
 import itertools
 
 #------------------------------------------------------------------------------
+def _iterate_hdf_group(dset):
+	for d in dset:
+		yield np.asarray(dset[d])
+
+#------------------------------------------------------------------------------
 def create_hdf5(input_folder=None, cameras=None, ccds=None):
 	"""
 	Restructure individual FFI images (in FITS format) into
@@ -66,6 +71,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 	# Loop over each combination of camera and CCD:
 	for camera, ccd in itertools.product(cameras, ccds):
 		logger.info("Running CAMERA=%s, CCD=%s", camera, ccd)
+		tic_total = default_timer()
 
 		# Find all the FFI files associated with this camera and CCD:
 		files = find_ffi_files(input_folder, camera, ccd)
@@ -79,6 +85,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 		logger.debug("Catalog File: %s", catalog_file)
 		if not os.path.exists(catalog_file):
 			logger.error("Catalog file could not be found: '%s'", catalog_file)
+			continue
 
 		# Load catalog settings from the SQLite database:
 		conn = sqlite3.connect(catalog_file)
@@ -88,7 +95,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 		row = cursor.fetchone()
 		if row is None:
 			raise IOError("Settings could not be loaded from catalog")
-		sector = row['sector']
+		#sector = row['sector']
 		sector_reference_time = row['reference_time']
 		cursor.close()
 		conn.close()
@@ -106,6 +113,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 			images = hdf.require_group('images')
 			backgrounds = hdf.require_group('backgrounds')
+			wcs = hdf.require_group('wcs')
 			time_smooth = backgrounds.attrs.get('time_smooth', 3)
 
 			if 'backgrounds_unsmoothed' in hdf or len(backgrounds) < numfiles:
@@ -139,6 +147,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 					if threads > 1:
 						pool.close()
 						pool.join()
+
 					hdf.flush()
 					toc = default_timer()
 					logger.info("%f sec/image", (toc-tic)/(numfiles-last_bck_fit))
@@ -208,8 +217,10 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 						num_frm = hdr.get('NUM_FRM')
 					elif hdr.get('NUM_FRM') != num_frm:
 						logger.error("NUM_FRM is not constant!")
-					if hdf.get('SECTOR') != sector:
-						logger.error("Incorrect SECTOR: Catalog=%s, FITS=%s", sector, hdf.get('SECTOR'))
+					#if hdf.get('SECTOR') != sector:
+					#	logger.error("Incorrect SECTOR: Catalog=%s, FITS=%s", sector, hdf.get('SECTOR'))
+					if hdf.get('CAMERA') != camera or hdf.get('CCD') != ccd:
+						logger.error("Incorrect CAMERA/CCD: FITS=(%s, %s)", hdf.get('CAMERA'), hdf.get('CCD'))
 
 					# Load background from HDF file and subtract background from image,
 					# if the background has not already been subtracted:
@@ -220,8 +231,8 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 					images.create_dataset(dset_name, data=flux0, **args)
 
 					# Save the World Coordinate System of each image:
-					#dset = wcs.create_dataset(dset_name, (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-					#dset[0] = WCS(header=hdr).to_header_string(relax=True).strip().encode('ascii', 'strict')
+					dset = wcs.create_dataset(dset_name, (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
+					dset[0] = WCS(header=hdr).to_header_string(relax=True).strip().encode('ascii', 'strict')
 
 					# Add together images for sum-image:
 					if TESSQualityFlags.filter(quality[k]):
@@ -264,44 +275,49 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				logger.error("Sector reference time outside timespan of data")
 				#return
 
-			if 'wcs' not in hdf or 'movement_kernel' not in hdf:
-				# Find the reference image:
-				refindx = np.searchsorted(hdf['time'], sector_reference_time, side='left')
-				if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time - hdf['time'][refindx-1]) < abs(sector_reference_time - hdf['time'][refindx])):
-					refindx -= 1
-				logger.info("WCS reference frame: %d", refindx)
+			# Find the reference image:
+			refindx = np.searchsorted(hdf['time'], sector_reference_time, side='left')
+			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time - hdf['time'][refindx-1]) < abs(sector_reference_time - hdf['time'][refindx])):
+				refindx -= 1
+			logger.info("WCS reference frame: %d", refindx)
 
-				# Load the reference image and associated header:
-				_dummy, hdr = load_ffi_fits(files[refindx], return_header=True)
-				del _dummy # Maybe save a bit of memory
+			# Save WCS to the file:
+			wcs.attrs['ref_frame'] = refindx
 
-				# Save WCS to the file:
-				dset = hdf.require_dataset('wcs', (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-				dset[0] = WCS(header=hdr).to_header_string(relax=True).strip().encode('ascii', 'strict')
-				dset.attrs['ref_frame'] = refindx
-
+			if 'movement_kernel' not in hdf:
 				# Calculate image motion:
 				logger.info("Calculation Image Movement Kernels...")
 				imk = ImageMovementKernel(image_ref=images['%04d' % refindx], warpmode='translation')
 				kernel = np.empty((numfiles, imk.n_params), dtype='float64')
 
 				tic = default_timer()
+				if threads > 1:
+					pool = multiprocessing.Pool(threads)
 
-				for k, dset in enumerate(images):
-					kernel[k, :] = imk.calc_kernel(images[dset])
-					logger.info("Kernel: %s", kernel[k, :])
-					logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
+					datasets = _iterate_hdf_group(images)
+					for k, knl in enumerate(pool.imap(imk.calc_kernel, datasets)):
+						kernel[k, :] = knl
+						logger.debug("Kernel: %s", knl)
+						logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
+
+					pool.close()
+					pool.join()
+				else:
+					for k, dset in enumerate(images):
+						kernel[k, :] = imk.calc_kernel(images[dset])
+						logger.info("Kernel: %s", kernel[k, :])
+						logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
 
 				toc = default_timer()
 				logger.info("%f sec/image", (toc-tic)/numfiles)
 
 				# Save Image Motion Kernel to HDF5 file:
-				if 'movement_kernel' in hdf: del hdf['movement_kernel']
-				dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
-				dset.attrs['warpmode'] = imk.warpmode
-				dset.attrs['ref_frame'] = refindx
+				#dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
+				#dset.attrs['warpmode'] = imk.warpmode
+				#dset.attrs['ref_frame'] = refindx
 
-			logger.info("Done.")
+		logger.info("Done.")
+		logger.info("%f sec/image", (default_timer()-tic_total)/numfiles)
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':

@@ -152,7 +152,11 @@ class BasePhotometry(object):
 			self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
 
 			# World Coordinate System solution:
-			hdr_string = self.hdf['wcs'][0]
+			if isinstance(self.hdf['wcs'], h5py.Group):
+				refindx = self.hdf['wcs'].attrs['ref_frame']
+				hdr_string = self.hdf['wcs']['%04d' % refindx][0]
+			else:
+				hdr_string = self.hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
 			self.wcs = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
 
