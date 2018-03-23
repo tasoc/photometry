@@ -937,9 +937,16 @@ class BasePhotometry(object):
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
 		# Make aperture image:
+		# TODO: Pixels used in background calculation (value=4)
+		cols, rows = self.get_pixel_grid()
 		mask = np.asarray(np.isfinite(self.sumimage), dtype='int32')
 		if self.final_mask is not None:
-			mask[self.final_mask] += 2 + 8
+			mask[self.final_mask] += 10 # 2 + 8
+		# Add mapping onto TESS output channels:
+		mask[45 <= cols <= 556] += 32 # CCD output A
+		mask[557 <= cols <= 1068] += 64 # CCD output B
+		mask[1069 <= cols <= 1580] += 128 # CCD output C
+		mask[1581 <= cols <= 2092] += 256 # CCD output D
 
 		# Construct FITS header for image extensions:
 		header = self.wcs.to_header(relax=True)
