@@ -312,9 +312,9 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				logger.info("%f sec/image", (toc-tic)/numfiles)
 
 				# Save Image Motion Kernel to HDF5 file:
-				#dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
-				#dset.attrs['warpmode'] = imk.warpmode
-				#dset.attrs['ref_frame'] = refindx
+				dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
+				dset.attrs['warpmode'] = imk.warpmode
+				dset.attrs['ref_frame'] = refindx
 
 		logger.info("Done.")
 		logger.info("%f sec/image", (default_timer()-tic_total)/numfiles)
