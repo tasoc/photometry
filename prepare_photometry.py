@@ -113,6 +113,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 			images = hdf.require_group('images')
 			backgrounds = hdf.require_group('backgrounds')
+			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
 			time_smooth = backgrounds.attrs.get('time_smooth', 3)
 
@@ -150,7 +151,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 					hdf.flush()
 					toc = default_timer()
-					logger.info("%f sec/image", (toc-tic)/(numfiles-last_bck_fit))
+					logger.info("Background estimation: %f sec/image", (toc-tic)/(numfiles-last_bck_fit))
 
 				# Smooth the backgrounds along the time axis:
 				backgrounds.attrs['time_smooth'] = time_smooth
@@ -174,7 +175,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 					backgrounds.create_dataset(dset_name, data=bck, **args)
 
 				toc = default_timer()
-				logger.info("%f sec/image", (toc-tic)/(numfiles))
+				logger.info("Background smoothing: %f sec/image", (toc-tic)/numfiles)
 
 				# FIXME: Because HDF5 is stupid, this might not actually delete the data
 				#        Maybe we need to run h5repack in the file at the end?
@@ -182,7 +183,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				hdf.flush()
 
 
-			if len(images) < numfiles:
+			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf:
 				SumImage = np.zeros((img_shape[0], img_shape[1]), dtype='float64')
 				time = np.empty(numfiles, dtype='float64')
 				timecorr = np.empty(numfiles, dtype='float32')
@@ -197,7 +198,6 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				for k, fname in enumerate(files):
 					logger.debug("Processing image: %.2f%% - %s", 100*k/numfiles, fname)
 					dset_name ='%04d' % k
-					#if dset_name in images: continue # Dont do this, because it will mess up the sumimage and time vector
 
 					# Load the FITS file data and the header:
 					flux0, hdr = load_ffi_fits(fname, return_header=True)
@@ -217,22 +217,26 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 						num_frm = hdr.get('NUM_FRM')
 					elif hdr.get('NUM_FRM') != num_frm:
 						logger.error("NUM_FRM is not constant!")
-					#if hdf.get('SECTOR') != sector:
-					#	logger.error("Incorrect SECTOR: Catalog=%s, FITS=%s", sector, hdf.get('SECTOR'))
-					if hdf.get('CAMERA') != camera or hdf.get('CCD') != ccd:
-						logger.error("Incorrect CAMERA/CCD: FITS=(%s, %s)", hdf.get('CAMERA'), hdf.get('CCD'))
+					#if hdr.get('SECTOR') != sector:
+					#	logger.error("Incorrect SECTOR: Catalog=%s, FITS=%s", sector, hdr.get('SECTOR'))
+					if hdr.get('CAMERA') != camera or hdr.get('CCD') != ccd:
+						logger.error("Incorrect CAMERA/CCD: FITS=(%s, %s)", hdr.get('CAMERA'), hdr.get('CCD'))
 
-					# Load background from HDF file and subtract background from image,
-					# if the background has not already been subtracted:
-					if not hdr.get('BACKAPP', False):
-						flux0 -= backgrounds[dset_name]
+					if dset_name not in images:
+						# Load background from HDF file and subtract background from image,
+						# if the background has not already been subtracted:
+						if not hdr.get('BACKAPP', False):
+							flux0 -= backgrounds[dset_name]
 
-					# Save image subtracted the background in HDF5 file:
-					images.create_dataset(dset_name, data=flux0, **args)
+						# Save image subtracted the background in HDF5 file:
+						images.create_dataset(dset_name, data=flux0, **args)
+					else:
+						flux0 = np.asarray(images[dset_name])
 
 					# Save the World Coordinate System of each image:
-					dset = wcs.create_dataset(dset_name, (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-					dset[0] = WCS(header=hdr).to_header_string(relax=True).strip().encode('ascii', 'strict')
+					if dset_name not in wcs:
+						dset = wcs.create_dataset(dset_name, (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
+						dset[0] = WCS(header=hdr).to_header_string(relax=True).strip().encode('ascii', 'strict')
 
 					# Add together images for sum-image:
 					if TESSQualityFlags.filter(quality[k]):
@@ -309,7 +313,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 						logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
 
 				toc = default_timer()
-				logger.info("%f sec/image", (toc-tic)/numfiles)
+				logger.info("Movement Kernel: %f sec/image", (toc-tic)/numfiles)
 
 				# Save Image Motion Kernel to HDF5 file:
 				dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
@@ -317,7 +321,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				dset.attrs['ref_frame'] = refindx
 
 		logger.info("Done.")
-		logger.info("%f sec/image", (default_timer()-tic_total)/numfiles)
+		logger.info("Total: %f sec/image", (default_timer()-tic_total)/numfiles)
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
