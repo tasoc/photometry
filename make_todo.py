@@ -64,7 +64,11 @@ def _ffi_todo(input_folder, camera, ccd):
 	if os.path.exists(hdf5_file):
 		# Load the relevant information from the HDF5 file for this camera and ccd:
 		with h5py.File(hdf5_file, 'r') as hdf:
-			hdr_string = hdf['wcs'][0]
+			if isinstance(hdf['wcs'], h5py.Group):
+				refindx = hdf['wcs'].attrs['ref_frame']
+				hdr_string = hdf['wcs']['%04d' % refindx][0]
+			else:
+				hdr_string = hdf['wcs'][0]
 			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
 			wcs = WCS(header=fits.Header().fromstring(hdr_string))
 			offset_rows = hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
