@@ -113,7 +113,7 @@ def _ffi_todo(input_folder, camera, ccd):
 	return cat
 
 #------------------------------------------------------------------------------
-def make_todo(input_folder=None):
+def make_todo(input_folder=None, cameras=None, ccds=None):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
@@ -124,6 +124,8 @@ def make_todo(input_folder=None):
 	Parameters:
 		input_folder (string, optional): Input folder to create TODO list for.
 			If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
+		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be included.
+		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -133,6 +135,11 @@ def make_todo(input_folder=None):
 	# Check the input folder, and load the default if not provided:
 	if input_folder is None:
 		input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
+
+	# Make sure cameras and ccds are iterable:
+	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
+	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
+	Nccds = len(cameras)*len(ccds)
 
 	# The TODO file that we want to create. Delete it if it already exits:
 	todo_file = os.path.join(input_folder, 'todo.sqlite')
@@ -155,23 +162,24 @@ def make_todo(input_folder=None):
 			ccd = hdu[0].header['CCD']
 			tmag = hdu[0].header['TESSMAG']
 
-			cat.add_row({
-				'starid': starid,
-				'camera': camera,
-				'ccd': ccd,
-				'datasource': 'tpf',
-				'tmag': tmag
-			})
+			if camera in cameras and ccd in ccds:
+				cat.add_row({
+					'starid': starid,
+					'camera': camera,
+					'ccd': ccd,
+					'datasource': 'tpf',
+					'tmag': tmag
+				})
 
-		# TODO: Load all other targets in this stamp!
+			# TODO: Load all other targets in this stamp!
 
 	# Find all targets in Full Frame Images:
-	inputs = itertools.product([input_folder], [1,2,3,4], [1,2,3,4])
+	inputs = itertools.product([input_folder], cameras, ccds)
 
 	# Open a pool of workers:
 	logger.info("Starting pool of workers for FFIs...")
 	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
-	threads = min(threads, 16) # No reason to use more than the number of jobs in total
+	threads = min(threads, Nccds) # No reason to use more than the number of jobs in total
 	logger.info("Using %d processes.", threads)
 
 	pool = multiprocessing.Pool(threads)
@@ -179,7 +187,7 @@ def make_todo(input_folder=None):
 	for cat2 in pool.imap_unordered(_ffi_todo_wrapper, inputs):
 		cat = vstack([cat, cat2], join_type='exact')
 		ccds_done += 1
-		logger.info("CCDs done: %d/16", ccds_done)
+		logger.info("CCDs done: %d/%d", ccds_done, Nccds)
 	pool.close()
 	pool.join()
 
@@ -236,6 +244,8 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Create TODO file for TESS Photometry.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
+	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
 	parser.add_argument('input_folder', type=str, help='TESSPhot input directory to create TODO file in.', nargs='?', default=None)
 	args = parser.parse_args()
 
@@ -257,4 +267,5 @@ if __name__ == '__main__':
 	logger_parent.addHandler(console)
 	logger_parent.setLevel(logging_level)
 
-	make_todo(args.input_folder)
+	# Run the program:
+	make_todo(args.input_folder, cameras=args.camera, ccds=args.ccd)
