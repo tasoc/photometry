@@ -267,5 +267,9 @@ if __name__ == '__main__':
 	logger_parent.addHandler(console)
 	logger_parent.setLevel(logging_level)
 
+	# Check that the given input directory is indeed a directory:
+	if args.input_folder is not None and not os.path.isdir(args.input_folder):
+		parser.error("The given path does not exist or is not a directory")
+
 	# Run the program:
 	make_todo(args.input_folder, cameras=args.camera, ccds=args.ccd)

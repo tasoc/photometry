@@ -352,5 +352,9 @@ if __name__ == '__main__':
 	if not logger.hasHandlers(): logger.addHandler(console)
 	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
 
+	# Check that the given input directory is indeed a directory:
+	if args.input_folder is not None and not os.path.isdir(args.input_folder):
+		parser.error("The given path does not exist or is not a directory")
+
 	# Run the program for the selected camera/ccd combinations:
 	create_hdf5(args.input_folder, args.camera, args.ccd)

@@ -54,8 +54,9 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 
 	logger = logging.getLogger(__name__)
 
-	if cameras is None: cameras = [1, 2, 3, 4]
-	if ccds is None: ccds = [1, 2, 3, 4]
+	# Make sure cameras and ccds are iterable:
+	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
+	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
 
 	settings = load_settings(sector=sector)
 	sector_reference_time = settings['reference_time']
@@ -190,6 +191,9 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Create CATALOG files for TESS Photometry.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
+	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
+	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
 	parser.add_argument('sector', type=int, help='TESS observing sector to generate catalogs for.')
 	args = parser.parse_args()
 
@@ -209,4 +213,4 @@ if __name__ == '__main__':
 	logger.addHandler(console)
 
 	# Run the program:
-	make_catalog(args.sector)
+	make_catalog(args.sector, cameras=args.camera, ccds=args.ccd, overwrite=args.overwrite)
