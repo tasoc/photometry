@@ -41,7 +41,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be processed.
 
 	Raises:
-		IOError: If settings table could not be loaded from the catalog SQLite file.
+		IOError: If the specified ``input_folder`` is not an existing directory or if settings table could not be loaded from the catalog SQLite file.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -52,6 +52,10 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 	if input_folder is None:
 		input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
 
+	# Check that the given input directory is indeed a directory:
+	if not os.path.isdir(input_folder):
+		raise IOError("The given path does not exist or is not a directory")		
+		
 	# Make sure cameras and ccds are iterable:
 	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
 	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )

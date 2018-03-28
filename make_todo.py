@@ -113,20 +113,23 @@ def _ffi_todo(input_folder, camera, ccd):
 	return cat
 
 #------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None):
+def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
 
 	Will create the file `todo.sqlite` in the directory.
-	It will be overwritten if it already exists.
 
 	Parameters:
 		input_folder (string, optional): Input folder to create TODO list for.
 			If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
 		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be included.
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
-
+		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
+		
+	Raises:
+		IOError: If the specified ``input_folder`` is not an existing directory.
+		
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
@@ -136,6 +139,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None):
 	if input_folder is None:
 		input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
 
+	# Check that the given input directory is indeed a directory:
+	if not os.path.isdir(input_folder):
+		raise IOError("The given path does not exist or is not a directory")
+		
 	# Make sure cameras and ccds are iterable:
 	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
 	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
@@ -143,7 +150,12 @@ def make_todo(input_folder=None, cameras=None, ccds=None):
 
 	# The TODO file that we want to create. Delete it if it already exits:
 	todo_file = os.path.join(input_folder, 'todo.sqlite')
-	if os.path.exists(todo_file): os.remove(todo_file)
+	if os.path.exists(todo_file):
+		if overwrite:
+			os.remove(todo_file)
+		else:
+			logger.info("TODO file already exists")
+			return
 
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
