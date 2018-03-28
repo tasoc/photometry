@@ -84,7 +84,7 @@ def _ffi_todo(input_folder, camera, ccd):
 		# Find all the stars in the catalog brigher than a certain limit:
 		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < 15 ORDER BY tmag;")
 		for k, row in enumerate(cursor.fetchall()):
-			logger.info("%011d - %.3f", row['starid'], row['tmag'])
+			logger.debug("%011d - %.3f", row['starid'], row['tmag'])
 
 			# Calculate the position of this star on the CCD using the WCS:
 			ra_dec = np.atleast_2d([row['ra'], row['decl']])
@@ -227,6 +227,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None):
 			float(row['tmag'])
 		))
 
+	conn.commit()
 	cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
 	cursor.execute("CREATE UNIQUE INDEX starid_datasource_idx ON todolist (starid, datasource);")
 	cursor.execute("CREATE INDEX status_idx ON todolist (status);")
