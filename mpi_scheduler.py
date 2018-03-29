@@ -24,6 +24,7 @@ execute the following command:
 
 from __future__ import with_statement, print_function
 from mpi4py import MPI
+import logging
 import os
 import enum
 
@@ -98,6 +99,14 @@ if __name__ == '__main__':
 		from photometry import tessphot
 		from timeit import default_timer
 
+		# Configure logging within photometry:
+		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+		console = logging.StreamHandler()
+		console.setFormatter(formatter)
+		logger = logging.getLogger('photometry')
+		logger.addHandler(console)
+		logger.setLevel(logging.WARNING)
+		
 		while True:
 			# Send signal that we are ready for task,
 			# and receive a task from the master:

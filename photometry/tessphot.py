@@ -6,6 +6,7 @@
 
 from __future__ import division, print_function, with_statement, absolute_import
 import logging
+import traceback
 from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 
 #------------------------------------------------------------------------------
@@ -24,9 +25,11 @@ def _try_photometry(PhotClass, *args, **kwargs):
 				pass
 		except:
 			logger.exception("Something happened")
+			tb = traceback.format_exc()
 			status = STATUS.ERROR
 			try:
 				pho._status = STATUS.ERROR
+				pho.report_details(error=tb)
 			except:
 				pass
 
