@@ -101,7 +101,7 @@ class BasePhotometry(object):
 		"""
 
 		logger = logging.getLogger(__name__)
-
+		
 		# Store the input:
 		self.starid = starid
 		self.input_folder = input_folder
@@ -180,7 +180,7 @@ class BasePhotometry(object):
 
 		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(os.path.join(input_folder, 'images'), self.starid)
+			fname = find_tpf_files(input_folder, self.starid)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
