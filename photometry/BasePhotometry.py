@@ -385,10 +385,10 @@ class BasePhotometry(object):
 				Nrows, Ncolumns = self.default_stamp()
 				logger.info("Setting default stamp with sizes (%d,%d)", Nrows, Ncolumns)
 				self._stamp = (
-					int(round(self.target_pos_row)) - Nrows//2,
-					int(round(self.target_pos_row)) + Nrows//2 + 1,
-					int(round(self.target_pos_column)) - Ncolumns//2,
-					int(round(self.target_pos_column)) + Ncolumns//2 + 1
+					int(np.round(self.target_pos_row)) - Nrows//2,
+					int(np.round(self.target_pos_row)) + Nrows//2 + 1,
+					int(np.round(self.target_pos_column)) - Ncolumns//2,
+					int(np.round(self.target_pos_column)) + Ncolumns//2 + 1
 				)
 			else:
 				Nrows = self._max_stamp[1] - self._max_stamp[0]
