@@ -46,6 +46,18 @@ class AperturePhotometry(BasePhotometry):
 		logger.info('='*80)
 		logger.info("starid: %d", self.starid)
 
+		k2p2_settings = {
+			'thresh': 1.0,
+			'min_no_pixels_in_mask': 4,
+			'min_for_cluster': 4,
+			'cluster_radius': np.sqrt(2),
+			'segmentation': True,
+			'ws_blur': 0.5,
+			'ws_thres': 0.05, # K2: 0.05
+			'ws_footprint': 3,
+			'extend_overflow': True # Turn this off for Tmag>7 targets?
+		}
+		
 		for retries in range(5):
 
 			SumImage = self.sumimage
@@ -57,18 +69,6 @@ class AperturePhotometry(BasePhotometry):
 			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
-			k2p2_settings = {
-				'thresh': 1.0,
-				'min_no_pixels_in_mask': 4,
-				'min_for_cluster': 4,
-				'cluster_radius': np.sqrt(2),
-				'segmentation': True,
-				'ws_blur': 0.5,
-				'ws_thres': 0.05, # K2: 0.05
-				'ws_footprint': 3,
-				'extend_overflow': True # Turn this off for Tmag>7 targets?
-			}
-
 			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, None, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
 			masks = np.asarray(masks, dtype='bool')
 
@@ -79,7 +79,7 @@ class AperturePhotometry(BasePhotometry):
 
 			else:
 				# Look at the central pixel where the target should be:
-				indx_main = masks[:, int(self.target_pos_row_stamp), int(self.target_pos_column_stamp)].flatten()
+				indx_main = masks[:, int(round(self.target_pos_row_stamp)), int(round(self.target_pos_column_stamp))].flatten()
 
 				if not np.any(indx_main):
 					logger.warning('No pixels')
@@ -158,7 +158,7 @@ class AperturePhotometry(BasePhotometry):
 		self.additional_headers['KP_EX'] = (bool(k2p2_settings['extend_overflow']), 'K2P2 extend overflow')
 
 		# Targets that are in the mask:
-		target_in_mask = [k for k,t in enumerate(self.catalog) if np.floor(t['row'])+1 in rows[mask_main] and np.floor(t['column'])+1 in cols[mask_main]]
+		target_in_mask = [k for k,t in enumerate(self.catalog) if np.round(t['row'])+1 in rows[mask_main] and np.round(t['column'])+1 in cols[mask_main]]
 
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:

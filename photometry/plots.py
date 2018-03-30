@@ -66,9 +66,9 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		raise ValueError("scale {} is not available.".format(scale))
 
 	if offset_axes:
-		extent = (offset_axes[0], offset_axes[0] + image.shape[1], offset_axes[1], offset_axes[1] + image.shape[0])
+		extent = (offset_axes[0]-0.5, offset_axes[0] + image.shape[1]-0.5, offset_axes[1]-0.5, offset_axes[1] + image.shape[0]-0.5)
 	else:
-		extent = (0, image.shape[1], 0, image.shape[0])
+		extent = (-0.5, image.shape[1]-0.5, -0.5, image.shape[0]-0.5)
 
 	if ax is None:
 		ax = plt.gca()

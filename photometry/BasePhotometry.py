@@ -591,11 +591,11 @@ class BasePhotometry(object):
 		if not self._catalog:
 			# Pixel-positions of the corners of the current stamp:
 			corners = np.array([
-				[self._stamp[2], self._stamp[0]],
-				[self._stamp[2], self._stamp[1]],
-				[self._stamp[3], self._stamp[0]],
-				[self._stamp[3], self._stamp[1]]
-			], dtype='int32')
+				[self._stamp[2]-0.5, self._stamp[0]-0.5],
+				[self._stamp[2]-0.5, self._stamp[1]-0.5],
+				[self._stamp[3]-0.5, self._stamp[0]-0.5],
+				[self._stamp[3]-0.5, self._stamp[1]-0.5]
+			], dtype='float64')
 			# Because the TPF world coordinate solution is relative to the stamp,
 			# add the pixel offset to these:
 			if self.datasource == 'tpf':

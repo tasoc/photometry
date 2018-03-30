@@ -27,11 +27,9 @@ using clustering algorithms.
 from __future__ import division, with_statement
 from six.moves import range, zip
 import numpy as np
-from ..plots import plot_image, save_figure
+from ..plots import plot_image, save_figure, plt
 import matplotlib as mpl
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-import matplotlib.cm as cm
 from scipy import stats
 from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from statsmodels.nonparametric.bandwidths import select_bandwidth
@@ -232,7 +230,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		# Use the original label for a part of the new cluster -  if only
 		# one cluster is identified by the watershed algorithm this will then
 		# keep the original labeling
-		idx = (labels_ws==1) & (Z!=0)
+		idx = (labels_ws == 1) & (Z != 0)
 		Labels[idx] = lab
 
 		# If the cluster is segmented we will assign these new labels, starting from
@@ -256,10 +254,20 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 			plot_image(Z, ax=ax0, scale='log', title='Overlapping objects', xlabel=None, ylabel=None)
 
+			# Plot the basin used for watershed:
 			plot_image(distance, ax=ax1, scale='log', title='Basin', xlabel=None, ylabel=None)
+
+			# Overplot the full catalog:
 			if not catalog is None:
-				ax1.scatter(catalog[:,0]+0.5, catalog[:,1]+0.5, color='y', s=5, alpha=0.3)
-			ax1.scatter(X[local_maxi]+0.5, Y[local_maxi]+0.5, color='r', s=5, alpha=0.5)
+				ax1.scatter(catalog[:,0], catalog[:,1], color='y', s=5, alpha=0.3)
+
+			#if local_maxi_all is not None:
+			#	print(local_maxi_all)
+			#	ax1.scatter(X[local_maxi_all[:,0]], Y[local_maxi_all[:,1]], color='g', marker='+', s=5, alpha=0.5)
+			#ax1.scatter(X[local_maxi_before], Y[local_maxi_before], color='c', s=5, alpha=0.7)
+
+			# Overplot the final markers for the watershed:
+			ax1.scatter(X[local_maxi], Y[local_maxi], color='r', s=5, alpha=0.7)
 
 			plot_image(labels_ws, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects', xlabel=None, ylabel=None)
 
@@ -564,9 +572,9 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 
 							ax2 = fig.add_subplot(122)
 							plot_image(SumImage, ax=ax2, scale='log')
-							ax2.plot(outline_before[u][:,0]+0.5, outline_before[u][:,1]+0.5, 'r:')
-							ax2.plot(outline[:,0]+0.5, outline[:,1]+0.5, 'r-')
-							ax2.axvline(c+0.5, color='r', ls='--')
+							ax2.plot(outline_before[u][:,0], outline_before[u][:,1], 'r:')
+							ax2.plot(outline[:,0], outline[:,1], 'r-')
+							ax2.axvline(c, color='r', ls='--')
 
 							pdf.savefig(fig)
 							plt.close(fig)
@@ -647,8 +655,8 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 			# Make mask outline:
 			outline = k2p2maks(MASKS[u, :, :], 1, threshold=0.5)
 			# Plot outlines:
-			ax5.plot(outline[:, 0]+0.5, outline[:, 1]+0.5, color=col, zorder=10, lw=2.5)
-			ax4.plot(outline[:, 0]+0.5, outline[:, 1]+0.5, color='k', zorder=10, lw=1.5)
+			ax5.plot(outline[:, 0], outline[:, 1], color=col, zorder=10, lw=2.5)
+			ax4.plot(outline[:, 0], outline[:, 1], color='k', zorder=10, lw=1.5)
 
 		# Save the figure and close it:
 		save_figure(os.path.join(plot_folder, 'masks_'+ws_alg))
