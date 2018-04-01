@@ -109,7 +109,7 @@ class BasePhotometry(object):
 		self.plot = plot
 		self.datasource = datasource
 
-		logger.debug('DATASOURCE = %s', self.datasource)
+		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
 
 		self._status = STATUS.UNKNOWN
 		self._details = {}
@@ -128,8 +128,8 @@ class BasePhotometry(object):
 		self.lightcurve = Table()
 
 		if self.datasource == 'ffi':
-			# FIXME: These should also come from the catalog somehow
-			#        They will be needed to find the correct input files
+			# The camera and CCD should also come as input
+			# They will be needed to find the correct input files
 			if camera is None or ccd is None:
 				raise ValueError("CAMERA and CCD keywords must be provided for FFI targets.")
 

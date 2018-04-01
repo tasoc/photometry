@@ -43,9 +43,8 @@ class AperturePhotometry(BasePhotometry):
 		"""
 
 		logger = logging.getLogger(__name__)
-		logger.info('='*80)
-		logger.info("starid: %d", self.starid)
-
+		logger.info("Running aperture photometry...")
+		
 		k2p2_settings = {
 			'thresh': 1.0,
 			'min_no_pixels_in_mask': 4,
@@ -61,7 +60,6 @@ class AperturePhotometry(BasePhotometry):
 		for retries in range(5):
 
 			SumImage = self.sumimage
-			logger.info("SumImage shape: %s", SumImage.shape)
 
 			logger.info(self.stamp)
 			logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
