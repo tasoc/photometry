@@ -5,6 +5,7 @@
 #SBATCH --ntasks=36
 #SBATCH --ntasks-per-node=36
 #SBATCH --cpus-per-task=1
+#SBATCH --mem=0
 #SBATCH --export=NONE
 #SBATCH --time=48:00:00
 #SBATCH --mail-type=ALL
@@ -36,7 +37,7 @@ cd /scratch/astro/tess/program
 mpiexec python mpi_scheduler.py
 
 # Copy some of the output to the home directory:
-cp /scratch/astro/tess/input/todo.sqlite ~/tasoc/output-slurm/
+cp /scratch/astro/tess/input/todo.sqlite ~/tasoc/
 
 echo "========= Job finished at `date` =========="
 #
