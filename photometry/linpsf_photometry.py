@@ -231,10 +231,28 @@ class LinPSFPhotometry(BasePhotometry):
 				res = 'failed'
 			logger.debug('Result of linear psf photometry: ' + np.str(res))
 
+			# Do non-negative least squares fit if the target had negative flux:
+			if fluxes[staridx] < 0:
+				try:
+					fluxes, rnorm = scipy.optimize.nnls(A,b)
+					res = 'notfailed'
+				except:
+					res = 'failed'
+
 			# Pass result if fit did not fail:
 			if res is not 'failed':
 				# Get flux of target star:
 				result = fluxes[staridx]
+
+				# Do MOMF-inspired residual aperture photometry:
+				residual_img = img - np.dot(A, fluxes)
+				pixel_grid = self.get_pixel_grid()
+				mask = np.sqrt(
+					(pixel_grid[0] - target['column_stamp'])**2 \
+					+ (pixel_grid[1] - target['row_stamp'])**2
+				) < 1
+				residual_result = np.nansum(residual_img[mask])
+				result += residual_result
 
 				logger.debug('Fluxes are: ' + np.str(fluxes))
 				logger.debug('Result is: ' + np.str(result))
