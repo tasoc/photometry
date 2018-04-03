@@ -106,40 +106,48 @@ if __name__ == '__main__':
 		logger = logging.getLogger('photometry')
 		logger.addHandler(console)
 		logger.setLevel(logging.WARNING)
-		
-		while True:
-			# Send signal that we are ready for task,
-			# and receive a task from the master:
-			comm.send(None, dest=0, tag=tags.READY)
-			task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
-			tag = status.Get_tag()
 
-			if tag == tags.START:
-				# Do the work here
-				result = task.copy()
-				del task['priority']
+		try:
+			while True:
+				# Send signal that we are ready for task,
+				# and receive a task from the master:
+				comm.send(None, dest=0, tag=tags.READY)
+				task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+				tag = status.Get_tag()
 
-				t1 = default_timer()
-				pho = tessphot(input_folder=input_folder, output_folder=output_folder, **task)
-				t2 = default_timer()
+				if tag == tags.START:
+					# Do the work here
+					result = task.copy()
+					del task['priority']
 
-				# Construct result message:
-				result.update({
-					'status': pho.status,
-					'time': t2 - t1,
-					'details': pho._details
-				})
+					t1 = default_timer()
+					try:
+						pho = tessphot(input_folder=input_folder, output_folder=output_folder, **task)
+					except:
+						logger.exception("Fatal error in call to tessphot")
+					t2 = default_timer()
 
-				# Send the result back to the master:
-				comm.send(result, dest=0, tag=tags.DONE)
+					# Construct result message:
+					result.update({
+						'status': pho.status,
+						'time': t2 - t1,
+						'details': pho._details
+					})
 
-			elif tag == tags.EXIT:
-				# We were told to EXIT, so lets do that
-				break
+					# Send the result back to the master:
+					comm.send(result, dest=0, tag=tags.DONE)
 
-			else:
-				# This should never happen, but just to
-				# make sure we don't run into an infinite loop:
-				raise Exception("Worker recieved an unknown tag: '{0}'".format(tag))
+				elif tag == tags.EXIT:
+					# We were told to EXIT, so lets do that
+					break
 
-		comm.send(None, dest=0, tag=tags.EXIT)
+				else:
+					# This should never happen, but just to
+					# make sure we don't run into an infinite loop:
+					raise Exception("Worker recieved an unknown tag: '{0}'".format(tag))
+
+		except:
+			logger.exception("Something failed in worker")
+
+		finally:
+			comm.send(None, dest=0, tag=tags.EXIT)
