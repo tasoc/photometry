@@ -28,7 +28,7 @@ import os
 import sqlite3
 import logging
 import itertools
-from tasoc_db import TASOC_DB
+from photometry.tasoc_db import TASOC_DB
 from photometry.utilities import add_proper_motion, load_settings
 
 #------------------------------------------------------------------------------
