@@ -12,29 +12,28 @@ from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 #------------------------------------------------------------------------------
 def _try_photometry(PhotClass, *args, **kwargs):
 	logger = logging.getLogger(__name__)
-	with PhotClass(*args, **kwargs) as pho:
-		try:
+	try:
+		with PhotClass(*args, **kwargs) as pho:
 			pho.photometry()
-			status = pho.status
-		except (KeyboardInterrupt, SystemExit):
-			status = STATUS.ABORT
-			logger.info("Stopped by user or system")
-			try:
-				pho._status = STATUS.ABORT
-			except:
-				pass
-		except:
-			logger.exception("Something happened")
-			tb = traceback.format_exc()
-			status = STATUS.ERROR
-			try:
-				pho._status = STATUS.ERROR
-				pho.report_details(error=tb)
-			except:
-				pass
 
-		if status in (STATUS.OK, STATUS.WARNING):
-			pho.save_lightcurve()
+			if pho.status in (STATUS.OK, STATUS.WARNING):
+				pho.save_lightcurve()
+
+	except (KeyboardInterrupt, SystemExit):
+		logger.info("Stopped by user or system")
+		try:
+			pho._status = STATUS.ABORT
+		except:
+			pass
+
+	except:
+		logger.exception("Something happened")
+		tb = traceback.format_exc()
+		try:
+			pho._status = STATUS.ERROR
+			pho.report_details(error=tb)
+		except:
+			pass
 
 	return pho
 
