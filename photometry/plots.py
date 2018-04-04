@@ -18,6 +18,11 @@ import matplotlib.pyplot as plt
 from astropy.visualization import (PercentileInterval, ImageNormalize,
 								   SqrtStretch, LogStretch, LinearStretch)
 
+# Disable some warnings that are annoying (see below):
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visualization", message="invalid value encountered in log")
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visualization", message="invalid value encountered in sqrt")
+warnings.filterwarnings("ignore", category=RuntimeWarning, module="matplotlib.colors", message="invalid value encountered in less")
+
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 			   ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)',
 			   title=None, percentile=95.0, ax=None, cmap=plt.cm.Blues, offset_axes=None, **kwargs):
@@ -40,15 +45,13 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	"""
 
 	# Negative values will throw warnings, so add offset so we are above zero:
-	# TODO: Something weird is going on, and this doesn't work, so for now we ignore warnings?!
-	warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visualization", message="invalid value encountered in log")
-	warnings.filterwarnings("ignore", category=RuntimeWarning, module="matplotlib.colors", message="invalid value encountered in less")
+	# TODO: Something weird is going on, and this doesn't work, so for now we ignore warnings?! (see above)
 	if scale == 'log' or scale == 'sqrt':
 		img_min = np.nanmin(image)
 		if img_min <= 0:
 			image += np.abs(img_min) + 1.0
 
-	#print(np.all(np.isfinite(image)), np.all(image > 0), np.min(image), np.max(image))
+	#print(scale, np.all(np.isfinite(image)), np.all(image > 0), np.min(image), np.max(image))
 
 	# Calcualte limits of color scaling:
 	vmin, vmax = PercentileInterval(percentile).get_limits(image)
