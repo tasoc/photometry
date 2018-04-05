@@ -10,6 +10,12 @@ import traceback
 from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 
 #------------------------------------------------------------------------------
+class _PhotErrorDummy(object):
+	def __init__(self, *args, **kwargs):
+		self.status = STATUS.ERROR
+		self._details = {}
+
+#------------------------------------------------------------------------------
 def _try_photometry(PhotClass, *args, **kwargs):
 	logger = logging.getLogger(__name__)
 	try:
@@ -35,7 +41,10 @@ def _try_photometry(PhotClass, *args, **kwargs):
 		except:
 			pass
 
-	return pho
+	try:
+		return pho
+	except UnboundLocalError:
+		return _PhotErrorDummy(*args, **kwargs)
 
 #------------------------------------------------------------------------------
 def tessphot(method=None, *args, **kwargs):
