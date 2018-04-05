@@ -15,6 +15,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
 from astropy.io import fits
 from astropy.table import Table, Column
+#from mpi4py import MPI
 import h5py
 import sqlite3
 import logging
@@ -101,7 +102,7 @@ class BasePhotometry(object):
 		"""
 
 		logger = logging.getLogger(__name__)
-		
+
 		# Store the input:
 		self.starid = starid
 		self.input_folder = input_folder
@@ -141,11 +142,10 @@ class BasePhotometry(object):
 
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
+			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
 
-			#from mpi4py import MPI
 			#self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest', driver='mpio', comm=MPI.COMM_WORLD)
-			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest', swmr=True)
-			self.hdf.atomic = False # Since we are only reading, this should be okay
+			#self.hdf.atomic = False # Since we are only reading, this should be okay
 
 			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
 			if 'timecorr' in self.hdf:
