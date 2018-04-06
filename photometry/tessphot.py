@@ -34,7 +34,7 @@ def _try_photometry(PhotClass, *args, **kwargs):
 
 	except:
 		logger.exception("Something happened")
-		tb = traceback.format_exc()
+		tb = traceback.format_exc().strip()
 		try:
 			pho._status = STATUS.ERROR
 			pho.report_details(error=tb)
