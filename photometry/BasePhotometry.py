@@ -183,7 +183,6 @@ class BasePhotometry(object):
 
 				cache['_sumimage_full'] = np.asarray(self.hdf['sumimage'])
 
-				logger.error(cache)
 				hdf5_cache[filepath_hdf5] = cache
 
 			# Set all the attributes from the cache:
@@ -299,6 +298,8 @@ class BasePhotometry(object):
 		self.target_pos_row_stamp = None # Main target CCD row position in stamp.
 		self._set_stamp()
 		self._sumimage = None
+		self._images_cube = None
+		self._backgrounds_cube = None
 
 	def __enter__(self):
 		return self
@@ -440,6 +441,8 @@ class BasePhotometry(object):
 		# Force sum-image and catalog to be recalculated next time:
 		self._sumimage = None
 		self._catalog = None
+		self._images_cube = None
+		self._backgrounds_cube = None
 		return True
 
 	def get_pixel_grid(self):
@@ -495,8 +498,17 @@ class BasePhotometry(object):
 			ir2 = self._stamp[1] - self.pixel_offset_row
 			ic1 = self._stamp[2] - self.pixel_offset_col
 			ic2 = self._stamp[3] - self.pixel_offset_col
+
+			# Load in the entire data-cube in one go in an attempt at limiting
+			# the number of I/O operations:
+			if self._images_cube is None:
+				self._images_cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
+				for k in range(self.Ntimes):
+					self._images_cube[:, :, k] = self.hdf['images/%04d' % k][ir1:ir2, ic1:ic2]
+
+			# Yield slices from the data-cube as an iterator:
 			for k in range(self.Ntimes):
-				yield self.hdf['images/%04d' % k][ir1:ir2, ic1:ic2]
+				yield self._images_cube[:, :, k]
 		else:
 			ir1 = self._stamp[0] - self._max_stamp[0]
 			ir2 = self._stamp[1] - self._max_stamp[0]
@@ -532,8 +544,17 @@ class BasePhotometry(object):
 			ir2 = self._stamp[1] - self.pixel_offset_row
 			ic1 = self._stamp[2] - self.pixel_offset_col
 			ic2 = self._stamp[3] - self.pixel_offset_col
+
+			# Load in the entire data-cube in one go in an attempt at limiting
+			# the number of I/O operations:
+			if self._backgrounds_cube is None:
+				self._backgrounds_cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
+				for k in range(self.Ntimes):
+					self._backgrounds_cube[:, :, k] = self.hdf['backgrounds/%04d' % k][ir1:ir2, ic1:ic2]
+
+			# Yield slices from the data-cube as an iterator:
 			for k in range(self.Ntimes):
-				yield self.hdf['backgrounds/%04d' % k][ir1:ir2, ic1:ic2]
+				yield self._backgrounds_cube[:, :, k]
 		else:
 			ir1 = self._stamp[0] - self._max_stamp[0]
 			ir2 = self._stamp[1] - self._max_stamp[0]
