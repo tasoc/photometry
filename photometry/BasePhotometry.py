@@ -33,6 +33,8 @@ from .plots import plot_image, plt, save_figure
 
 __docformat__ = 'restructuredtext'
 
+hdf5_cache = {}
+
 @enum.unique
 class STATUS(enum.Enum):
 	"""
@@ -147,22 +149,49 @@ class BasePhotometry(object):
 			#self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest', driver='mpio', comm=MPI.COMM_WORLD)
 			#self.hdf.atomic = False # Since we are only reading, this should be okay
 
-			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
-			if 'timecorr' in self.hdf:
-				self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
-			else:
-				self.lightcurve['timecorr'] = Column(np.zeros(len(self.lightcurve['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
-			self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
-			self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
+			global hdf5_cache
+			if filepath_hdf5 not in hdf5_cache:
+				logger.error("CREATING CACHE")
+				cache = {}
 
-			# World Coordinate System solution:
-			if isinstance(self.hdf['wcs'], h5py.Group):
-				refindx = self.hdf['wcs'].attrs['ref_frame']
-				hdr_string = self.hdf['wcs']['%04d' % refindx][0]
+				cache['lightcurve'] = Table()
+				cache['lightcurve']['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
+				cache['lightcurve']['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
+				cache['lightcurve']['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
+				if 'timecorr' in self.hdf:
+					cache['lightcurve']['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
+				else:
+					cache['lightcurve']['timecorr'] = Column(np.zeros(len(cache['lightcurve']['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+
+				# World Coordinate System solution:
+				if isinstance(self.hdf['wcs'], h5py.Group):
+					refindx = self.hdf['wcs'].attrs['ref_frame']
+					hdr_string = self.hdf['wcs']['%04d' % refindx][0]
+				else:
+					hdr_string = self.hdf['wcs'][0]
+				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+				cache['wcs'] = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+
+				# Get shape of sumimage from hdf5 file:
+				cache['_max_stamp'] = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
+				cache['pixel_offset_row'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+				cache['pixel_offset_col'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
+
+				# Get info for psf fit Gaussian statistic:
+				cache['readnoise'] = self.hdf['images'].attrs.get('READNOIS', 10)
+				cache['gain'] = self.hdf['images'].attrs.get('GAIN', 100)
+				cache['n_readout'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
+
+				cache['_sumimage_full'] = np.asarray(self.hdf['sumimage'])
+
+				logger.error(cache)
+				hdf5_cache[filepath_hdf5] = cache
 			else:
-				hdr_string = self.hdf['wcs'][0]
-			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-			self.wcs = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+				logger.error("USING CACHE")
+
+			for key, value in hdf5_cache[filepath_hdf5].items():
+				logger.info("%s = %s", key, value)
+				setattr(self, key, value)
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
@@ -171,16 +200,6 @@ class BasePhotometry(object):
 			#times = time.Time(self.lightcurve['time'], format='mjd', scale='utc', location=tess)
 			#self.lightcurve['timecorr'] = times.light_travel_time(star_coord, ephemeris='jpl')
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
-
-			# Get shape of sumimage from hdf5 file:
-			self._max_stamp = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
-			self.pixel_offset_row = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-			self.pixel_offset_col = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
-
-			# Get info for psf fit Gaussian statistic:
-			self.readnoise = self.hdf['images'].attrs.get('READNOIS', 10)
-			self.gain = self.hdf['images'].attrs.get('GAIN', 100)
-			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
 
 		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
@@ -259,10 +278,10 @@ class BasePhotometry(object):
 		conn.close()
 
 		# Define the columns that have to be filled by the do_photometry method:
-		N = len(self.lightcurve['time'])
-		self.lightcurve['flux'] = Column(length=N, description='Flux', dtype='float64')
-		self.lightcurve['flux_background'] = Column(length=N, description='Background flux', dtype='float64')
-		self.lightcurve['pos_centroid'] = Column(length=N, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
+		self.Ntimes = len(self.lightcurve['time'])
+		self.lightcurve['flux'] = Column(length=self.Ntimes, description='Flux', dtype='float64')
+		self.lightcurve['flux_background'] = Column(length=self.Ntimes, description='Background flux', dtype='float64')
+		self.lightcurve['pos_centroid'] = Column(length=self.Ntimes, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
 
 		# Init arrays that will be filled with lightcurve stuff:
 		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
@@ -478,14 +497,14 @@ class BasePhotometry(object):
 			ir2 = self._stamp[1] - self.pixel_offset_row
 			ic1 = self._stamp[2] - self.pixel_offset_col
 			ic2 = self._stamp[3] - self.pixel_offset_col
-			for k in range(len(self.hdf['images'])):
+			for k in range(self.Ntimes):
 				yield self.hdf['images/%04d' % k][ir1:ir2, ic1:ic2]
 		else:
 			ir1 = self._stamp[0] - self._max_stamp[0]
 			ir2 = self._stamp[1] - self._max_stamp[0]
 			ic1 = self._stamp[2] - self._max_stamp[2]
 			ic2 = self._stamp[3] - self._max_stamp[2]
-			for k in range(self.tpf[1].header['NAXIS2']):
+			for k in range(self.Ntimes):
 				yield self.tpf[1].data['FLUX'][k][ir1:ir2, ic1:ic2]
 
 	@property
@@ -515,14 +534,14 @@ class BasePhotometry(object):
 			ir2 = self._stamp[1] - self.pixel_offset_row
 			ic1 = self._stamp[2] - self.pixel_offset_col
 			ic2 = self._stamp[3] - self.pixel_offset_col
-			for k in range(len(self.hdf['backgrounds'])):
+			for k in range(self.Ntimes):
 				yield self.hdf['backgrounds/%04d' % k][ir1:ir2, ic1:ic2]
 		else:
 			ir1 = self._stamp[0] - self._max_stamp[0]
 			ir2 = self._stamp[1] - self._max_stamp[0]
 			ic1 = self._stamp[2] - self._max_stamp[2]
 			ic2 = self._stamp[3] - self._max_stamp[2]
-			for k in range(self.tpf[1].header['NAXIS2']):
+			for k in range(self.Ntimes):
 				yield self.tpf[1].data['FLUX_BKG'][k][ir1:ir2, ic1:ic2]
 
 	@property
@@ -543,7 +562,7 @@ class BasePhotometry(object):
 				ir2 = self._stamp[1] - self.pixel_offset_row
 				ic1 = self._stamp[2] - self.pixel_offset_col
 				ic2 = self._stamp[3] - self.pixel_offset_col
-				self._sumimage = self.hdf['sumimage'][ir1:ir2, ic1:ic2]
+				self._sumimage = self._sumimage_full[ir1:ir2, ic1:ic2]
 			else:
 				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
 				Nimg = np.zeros_like(self._sumimage, dtype='int32')
