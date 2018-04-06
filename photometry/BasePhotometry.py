@@ -151,7 +151,6 @@ class BasePhotometry(object):
 
 			global hdf5_cache
 			if filepath_hdf5 not in hdf5_cache:
-				logger.error("CREATING CACHE")
 				cache = {}
 
 				cache['lightcurve'] = Table()
@@ -186,11 +185,10 @@ class BasePhotometry(object):
 
 				logger.error(cache)
 				hdf5_cache[filepath_hdf5] = cache
-			else:
-				logger.error("USING CACHE")
 
+			# Set all the attributes from the cache:
 			for key, value in hdf5_cache[filepath_hdf5].items():
-				logger.info("%s = %s", key, value)
+				logger.debug("%s = %s", key, value)
 				setattr(self, key, value)
 
 			# Correct timestamps for light-travel time:
