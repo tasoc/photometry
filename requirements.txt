@@ -1,5 +1,6 @@
 six
 pytest
+pytest-mpl
 numpy
 scipy >= 0.16
 matplotlib == 2.1.2

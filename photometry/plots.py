@@ -79,7 +79,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if isinstance(cmap, six.string_types):
 		cmap = plt.get_cmap(cmap)
 
-	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, interpolation='none', **kwargs)
+	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, interpolation='nearest', **kwargs)
 	if not xlabel is None: ax.set_xlabel(xlabel)
 	if not ylabel is None: ax.set_ylabel(ylabel)
 	if not title is None: ax.set_title(title)

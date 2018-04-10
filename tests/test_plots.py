@@ -3,6 +3,10 @@
 """
 Tests of plots
 
+>>> pytest --mpl
+
+>>> pytest --mpl-generate-path=tests/baseline_images
+
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
@@ -10,12 +14,14 @@ from __future__ import division, print_function, with_statement, absolute_import
 import sys
 import os.path
 import numpy as np
-#from matplotlib.testing.decorators import image_comparison
 import scipy
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.plots import plt, plot_image
+import pytest
 
-#@image_comparison(baseline_images=['plot_image'], extensions=['png'])
+kwargs = {'baseline_dir': 'baseline_images', 'savefig_kwargs': {'bbox_inches': 'tight'}}
+
+@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image():
 
 	mu = [3.5, 3]
@@ -35,7 +41,9 @@ def test_plot_image():
 	plot_image(gauss, ax=ax3, scale='log', title='Log')
 	ax3.plot(mu[1], mu[0], 'r+')
 
-#@image_comparison(baseline_images=['plot_image_grid1', 'plot_image_grid2'], extensions=['png'])
+	return fig
+
+@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid():
 
 	img = np.zeros((5,7))
@@ -45,20 +53,33 @@ def test_plot_image_grid():
 	img[-1,:] = 1
 
 	fig = plt.figure()
-	plot_image(img, scale='linear')
-	plt.plot(0.5, 0.5, 'r+')
-	plt.plot(5.5, 3.5, 'g+')
-	plt.grid(True)
+	ax = fig.add_subplot(111)
+	plot_image(img, ax=ax, scale='linear')
+	ax.plot(0.5, 0.5, 'r+')
+	ax.plot(5.5, 3.5, 'g+')
+	ax.grid(True)
+	return fig
+
+@pytest.mark.mpl_image_compare(**kwargs)
+def test_plot_image_grid_offset():
+
+	img = np.zeros((5,7))
+	img[:,0] = 1
+	img[0,:] = 1
+	img[:,-1] = 1
+	img[-1,:] = 1
 
 	fig = plt.figure()
-	plot_image(img, scale='linear', offset_axes=(3,2))
-	plt.plot(3.5, 2.5, 'r+')
-	plt.plot(8.5, 5.5, 'g+')
-	plt.grid(True)
-
+	ax = fig.add_subplot(111)
+	plot_image(img, ax=ax, scale='linear', offset_axes=(3,2))
+	ax.plot(3.5, 2.5, 'r+')
+	ax.plot(8.5, 5.5, 'g+')
+	ax.grid(True)
+	return fig
 
 if __name__ == '__main__':
 	plt.close('all')
 	test_plot_image()
 	test_plot_image_grid()
+	test_plot_image_grid_offset()
 	plt.show()
