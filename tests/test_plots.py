@@ -19,7 +19,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.plots import plt, plot_image
 import pytest
 
-kwargs = {'baseline_dir': 'baseline_images', 'savefig_kwargs': {'bbox_inches': 'tight'}}
+kwargs = {'baseline_dir': 'baseline_images'}
 
 @pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image():
