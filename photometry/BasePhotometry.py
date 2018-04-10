@@ -105,10 +105,12 @@ class BasePhotometry(object):
 
 		logger = logging.getLogger(__name__)
 
+		if datasource not in ('ffi', 'tpf'):
+			raise ValueError("Invalid datasource: '%s'" % datasource)
+
 		# Store the input:
 		self.starid = starid
 		self.input_folder = input_folder
-		self.output_folder = output_folder
 		self.plot = plot
 		self.datasource = datasource
 
@@ -119,6 +121,13 @@ class BasePhotometry(object):
 		self.tpf = None
 		self.hdf = None
 		self._MovementKernel = None
+
+		# Directory where output files will be saved:
+		self.output_folder = os.path.join(
+			output_folder,
+			self.datasource,
+			'{0:011d}'.format(self.starid)[:5]
+		)
 
 		# Set directory where diagnostics plots should be saved to:
 		self.plot_folder = None
@@ -244,9 +253,6 @@ class BasePhotometry(object):
 			self.readnoise = self.tpf[1].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
 			self.gain = self.tpf[1].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
 			self.n_readout = self.tpf[1].header.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
-
-		else:
-			raise ValueError("Invalid datasource: '%s'" % self.datasource)
 
 		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
@@ -878,6 +884,10 @@ class BasePhotometry(object):
 		# Check if another output folder was provided:
 		if output_folder is None:
 			output_folder = self.output_folder
+
+		# Make sure that the directory exists:
+		if not os.path.exists(output_folder):
+			os.makedirs(output_folder)
 
 		# Get the current date for the files:
 		now = datetime.datetime.now()
