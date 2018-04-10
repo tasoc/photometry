@@ -10,7 +10,10 @@ from __future__ import division, print_function, with_statement, absolute_import
 import numpy as np
 import sys
 import os
-import tempfile
+try:
+	from tempfile import TemporaryDirectory
+except ImportError:
+	from backports.tempfile import TemporaryDirectory
 from astropy.io import fits
 from astropy.wcs import WCS
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -20,7 +23,7 @@ INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 DUMMY_TARGET = 471012650
 
 def test_stamp():
-	with tempfile.TemporaryDirectory() as OUTPUT_DIR:
+	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
 			pho._stamp = (0, 10, 0, 20)
@@ -55,7 +58,7 @@ def test_stamp():
 			assert(cols.shape == (22, 20))
 
 def test_images():
-	with tempfile.TemporaryDirectory() as OUTPUT_DIR:
+	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
 			pho._stamp = (0, 10, 0, 20)
@@ -65,7 +68,7 @@ def test_images():
 				assert(img.shape == (10, 20))
 
 def test_backgrounds():
-	with tempfile.TemporaryDirectory() as OUTPUT_DIR:
+	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
 			pho._stamp = (0, 10, 0, 20)
@@ -75,7 +78,7 @@ def test_backgrounds():
 				assert(img.shape == (10, 20))
 
 def test_catalog():
-	with tempfile.TemporaryDirectory() as OUTPUT_DIR:
+	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
 			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
 				print(pho.catalog)
@@ -97,7 +100,7 @@ def test_catalog():
 
 
 def test_catalog_attime():
-	with tempfile.TemporaryDirectory() as OUTPUT_DIR:
+	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
 			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
 
@@ -110,7 +113,7 @@ def test_catalog_attime():
 
 
 def test_wcs():
-	with tempfile.TemporaryDirectory() as OUTPUT_DIR:
+	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 			cols, rows = pho.get_pixel_grid()
 			wcs_ffi = pho.wcs
