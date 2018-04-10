@@ -100,7 +100,7 @@ class BasePhotometry(object):
 		Raises:
 			IOError: If starid could not be found in catalog.
 			ValueError: On invalid datasource.
-
+			ValueError: If ``camera`` and ``ccd`` is not provided together with ``datasource='ffi'``.
 		"""
 
 		logger = logging.getLogger(__name__)
@@ -879,6 +879,9 @@ class BasePhotometry(object):
 
 		Parameters:
 			output_folder (string, optional): Path to directory where to save lightcurve. If ``None`` the directory specified in the attribute ``output_folder`` is used.
+
+		Returns:
+			string: Path to the generated file.
 		"""
 
 		# Check if another output folder was provided:
@@ -1001,8 +1004,9 @@ class BasePhotometry(object):
 		mask[(1581 <= cols) & (cols <= 2092)] += 256 # CCD output D
 
 		# Construct FITS header for image extensions:
-		header = self.wcs.to_header(relax=True)
-		header.set('INHERIT', True, 'inherit the primary header', before=0) # Add
+		wcs = self.wcs[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+		header = wcs.to_header(relax=True)
+		header.set('INHERIT', True, 'inherit the primary header', before=0) # Add inherit header
 
 		# Create aperture image extension:
 		img_aperture = fits.ImageHDU(data=mask, header=header, name='APERTURE')
@@ -1019,5 +1023,8 @@ class BasePhotometry(object):
 		)
 
 		# Write to file:
+		filepath = os.path.join(output_folder, filename)
 		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
-			hdulist.writeto(os.path.join(output_folder, filename), checksum=True, overwrite=True)
+			hdulist.writeto(filepath, checksum=True, overwrite=True)
+
+		return filepath
