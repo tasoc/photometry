@@ -44,27 +44,59 @@ if __name__ == '__main__':
 
 
 	""" Create dictionaries with simulations """
-	single_star = {
-		'name':				'single_star',
-		'ignore_mov_kernel': 	True,
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
-		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
-	}
 	single_star_mov_kernel = {
 		'name':				'single_star_mov_kernel',
 		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[1, 150], # 1 star, 150 samples
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
 		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
 		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
 	}
+	single_star = {
+		'name':				'single_star',
+		'ignore_mov_kernel': 	True,
+		'run_simulateFITS': 	[1, 150], # 1 star, 150 samples
+#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
+#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
+		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
+	}
+	multi_star_100 = {
+		'name':				'multi_star',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[100, 2], # 1 star, 150 samples
+#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
+#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
+		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
+	}
+	multi_star_5000 = {
+		'name':				'multi_star_5000_150t',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[5000, 150], # 1 star, 150 samples
+#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
+#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
+		'stars': 			np.arange(1,501, dtype=int) # stars to do photometry on
+	}
+	multi_star_2 = {
+		'name':				'multi_star_2',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2, 2], # 1 star, 150 samples
+#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
+#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
+		'stars': 			np.arange(1,3, dtype=int) # stars to do photometry on
+	}
 
 	# Collect dictionaries in list:
-	simulations = [single_star, single_star_mov_kernel]
+	simulations = [multi_star_5000]
 	logger.info("Simulations being run: \n %s", simulations)
 
 
