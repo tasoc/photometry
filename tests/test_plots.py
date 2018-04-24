@@ -17,11 +17,11 @@ import numpy as np
 import scipy
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.plots import plt, plot_image
-import pytest
+#import pytest
 
 kwargs = {'baseline_dir': 'baseline_images'}
 
-@pytest.mark.mpl_image_compare(**kwargs)
+#@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image():
 
 	mu = [3.5, 3]
@@ -43,7 +43,7 @@ def test_plot_image():
 
 	return fig
 
-@pytest.mark.mpl_image_compare(**kwargs)
+#@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid():
 
 	img = np.zeros((5,7))
@@ -60,7 +60,7 @@ def test_plot_image_grid():
 	ax.grid(True)
 	return fig
 
-@pytest.mark.mpl_image_compare(**kwargs)
+#@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid_offset():
 
 	img = np.zeros((5,7))
