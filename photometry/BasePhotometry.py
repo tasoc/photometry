@@ -26,6 +26,7 @@ from copy import deepcopy
 from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian, ss
+from timeit import default_timer
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
 from .utilities import find_tpf_files
@@ -1025,6 +1026,8 @@ class BasePhotometry(object):
 		# Write to file:
 		filepath = os.path.join(output_folder, filename)
 		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
+			t1 = default_timer()
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
+			self.report_details(error='I/O Output time: %f' & (default_timer() - t1))
 
 		return filepath
