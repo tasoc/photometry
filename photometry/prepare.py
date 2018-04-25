@@ -53,8 +53,8 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 	# Check that the given input directory is indeed a directory:
 	if not os.path.isdir(input_folder):
-		raise IOError("The given path does not exist or is not a directory")		
-		
+		raise IOError("The given path does not exist or is not a directory")
+
 	# Make sure cameras and ccds are iterable:
 	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
 	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
@@ -112,7 +112,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 		img_shape = img.shape
 
 		# Open the HDF5 file for editing:
-		with h5py.File(hdf_file, 'a', libver='latest', swmr=True) as hdf:
+		with h5py.File(hdf_file, 'a', libver='latest', swmr=False) as hdf:
 
 			images = hdf.require_group('images')
 			backgrounds = hdf.require_group('backgrounds')

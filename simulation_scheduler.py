@@ -14,7 +14,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
 
-from prepare_photometry import create_hdf5
+from photometry.prepare import create_hdf5
 
 
 if __name__ == '__main__':
@@ -65,19 +65,19 @@ if __name__ == '__main__':
 		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
 	}
 	multi_star_100 = {
-		'name':				'multi_star',
+		'name':				'multi_star_100',
 		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[100, 2], # 1 star, 150 samples
+		'run_simulateFITS': 	[100, 2], # 100 stars, 2 samples
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
 #		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
 		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
+		'stars': 			[84, 63, 15, 5, 34] # stars to do photometry on
 	}
 	multi_star_5000 = {
 		'name':				'multi_star_5000_150t',
 		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[5000, 150], # 1 star, 150 samples
+		'run_simulateFITS': 	[5000, 150], # 5000 stars, 150 samples
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
 #		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
@@ -87,16 +87,17 @@ if __name__ == '__main__':
 	multi_star_2 = {
 		'name':				'multi_star_2',
 		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[2, 2], # 1 star, 150 samples
+		'run_simulateFITS': 	[2, 2], # 2 stars, 2 samples
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
 #		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
 		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,3, dtype=int) # stars to do photometry on
+#		'stars': 			np.arange(1,3, dtype=int) # stars to do photometry on
+		'stars': 			np.array([1,2],dtype=int)
 	}
 
 	# Collect dictionaries in list:
-	simulations = [multi_star_5000]
+	simulations = [multi_star_100]
 	logger.info("Simulations being run: \n %s", simulations)
 
 
@@ -150,9 +151,9 @@ if __name__ == '__main__':
 		# Run create_hdf5 from prepare_photometry.py:
 		logger.info("Running create_hdf5 from prepare_photometry.py")
 		create_hdf5(
-			sector = simulation['create_hdf5'][0],
-			camera = simulation['create_hdf5'][1],
-			ccd    = simulation['create_hdf5'][2]
+			simulation['input_folder'],
+			cameras = simulation['create_hdf5'][1],
+			ccds    = simulation['create_hdf5'][2]
 		)
 
 		# Rewrite motion_kernel in hdf5 file:
