@@ -76,7 +76,8 @@ class ImageMovementKernel(object):
 		"""
 
 		# Convert to logarithmic units, avoiding taking log if zero:
-		flux = np.log10(np.asarray(flux) - np.nanmin(flux) + 1.0)
+		flux = np.asarray(flux)
+		flux = np.log10(flux - np.nanmin(flux) + 1.0)
 
 		# Convert image to flux in range -1 to 1 (for gradient determination)
 		fmax = np.nanmax(flux)

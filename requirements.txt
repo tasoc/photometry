@@ -1,5 +1,6 @@
 six
 pytest
+pytest-mpl
 numpy
 scipy >= 0.16
 matplotlib == 2.1.2
@@ -13,3 +14,4 @@ scikit-learn == 0.19.0
 statsmodels == 0.8.0
 opencv-python
 psycopg2-binary
+backports.tempfile
