@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Test of MOMF-inspired mask for residual aperture photometry.
+MOMF-inspired mask for residual aperture photometry.
 
 @author: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 """
@@ -21,7 +21,7 @@ def four_pixel_mask(row, col):
 		col (float): subpixel column position of star. Must be positive.
 
 	Returns:
-		mask (numpy array, dtype=int): Indices of the four pixels in the mask.
+		mask (numpy array, dtype=int): 2D indices of the four pixels in the mask. Convert to 1D using NumPy's ravel_multi_index.
 	"""
 
 	if row % 1 < 0.5:
@@ -52,14 +52,11 @@ def four_pixel_mask(row, col):
 
 
 if __name__=="__main__":
+	# Plot examples of how the residual mask is defined:
+
 	import matplotlib.pyplot as plt
 
 	plt.close('all')
-
-#	row, col = (1.1, 1.9)
-#
-#	print(row, col)
-#	print(four_pixel_mask(row, col))
 
 	offset = 0.2
 	positions = [(1.+offset, 1.+offset),
@@ -73,8 +70,8 @@ if __name__=="__main__":
 		row, col = position
 
 		mask = four_pixel_mask(row, col)
-#		print(row, col)
-#		print(mask)
+		print(row, col)
+		print(mask)
 
 		image = np.zeros([3, 3], dtype=int)
 
