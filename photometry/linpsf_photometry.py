@@ -104,8 +104,8 @@ class LinPSFPhotometry(BasePhotometry):
 						).reshape(1, 3)
 				# Write
 				if col == staridx:
-					target_row = params0[0]
-					target_col = params0[1]
+					target_row = params0[0][0]
+					target_col = params0[0][1]
 
 				# Fill out column of A with reshaped PRF array from one star:
 				A[:,col] = np.reshape(self.psf.integrate_to_image(params0,
@@ -142,7 +142,8 @@ class LinPSFPhotometry(BasePhotometry):
 				# Get indices of mask in residual image:
 				res_mask = four_pixel_mask(target_row, target_col)
 				logger.debug('Indices of residual mask, 2D: ' + np.array_str(res_mask))
-				res_mask = np.ravel_multi_index(res_mask, dims=img.shape)
+				res_mask_for_ravel = ([idx[0] for idx in res_mask],[idx[1] for idx in res_mask])
+				res_mask = np.ravel_multi_index(res_mask_for_ravel, dims=img.shape)
 				logger.debug('Indices of residual mask, ravelled: ' + np.array_str(res_mask))
 
 				# Do aperture photometry on residual image:
