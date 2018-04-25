@@ -104,8 +104,8 @@ class PSF(object):
 		PRFx = (PRFx - np.size(PRFx) / 2) * cdelt1p
 		PRFy = (PRFy - np.size(PRFy) / 2) * cdelt2p
 
-		# Interpolation function over the PRF:
-		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf) #: 2D-interpolation of PSF (RectBivariateSpline).
+		# Interpolation function (linear as set by kx=ky=1) over the PRF:
+		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf, kx=1, ky=1) #: 2D-interpolation of PSF (RectBivariateSpline).
 
 
 	def integrate_to_image(self, params, cutoff_radius=5):

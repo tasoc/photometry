@@ -17,6 +17,7 @@ from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
 from .plots import plot_image_fit_residuals, save_figure
+from .residual_mask import four_pixel_mask
 
 class LinPSFPhotometry(BasePhotometry):
 
@@ -205,11 +206,17 @@ class LinPSFPhotometry(BasePhotometry):
 
 			# Create A, the 2D of vertically reshaped PRF 1D arrays:
 			A = np.empty([npx, nstars])
+
+			# Preallocate target row and col position:
 			for col,target in enumerate(cat):
 				# Get star parameters with flux set to 1 and reshape:
 				params0 = np.array(
 						[target['row_stamp'], target['column_stamp'], 1.]
 						).reshape(1, 3)
+				# Write
+				if col == staridx:
+					target_row = params0[0][0]
+					target_col = params0[0][1]
 
 				# Fill out column of A with reshaped PRF array from one star:
 				A[:,col] = np.reshape(self.psf.integrate_to_image(params0,
@@ -244,18 +251,26 @@ class LinPSFPhotometry(BasePhotometry):
 				# Get flux of target star:
 				result = fluxes[staridx]
 
-				# Do MOMF-inspired residual aperture photometry:
-				residual_img = img - np.dot(A, fluxes)
-				pixel_grid = self.get_pixel_grid()
-				mask = np.sqrt(
-					(pixel_grid[0] - target['column_stamp'])**2 \
-					+ (pixel_grid[1] - target['row_stamp'])**2
-				) < 1
-				residual_result = np.nansum(residual_img[mask])
-				result += residual_result
+				logger.debug('PSF fitted fluxes are: ' + np.str(fluxes))
+				logger.debug('PSF fitted result is: ' + np.str(result))
 
-				logger.debug('Fluxes are: ' + np.str(fluxes))
-				logger.debug('Result is: ' + np.str(result))
+				# Generate fitted and residual images from A and fitted fluxes:
+				img_fit = np.reshape(np.sum(A*fluxes, 1), img.shape)
+				img_res = img - img_fit
+
+				# Get indices of mask in residual image:
+				res_mask = four_pixel_mask(target_row, target_col)
+				logger.debug('Indices of residual mask, 2D: ' + np.array_str(res_mask))
+				res_mask_for_ravel = ([idx[0] for idx in res_mask],[idx[1] for idx in res_mask])
+				res_mask = np.ravel_multi_index(res_mask_for_ravel, dims=img.shape)
+				logger.debug('Indices of residual mask, ravelled: ' + np.array_str(res_mask))
+
+				# Do aperture photometry on residual image:
+				res_mask_sum = np.sum(img_res.ravel()[res_mask])
+				logger.debug('Residual aperture photometry result: ' + np.str(res_mask_sum))
+
+				# Add residual photometry result to target flux value:
+				result += res_mask_sum
 
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result
@@ -268,25 +283,22 @@ class LinPSFPhotometry(BasePhotometry):
 				if self.plot:
 					# Make plot for debugging:
 					fig = plt.figure()
-					result4plot = []
-					for star, target in enumerate(cat):
-						result4plot.append(np.array([target['row_stamp'],
-													target['column_stamp'],
-													fluxes[star]]))
 
 					# Add subplots with the image, fit and residuals:
 					ax_list = plot_image_fit_residuals(fig=fig,
 							image=img,
-							fit=self.psf.integrate_to_image(result4plot, cutoff_radius=20),
-							residuals=img - self.psf.integrate_to_image(result4plot, cutoff_radius=20))
+							fit=img_fit,
+							residuals=img_res)
 
-					# Add star position to the first plot:
-					ax_list[0].scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
-
-					# Add subplot titles:
+					# Set subplot titles:
 					title_list = ['Simulated image', 'Least squares PSF fit', 'Residual image']
 					for ax, title in zip(ax_list, title_list):
+						# Add title to subplot:
 						ax.set_title(title)
+
+						# Add star position to subplot:
+						# TODO: get target star position from somewhere else than result4plot which is to be outphased
+						ax_list[0].scatter(target_col, target_row, c='r', alpha=0.5)
 
 					# Save figure to file:
 					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
