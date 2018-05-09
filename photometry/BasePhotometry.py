@@ -1028,6 +1028,6 @@ class BasePhotometry(object):
 		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
 			t1 = default_timer()
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
-			self.report_details(error='I/O Output time: %f' & (default_timer() - t1))
+			self.report_details(error='I/O Output time: %f' % (default_timer() - t1))
 
 		return filepath
