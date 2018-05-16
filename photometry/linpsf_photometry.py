@@ -185,7 +185,6 @@ class LinPSFPhotometry(BasePhotometry):
 
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
-
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
@@ -260,9 +259,10 @@ class LinPSFPhotometry(BasePhotometry):
 				img_fit = np.reshape(np.sum(A*fluxes, 1), img.shape)
 				img_res = img - img_fit
 
-				# Get indices of mask in residual image:
-#				res_mask = four_pixel_mask(target_row, target_col)
-				res_mask_2D = nine_pixel_mask(target_row, target_col)
+				# Get indices of mask in residual image (only first time step):
+				if k == 0:
+	#				res_mask_2D = four_pixel_mask(target_row, target_col)
+					res_mask_2D = nine_pixel_mask(target_row, target_col)
 				logger.debug('Indices of residual mask, 2D: ' + np.array_str(res_mask_2D))
 				res_mask_for_ravel = ([idx[0] for idx in res_mask_2D],[idx[1] for idx in res_mask_2D])
 				res_mask = np.ravel_multi_index(res_mask_for_ravel, dims=img.shape)
