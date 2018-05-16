@@ -27,7 +27,6 @@ from mpi4py import MPI
 import logging
 import os
 import enum
-import gc
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -143,8 +142,6 @@ if __name__ == '__main__':
 					# TODO: Is this even needed?
 					del pho, task, result
 					k += 1
-					if k % 100:
-						gc.collect()
 
 				elif tag == tags.EXIT:
 					# We were told to EXIT, so lets do that
