@@ -16,8 +16,8 @@ from scipy.optimize import minimize
 from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
-from .plots import plot_image_fit_residuals, save_figure
-from .residual_mask import four_pixel_mask
+from .plots import plot_image_fit_residuals, save_figure, mark_pixels
+from .residual_mask import four_pixel_mask, nine_pixel_mask
 
 class LinPSFPhotometry(BasePhotometry):
 
@@ -261,9 +261,10 @@ class LinPSFPhotometry(BasePhotometry):
 				img_res = img - img_fit
 
 				# Get indices of mask in residual image:
-				res_mask = four_pixel_mask(target_row, target_col)
-				logger.debug('Indices of residual mask, 2D: ' + np.array_str(res_mask))
-				res_mask_for_ravel = ([idx[0] for idx in res_mask],[idx[1] for idx in res_mask])
+#				res_mask = four_pixel_mask(target_row, target_col)
+				res_mask_2D = nine_pixel_mask(target_row, target_col)
+				logger.debug('Indices of residual mask, 2D: ' + np.array_str(res_mask_2D))
+				res_mask_for_ravel = ([idx[0] for idx in res_mask_2D],[idx[1] for idx in res_mask_2D])
 				res_mask = np.ravel_multi_index(res_mask_for_ravel, dims=img.shape)
 				logger.debug('Indices of residual mask, ravelled: ' + np.array_str(res_mask))
 
@@ -299,8 +300,12 @@ class LinPSFPhotometry(BasePhotometry):
 						ax.set_title(title)
 
 						# Add star position to subplot:
-						# TODO: get target star position from somewhere else than result4plot which is to be outphased
-						ax_list[0].scatter(target_col, target_row, c='r', alpha=0.5)
+						ax.scatter(target_col, target_row, c='r', alpha=0.5)
+					logger.debug("Target stamp column: {}".format(target_col))
+					logger.debug("Target stamp row: {}".format(target_row))
+
+					# Mark the pixels in the residual mask:
+					mark_pixels(res_mask_2D, ax_list[2])
 
 					# Save figure to file:
 					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
