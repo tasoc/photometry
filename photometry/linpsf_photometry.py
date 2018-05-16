@@ -12,6 +12,7 @@ import scipy
 import matplotlib.pyplot as plt
 import logging
 import os
+from scipy.optimize import minimize
 from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
@@ -48,6 +49,65 @@ class LinPSFPhotometry(BasePhotometry):
 		# TODO: Maybe we should move this into BasePhotometry?
 		self.psf = PSF(self.camera, self.ccd, self.stamp)
 
+	def _lhood(self, params, img, bkg, lhood_stat='Gaussian_d', include_bkg=True):
+		"""
+		Log-likelihood function to be minimized for the PSF fit.
+
+		Parameters:
+			params (numpy array): Parameters for the PSF integrator.
+			img_bkg (list): List containing the image and background numpy arrays.
+			lhood_stat (string): Determines what statistic to use. Default is
+			``Gaussian_d``. Can also be ``Gaussian_m`` or ``Poisson``.
+			include_bkg (boolean): Determine whether to include background. Default
+			is ``True``.
+		"""
+
+		# Reshape the parameters into a 2D array:
+		params = params.reshape(len(params)//3, 3)
+
+		# Define minimum weights to avoid dividing by 0:
+		minweight = 1e-9
+		minvar = 1e-9
+
+		# Pass the list of stars to the PSF integrator to produce an artificial image:
+		mdl = self.psf.integrate_to_image(params, cutoff_radius=10)
+
+		# Calculate the likelihood value:
+		if lhood_stat.startswith('Gaussian'):
+			if lhood_stat == 'Gaussian_d':
+				if include_bkg:
+					var = np.abs(img + bkg) # can be outside _lhood
+				else:
+					var = np.abs(img) # can be outside _lhood
+
+			elif lhood_stat == 'Gaussian_m':
+				if include_bkg:
+					var = np.abs(mdl + bkg) # has to be in _lhood
+				else:
+					var = np.abs(mdl) # has to be in _lhood
+			# Add 2nd term of Erwin (2015), eq. (13):
+			var += self.n_readout * self.readnoise**2 / self.gain**2
+			var[var<minvar] = minvar
+			weightmap = 1 / var
+			weightmap[weightmap<minweight] = minweight
+			# Return the chi2:
+			return np.nansum( weightmap * (img - mdl)**2 )
+
+		elif lhood_stat == 'Poisson':
+			# Prepare model for logarithmic expression by changing zeros to small values:
+			mdl_for_log = mdl
+			mdl_for_log[mdl_for_log < 1e-9] = 1e-9
+			# Return the Cash statistic:
+			return 2 * np.nansum( mdl - img * np.log(mdl_for_log) )
+
+		elif lhood_stat == 'old_Gaussian':
+			# Return the chi2:
+			return np.nansum( (img - mdl)**2 / img )
+
+		else:
+			raise ValueError("Invalid statistic: '%s'" % lhood_stat)
+
+
 	def do_photometry(self):
 		"""Linear PSF Photometry
 		TODO: add description of method and what A and b are
@@ -72,17 +132,69 @@ class LinPSFPhotometry(BasePhotometry):
 		indx = (cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -5)
 		nstars = np.sum(indx)
 
+		# Reduce catalog to only include stars that should be fitted:
+		cat = cat[indx]
+
 		# Get target star index in the reduced catalog of stars to fit:
-		staridx = np.squeeze(np.where(cat[indx]['starid']==self.starid))
+		staridx = np.squeeze(np.where(cat['starid']==self.starid))
 		logger.debug('Target star index: %s', np.str(staridx))
+
+		# Find catalog inaccuracies by PSF fit to the sum image:
+		PSF_correction_factor = 0.
+		if PSF_correction_factor != 0:
+			# Prepare catalog for minimizer:
+			params0 = np.empty((len(cat), 3), dtype='float64')
+			for k, target in enumerate(cat):
+				params0[k,:] = [target['row_stamp'],
+								target['column_stamp'],
+								mag2flux(target['tmag'])]
+			params0 = params0.flatten() # Make the parameters into a 1D array
+
+			# Call minimizer with sumimage and zero background:
+			img = self.sumimage
+			bkg = np.zeros_like(img)
+			maxiter = 1500
+			try:
+				res_PSF = minimize(self._lhood,
+					params0, args=(img, bkg), method='Nelder-Mead',
+					options={'maxiter': maxiter})
+			except:
+				res_PSF = 'failed'
+				logger.info('Initial PSF fit to determine location failed.')
+
+			# Get PSF-catalog offset results from minimize results object:
+			if res_PSF == 'failed':
+				pass
+			else:
+				if res_PSF.x.ndim > 1:
+					PSF_position = res_PSF.x[staridx, 0:2]
+				else:
+					PSF_position = res_PSF.x[0:2]
+				logger.info('PSF fit to sumimage target [row,col] result: {0}'.format(PSF_position))
+
+				# Determine offset magnitude:
+				PSF_offset = PSF_position - np.array([cat['row_stamp'][staridx],
+												cat['column_stamp'][staridx]])
+				PSF_offset_norm = np.linalg.norm(PSF_offset)
+				logger.info('Catalog off by {:3.12f} pixel'.format(PSF_offset_norm))
+				if PSF_offset_norm > 0.9:
+					self.report_details(error='Catalog position off by {0} pixel'.format(PSF_offset_norm))
 
 		# Preallocate flux sum array for contamination calculation:
 		fluxes_sum = np.zeros(nstars)
 
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
+
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
+
+			# Modify catalog with PSF fit to sumimage to fix catalog errors:
+			if PSF_correction_factor != 0 and res_PSF != 'failed':
+				PSF_offset = PSF_position - np.array([cat['row_stamp'][staridx],
+											cat['column_stamp'][staridx]])
+				cat['row_stamp'][staridx] += PSF_correction_factor*PSF_offset[0]
+				cat['column_stamp'][staridx] += PSF_correction_factor*PSF_offset[1]
 
 			# Reduce catalog to only include stars that should be fitted:
 			cat = cat[indx]
@@ -126,6 +238,15 @@ class LinPSFPhotometry(BasePhotometry):
 			except:
 				res = 'failed'
 			logger.debug('Result of linear psf photometry: ' + np.str(res))
+
+			# Do non-negative least squares fit if the target had negative flux:
+			if fluxes[staridx] < 0:
+				logger.debug('Negative fitted target flux. Re-fitting with non-negative algorithm')
+				try:
+					fluxes, rnorm = scipy.optimize.nnls(A,b)
+					res = 'notfailed'
+				except:
+					res = 'failed'
 
 			# Pass result if fit did not fail:
 			if res is not 'failed':
@@ -184,6 +305,7 @@ class LinPSFPhotometry(BasePhotometry):
 					# Save figure to file:
 					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
 					save_figure(os.path.join(self.plot_folder, fig_name))
+					plt.close(fig)
 
 			# Pass result if fit failed:
 			else:
