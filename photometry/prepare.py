@@ -63,9 +63,9 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 	args = {
 		'compression': 'lzf',
 		'shuffle': True,
-		'fletcher32': True,
-		'chunks': True
+		'fletcher32': True
 	}
+	imgchunks = (64, 64)
 
 	# Get the number of processes we can spawn in case it is needed for calculations:
 	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
@@ -175,7 +175,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 					bck = nanmean(block, axis=2)
 
-					backgrounds.create_dataset(dset_name, data=bck, **args)
+					backgrounds.create_dataset(dset_name, data=bck, chunks=imgchunks, **args)
 
 				toc = default_timer()
 				logger.info("Background smoothing: %f sec/image", (toc-tic)/numfiles)
@@ -232,7 +232,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 							flux0 -= backgrounds[dset_name]
 
 						# Save image subtracted the background in HDF5 file:
-						images.create_dataset(dset_name, data=flux0, **args)
+						images.create_dataset(dset_name, data=flux0, chunks=imgchunks, **args)
 					else:
 						flux0 = np.asarray(images[dset_name])
 
