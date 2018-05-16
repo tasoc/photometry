@@ -103,6 +103,36 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	return im
 
 
+def mark_pixels(maskidxs, axes, edgecolor='red'):
+	'''
+	Mark the pixels in a plot by adding square patches along the edges of
+	each pixel in ``mask``.
+
+	Parameters:
+		maskidxs (numpy array): Row and column index pairs of pixels to mark.
+		axes (axes object): Axes to add the marking to.
+		color (string): Color of the marking. Default is ``'red'``.
+	'''
+	# Set center to lower left of pixel
+	print(maskidxs)
+	maskidxs = maskidxs - 0.5
+	print(maskidxs)
+
+	# Mark each pixel in maskidxs array:
+	for maskidx in maskidxs:
+		# Generate rectangular path to mark:
+		path = matplotlib.patches.Rectangle(
+			np.flip(maskidx, axis=0),		# convert from [row, col] to [col, row]
+			1, 1, 				# size of pixel in pixels
+			facecolor='none',		# set transparent face color
+			edgecolor=edgecolor,
+			linewidth=1,
+			joinstyle='round' 	# nake the edges round
+		)
+		# Mark path on plot:
+		axes.add_patch(path)
+
+
 def plot_image_fit_residuals(fig, image, fit, residuals):
 	"""
 	Make a figure with three subplots showing the image, the fit and the
