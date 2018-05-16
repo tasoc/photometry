@@ -84,8 +84,8 @@ class simulateFITS(object):
 
 		# Set image parameters:
 		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
-		self.Nrows = 256
-		self.Ncols = 256
+		self.Nrows = 128
+		self.Ncols = 128
 		self.stamp = (0,self.Nrows,0,self.Ncols)
 		self.coord_zero_point = [0.,0.] # Zero point
 		self.sector = 0
@@ -93,6 +93,7 @@ class simulateFITS(object):
 		self.ccd = 1
 		self.TmagLow = 7.
 		self.TmagHigh = 16.
+		self.gain = 5.3 # electrons/count, CCD output gain (ETE6 estimate)
 
 		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
@@ -130,7 +131,7 @@ class simulateFITS(object):
 		self.create_todo(sector=self.sector)
 
 		# Apply time-independent changes to catalog:
-		self.catalog = self.apply_inaccurate_catalog(self.catalog)
+#		self.catalog = self.apply_inaccurate_catalog(self.catalog)
 		master_catalog = deepcopy(self.catalog)
 
 		# Generate jitter array:
@@ -159,6 +160,7 @@ class simulateFITS(object):
 
 			# Sum image from its parts:
 			img = stars + bkg + noise
+#			img = stars
 
 			if self.save_images:
 				# Write img to FITS file:
@@ -244,8 +246,8 @@ class simulateFITS(object):
 		 * decl:          Declination coordinate.
 		 * prop_mot_ra:   Proper motion in right ascension. Is set to 0.
 		 * prop_mot_decl: Proper motion in declination. Is set to 0.
-		 * row:           Pixel row in 200x200px full frame image.
-		 * col:           Pixel column in 200x200px full frame image.
+		 * row:           Pixel row in full frame image.
+		 * col:           Pixel column in full frame image.
 		 * tmag:          TESS magnitude.
 
 		Parameters:
@@ -260,7 +262,7 @@ class simulateFITS(object):
 		catalog.remove_column('starid')
 
 		# Set ra and dec from pixel coordinates using WCS solution:
-		ra, decl = self.w.all_pix2world(catalog['col'],catalog['row'],0,ra_dec_order=True)
+		ra, decl = self.w.all_pix2world(catalog['row'],catalog['col'],0,ra_dec_order=True)
 
 		# Set proper motion:
 		prop_mot_ra = np.zeros_like(catalog['tmag'])
@@ -470,21 +472,32 @@ class simulateFITS(object):
 			parameter, but with changes to its entries.
 		"""
 
-		# Scatter of Gaia band to TESS band calibration (Stassun, 28 Jun 2017):
-		sigma_tmag = 0.015 # (magnitudes)
+#		# Scatter of Gaia band to TESS band calibration (Stassun, 28 Jun 2017):
+#		sigma_tmag = 0.015 # (magnitudes)
+#
+#		# Median RA std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
+#		sigma_RA = 0.254 # (milliarcsec)
+#		sigma_col = self.pixel_scale * sigma_RA / 1e3
+#
+#		# Median DEC std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
+#		sigma_DEC = 0.233 # (milliarcsec)
+#		sigma_row = self.pixel_scale * sigma_DEC / 1e3
+
+#		# Scatter of Gaia band to TESS band calibration (Stassun, 28 Jun 2017):
+#		sigma_tmag = 0.015 # (magnitudes)
 
 		# Median RA std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
-		sigma_RA = 0.254 # (milliarcsec)
+		sigma_RA = 0.1 # (milliarcsec)
 		sigma_col = self.pixel_scale * sigma_RA / 1e3
 
 		# Median DEC std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
-		sigma_DEC = 0.233 # (milliarcsec)
+		sigma_DEC = 0.1 # (milliarcsec)
 		sigma_row = self.pixel_scale * sigma_DEC / 1e3
 
 		# Loop through each star in the catalog:
 		for star in range(len(catalog['tmag'])):
-			# Modify TESS magnitude:
-			catalog['tmag'][star] += random.gauss(0, sigma_tmag)
+#			# Modify TESS magnitude:
+#			catalog['tmag'][star] += random.gauss(0, sigma_tmag)
 
 			# Modify column pixel positions:
 			catalog['col'][star] += random.gauss(0, sigma_col)
@@ -513,7 +526,7 @@ class simulateFITS(object):
 		return catalog
 
 
-	def apply_jitter(self, var=None, apply=True):
+	def apply_jitter(self, var=None):
 		"""
 		Apply crude large-scale jitter by adjusting catalog position.
 
@@ -521,17 +534,19 @@ class simulateFITS(object):
 			var (float): Variance of 2D Gaussian distribution in pixels.
 			Default is None which sets the variance to the value 1 arcsec from
 			Sullivan et al (2015).
-			apply (boolean): True if jitter should be applied (default), false
-			if else.
+
 
 		Returns:
 			catalog (`astropy.table.Table`): Table formatted like the catalog
 			parameter, but with changes to its entries.
 		"""
 
+		# Set jitter scale:
+		jitter_scale = 0.01
+
 		# Define distribution properties:
 		if var is None:
-			var = 1.*self.pixel_scale/3600
+			var = jitter_scale*self.pixel_scale/3600
 		cov_mat = np.array([[var, 0.],[0., var]])
 
 		# Create jitter, the same for all stars:
@@ -540,7 +555,7 @@ class simulateFITS(object):
 		return jitter
 
 
-	def make_stars(self, t, camera=1, ccd=1):
+	def make_stars(self, t, camera=1, ccd=1, apply=False):
 		"""
 		Make stars for the image and append catalog with flux column.
 
@@ -548,6 +563,8 @@ class simulateFITS(object):
 			t (int): Time loop index.
 			camera (int): Kepler camera. Used to get PSF. Default is 1.
 			ccd (int): Kepler CCD. Used to get PSF. Default is 1.
+			apply (boolean): True if jitter should be applied (default), false
+			if else.
 
 		Returns:
 			stars (numpy array): Summed PRFs of stars in the image of the same
@@ -558,26 +575,36 @@ class simulateFITS(object):
 		KPSF = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
 
 		# Make list with parameter numpy arrays for the pixel integrater:
-		params = [
-					np.array(
-						[self.catalog['row'][i] + self.jitter[t][0],
-						self.catalog['col'][i] + self.jitter[t][1],
-						mag2flux(self.catalog['tmag'][i])]
-					)
-				for i in range(self.Nstars)
-				]
+		if apply:
+			params = [
+						np.array(
+							[self.catalog['row'][i] + self.jitter[t][0],
+							self.catalog['col'][i] + self.jitter[t][1],
+							self.exposure_time*mag2flux(self.catalog['tmag'][i])/self.gain]
+						)
+					for i in range(self.Nstars)
+					]
+		else:
+			params = [
+						np.array(
+							[self.catalog['row'][i],
+							self.catalog['col'][i],
+							self.exposure_time*mag2flux(self.catalog['tmag'][i])/self.gain]
+						)
+					for i in range(self.Nstars)
+					]
 
 		# Integrate stars to image:
 		return KPSF.integrate_to_image(params, cutoff_radius=20)
 
 
-	def make_background(self, bkg_level=1e3):
+	def make_background(self, bkg_level=337000.):
 		"""
 		Make a background for the image.
 
 		Parameters:
 			bkg_level (float): Background level of uniform background. Default
-			is 1000.
+			is the median of an ETE6 image.
 
 		Returns:
 			bkg (numpy array): Background array of the same shape as image.
@@ -587,13 +614,14 @@ class simulateFITS(object):
 		return bkg_level * np.ones([self.Nrows, self.Ncols])
 
 
-	def make_noise(self, sigma=500.0):
+	def make_noise(self, sigma=52000.):
 		"""
 		Make Gaussian noise uniformily across the image.
 
 		Parameters:
 			sigma (float): Sigma parameter of Gaussian distribution for noise.
-			Default is 500.0.
+			Default is the standard deviation of an upper boundary sigma
+			clipped (6 sigma) ETE6 image.
 
 		Returns:
 			noise (numpy array): Noise array of the same shape as image.
@@ -634,7 +662,7 @@ class simulateFITS(object):
 		hdu.header['NAXIS2'] = (self.Nrows, 'Number of pixel rows')
 		hdu.header['DQUALITY'] = (0, 'Data quality')
 		hdu.header['NUM_FRM'] = (900, 'Number of frames added (true: 1)')
-		hdu.header['GAIN'] = (100, 'Gain. Arbitrary value')
+		hdu.header['GAIN'] = (self.gain, 'Gain. Arbitrary value')
 		hdu.header['READNOIS'] = (10, 'Readnoise. Arbitrary value')
 
 		# Specify output directory:
