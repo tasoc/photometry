@@ -85,19 +85,28 @@ if __name__ == '__main__':
 		'stars': 			np.arange(1,501, dtype=int) # stars to do photometry on
 	}
 	multi_star_2 = {
-		'name':				'multi_star_2',
-		'ignore_mov_kernel': 	False,
+		'name':				'multi_star_2_exact',
+		'ignore_mov_kernel': 	True,
 		'run_simulateFITS': 	[2, 2], # 2 stars, 2 samples
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
 #		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
 		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-#		'stars': 			np.arange(1,3, dtype=int) # stars to do photometry on
-		'stars': 			np.array([1,2],dtype=int)
+		'stars': 			np.arange(1,3, dtype=int) # stars to do photometry on
+	}
+	multi_star_500 = {
+		'name':				'multi_star_500',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[500, 142], # 500 stars, 142 samples
+#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
+#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
+		'stars': 			np.arange(1,501, dtype=int) # stars to do photometry on
 	}
 
 	# Collect dictionaries in list:
-	simulations = [multi_star_100]
+	simulations = [multi_star_500]
 	logger.info("Simulations being run: \n %s", simulations)
 
 
@@ -156,7 +165,7 @@ if __name__ == '__main__':
 			ccds    = simulation['create_hdf5'][2]
 		)
 
-		# Rewrite motion_kernel in hdf5 file:
+		# Rewrite motion_kernel in hdf5 file: WARNING: this appears to be faulty
 		if simulation['ignore_mov_kernel'] is True:
 			logger.info("Rewriting motion_kernel in hdf5 file")
 			hdf_file = os.path.join(input_folder,

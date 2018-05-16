@@ -185,6 +185,7 @@ class LinPSFPhotometry(BasePhotometry):
 
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
+
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
@@ -240,6 +241,7 @@ class LinPSFPhotometry(BasePhotometry):
 
 			# Do non-negative least squares fit if the target had negative flux:
 			if fluxes[staridx] < 0:
+				logger.debug('Negative fitted target flux. Re-fitting with non-negative algorithm')
 				try:
 					fluxes, rnorm = scipy.optimize.nnls(A,b)
 					res = 'notfailed'
