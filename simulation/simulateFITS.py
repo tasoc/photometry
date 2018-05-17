@@ -128,7 +128,8 @@ class simulateFITS(object):
 		self.create_catalog(self.sector, self.camera, self.ccd)
 
 		# Generate TODO list:
-		self.create_todo(sector=self.sector)
+		for method in ['linpsf','aperture','psf']:
+			self.create_todo(sector=self.sector, method=method, filename='todo_'+method+'.sqlite')
 
 		# Apply time-independent changes to catalog:
 #		self.catalog = self.apply_inaccurate_catalog(self.catalog)
@@ -389,7 +390,7 @@ class simulateFITS(object):
 #			logger.info("Catalog done.")
 
 
-	def create_todo(self, sector):
+	def create_todo(self, sector, method, filename):
 		"""Create the TODO list which is used by the pipeline to keep track of the
 		targets that needs to be processed.
 
@@ -417,7 +418,7 @@ class simulateFITS(object):
 			dtype=('int64', 'float64', 'float64', 'float32')
 		)
 
-		todo_file = os.path.join(input_folder, 'todo.sqlite')
+		todo_file = os.path.join(input_folder, filename)
 		if os.path.exists(todo_file): os.remove(todo_file)
 		conn = sqlite3.connect(todo_file)
 		cursor = conn.cursor()
@@ -442,7 +443,7 @@ class simulateFITS(object):
 		for pri, row in enumerate(cat):
 			starid = int(row['starid'])
 			tmag = float(row['tmag'])
-			cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,x,y,tmag) VALUES (?,?,?,?,?,?,?);", (pri+1, starid, 1, 1, row['x'], row['y'], tmag))
+			cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,method,x,y,tmag) VALUES (?,?,?,?,?,?,?,?);", (pri+1, starid, 1, 1, method, row['x'], row['y'], tmag))
 
 		cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")

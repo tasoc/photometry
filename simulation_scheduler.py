@@ -108,7 +108,7 @@ if __name__ == '__main__':
 	multi_star_2000 = {
 		'name':				'multi_star_2000',
 		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[2000, 1000], # 500 stars, 142 samples
+		'run_simulateFITS': 	[2000, 190], # 500 stars, 142 samples
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
 #		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
