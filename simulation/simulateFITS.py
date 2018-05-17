@@ -84,8 +84,8 @@ class simulateFITS(object):
 
 		# Set image parameters:
 		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
-		self.Nrows = 128
-		self.Ncols = 128
+		self.Nrows = 256
+		self.Ncols = 256
 		self.stamp = (0,self.Nrows,0,self.Ncols)
 		self.coord_zero_point = [0.,0.] # Zero point
 		self.sector = 0

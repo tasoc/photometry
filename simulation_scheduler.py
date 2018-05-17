@@ -105,8 +105,19 @@ if __name__ == '__main__':
 		'stars': 			np.arange(1,501, dtype=int) # stars to do photometry on
 	}
 
+	multi_star_2000 = {
+		'name':				'multi_star_2000',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 1000], # 500 stars, 142 samples
+#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
+#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
+		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
+	}
+
 	# Collect dictionaries in list:
-	simulations = [multi_star_500]
+	simulations = [multi_star_2000]
 	logger.info("Simulations being run: \n %s", simulations)
 
 
@@ -188,22 +199,22 @@ if __name__ == '__main__':
 				logger.debug("New movement kernel: \n{}".format(np.array(data)))
 
 
-		# Run run_tessphot for each method:
-		for i, method in enumerate(simulation['methods']):
-			# Set the output environment variable:
-			os.environ['TESSPHOT_OUTPUT'] = simulation['output_folders'][i]
-			logger.info("TESSPHOT_OUTPUT set to '%s'", os.environ.get('TESSPHOT_OUTPUT'))
-
-			# Run run_tessphot:
-			for star in simulation['stars']:
-				run_tessphot_call = "python run_tessphot.py" \
-					+ ' ' + np.str(star) + ' ' \
-					+ ' --method ' + method \
-					+ ' --plot'
-				if args.debug:
-					run_tessphot_call += ' --debug'
-				if args.quiet:
-					run_tessphot_call += ' --quiet'
-
-				logger.info("Doing %s photometry: %s", method, run_tessphot_call)
-				os.system(run_tessphot_call)
+#		# Run run_tessphot for each method:
+#		for i, method in enumerate(simulation['methods']):
+#			# Set the output environment variable:
+#			os.environ['TESSPHOT_OUTPUT'] = simulation['output_folders'][i]
+#			logger.info("TESSPHOT_OUTPUT set to '%s'", os.environ.get('TESSPHOT_OUTPUT'))
+#
+#			# Run run_tessphot:
+#			for star in simulation['stars']:
+#				run_tessphot_call = "python run_tessphot.py" \
+#					+ ' ' + np.str(star) + ' ' \
+#					+ ' --method ' + method \
+#					+ ' --plot'
+#				if args.debug:
+#					run_tessphot_call += ' --debug'
+#				if args.quiet:
+#					run_tessphot_call += ' --quiet'
+#
+#				logger.info("Doing %s photometry: %s", method, run_tessphot_call)
+#				os.system(run_tessphot_call)
