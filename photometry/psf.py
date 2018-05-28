@@ -50,7 +50,8 @@ class PSF(object):
 		self.stamp = stamp
 
 		# Target pixel file shape in pixels:
-		self.shape = (int(stamp[3] - stamp[2]), int(stamp[1] - stamp[0]))
+		# (row_min, row_max, col_min, col_max)
+		self.shape = (int(stamp[1] - stamp[0]), int(stamp[3] - stamp[2]))
 
 		# The number of header units in the Kepler PSF files:
 		n_hdu = 5
@@ -64,28 +65,28 @@ class PSF(object):
 		minimum_prf_weight = 1e-6
 
 		# Interpolate the calibrated PRF shape to middle of the stamp:
-		self.ref_column = 0.5*(stamp[3] + stamp[2])
+		self.ref_col = 0.5*(stamp[3] + stamp[2])
 		self.ref_row = 0.5*(stamp[1] + stamp[0])
 
 		# Read the Kepler PRF images:
 		with fits.open(self.PSFfile, mode='readonly', memmap=True) as hdu:
 			# Find size of PSF images and
 			# the pixel-scale of the PSF images:
-			xdim = hdu[1].header['NAXIS1']
-			ydim = hdu[1].header['NAXIS2']
+			rowdim = hdu[1].header['NAXIS1']
+			coldim = hdu[1].header['NAXIS2']
 			cdelt1p = hdu[1].header['CDELT1P']
 			cdelt2p = hdu[1].header['CDELT2P']
 
 			# Preallocate prf array:
-			prf = np.zeros((xdim, ydim), dtype='float64')
+			prf = np.zeros((rowdim, coldim), dtype='float64')
 
 			for i in range(1, n_hdu+1):
 				prfn = hdu[i].data
-				crval1p = hdu[1].header['CRPIX1P']
-				crval2p = hdu[1].header['CRPIX2P']
+				crval1p = hdu[i].header['CRPIX1P']
+				crval2p = hdu[i].header['CRPIX2P']
 
 				# Weight with the distance between each PRF sample and the target:
-				prfWeight = np.sqrt((self.ref_column - crval1p)**2 + (self.ref_row - crval2p)**2)
+				prfWeight = np.sqrt((self.ref_row - crval1p)**2 + (self.ref_col - crval2p)**2)
 
 				# Catch too small weights
 				if prfWeight < minimum_prf_weight:
@@ -98,14 +99,14 @@ class PSF(object):
 		prf /= (np.nansum(prf) * cdelt1p * cdelt2p)
 
 		# Define pixel centered index arrays for the interpolator:
-		PRFx = np.arange(0.5, xdim + 0.5)
-		PRFy = np.arange(0.5, ydim + 0.5)
+		PRFrow = np.arange(0.5, rowdim + 0.5)
+		PRFcol = np.arange(0.5, coldim + 0.5)
 		# Center around 0 and convert to PSF subpixel resolution:
-		PRFx = (PRFx - np.size(PRFx) / 2) * cdelt1p
-		PRFy = (PRFy - np.size(PRFy) / 2) * cdelt2p
+		PRFrow = (PRFrow - np.size(PRFrow) / 2) * cdelt1p
+		PRFcol = (PRFcol - np.size(PRFcol) / 2) * cdelt2p
 
 		# Interpolation function (linear as set by kx=ky=1) over the PRF:
-		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf, kx=1, ky=1) #: 2D-interpolation of PSF (RectBivariateSpline).
+		self.splineInterpolation = RectBivariateSpline(PRFrow, PRFcol, prf, kx=1, ky=1) #: 2D-interpolation of PSF (RectBivariateSpline).
 
 
 	def integrate_to_image(self, params, cutoff_radius=5):
@@ -121,16 +122,16 @@ class PSF(object):
 		"""
 
 		img = np.zeros(self.shape, dtype='float64')
-		for i in range(self.shape[1]): # row
-			for j in range(self.shape[0]): # column
+		for i in range(self.shape[0]): # row
+			for j in range(self.shape[1]): # column
 				for star in params:
 					star_row = star[0]
-					star_column = star[1]
-					if np.sqrt((j-star_column)**2 + (i-star_row)**2) < cutoff_radius:
+					star_col = star[1]
+					if np.sqrt((j-star_col)**2 + (i-star_row)**2) < cutoff_radius:
 						star_flux = star[2]
-						column_cen = j - star_column
 						row_cen = i - star_row
-						img[j,i] += star_flux * self.splineInterpolation.integral(column_cen-0.5, column_cen+0.5, row_cen-0.5, row_cen+0.5)
+						col_cen = j - star_col
+						img[i,j] += star_flux * self.splineInterpolation.integral(row_cen-0.5, row_cen+0.5, col_cen-0.5, col_cen+0.5)
 
 		return img
 
