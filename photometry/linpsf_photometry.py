@@ -256,7 +256,14 @@ class LinPSFPhotometry(BasePhotometry):
 				logger.debug('PSF fitted result is: ' + np.str(result))
 
 				# Generate fitted and residual images from A and fitted fluxes:
+				logger.debug('Shape of A is: ' + np.str(np.shape(A)))
+				logger.debug('Shape of img is: ' + np.str(np.shape(img)))
+				logger.debug('Shape of fluxes is: ' + np.str(np.shape(fluxes)))
+				logger.debug('Shape of A*fluxes is: ' + np.str(np.shape(A*fluxes)))
+				logger.debug('Shape of np.sum(A*fluxes, 1) is: ' + np.str(np.shape(np.sum(A*fluxes, 1))))
 				img_fit = np.reshape(np.sum(A*fluxes, 1), img.shape)
+#				img_fit = np.transpose(np.reshape(np.flip(np.sum(A*fluxes, 1), 0), np.flip(img.shape,0)))
+#				img_fit = np.transpose(np.reshape(np.sum(A*fluxes, 1), np.flip(img.shape,axis=0)))
 				img_res = img - img_fit
 
 				# Get indices of mask in residual image (only first time step):
@@ -309,7 +316,7 @@ class LinPSFPhotometry(BasePhotometry):
 
 					# Save figure to file:
 					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
-					save_figure(os.path.join(self.plot_folder, fig_name))
+					save_figure(os.path.join(self.plot_folder, fig_name), format='png')
 					plt.close(fig)
 
 			# Pass result if fit failed:
