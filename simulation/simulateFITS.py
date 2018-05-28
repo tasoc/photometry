@@ -128,9 +128,9 @@ class simulateFITS(object):
 		self.create_catalog(self.sector, self.camera, self.ccd)
 
 		# Generate TODO list:
-#		for method in ['linpsf','aperture','psf']:
-#			self.create_todo(sector=self.sector, method=method, filename='todo_'+method+'.sqlite')
-		self.create_todo(sector=self.sector, method='linpsf', filename='todo.sqlite')
+		for method in ['linpsf','aperture','psf']:
+			self.create_todo(sector=self.sector, method=method, filename='todo_'+method+'.sqlite')
+#		self.create_todo(sector=self.sector, method='linpsf', filename='todo.sqlite')
 
 		# Apply time-independent changes to catalog:
 #		self.catalog = self.apply_inaccurate_catalog(self.catalog)
@@ -215,12 +215,10 @@ class simulateFITS(object):
 		bufferpx = 3
 
 		# Draw uniform row positions:
-		starrows =  np.random.uniform(bufferpx, self.Nrows-bufferpx,
-								self.Nstars)
+		starrows =  np.random.uniform(bufferpx, self.Nrows-bufferpx, self.Nstars)
 
 		# Draw uniform column positions:
-		starcols =  np.random.uniform(bufferpx, self.Ncols-bufferpx,
-								self.Nstars)
+		starcols =  np.random.uniform(bufferpx, self.Ncols-bufferpx, self.Nstars)
 
 		# Draw stellar magnitudes:
 #		starmag = np.random.uniform(self.TmagLow, self.TmagHigh, self.Nstars)
