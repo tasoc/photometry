@@ -85,13 +85,13 @@ if __name__ == '__main__':
 		'stars': 			np.arange(1,501, dtype=int) # stars to do photometry on
 	}
 	multi_star_2 = {
-		'name':				'multi_star_2_exact',
-		'ignore_mov_kernel': 	True,
+		'name':				'multi_star_2',
+		'ignore_mov_kernel': 	False,
 		'run_simulateFITS': 	[2, 2], # 2 stars, 2 samples
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
 #		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
+		'methods': 			['linpsf'], # photometry methods
 		'stars': 			np.arange(1,3, dtype=int) # stars to do photometry on
 	}
 	multi_star_500 = {
@@ -108,12 +108,12 @@ if __name__ == '__main__':
 	multi_star_2000 = {
 		'name':				'multi_star_2000',
 		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[2000, 190], # 500 stars, 142 samples
+		'run_simulateFITS': 	[2000, 250], # stars, samples
 #		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
 #		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
 		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
+		'stars': 			np.arange(1,2001, dtype=int) # stars to do photometry on
 	}
 
 	# Collect dictionaries in list:
