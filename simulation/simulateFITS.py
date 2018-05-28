@@ -128,8 +128,9 @@ class simulateFITS(object):
 		self.create_catalog(self.sector, self.camera, self.ccd)
 
 		# Generate TODO list:
-		for method in ['linpsf','aperture','psf']:
-			self.create_todo(sector=self.sector, method=method, filename='todo_'+method+'.sqlite')
+#		for method in ['linpsf','aperture','psf']:
+#			self.create_todo(sector=self.sector, method=method, filename='todo_'+method+'.sqlite')
+		self.create_todo(sector=self.sector, method='linpsf', filename='todo.sqlite')
 
 		# Apply time-independent changes to catalog:
 #		self.catalog = self.apply_inaccurate_catalog(self.catalog)
@@ -263,7 +264,7 @@ class simulateFITS(object):
 		catalog.remove_column('starid')
 
 		# Set ra and dec from pixel coordinates using WCS solution:
-		ra, decl = self.w.all_pix2world(catalog['row'],catalog['col'],0,ra_dec_order=True)
+		ra, decl = self.w.all_pix2world(catalog['col'],catalog['row'],0,ra_dec_order=True)
 
 		# Set proper motion:
 		prop_mot_ra = np.zeros_like(catalog['tmag'])
@@ -581,7 +582,7 @@ class simulateFITS(object):
 						np.array(
 							[self.catalog['row'][i] + self.jitter[t][0],
 							self.catalog['col'][i] + self.jitter[t][1],
-							self.exposure_time*mag2flux(self.catalog['tmag'][i])/self.gain]
+							self.exposure_time*mag2flux(self.catalog['tmag'][i])]
 						)
 					for i in range(self.Nstars)
 					]
@@ -590,7 +591,7 @@ class simulateFITS(object):
 						np.array(
 							[self.catalog['row'][i],
 							self.catalog['col'][i],
-							self.exposure_time*mag2flux(self.catalog['tmag'][i])/self.gain]
+							self.exposure_time*mag2flux(self.catalog['tmag'][i])]
 						)
 					for i in range(self.Nstars)
 					]
@@ -612,7 +613,7 @@ class simulateFITS(object):
 		"""
 
 		# Apply background level by multiplying:
-		return bkg_level * np.ones([self.Nrows, self.Ncols])
+		return bkg_level * np.ones([self.Nrows, self.Ncols]) * self.gain
 
 
 	def make_noise(self, sigma=52000.):
@@ -635,7 +636,7 @@ class simulateFITS(object):
 		for row in range(self.Nrows):
 			for col in range(self.Ncols):
 				# Draw a random value from a Gaussian (normal) distribution:
-				noise[row,col] = random.gauss(mu=0, sigma=sigma)
+				noise[row,col] = random.gauss(mu=0, sigma=sigma) * self.gain
 
 		return noise
 
