@@ -580,7 +580,7 @@ class simulateFITS(object):
 						np.array(
 							[self.catalog['row'][i] + self.jitter[t][0],
 							self.catalog['col'][i] + self.jitter[t][1],
-							self.exposure_time*mag2flux(self.catalog['tmag'][i])]
+							mag2flux(self.catalog['tmag'][i])]
 						)
 					for i in range(self.Nstars)
 					]
@@ -589,7 +589,7 @@ class simulateFITS(object):
 						np.array(
 							[self.catalog['row'][i],
 							self.catalog['col'][i],
-							self.exposure_time*mag2flux(self.catalog['tmag'][i])]
+							mag2flux(self.catalog['tmag'][i])]
 						)
 					for i in range(self.Nstars)
 					]
