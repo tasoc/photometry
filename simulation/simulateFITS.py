@@ -555,7 +555,7 @@ class simulateFITS(object):
 		return jitter
 
 
-	def make_stars(self, t, camera=1, ccd=1, apply=False):
+	def make_stars(self, t, camera=1, ccd=1, apply_jitter=True, multiprocess=True):
 		"""
 		Make stars for the image and append catalog with flux column.
 
@@ -563,8 +563,8 @@ class simulateFITS(object):
 			t (int): Time loop index.
 			camera (int): Kepler camera. Used to get PSF. Default is 1.
 			ccd (int): Kepler CCD. Used to get PSF. Default is 1.
-			apply (boolean): True if jitter should be applied (default), false
-			if else.
+			apply_jitter (boolean): True if jitter should be applied (default).
+			multiprocess (boolean): True if multiprocessing is to be used (default).
 
 		Returns:
 			stars (numpy array): Summed PRFs of stars in the image of the same
@@ -572,10 +572,10 @@ class simulateFITS(object):
 		"""
 
 		# Create PSF class instance:
-		KPSF = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
+		kpsf = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
 
 		# Make list with parameter numpy arrays for the pixel integrater:
-		if apply:
+		if apply_jitter:
 			params = [
 						np.array(
 							[self.catalog['row'][i] + self.jitter[t][0],
@@ -595,7 +595,14 @@ class simulateFITS(object):
 					]
 
 		# Integrate stars to image:
-		return KPSF.integrate_to_image(params, cutoff_radius=20)
+		if multiprocess:
+			img = np.zeros([self.Nrows, self.Ncols], dtype='float64')
+			with Pool(8) as p:
+				for i in p.imap_unordered(kpsf.integrate_single, params):
+					img += i
+			return img
+		else:
+			return kpsf.integrate_to_image(params, cutoff_radius=20)
 
 
 	def make_background(self, bkg_level=337000.):

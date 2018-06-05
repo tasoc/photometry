@@ -118,7 +118,7 @@ class PSF(object):
 			cutoff_radius (float, optional): Maximal radius away from center of star in pixels to integrate PSF model.
 
 		Returns:
-			numpy.array: Image
+			numpy.array: Image containing several pixel-integrated stars.
 		"""
 
 		img = np.zeros(self.shape, dtype='float64')
@@ -132,6 +132,33 @@ class PSF(object):
 						row_cen = i - star_row
 						col_cen = j - star_col
 						img[i,j] += star_flux * self.splineInterpolation.integral(row_cen-0.5, row_cen+0.5, col_cen-0.5, col_cen+0.5)
+
+		return img
+
+
+	def integrate_single(self, star):
+		"""
+		Integrate the underlying high-res PSF of a single star onto pixels.
+
+		Parameters:
+			params (iterator, numpy.array): Star to add to image. Should be a numpy array with three elements: row, column and flux.
+			cutoff_radius (float, optional): Maximal radius away from center of star in pixels to integrate PSF model.
+
+		Returns:
+			numpy.array: Image containing a single pixel-integrated star.
+		"""
+
+		img = np.zeros(self.shape, dtype='float64')
+		cutoff_radius=5
+		for i in range(self.shape[0]): # row
+			for j in range(self.shape[1]): # column
+				star_row = star[0]
+				star_col = star[1]
+				if np.sqrt((j-star_col)**2 + (i-star_row)**2) < cutoff_radius:
+					star_flux = star[2]
+					row_cen = i - star_row
+					col_cen = j - star_col
+					img[i,j] += star_flux * self.splineInterpolation.integral(row_cen-0.5, row_cen+0.5, col_cen-0.5, col_cen+0.5)
 
 		return img
 
