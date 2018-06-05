@@ -114,9 +114,7 @@ def mark_pixels(maskidxs, axes, edgecolor='red'):
 		color (string): Color of the marking. Default is ``'red'``.
 	'''
 	# Move down half a pixel:
-	print(maskidxs)
 	maskidxs = maskidxs - 0.5
-	print(maskidxs)
 
 	# Mark each pixel in maskidxs array:
 	for maskidx in maskidxs:
