@@ -14,6 +14,7 @@ from astropy.table import Table, Column
 from astropy.wcs import WCS
 from copy import deepcopy
 import sqlite3
+from multiprocessing import Pool
 
 # Import stuff from the photometry directory:
 import sys
@@ -26,7 +27,7 @@ from photometry.utilities import mag2flux, add_proper_motion
 
 
 class simulateFITS(object):
-	def __init__(self, Nstars = 5, Ntimes = 5,
+	def __init__(self, Nstars = 150, Ntimes = 5,
 			save_images=True, overwrite_images=True):
 		"""
 		Simulate FITS images with stars, background and noise.
@@ -139,6 +140,7 @@ class simulateFITS(object):
 		# Generate jitter array:
 		self.jitter = self.apply_jitter()
 		print(self.jitter)
+		np.savetxt(os.path.join(self.output_folder, "jitter.txt"), self.jitter)
 
 		# Loop through the time steps:
 		for t, timestep in enumerate(self.times):
@@ -166,7 +168,6 @@ class simulateFITS(object):
 
 			if self.save_images:
 				# Write img to FITS file:
-				# TODO: Add possibility to write to custom directory
 				self.make_fits(img, timestep, t)
 
 
@@ -294,6 +295,7 @@ class simulateFITS(object):
 				txtfiledir = os.path.join(self.output_folder, fname+fextension)
 
 				# Write catalog to txt file:
+				print("Writing catalog to file: "+txtfiledir)
 				np.savetxt(txtfiledir, catalog_out,
 							delimiter='\t',
 							header='    '.join(catalog.colnames))
@@ -304,7 +306,6 @@ class simulateFITS(object):
 			pass
 
 		# Print the catalog:
-		print("Writing catalog to file: "+txtfiledir)
 		print(catalog)
 
 
