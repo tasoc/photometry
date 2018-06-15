@@ -75,6 +75,7 @@ class simulateFITS(object):
 		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
 		self.Nstars = np.int(Nstars) # Number of stars in image
+		self.NoscStars = np.int(self.Nstars/2) # Number of oscillating stars
 		self.Ntimes = np.int(Ntimes) # Number of images in time series
 		self.save_images = save_images # True if images+catalog should be saved
 		self.overwrite_images = overwrite_images # True if overwrite in saving
@@ -139,12 +140,19 @@ class simulateFITS(object):
 
 		# Generate jitter array:
 		self.jitter = self.apply_jitter()
-		print(self.jitter)
+		print("Saving jitter array to jitter.txt")
 		np.savetxt(os.path.join(self.output_folder, "jitter.txt"), self.jitter)
+
+		# Generate light curves:
+		self.light_curves, params = self.generate_light_curves()
+		print("Saving light curve parameters to light_curve_params")
+		np.savetxt(os.path.join(self.output_folder, "light_curve_params.txt"), params)
+		print("Saving light curves to light_curves.txt")
+		np.savetxt(os.path.join(self.output_folder, "light_curves.txt"), self.light_curves)
 
 		# Loop through the time steps:
 		for t, timestep in enumerate(self.times):
-			print("Making time step: "+str(timestep/3600/24))
+			print("Making time step "+str(t)+" out of "+str(self.Ntimes))
 
 			# Set catalog to master_catalog:
 			self.catalog = master_catalog
@@ -509,6 +517,41 @@ class simulateFITS(object):
 		return catalog
 
 
+	def generate_light_curves(self):
+		"""
+		Generate light curves to scale the stellar flux with. Half of all will be constant.
+
+		Returns:
+			light_curves (numpy array, 2D): Light curves formatted to be multiplied with the constant star flux value, (Nstars,Ntimes).
+			params (list): List of oscillation parameters used to generate the light curve, ([amplitudes, frequency, phase] for each star).
+		"""
+		# Indices of half the stars that are not constant:
+		osc_star_indices = np.random.choice(self.Nstars, self.NoscStars)
+
+		# Preallocate light curves array:
+		light_curves = np.ones([self.Nstars, self.Ntimes])
+
+		# Set oscillation parameters:
+		amplitudes = 0.1*np.ones(self.NoscStars)
+		frequencies = 3*1e-3*np.ones(self.NoscStars) # RGB star, solarlike osc.
+		phases = np.array([random.uniform(0, self.exposure_time)
+				for star in range(self.NoscStars)])
+		params = [[amplitude, frequency, phase] \
+				for amplitude, frequency, phase \
+				in zip(amplitudes, frequencies, phases)]
+
+		k = 0
+		for star in range(self.Nstars):
+			if star in osc_star_indices:
+				amplitude = params[k][0]
+				frequency = params[k][1]
+				phase = params[k][2]
+				light_curves[star,:] += amplitude*np.sin(frequency*self.times + phase)
+				k += 1
+
+		return light_curves, params
+
+
 	def apply_variable_magnitudes(self, catalog, timestamp):
 		"""
 		Modify the input catalog to simulate variable stars.
@@ -581,7 +624,7 @@ class simulateFITS(object):
 						np.array(
 							[self.catalog['row'][i] + self.jitter[t][0],
 							self.catalog['col'][i] + self.jitter[t][1],
-							mag2flux(self.catalog['tmag'][i])]
+							self.light_curves[i][t]*mag2flux(self.catalog['tmag'][i])]
 						)
 					for i in range(self.Nstars)
 					]
@@ -590,7 +633,7 @@ class simulateFITS(object):
 						np.array(
 							[self.catalog['row'][i],
 							self.catalog['col'][i],
-							mag2flux(self.catalog['tmag'][i])]
+							self.light_curves[i][t]*mag2flux(self.catalog['tmag'][i])]
 						)
 					for i in range(self.Nstars)
 					]
