@@ -543,7 +543,7 @@ class simulateFITS(object):
 		"""
 
 		# Set jitter scale:
-		jitter_scale = 0.01
+		jitter_scale = 0.1
 
 		# Define distribution properties:
 		if var is None:
