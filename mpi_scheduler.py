@@ -123,7 +123,7 @@ if __name__ == '__main__':
 
 					t1 = default_timer()
 					try:
-						pho = tessphot(input_folder=input_folder, output_folder=output_folder, **task)
+						pho = tessphot(input_folder=input_folder, output_folder=output_folder, plot=True, **task)
 					except:
 						logger.exception("Fatal error in call to tessphot")
 					t2 = default_timer()
