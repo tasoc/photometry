@@ -860,13 +860,14 @@ class BasePhotometry(object):
 
 		return self._catalog
 
-	def catalog_attime(self, time):
+	def catalog_attime(self, time, correct_jitter=True):
 		"""
 		Catalog of stars, calculated at a given time-stamp, so CCD positions are
 		modified according to the measured spacecraft jitter.
 
 		Parameters:
 			time (float): Time in MJD when to calculate catalog.
+			correct_jitter (boolean): Correct for jitter if true.
 
 		Returns:
 			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`, but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated at the given timestamp.
@@ -911,10 +912,11 @@ class BasePhotometry(object):
 
 		# Modify the reference catalog:
 		cat = deepcopy(self.catalog)
-		cat['column'] += jitter[:, 0]
-		cat['row'] += jitter[:, 1]
-		cat['column_stamp'] += jitter[:, 0]
-		cat['row_stamp'] += jitter[:, 1]
+		if correct_jitter:
+			cat['column'] += jitter[:, 0]
+			cat['row'] += jitter[:, 1]
+			cat['column_stamp'] += jitter[:, 0]
+			cat['row_stamp'] += jitter[:, 1]
 
 		return cat
 
