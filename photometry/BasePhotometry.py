@@ -125,6 +125,9 @@ class BasePhotometry(object):
 		self.tpf = None
 		self.hdf = None
 		self._MovementKernel = None
+		self._images_cube_full = None
+		self._backgrounds_cube_full = None
+		self._sumimage_full = None
 
 		# Directory where output files will be saved:
 		self.output_folder = os.path.join(
@@ -954,9 +957,9 @@ class BasePhotometry(object):
 			The status of the photometry.
 
 		Raises:
-			NotImplemented
+			NotImplementedError
 		"""
-		raise NotImplemented("You have to implement the actual lightcurve extraction yourself... Sorry!")
+		raise NotImplementedError("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
 
 	def photometry(self, *args, **kwargs):
