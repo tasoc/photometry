@@ -18,9 +18,29 @@ import itertools
 from astropy.table import Table, vstack
 from astropy.io import fits
 from astropy.wcs import WCS
-from .utilities import find_tpf_files
+from .utilities import find_tpf_files, sphere_distance
 import multiprocessing
 
+def calc_cbv_area(catalog_row, settings):
+	# The distance from the camera centre to the corner furthest away:
+	camera_radius = np.sqrt( 12**2 + 12**2 ) # np.max(sphere_distance(a[:,0], a[:,1], settings['camera_centre_ra'], settings['camera_centre_dec']))
+
+	# Distance to centre of the camera in degrees:
+	camera_centre_dist = sphere_distance(catalog_row['ra'], catalog_row['decl'], settings['camera_centre_ra'], settings['camera_centre_dec'])
+
+	cbv_area = settings['camera']*100 + settings['ccd']*10 
+
+	if camera_centre_dist < 0.25*camera_radius:
+		cbv_area += 1
+	elif camera_centre_dist < 0.5*camera_radius:
+		cbv_area += 2
+	elif camera_centre_dist < 0.75*camera_radius:
+		cbv_area += 3
+	else:
+		cbv_area += 4
+
+	return cbv_area
+		
 def _ffi_todo_wrapper(args):
 	return _ffi_todo(*args)
 
@@ -30,8 +50,8 @@ def _ffi_todo(input_folder, camera, ccd):
 
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
-		names=('starid', 'camera', 'ccd', 'datasource', 'tmag'),
-		dtype=('int64', 'int32', 'int32', 'S3', 'float32')
+		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
+		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
 	)
 
 	# See if there are any FFIs for this camera and ccd.
@@ -57,9 +77,13 @@ def _ffi_todo(input_folder, camera, ccd):
 		conn.row_factory = sqlite3.Row
 		cursor = conn.cursor()
 
+		# Load the settings:
+		cursor.execute("SELECT * FROM settings WHERE camera=? AND ccd=? LIMIT 1;", (camera, ccd))
+		settings = cursor.fetchone()
+
 		# Find all the stars in the catalog brigher than a certain limit:
 		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < 15 ORDER BY tmag;")
-		for k, row in enumerate(cursor.fetchall()):
+		for row in cursor.fetchall():
 			logger.debug("%011d - %.3f", row['starid'], row['tmag'])
 
 			# Calculate the position of this star on the CCD using the WCS:
@@ -71,8 +95,12 @@ def _ffi_todo(input_folder, camera, ccd):
 			y -= offset_rows
 
 			# If the target falls outside silicon, do not add it to the todo list:
-			if x < 0 or y < 0 or x > image_shape[1] or y > image_shape[0]:
+			# The reason for the strange 0.5's is that pixel centers are at integers.
+			if x < -0.5 or y < -0.5 or x > image_shape[1] or y > image_shape[0]:
 				continue
+
+			# Calculate the Cotrending Basis Vector area the star falls in:
+			cbv_area = calc_cbv_area(row, settings)
 
 			# The targets is on silicon, so add it to the todo list:
 			cat.add_row({
@@ -80,7 +108,8 @@ def _ffi_todo(input_folder, camera, ccd):
 				'camera': camera,
 				'ccd': ccd,
 				'datasource': 'ffi',
-				'tmag': row['tmag']
+				'tmag': row['tmag'],
+				'cbv_area': cbv_area
 			})
 
 		cursor.close()
@@ -135,9 +164,23 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
-		names=('starid', 'camera', 'ccd', 'datasource', 'tmag'),
-		dtype=('int64', 'int32', 'int32', 'S3', 'float32')
+		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
+		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
 	)
+
+	# Load all the settings into memory:
+	settings = {}
+	for camera, ccd in itertools.product(cameras, ccds):
+		catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
+		if not os.path.exists(catalog_file):
+			raise IOError("Catalog file not found: %s" % catalog_file)
+		conn = sqlite3.connect(catalog_file)
+		conn.row_factory = sqlite3.Row
+		cursor = conn.cursor()
+		cursor.execute("SELECT * FROM settings WHERE camera=? AND ccd=? LIMIT 1;", (camera, ccd))
+		settings[camera, ccd] = cursor.fetchone()
+		cursor.close()
+		conn.close()
 
 	# Load list of all Target Pixel files in the directory:
 	tpf_files = find_tpf_files(input_folder)
@@ -148,18 +191,66 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 			starid = hdu[0].header['TICID']
 			camera = hdu[0].header['CAMERA']
 			ccd = hdu[0].header['CCD']
-			tmag = hdu[0].header['TESSMAG']
 
 			if camera in cameras and ccd in ccds:
+				# Load the corresponding catalog:
+				catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
+				conn = sqlite3.connect(catalog_file)
+				conn.row_factory = sqlite3.Row
+				cursor = conn.cursor()
+
+				# Get information about star:
+				cursor.execute("SELECT * FROM catalog WHERE starid=? LIMIT 1;", (starid, ))
+				row = cursor.fetchone()
+
+				# Calculate CBV area that target falls in:
+				cbv_area = calc_cbv_area(row, settings[camera, ccd])
+
+				# Add the main target to the list:
 				cat.add_row({
 					'starid': starid,
 					'camera': camera,
 					'ccd': ccd,
 					'datasource': 'tpf',
-					'tmag': tmag
+					'tmag': row['tmag'],
+					'cbv_area': cbv_area
 				})
 
-			# TODO: Load all other targets in this stamp!
+				# Load all other targets in this stamp:
+				# Use the WCS of the stamp to find all stars that fall within
+				# the footprint of the stamp.
+				image_shape = hdu[2].shape
+				wcs = WCS(header=hdu[2].header)
+				footprint = wcs.calc_footprint()
+				radec_min = np.min(footprint, axis=0)
+				radec_max = np.max(footprint, axis=0)
+				cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1]))
+				for row in cursor.fetchall():
+					# Calculate the position of this star on the CCD using the WCS:
+					ra_dec = np.atleast_2d([row['ra'], row['decl']])
+					x, y = wcs.all_world2pix(ra_dec, 0)[0]
+
+					# If the target falls outside silicon, do not add it to the todo list:
+					# The reason for the strange 0.5's is that pixel centers are at integers.
+					if x < -0.5 or y < -0.5 or x > image_shape[1] or y > image_shape[0]:
+						continue
+
+					# Add this secondary target to the list:
+					# Note that we are storing the starid of the target
+					# in which target pixel file the target can be found.
+					logger.debug("Adding extra target: TIC %d", row['starid'])
+					cat.add_row({
+						'starid': row['starid'],
+						'camera': camera,
+						'ccd': ccd,
+						'datasource': 'tpf:' + str(starid),
+						'tmag': row['tmag'],
+						'cbv_area': cbv_area
+					})
+
+				# Close the connection to the catalog SQLite database:
+				cursor.close()
+				conn.close()
 
 	# Find all targets in Full Frame Images:
 	inputs = itertools.product([input_folder], cameras, ccds)
@@ -182,7 +273,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	# Sort the final list:
 	cat.sort('tmag')
 
-	# TODO: Remove duplicates!
+	# Remove duplicates!
 	logger.info("Removing duplicate entries...")
 	_, idx = np.unique(cat[('starid', 'camera', 'ccd', 'datasource')], return_index=True, axis=0)
 	cat = cat[np.sort(idx)]
@@ -202,17 +293,19 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 		ccd INT NOT NULL,
 		method TEXT DEFAULT NULL,
 		tmag REAL,
-		status INT DEFAULT NULL
+		status INT DEFAULT NULL,
+		cbv_area INT NOT NULL
 	);""")
 
 	for pri, row in enumerate(cat):
-		cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,datasource,tmag) VALUES (?,?,?,?,?,?);", (
+		cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,datasource,tmag,cbv_area) VALUES (?,?,?,?,?,?,?);", (
 			pri+1,
 			int(row['starid']),
 			int(row['camera']),
 			int(row['ccd']),
 			row['datasource'],
-			float(row['tmag'])
+			float(row['tmag']),
+			int(row['cbv_area'])
 		))
 
 	conn.commit()

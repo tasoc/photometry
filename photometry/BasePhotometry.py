@@ -107,7 +107,7 @@ class BasePhotometry(object):
 
 		logger = logging.getLogger(__name__)
 
-		if datasource not in ('ffi', 'tpf'):
+		if datasource != 'ffi' and not datasource.startswith('tpf'):
 			raise ValueError("Invalid datasource: '%s'" % datasource)
 		if cache not in ('basic', 'none', 'full'):
 			raise ValueError("Invalid cache: '%s'" % cache)
@@ -252,9 +252,18 @@ class BasePhotometry(object):
 			#self.lightcurve['timecorr'] = times.light_travel_time(star_coord, ephemeris='jpl')
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
-		elif self.datasource == 'tpf':
+		elif self.datasource.startswith('tpf'):
+			# If the datasource was specified as 'tpf:starid' it means
+			# that we should load from the specified starid instead of
+			# the starid of the current main target.
+			if self.datasource.startswith('tpf:'):
+				starid_to_load = int(self.datasource[4:])
+				self.datasource = 'tpf'
+			else:
+				starid_to_load = self.starid
+
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(input_folder, self.starid)
+			fname = find_tpf_files(input_folder, starid_to_load)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
