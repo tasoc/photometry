@@ -96,7 +96,7 @@ def _ffi_todo(input_folder, camera, ccd):
 
 			# If the target falls outside silicon, do not add it to the todo list:
 			# The reason for the strange 0.5's is that pixel centers are at integers.
-			if x < -0.5 or y < -0.5 or x > image_shape[1] or y > image_shape[0]:
+			if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
 				continue
 
 			# Calculate the Cotrending Basis Vector area the star falls in:
@@ -224,6 +224,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 				footprint = wcs.calc_footprint()
 				radec_min = np.min(footprint, axis=0)
 				radec_max = np.max(footprint, axis=0)
+				# TODO: This can fail to find all targets e.g. if the footprint is across the ra=0 line
 				cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1]))
 				for row in cursor.fetchall():
 					# Calculate the position of this star on the CCD using the WCS:
@@ -232,7 +233,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 
 					# If the target falls outside silicon, do not add it to the todo list:
 					# The reason for the strange 0.5's is that pixel centers are at integers.
-					if x < -0.5 or y < -0.5 or x > image_shape[1] or y > image_shape[0]:
+					if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
 						continue
 
 					# Add this secondary target to the list:
