@@ -18,6 +18,7 @@ import itertools
 from astropy.table import Table, vstack
 from astropy.io import fits
 from astropy.wcs import WCS
+from timeit import default_timer
 from .utilities import find_tpf_files, sphere_distance
 import multiprocessing
 
@@ -185,6 +186,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	# Load list of all Target Pixel files in the directory:
 	tpf_files = find_tpf_files(input_folder)
 	logger.info("Number of TPF files: %d", len(tpf_files))
+	tic = default_timer()
 	for fname in tpf_files:
 		logger.debug("Processing TPF file: '%s'", fname)
 		with fits.open(fname, memmap=True, mode='readonly') as hdu:
@@ -225,7 +227,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 				radec_min = np.min(footprint, axis=0)
 				radec_max = np.max(footprint, axis=0)
 				# TODO: This can fail to find all targets e.g. if the footprint is across the ra=0 line
-				cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1]))
+				cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND starid != ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1], starid))
 				for row in cursor.fetchall():
 					# Calculate the position of this star on the CCD using the WCS:
 					ra_dec = np.atleast_2d([row['ra'], row['decl']])
@@ -252,6 +254,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 				# Close the connection to the catalog SQLite database:
 				cursor.close()
 				conn.close()
+
+	# Amount of time it took to process TPF files:
+	toc = default_timer()
+	logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(tpf_files))
 
 	# Find all targets in Full Frame Images:
 	inputs = itertools.product([input_folder], cameras, ccds)
@@ -280,6 +286,9 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	cat = cat[np.sort(idx)]
 
 	# TODO: Can we make decisions already now on methods?
+	# tmag < 2.5 : Halo photometry
+	# tmag < 6.5 : Aperture (saturated)
+	# tmag > 6.5 : Aperture (with PSF fallback)
 
 	# Write the TODO list to the SQLite database file:
 	logger.info("Writing TODO file...")
