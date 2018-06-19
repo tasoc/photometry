@@ -15,6 +15,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
 import itertools
+import functools
 from astropy.table import Table, vstack
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -119,6 +120,91 @@ def _ffi_todo(input_folder, camera, ccd):
 	return cat
 
 #------------------------------------------------------------------------------
+def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None):
+
+	logger = logging.getLogger(__name__)
+
+	# Create the TODO list as a table which we will fill with targets:
+	cat = Table(
+		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
+		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
+	)
+
+	logger.debug("Processing TPF file: '%s'", fname)
+	with fits.open(fname, memmap=True, mode='readonly') as hdu:
+		starid = hdu[0].header['TICID']
+		camera = hdu[0].header['CAMERA']
+		ccd = hdu[0].header['CCD']
+
+		if camera in cameras and ccd in ccds:
+			# Load the corresponding catalog:
+			catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
+			if not os.path.exists(catalog_file):
+				raise IOError("Catalog file not found: %s" % catalog_file)
+			conn = sqlite3.connect(catalog_file)
+			conn.row_factory = sqlite3.Row
+			cursor = conn.cursor()
+
+			cursor.execute("SELECT * FROM settings WHERE camera=? AND ccd=? LIMIT 1;", (camera, ccd))
+			settings = cursor.fetchone()
+
+			# Get information about star:
+			cursor.execute("SELECT * FROM catalog WHERE starid=? LIMIT 1;", (starid, ))
+			row = cursor.fetchone()
+
+			# Calculate CBV area that target falls in:
+			cbv_area = calc_cbv_area(row, settings)
+
+			# Add the main target to the list:
+			cat.add_row({
+				'starid': starid,
+				'camera': camera,
+				'ccd': ccd,
+				'datasource': 'tpf',
+				'tmag': row['tmag'],
+				'cbv_area': cbv_area
+			})
+
+			# Load all other targets in this stamp:
+			# Use the WCS of the stamp to find all stars that fall within
+			# the footprint of the stamp.
+			image_shape = hdu[2].shape
+			wcs = WCS(header=hdu[2].header)
+			footprint = wcs.calc_footprint()
+			radec_min = np.min(footprint, axis=0)
+			radec_max = np.max(footprint, axis=0)
+			# TODO: This can fail to find all targets e.g. if the footprint is across the ra=0 line
+			cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND starid != ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1], starid))
+			for row in cursor.fetchall():
+				# Calculate the position of this star on the CCD using the WCS:
+				ra_dec = np.atleast_2d([row['ra'], row['decl']])
+				x, y = wcs.all_world2pix(ra_dec, 0)[0]
+
+				# If the target falls outside silicon, do not add it to the todo list:
+				# The reason for the strange 0.5's is that pixel centers are at integers.
+				if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
+					continue
+
+				# Add this secondary target to the list:
+				# Note that we are storing the starid of the target
+				# in which target pixel file the target can be found.
+				logger.debug("Adding extra target: TIC %d", row['starid'])
+				cat.add_row({
+					'starid': row['starid'],
+					'camera': camera,
+					'ccd': ccd,
+					'datasource': 'tpf:' + str(starid),
+					'tmag': row['tmag'],
+					'cbv_area': cbv_area
+				})
+
+			# Close the connection to the catalog SQLite database:
+			cursor.close()
+			conn.close()
+
+	return cat
+
+#------------------------------------------------------------------------------
 def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
@@ -169,91 +255,25 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
 	)
 
-	# Load all the settings into memory:
-	settings = {}
-	for camera, ccd in itertools.product(cameras, ccds):
-		catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
-		if not os.path.exists(catalog_file):
-			raise IOError("Catalog file not found: %s" % catalog_file)
-		conn = sqlite3.connect(catalog_file)
-		conn.row_factory = sqlite3.Row
-		cursor = conn.cursor()
-		cursor.execute("SELECT * FROM settings WHERE camera=? AND ccd=? LIMIT 1;", (camera, ccd))
-		settings[camera, ccd] = cursor.fetchone()
-		cursor.close()
-		conn.close()
-
 	# Load list of all Target Pixel files in the directory:
 	tpf_files = find_tpf_files(input_folder)
 	logger.info("Number of TPF files: %d", len(tpf_files))
+
+	# Open a pool of workers:
+	logger.info("Starting pool of workers for TPFs...")
+	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
+	threads = min(threads, len(tpf_files)) # No reason to use more than the number of jobs in total
+	logger.info("Using %d processes.", threads)
+	pool = multiprocessing.Pool(threads)
+
+	# Run the TPF files in parallel:
 	tic = default_timer()
-	for fname in tpf_files:
-		logger.debug("Processing TPF file: '%s'", fname)
-		with fits.open(fname, memmap=True, mode='readonly') as hdu:
-			starid = hdu[0].header['TICID']
-			camera = hdu[0].header['CAMERA']
-			ccd = hdu[0].header['CCD']
+	_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds)
+	for cat2 in pool.imap_unordered(_tpf_todo_wrapper, tpf_files):
+		cat = vstack([cat, cat2], join_type='exact')
 
-			if camera in cameras and ccd in ccds:
-				# Load the corresponding catalog:
-				catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
-				conn = sqlite3.connect(catalog_file)
-				conn.row_factory = sqlite3.Row
-				cursor = conn.cursor()
-
-				# Get information about star:
-				cursor.execute("SELECT * FROM catalog WHERE starid=? LIMIT 1;", (starid, ))
-				row = cursor.fetchone()
-
-				# Calculate CBV area that target falls in:
-				cbv_area = calc_cbv_area(row, settings[camera, ccd])
-
-				# Add the main target to the list:
-				cat.add_row({
-					'starid': starid,
-					'camera': camera,
-					'ccd': ccd,
-					'datasource': 'tpf',
-					'tmag': row['tmag'],
-					'cbv_area': cbv_area
-				})
-
-				# Load all other targets in this stamp:
-				# Use the WCS of the stamp to find all stars that fall within
-				# the footprint of the stamp.
-				image_shape = hdu[2].shape
-				wcs = WCS(header=hdu[2].header)
-				footprint = wcs.calc_footprint()
-				radec_min = np.min(footprint, axis=0)
-				radec_max = np.max(footprint, axis=0)
-				# TODO: This can fail to find all targets e.g. if the footprint is across the ra=0 line
-				cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND starid != ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1], starid))
-				for row in cursor.fetchall():
-					# Calculate the position of this star on the CCD using the WCS:
-					ra_dec = np.atleast_2d([row['ra'], row['decl']])
-					x, y = wcs.all_world2pix(ra_dec, 0)[0]
-
-					# If the target falls outside silicon, do not add it to the todo list:
-					# The reason for the strange 0.5's is that pixel centers are at integers.
-					if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
-						continue
-
-					# Add this secondary target to the list:
-					# Note that we are storing the starid of the target
-					# in which target pixel file the target can be found.
-					logger.debug("Adding extra target: TIC %d", row['starid'])
-					cat.add_row({
-						'starid': row['starid'],
-						'camera': camera,
-						'ccd': ccd,
-						'datasource': 'tpf:' + str(starid),
-						'tmag': row['tmag'],
-						'cbv_area': cbv_area
-					})
-
-				# Close the connection to the catalog SQLite database:
-				cursor.close()
-				conn.close()
+	pool.close()
+	pool.join()
 
 	# Amount of time it took to process TPF files:
 	toc = default_timer()
