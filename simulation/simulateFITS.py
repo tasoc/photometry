@@ -27,8 +27,10 @@ from photometry.utilities import mag2flux, add_proper_motion
 
 
 class simulateFITS(object):
-	def __init__(self, Nstars = 150, Ntimes = 5,
-			save_images=True, overwrite_images=True):
+	def __init__(self, Nstars = 2, Ntimes = 2,
+			save_images=True, overwrite_images=True,
+			include_jitter=True, include_noise=True, include_bkg=True,
+			Nvariables=1, multiprocess=True):
 		"""
 		Simulate FITS images with stars, background and noise.
 
@@ -38,12 +40,17 @@ class simulateFITS(object):
 		photometry methods in the photometry pipeline.
 
 		Parameters:
-			Nstars (int): Number of stars in image. Default is 5.
-			Ntimes (int): Number of time steps in timeseries. Default is 5.
+			Nstars (int): Number of stars in image. Default is 2.
+			Ntimes (int): Number of time steps in timeseries. Default is 2.
 			save_images (boolean): True if images and catalog should be saved.
 			Default is True.
 			overwrite_images (boolean): True if image and catalog files should
 			be overwritten. Default is True.
+			include_jitter (boolean): True if jitter is to be used (default).
+			include_noise (boolean): True if noise is to be added to the image (default).
+			include_bkg (boolean): True if background is to be added to the image (default).
+			Nvariables (int): Number of stars that are variable (default is 1).
+			multiprocess (boolean): True if multiprocessing is to be used (default).
 
 		Output:
 			The output FITS images are saved to a subdirectory images in the
@@ -75,10 +82,15 @@ class simulateFITS(object):
 		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
 		self.Nstars = np.int(Nstars) # Number of stars in image
-		self.NoscStars = np.int(self.Nstars/2) # Number of oscillating stars
 		self.Ntimes = np.int(Ntimes) # Number of images in time series
 		self.save_images = save_images # True if images+catalog should be saved
 		self.overwrite_images = overwrite_images # True if overwrite in saving
+		self.include_jitter = include_jitter
+		self.include_noise = include_noise
+		self.include_bkg = include_bkg
+		self.Nvariables = Nvariables # Number of oscillating stars
+		self.multiprocess = multiprocess
+
 
 		# Get output directory from enviroment variable:
 		self.output_folder = os.environ.get('TESSPHOT_INPUT',
@@ -97,7 +109,6 @@ class simulateFITS(object):
 		self.TmagHigh = 16.
 		self.gain = 5.3 # electrons/count, CCD output gain (ETE6 estimate)
 
-		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
 		self.exposure_time = 1800. # 30 min
 		self.times = self.make_times(cadence=self.exposure_time)
@@ -112,16 +123,12 @@ class simulateFITS(object):
 		self.w.wcs.ctype = ["RA---AIR", "DEC--AIR"]
 		self.header = self.w.to_header()
 
-		# Set random number generator seed:
+		# Set random number generator seeds:
 		random.seed(0)
 		np.random.seed(0)
 
 		# Make catalog:
 		self.catalog = self.make_catalog()
-
-		# Adjust catalog for debugging purposes:
-#		self.catalog['row'][4] = 13
-#		self.catalog['col'][4] = 13
 
 		# Save catalog to txt.gz file:
 		self.make_catalog_file(self.catalog)
@@ -129,26 +136,33 @@ class simulateFITS(object):
 		# Generate sqlite catalog file from catalog.txt.gzfile:
 		self.create_catalog(self.sector, self.camera, self.ccd)
 
-		# Generate TODO list:
+		# Generate TODO list for each photometry method:
 		for method in ['linpsf','aperture','psf']:
 			self.create_todo(sector=self.sector, method=method, filename='todo_'+method+'.sqlite')
-#		self.create_todo(sector=self.sector, method='linpsf', filename='todo.sqlite')
 
 		# Apply time-independent changes to catalog:
 #		self.catalog = self.apply_inaccurate_catalog(self.catalog)
 		master_catalog = deepcopy(self.catalog)
 
 		# Generate jitter array:
-		self.jitter = self.apply_jitter()
+		if include_jitter:
+			self.jitter = self.apply_jitter()
+			print("Jitter included.")
+		else:
+			self.jitter = np.zeros([self.Ntimes, 2])
+			print("Jitter excluded. Jitter array set to 0.")
 		print("Saving jitter array to jitter.txt")
 		np.savetxt(os.path.join(self.output_folder, "jitter.txt"), self.jitter)
 
 		# Generate light curves:
-		self.light_curves, params = self.generate_light_curves()
-		print("Saving light curve parameters to light_curve_params")
-		np.savetxt(os.path.join(self.output_folder, "light_curve_params.txt"), params)
-		print("Saving light curves to light_curves.txt")
-		np.savetxt(os.path.join(self.output_folder, "light_curves.txt"), self.light_curves)
+		if self.Nvariables > 0:
+			self.light_curves, params = self.generate_light_curves()
+			print("Saving light curve parameters to light_curve_params")
+			np.savetxt(os.path.join(self.output_folder, "light_curve_params.txt"), params)
+			print("Saving light curves to light_curves.txt")
+			np.savetxt(os.path.join(self.output_folder, "light_curves.txt"), self.light_curves)
+		else:
+			print("No variable stars included.")
 
 		# Loop through the time steps:
 		for t, timestep in enumerate(self.times):
@@ -156,10 +170,6 @@ class simulateFITS(object):
 
 			# Set catalog to master_catalog:
 			self.catalog = master_catalog
-
-			# Apply time-dependent changes to catalog:
-#			self.catalog = self.apply_variable_magnitudes(self.catalog,
-#														timestamp)
 
 			# Make stars from catalog:
 			stars = self.make_stars(t)
@@ -171,8 +181,11 @@ class simulateFITS(object):
 			noise = self.make_noise()
 
 			# Sum image from its parts:
-			img = stars + bkg + noise
-#			img = stars
+			img = stars
+			if self.include_noise:
+				img += noise
+			if self.include_bkg:
+				img += bkg
 
 			if self.save_images:
 				# Write img to FITS file:
@@ -526,16 +539,16 @@ class simulateFITS(object):
 			params (list): List of oscillation parameters used to generate the light curve, ([amplitudes, frequency, phase] for each star).
 		"""
 		# Indices of half the stars that are not constant:
-		osc_star_indices = np.random.choice(self.Nstars, self.NoscStars)
+		osc_star_indices = np.random.choice(self.Nstars, self.Nvariables)
 
 		# Preallocate light curves array:
 		light_curves = np.ones([self.Nstars, self.Ntimes])
 
 		# Set oscillation parameters:
-		amplitudes = 0.1*np.ones(self.NoscStars)
-		frequencies = 3*1e-3*np.ones(self.NoscStars) # RGB star, solarlike osc.
+		amplitudes = 0.1*np.ones(self.Nvariables)
+		frequencies = 3*1e-3*np.ones(self.Nvariables) # RGB star, solarlike osc.
 		phases = np.array([random.uniform(0, self.exposure_time)
-				for star in range(self.NoscStars)])
+				for star in range(self.Nvariables)])
 		params = [[amplitude, frequency, phase] \
 				for amplitude, frequency, phase \
 				in zip(amplitudes, frequencies, phases)]
@@ -581,8 +594,8 @@ class simulateFITS(object):
 
 
 		Returns:
-			catalog (`astropy.table.Table`): Table formatted like the catalog
-			parameter, but with changes to its entries.
+			catalog (numpy array): Jitter changes in each timestep (dim. 1) and
+			dimension (dim. 2).
 		"""
 
 		# Set jitter scale:
@@ -599,7 +612,7 @@ class simulateFITS(object):
 		return jitter
 
 
-	def make_stars(self, t, camera=1, ccd=1, apply_jitter=True, multiprocess=True):
+	def make_stars(self, t, camera=1, ccd=1):
 		"""
 		Make stars for the image and append catalog with flux column.
 
@@ -607,8 +620,7 @@ class simulateFITS(object):
 			t (int): Time loop index.
 			camera (int): Kepler camera. Used to get PSF. Default is 1.
 			ccd (int): Kepler CCD. Used to get PSF. Default is 1.
-			apply_jitter (boolean): True if jitter should be applied (default).
-			multiprocess (boolean): True if multiprocessing is to be used (default).
+
 
 		Returns:
 			stars (numpy array): Summed PRFs of stars in the image of the same
@@ -619,7 +631,7 @@ class simulateFITS(object):
 		kpsf = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
 
 		# Make list with parameter numpy arrays for the pixel integrater:
-		if apply_jitter:
+		if self.include_jitter:
 			params = [
 						np.array(
 							[self.catalog['row'][i] + self.jitter[t][0],
@@ -639,7 +651,7 @@ class simulateFITS(object):
 					]
 
 		# Integrate stars to image:
-		if multiprocess:
+		if self.multiprocess:
 			img = np.zeros([self.Nrows, self.Ncols], dtype='float64')
 			with Pool(8) as p:
 				for i in p.imap_unordered(kpsf.integrate_single, params):
