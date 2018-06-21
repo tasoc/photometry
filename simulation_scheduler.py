@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Simulate data, prepare it for and do photometry with the TESS Photometry pipeline.
+Simulate data for the TASOC photometry pipeline.
 
 @author: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 """
@@ -50,23 +50,102 @@ if __name__ == '__main__':
 		'name':				'multi_star_2000',
 		'ignore_mov_kernel': 	False,
 		'run_simulateFITS': 	[2000, 350], # stars, samples
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf'], # photometry methods
-		'stars': 			np.arange(1,2001, dtype=int) # stars to do photometry on
+		'methods': 			['aperture', 'linpsf'] # photometry methods
 	}
 
 	multi_star_test = {
 		'name':				'multi_star_test',
-		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[2000, 2], # 2 stars, 2 samples
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'ignore_mov_kernel': 	True,
+		'run_simulateFITS': 	[2, 2, True, True, True, True, True, True, 1, True],
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['linpsf'], # photometry methods
-		'stars': 			np.arange(1,3, dtype=int) # stars to do photometry on
+		'methods': 			['linpsf'] # photometry methods
 	}
+
+
+	""" Noise investigation simulation runs """
+	# jitter, noise, inaccurate catalog, variables
+
+	multi_star_no_noise = {
+		'name':				'multi_star_no_noise',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, False, True, False, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise = {
+		'name':				'multi_star_noise',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, True, True, False, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_jitter = {
+		'name':				'multi_star_jitter',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, True, False, True, False, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_inaccurate = {
+		'name':				'multi_star_inaccurate',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, False, True, True, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_variable = {
+		'name':				'multi_star_variable',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, False, True, False, 1000, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise_jitter = {
+		'name':				'multi_star_noise_jitter',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, True, True, True, False, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise_inaccurate = {
+		'name':				'multi_star_noise_inaccurate',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, True, True, True, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise_variable = {
+		'name':				'multi_star_noise_variable',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, True, True, False, 1000, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_no_noise_jitter_inaccurate_variable = {
+		'name':				'multi_star_no_noise_jitter_inaccurate_variable',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, True, False, True, True, 1000, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise_jitter_inaccurate_variable = {
+		'name':				'multi_star_noise_jitter_inaccurate_variable',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, True, True, True, True, 1000, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
 
 	# Collect dictionaries in list:
 	simulations = [multi_star_test]
