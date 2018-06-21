@@ -203,26 +203,3 @@ if __name__ == '__main__':
 			cameras = simulation['create_hdf5'][1],
 			ccds    = simulation['create_hdf5'][2]
 		)
-
-		# Rewrite motion_kernel in hdf5 file:
-		if simulation['ignore_mov_kernel']:
-			hdf_file = os.path.join(input_folder,
-				simulation['name'],
-				'camera{0:d}_ccd{1:d}.hdf5'.format(
-					simulation['create_hdf5'][1],
-					simulation['create_hdf5'][2]
-					)
-			)
-			logger.info("Rewriting motion_kernel in hdf5 file: \n{}".format(hdf_file))
-			with h5py.File(hdf_file, 'a') as hdf:
-				# Get original movement kernel
-				movement_kernel = np.array(hdf['movement_kernel'])
-				logger.debug("Original movement kernel: \n{}".format(movement_kernel))
-				logger.debug(np.shape(movement_kernel))
-
-				# Define new movement kernel:
-				movement_kernel_new = np.zeros_like(movement_kernel)
-
-				# Replace values of movement kernel in hdf5 file:
-				hdf['movement_kernel'][:] = movement_kernel_new
-				logger.debug("New movement kernel: \n{}".format(np.array(hdf['movement_kernel'])))
