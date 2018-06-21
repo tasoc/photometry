@@ -8,11 +8,9 @@ Simulate data for the TASOC photometry pipeline.
 
 import os
 import argparse
-import numpy as np
 import logging
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
-import h5py
 
 from photometry.prepare import create_hdf5
 from simulation.simulateFITS import simulateFITS
@@ -60,6 +58,14 @@ if __name__ == '__main__':
 		'run_simulateFITS': 	[2, 2, True, True, True, True, True, True, 1, True],
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
 		'methods': 			['linpsf'] # photometry methods
+	}
+
+	multi_star_test2 = {
+		'name':				'multi_star_test2',
+		'ignore_mov_kernel': 	True,
+		'run_simulateFITS': 	[2, 2, True, True, True, True, True, True, 1, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
 	}
 
 
@@ -148,7 +154,18 @@ if __name__ == '__main__':
 
 
 	# Collect dictionaries in list:
-	simulations = [multi_star_test]
+	simulations = [
+				multi_star_no_noise,
+				multi_star_noise,
+				multi_star_jitter,
+				multi_star_inaccurate,
+				multi_star_variable,
+				multi_star_noise_jitter,
+				multi_star_noise_inaccurate,
+				multi_star_noise_variable,
+				multi_star_no_noise_jitter_inaccurate_variable,
+				multi_star_noise_jitter_inaccurate_variable
+				]
 	logger.info("Simulations being run: \n %s", simulations)
 
 
