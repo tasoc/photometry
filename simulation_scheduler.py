@@ -113,11 +113,6 @@ if __name__ == '__main__':
 		logger.info("TESSPHOT_INPUT set to '%s'", os.environ.get('TESSPHOT_INPUT'))
 
 		# Run run_simulateFITS.py:
-#		run_simulateFITS_call = "python run_simulateFITS.py" \
-#			+ " -s " + np.str(simulation['run_simulateFITS'][0]) \
-#			+ " -t " + np.str(simulation['run_simulateFITS'][1])
-#		logger.info("Running run_simulateFITS.py: " + run_simulateFITS_call)
-#		os.system(run_simulateFITS_call)
 		Nstars = simulation['run_simulateFITS'][0]
 		Ntimes = simulation['run_simulateFITS'][1]
 		simulateFITS(Nstars=Nstars, Ntimes=Ntimes, save_images=True, overwrite_images=True)
@@ -130,47 +125,25 @@ if __name__ == '__main__':
 			ccds    = simulation['create_hdf5'][2]
 		)
 
+		# Rewrite motion_kernel in hdf5 file:
+		if simulation['ignore_mov_kernel']:
+			hdf_file = os.path.join(input_folder,
+				simulation['name'],
+				'camera{0:d}_ccd{1:d}.hdf5'.format(
+					simulation['create_hdf5'][1],
+					simulation['create_hdf5'][2]
+					)
+			)
+			logger.info("Rewriting motion_kernel in hdf5 file: \n{}".format(hdf_file))
+			with h5py.File(hdf_file, 'a') as hdf:
+				# Get original movement kernel
+				movement_kernel = np.array(hdf['movement_kernel'])
+				logger.debug("Original movement kernel: \n{}".format(movement_kernel))
+				logger.debug(np.shape(movement_kernel))
 
+				# Define new movement kernel:
+				movement_kernel_new = np.zeros_like(movement_kernel)
 
-		# Rewrite motion_kernel in hdf5 file: WARNING: this appears to be faulty
-#		if simulation['ignore_mov_kernel'] is True:
-#			logger.info("Rewriting motion_kernel in hdf5 file")
-#			hdf_file = os.path.join(input_folder,
-#				'camera{0:d}_ccd{1:d}.hdf5'.format(
-#					simulation['create_hdf5'][1],
-#					simulation['create_hdf5'][2]
-#					)
-#			)
-#			with h5py.File(hdf_file, 'a') as hdf:
-#				# Get movement kernel data:
-#				data = hdf['movement_kernel'] = arr (N, (row,col))
-#				data_np = np.array(data)
-#				logger.debug("Original movement kernel: \n{}".format(data_np))
-#
-#				# Define new movement kernel:
-#				movement_kernel_new = np.zeros_like(data_np)
-#
-#				# Replace values of movement kernel in hdf5 file:
-#				data[...] = movement_kernel_new
-#				logger.debug("New movement kernel: \n{}".format(np.array(data)))
-
-
-#		# Run run_tessphot for each method:
-#		for i, method in enumerate(simulation['methods']):
-#			# Set the output environment variable:
-#			os.environ['TESSPHOT_OUTPUT'] = simulation['output_folders'][i]
-#			logger.info("TESSPHOT_OUTPUT set to '%s'", os.environ.get('TESSPHOT_OUTPUT'))
-#
-#			# Run run_tessphot:
-#			for star in simulation['stars']:
-#				run_tessphot_call = "python run_tessphot.py" \
-#					+ ' ' + np.str(star) + ' ' \
-#					+ ' --method ' + method \
-#					+ ' --plot'
-#				if args.debug:
-#					run_tessphot_call += ' --debug'
-#				if args.quiet:
-#					run_tessphot_call += ' --quiet'
-#
-#				logger.info("Doing %s photometry: %s", method, run_tessphot_call)
-#				os.system(run_tessphot_call)
+				# Replace values of movement kernel in hdf5 file:
+				hdf['movement_kernel'][:] = movement_kernel_new
+				logger.debug("New movement kernel: \n{}".format(np.array(hdf['movement_kernel'])))
