@@ -29,7 +29,8 @@ from photometry.utilities import mag2flux, add_proper_motion
 class simulateFITS(object):
 	def __init__(self, Nstars = 2, Ntimes = 2,
 			save_images=True, overwrite_images=True,
-			include_jitter=True, include_noise=True, include_bkg=True,
+			include_jitter=True, include_noise=True,
+			include_bkg=True, inaccurate_catalog=False,
 			Nvariables=1, multiprocess=True):
 		"""
 		Simulate FITS images with stars, background and noise.
@@ -49,6 +50,7 @@ class simulateFITS(object):
 			include_jitter (boolean): True if jitter is to be used (default).
 			include_noise (boolean): True if noise is to be added to the image (default).
 			include_bkg (boolean): True if background is to be added to the image (default).
+			inaccurate_catalog (boolean): True if catalog positional inaccuracies at Gaia level should be included (default is False).
 			Nvariables (int): Number of stars that are variable (default is 1).
 			multiprocess (boolean): True if multiprocessing is to be used (default).
 
@@ -88,6 +90,7 @@ class simulateFITS(object):
 		self.include_jitter = include_jitter
 		self.include_noise = include_noise
 		self.include_bkg = include_bkg
+		self.inaccurate_catalog = inaccurate_catalog
 		self.Nvariables = Nvariables # Number of oscillating stars
 		self.multiprocess = multiprocess
 
@@ -141,7 +144,8 @@ class simulateFITS(object):
 			self.create_todo(sector=self.sector, method=method, filename='todo_'+method+'.sqlite')
 
 		# Apply time-independent changes to catalog:
-#		self.catalog = self.apply_inaccurate_catalog(self.catalog)
+		if self.inaccurate_catalog:
+			self.catalog = self.apply_inaccurate_catalog(self.catalog)
 		master_catalog = deepcopy(self.catalog)
 
 		# Generate jitter array:
@@ -233,7 +237,6 @@ class simulateFITS(object):
 		starids = np.arange(self.Nstars, dtype=int)
 
 		# Set buffer pixel size around edge where not to put stars:
-		# TODO: Add possibility of stars on the edges
 		bufferpx = 3
 
 		# Draw uniform row positions:
@@ -243,7 +246,6 @@ class simulateFITS(object):
 		starcols =  np.random.uniform(bufferpx, self.Ncols-bufferpx, self.Nstars)
 
 		# Draw stellar magnitudes:
-#		starmag = np.random.uniform(self.TmagLow, self.TmagHigh, self.Nstars)
 		starmag = np.random.triangular(self.TmagLow, self.TmagHigh, self.TmagHigh, self.Nstars)
 
 		# Collect star parameters in list for catalog:
@@ -286,7 +288,7 @@ class simulateFITS(object):
 		# Set ra and dec from pixel coordinates using WCS solution:
 		ra, decl = self.w.all_pix2world(catalog['col'],catalog['row'],0,ra_dec_order=True)
 
-		# Set proper motion:
+		# Set proper motion to zero:
 		prop_mot_ra = np.zeros_like(catalog['tmag'])
 		prop_mot_dec = np.zeros_like(catalog['tmag'])
 
@@ -321,7 +323,6 @@ class simulateFITS(object):
 							delimiter='\t',
 							header='    '.join(catalog.colnames))
 			else:
-				# TODO: add check and error if file exists
 				pass
 		else:
 			pass
@@ -332,17 +333,12 @@ class simulateFITS(object):
 
 	def create_catalog(self, sector, camera, ccd):
 		""" Original function by Rasmus Handberg. Create sqlite file """
-
-#			logger = logging.getLogger(__name__)
-
 		input_folder = os.environ['TESSPHOT_INPUT']
 
 		# We need a list of when the sectors are in time:
 		sector_reference_time = 2457827.0 + 13.5
-#			logger.info('Projecting catalog {0:.3f} years relative to 2000'.format((sector_reference_time - 2451544.5)/365.25))
 
 		# Load the catalog from file:
-		# TODO: In the future this will be loaded from the TASOC database:
 		cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,2,3,6), dtype='float64')
 		if cat.ndim == 1:
 			cat = np.expand_dims(cat, axis=0)
@@ -367,7 +363,6 @@ class simulateFITS(object):
 		for row in cat:
 			# Add the proper motion to each coordinate:
 			ra, dec = add_proper_motion(row[1], row[2], row[3], row[4], sector_reference_time, epoch=2000.0)
-#				logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
 
 			# Save the coordinates in SQLite database:
 			cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,tmag) VALUES (?,?,?,?,?,?);", (
@@ -408,8 +403,6 @@ class simulateFITS(object):
 		cursor.close()
 		conn.close()
 
-#			logger.info("Catalog done.")
-
 
 	def create_todo(self, sector, method, filename):
 		"""Create the TODO list which is used by the pipeline to keep track of the
@@ -423,8 +416,6 @@ class simulateFITS(object):
 
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
-
-	#	logger = logging.getLogger(__name__)
 
 		input_folder = os.environ['TESSPHOT_INPUT']
 
