@@ -52,18 +52,18 @@ if __name__ == '__main__':
 		'methods': 			['aperture', 'linpsf'] # photometry methods
 	}
 
-	multi_star_test = {
-		'name':				'multi_star_test',
+	multi_star_test_noise = {
+		'name':				'multi_star_test_noise',
 		'ignore_mov_kernel': 	True,
-		'run_simulateFITS': 	[2, 2, True, True, True, True, True, True, 1, True],
+		'run_simulateFITS': 	[100, 2, True, True, True, True, True, True, 1, True],
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
 		'methods': 			['linpsf'] # photometry methods
 	}
 
-	multi_star_test2 = {
-		'name':				'multi_star_test2',
+	multi_star_test_no_noise = {
+		'name':				'multi_star_test_no_noise',
 		'ignore_mov_kernel': 	True,
-		'run_simulateFITS': 	[2, 2, True, True, True, True, True, True, 1, True],
+		'run_simulateFITS': 	[100, 2, True, True, True, False, True, True, 1, True],
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
 		'methods': 			['linpsf', 'aperture'] # photometry methods
 	}
@@ -209,9 +209,22 @@ if __name__ == '__main__':
 		logger.info("TESSPHOT_INPUT set to '%s'", os.environ.get('TESSPHOT_INPUT'))
 
 		# Run run_simulateFITS.py:
-		Nstars = simulation['run_simulateFITS'][0]
-		Ntimes = simulation['run_simulateFITS'][1]
-		simulateFITS(Nstars=Nstars, Ntimes=Ntimes, save_images=True, overwrite_images=True)
+		Nstars =				simulation['run_simulateFITS'][0]
+		Ntimes =				simulation['run_simulateFITS'][1]
+		save_images =		simulation['run_simulateFITS'][2]
+		overwrite_images =	simulation['run_simulateFITS'][3]
+		include_jitter =		simulation['run_simulateFITS'][4]
+		include_noise =		simulation['run_simulateFITS'][5]
+		include_bkg =		simulation['run_simulateFITS'][6]
+		inaccurate_catalog =	simulation['run_simulateFITS'][7]
+		Nvariables =			simulation['run_simulateFITS'][8]
+		multiprocess =		simulation['run_simulateFITS'][9]
+		# TODO: add the rest of the parameters to the simulateFITS call
+		simulateFITS(Nstars=Nstars, Ntimes=Ntimes,
+					save_images=save_images, overwrite_images=overwrite_images,
+					include_jitter=include_jitter, include_noise=include_noise,
+					include_bkg=include_bkg, inaccurate_catalog=inaccurate_catalog,
+					Nvariables=Nvariables, multiprocess=multiprocess)
 
 		# Run create_hdf5 from prepare_photometry.py:
 		logger.info("Running create_hdf5 from prepare_photometry.py")
