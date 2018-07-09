@@ -161,12 +161,14 @@ class simulateFITS(object):
 		# Generate light curves:
 		if self.Nvariables > 0:
 			self.light_curves, params = self.generate_light_curves()
-			print("Saving light curve parameters to light_curve_params")
-			np.savetxt(os.path.join(self.output_folder, "light_curve_params.txt"), params)
-			print("Saving light curves to light_curves.txt")
-			np.savetxt(os.path.join(self.output_folder, "light_curves.txt"), self.light_curves)
 		else:
+			self.light_curves = np.zeros([self.Nstars, self.Ntimes])
+			params = ''
 			print("No variable stars included.")
+		print("Saving light curve parameters to light_curve_params")
+		np.savetxt(os.path.join(self.output_folder, "light_curve_params.txt"), params)
+		print("Saving light curves to light_curves.txt")
+		np.savetxt(os.path.join(self.output_folder, "light_curves.txt"), self.light_curves)
 
 		# Loop through the time steps:
 		for t, timestep in enumerate(self.times):
@@ -622,24 +624,14 @@ class simulateFITS(object):
 		kpsf = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
 
 		# Make list with parameter numpy arrays for the pixel integrater:
-		if self.include_jitter:
-			params = [
-						np.array(
-							[self.catalog['row'][i] + self.jitter[t][0],
-							self.catalog['col'][i] + self.jitter[t][1],
-							self.light_curves[i][t]*mag2flux(self.catalog['tmag'][i])]
-						)
-					for i in range(self.Nstars)
-					]
-		else:
-			params = [
-						np.array(
-							[self.catalog['row'][i],
-							self.catalog['col'][i],
-							self.light_curves[i][t]*mag2flux(self.catalog['tmag'][i])]
-						)
-					for i in range(self.Nstars)
-					]
+		params = [
+					np.array(
+						[self.catalog['row'][i] + self.jitter[t][0],
+						self.catalog['col'][i] + self.jitter[t][1],
+						self.light_curves[i][t]*mag2flux(self.catalog['tmag'][i])]
+					)
+				for i in range(self.Nstars)
+				]
 
 		# Integrate stars to image:
 		if self.multiprocess:
