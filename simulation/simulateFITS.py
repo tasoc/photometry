@@ -162,8 +162,8 @@ class simulateFITS(object):
 		if self.Nvariables > 0:
 			self.light_curves, params = self.generate_light_curves()
 		else:
-			self.light_curves = np.zeros([self.Nstars, self.Ntimes])
-			params = ''
+			self.light_curves = np.ones([self.Nstars, self.Ntimes])
+			params = [np.nan]
 			print("No variable stars included.")
 		print("Saving light curve parameters to light_curve_params")
 		np.savetxt(os.path.join(self.output_folder, "light_curve_params.txt"), params)
