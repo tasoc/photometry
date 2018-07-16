@@ -498,14 +498,11 @@ class simulateFITS(object):
 #		sigma_DEC = 0.233 # (milliarcsec)
 #		sigma_row = self.pixel_scale * sigma_DEC / 1e3
 
-#		# Scatter of Gaia band to TESS band calibration (Stassun, 28 Jun 2017):
-#		sigma_tmag = 0.015 # (magnitudes)
-
-		# Median RA std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
+		# Median RA std. in Gaia DR2 (Gaia coll. 2018, tbl. 3) for 17 Gmag star (ignore proper motion)
 		sigma_RA = 0.1 # (milliarcsec)
 		sigma_col = self.pixel_scale * sigma_RA / 1e3
 
-		# Median DEC std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
+		# Median DEC std. in Gaia DR2 (Gaia coll. 2018, tbl. 3) for 17 Gmag star (ignore proper motion)
 		sigma_DEC = 0.1 # (milliarcsec)
 		sigma_row = self.pixel_scale * sigma_DEC / 1e3
 
