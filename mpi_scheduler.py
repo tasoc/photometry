@@ -10,12 +10,13 @@ independent tasks when there are more tasks than processors, especially
 when the run times vary for each task.
 
 The basic example was inspired by
-http://math.acadiau.ca/ACMMaC/Rmpi/index.html
+https://github.com/jbornschein/mpi4py-examples/blob/master/09-task-pull.py
 
 Example
 -------
 To run the program using four processes (one master and three workers) you can
 execute the following command:
+
 >>> mpiexec -n 4 python mpi_scheduler.py
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -23,6 +24,7 @@ execute the following command:
 
 from __future__ import with_statement, print_function
 from mpi4py import MPI
+import logging
 import os
 import enum
 
@@ -97,39 +99,61 @@ if __name__ == '__main__':
 		from photometry import tessphot
 		from timeit import default_timer
 
-		while True:
-			# Send signal that we are ready for task,
-			# and receive a task from the master:
-			comm.send(None, dest=0, tag=tags.READY)
-			task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
-			tag = status.Get_tag()
+		# Configure logging within photometry:
+		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+		console = logging.StreamHandler()
+		console.setFormatter(formatter)
+		logger = logging.getLogger('photometry')
+		logger.addHandler(console)
+		logger.setLevel(logging.WARNING)
 
-			if tag == tags.START:
-				# Do the work here
-				result = task.copy()
-				del task['priority']
+		try:
+			k = 0
+			while True:
+				# Send signal that we are ready for task,
+				# and receive a task from the master:
+				comm.send(None, dest=0, tag=tags.READY)
+				task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+				tag = status.Get_tag()
 
-				t1 = default_timer()
-				pho = tessphot(input_folder=input_folder, output_folder=output_folder, **task)
-				t2 = default_timer()
+				if tag == tags.START:
+					# Do the work here
+					result = task.copy()
+					del task['priority']
 
-				# Construct result message:
-				result.update({
-					'status': pho.status,
-					'time': t2 - t1,
-					'details': pho._details
-				})
+					t1 = default_timer()
+					try:
+						pho = tessphot(input_folder=input_folder, output_folder=output_folder, **task)
+					except:
+						logger.exception("Fatal error in call to tessphot")
+					t2 = default_timer()
 
-				# Send the result back to the master:
-				comm.send(result, dest=0, tag=tags.DONE)
+					# Construct result message:
+					result.update({
+						'status': pho.status,
+						'time': t2 - t1,
+						'details': pho._details
+					})
 
-			elif tag == tags.EXIT:
-				# We were told to EXIT, so lets do that
-				break
+					# Send the result back to the master:
+					comm.send(result, dest=0, tag=tags.DONE)
 
-			else:
-				# This should never happen, but just to
-				# make sure we don't run into an infinite loop:
-				raise Exception("Worker recieved an unknown tag: '{0}'".format(tag))
+					# Attempt some cleanup:
+					# TODO: Is this even needed?
+					del pho, task, result
+					k += 1
 
-		comm.send(None, dest=0, tag=tags.EXIT)
+				elif tag == tags.EXIT:
+					# We were told to EXIT, so lets do that
+					break
+
+				else:
+					# This should never happen, but just to
+					# make sure we don't run into an infinite loop:
+					raise Exception("Worker recieved an unknown tag: '{0}'".format(tag))
+
+		except:
+			logger.exception("Something failed in worker")
+
+		finally:
+			comm.send(None, dest=0, tag=tags.EXIT)

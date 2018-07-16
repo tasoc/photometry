@@ -106,7 +106,7 @@ class TaskManager(object):
 		else:
 			constraints = ''
 
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -118,7 +118,7 @@ class TaskManager(object):
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None

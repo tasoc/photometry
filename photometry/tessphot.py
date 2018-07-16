@@ -6,34 +6,45 @@
 
 from __future__ import division, print_function, with_statement, absolute_import
 import logging
-from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry, HaloPhotometry
+import traceback
+from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
+
+#------------------------------------------------------------------------------
+class _PhotErrorDummy(object):
+	def __init__(self, *args, **kwargs):
+		self.status = STATUS.ERROR
+		self._details = {}
 
 #------------------------------------------------------------------------------
 def _try_photometry(PhotClass, *args, **kwargs):
 	logger = logging.getLogger(__name__)
-	with PhotClass(*args, **kwargs) as pho:
-		try:
+	try:
+		with PhotClass(*args, **kwargs) as pho:
 			pho.photometry()
-			status = pho.status
-		except (KeyboardInterrupt, SystemExit):
-			status = STATUS.ABORT
-			logger.info("Stopped by user or system")
-			try:
-				pho._status = STATUS.ABORT
-			except:
-				pass
+
+			if pho.status in (STATUS.OK, STATUS.WARNING):
+				pho.save_lightcurve()
+
+	except (KeyboardInterrupt, SystemExit):
+		logger.info("Stopped by user or system")
+		try:
+			pho._status = STATUS.ABORT
 		except:
-			logger.exception("Something happened")
-			status = STATUS.ERROR
-			try:
-				pho._status = STATUS.ERROR
-			except:
-				pass
+			pass
 
-		if status in (STATUS.OK, STATUS.WARNING):
-			pho.save_lightcurve()
+	except:
+		logger.exception("Something happened")
+		tb = traceback.format_exc().strip()
+		try:
+			pho._status = STATUS.ERROR
+			pho.report_details(error=tb)
+		except:
+			pass
 
-	return pho
+	try:
+		return pho
+	except UnboundLocalError:
+		return _PhotErrorDummy(*args, **kwargs)
 
 #------------------------------------------------------------------------------
 def tessphot(method=None, *args, **kwargs):

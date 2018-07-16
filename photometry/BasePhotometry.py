@@ -15,6 +15,7 @@ import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
 from astropy.io import fits
 from astropy.table import Table, Column
+#from mpi4py import MPI
 import h5py
 import sqlite3
 import logging
@@ -25,12 +26,15 @@ from copy import deepcopy
 from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian, ss
+from timeit import default_timer
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
 from .utilities import find_tpf_files
 from .plots import plot_image, plt, save_figure
 
 __docformat__ = 'restructuredtext'
+
+hdf5_cache = {}
 
 @enum.unique
 class STATUS(enum.Enum):
@@ -81,7 +85,7 @@ class BasePhotometry(object):
 	"""
 
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		camera=None, ccd=None, plot=False):
+		camera=None, ccd=None, plot=False, cache='basic'):
 		"""
 		Initialize the photometry object.
 
@@ -93,29 +97,44 @@ class BasePhotometry(object):
 			plot (boolean, optional): Create plots as part of the output. Default is ``False``.
 			camera (integer, optional): TESS camera (1-4) to load target from (Only used for FFIs).
 			ccd (integer, optional): TESS CCD (1-4) to load target from (Only used for FFIs).
+			cache (string, optional): Optional values are ``'none'``, ``'full'`` or ``'basic'`` (Default).
 
 		Raises:
 			IOError: If starid could not be found in catalog.
 			ValueError: On invalid datasource.
-
+			ValueError: If ``camera`` and ``ccd`` is not provided together with ``datasource='ffi'``.
 		"""
 
 		logger = logging.getLogger(__name__)
 
+		if datasource != 'ffi' and not datasource.startswith('tpf'):
+			raise ValueError("Invalid datasource: '%s'" % datasource)
+		if cache not in ('basic', 'none', 'full'):
+			raise ValueError("Invalid cache: '%s'" % cache)
+
 		# Store the input:
 		self.starid = starid
 		self.input_folder = input_folder
-		self.output_folder = output_folder
 		self.plot = plot
 		self.datasource = datasource
 
-		logger.debug('DATASOURCE = %s', self.datasource)
+		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
 
 		self._status = STATUS.UNKNOWN
 		self._details = {}
 		self.tpf = None
 		self.hdf = None
 		self._MovementKernel = None
+		self._images_cube_full = None
+		self._backgrounds_cube_full = None
+		self._sumimage_full = None
+
+		# Directory where output files will be saved:
+		self.output_folder = os.path.join(
+			output_folder,
+			self.datasource,
+			'{0:011d}'.format(self.starid)[:5]
+		)
 
 		# Set directory where diagnostics plots should be saved to:
 		self.plot_folder = None
@@ -128,8 +147,8 @@ class BasePhotometry(object):
 		self.lightcurve = Table()
 
 		if self.datasource == 'ffi':
-			# FIXME: These should also come from the catalog somehow
-			#        They will be needed to find the correct input files
+			# The camera and CCD should also come as input
+			# They will be needed to find the correct input files
 			if camera is None or ccd is None:
 				raise ValueError("CAMERA and CCD keywords must be provided for FFI targets.")
 
@@ -141,40 +160,113 @@ class BasePhotometry(object):
 
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
-			self.hdf = h5py.File(filepath_hdf5, 'r')
+			self.filepath_hdf5 = filepath_hdf5
 
-			self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
-			self.lightcurve['timecorr'] = Column(np.zeros(len(self.hdf['time']), dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
-			self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
-			self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
+			logger.debug("CACHE = %s", cache)
+			load_into_cache = False
+			if cache == 'none':
+				attrs = {}
+				load_into_cache = True
+			else:
+				global hdf5_cache
+				if filepath_hdf5 not in hdf5_cache:
+					hdf5_cache[filepath_hdf5] = {}
+					load_into_cache = True
+				elif cache == 'full' and hdf5_cache[filepath_hdf5].get('_images_cube_full') is None:
+					load_into_cache = True
+				attrs = hdf5_cache[filepath_hdf5] # Pointer to global variable
 
-			# World Coordinate System solution:
-			hdr_string = self.hdf['wcs'][0]
-			if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-			hdr = fits.Header().fromstring(hdr_string)
-			self.wcs = WCS(header=hdr) # World Coordinate system solution.
+			# Open the HDF5 file for reading if we are not holding everything in memory:
+			if load_into_cache or cache != 'full':
+				self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
+				#self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest', driver='mpio', comm=MPI.COMM_WORLD)
+				#self.hdf.atomic = False # Since we are only reading, this should be okay
+
+			if load_into_cache:
+				logger.debug('Loading basic data into cache...')
+
+				# Start filling out the basic vectors:
+				attrs['lightcurve'] = Table()
+				attrs['lightcurve']['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
+				N = len(attrs['lightcurve']['time'])
+				attrs['lightcurve']['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
+				attrs['lightcurve']['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
+				if 'timecorr' in self.hdf:
+					attrs['lightcurve']['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
+				else:
+					attrs['lightcurve']['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+
+				# World Coordinate System solution:
+				if isinstance(self.hdf['wcs'], h5py.Group):
+					refindx = self.hdf['wcs'].attrs['ref_frame']
+					hdr_string = self.hdf['wcs']['%04d' % refindx][0]
+				else:
+					hdr_string = self.hdf['wcs'][0]
+				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+				attrs['wcs'] = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+
+				# Get shape of sumimage from hdf5 file:
+				attrs['_max_stamp'] = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
+				attrs['pixel_offset_row'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+				attrs['pixel_offset_col'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
+
+				# Get info for psf fit Gaussian statistic:
+				attrs['readnoise'] = self.hdf['images'].attrs.get('READNOIS', 10)
+				attrs['gain'] = self.hdf['images'].attrs.get('GAIN', 100)
+				attrs['n_readout'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
+
+				# Load MovementKernel into memory:
+				# TODO: But what if its not needed?!
+				attrs['_MovementKernel'] = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
+				attrs['_MovementKernel'].load_series(attrs['lightcurve']['time'], self.hdf['movement_kernel'])
+
+				# The full sum-image:
+				attrs['_sumimage_full'] = np.asarray(self.hdf['sumimage'])
+
+				# If we are doing a full cache (everything in memory) load the image cubes as well.
+				# Note that this will take up A LOT of memory!
+				if cache == 'full':
+					logger.warning('Loading full image cubes into cache...')
+					hdf5_cache[filepath_hdf5]['_images_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='float32')
+					hdf5_cache[filepath_hdf5]['_backgrounds_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='float32')
+					for k in range(N):
+						hdf5_cache[filepath_hdf5]['_images_cube_full'][:, :, k] = self.hdf['images/%04d' % k]
+						hdf5_cache[filepath_hdf5]['_backgrounds_cube_full'][:, :, k] = self.hdf['backgrounds/%04d' % k]
+
+					# We dont need the file anymore!
+					self.hdf.close()
+					self.hdf = None
+				else:
+					attrs['_images_cube_full'] = None
+					attrs['_backgrounds_cube_full'] = None
+			else:
+				logger.debug('Loaded data from cache!')
+
+			# Set all the attributes from the cache:
+			# TODO: Does this create copies of data - if so we should mayde delete "attrs" again?
+			for key, value in attrs.items():
+				setattr(self, key, value)
 
 			# Correct timestamps for light-travel time:
 			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
 			#star_coord = coordinates.SkyCoord(self.target_pos_ra_J2000, self.target_pos_dec_J2000, unit=units.deg, frame='icrs')
-			#tess = coordinates.EarthLocation.of_site('greenwich')
+			#tess = coordinates.EarthLocation.from_geocentric(x, y, z)
 			#times = time.Time(self.lightcurve['time'], format='mjd', scale='utc', location=tess)
 			#self.lightcurve['timecorr'] = times.light_travel_time(star_coord, ephemeris='jpl')
 			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
 
-			# Get shape of sumimage from hdf5 file:
-			self._max_stamp = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
-			self.pixel_offset_row = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-			self.pixel_offset_col = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
+		elif self.datasource.startswith('tpf'):
+			# If the datasource was specified as 'tpf:starid' it means
+			# that we should load from the specified starid instead of
+			# the starid of the current main target.
+			if self.datasource.startswith('tpf:'):
+				starid_to_load = int(self.datasource[4:])
+				self.datasource = 'tpf'
+			else:
+				starid_to_load = self.starid
 
-			# Get info for psf fit Gaussian statistic:
-			self.readnoise = self.hdf['images'].attrs.get('READNOIS', 10)
-			self.gain = self.hdf['images'].attrs.get('GAIN', 100)
-			self.n_readout = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
-
-		elif self.datasource == 'tpf':
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(os.path.join(input_folder, 'images'), self.starid)
+			fname = find_tpf_files(input_folder, starid_to_load)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
@@ -219,9 +311,6 @@ class BasePhotometry(object):
 			self.gain = self.tpf[1].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
 			self.n_readout = self.tpf[1].header.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
 
-		else:
-			raise ValueError("Invalid datasource: '%s'" % self.datasource)
-
 		# The file to load the star catalog from:
 		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
 		self._catalog = None
@@ -249,10 +338,10 @@ class BasePhotometry(object):
 		conn.close()
 
 		# Define the columns that have to be filled by the do_photometry method:
-		N = len(self.lightcurve['time'])
-		self.lightcurve['flux'] = Column(length=N, description='Flux', dtype='float64')
-		self.lightcurve['flux_background'] = Column(length=N, description='Background flux', dtype='float64')
-		self.lightcurve['pos_centroid'] = Column(length=N, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
+		self.Ntimes = len(self.lightcurve['time'])
+		self.lightcurve['flux'] = Column(length=self.Ntimes, description='Flux', dtype='float64')
+		self.lightcurve['flux_background'] = Column(length=self.Ntimes, description='Background flux', dtype='float64')
+		self.lightcurve['pos_centroid'] = Column(length=self.Ntimes, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
 
 		# Init arrays that will be filled with lightcurve stuff:
 		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
@@ -272,6 +361,8 @@ class BasePhotometry(object):
 		self.target_pos_row_stamp = None # Main target CCD row position in stamp.
 		self._set_stamp()
 		self._sumimage = None
+		self._images_cube = None
+		self._backgrounds_cube = None
 
 	def __enter__(self):
 		return self
@@ -285,6 +376,11 @@ class BasePhotometry(object):
 			self.hdf.close()
 		if self.tpf:
 			self.tpf.close()
+
+	def clear_cache(self):
+		"""Clear internal cache"""
+		global hdf5_cache
+		hdf5_cache = {}
 
 	@property
 	def status(self):
@@ -379,10 +475,10 @@ class BasePhotometry(object):
 				Nrows, Ncolumns = self.default_stamp()
 				logger.info("Setting default stamp with sizes (%d,%d)", Nrows, Ncolumns)
 				self._stamp = (
-					int(self.target_pos_row) - Nrows//2,
-					int(self.target_pos_row) + Nrows//2 + 1,
-					int(self.target_pos_column) - Ncolumns//2,
-					int(self.target_pos_column) + Ncolumns//2 + 1
+					int(np.round(self.target_pos_row)) - Nrows//2,
+					int(np.round(self.target_pos_row)) + Nrows//2 + 1,
+					int(np.round(self.target_pos_column)) - Ncolumns//2,
+					int(np.round(self.target_pos_column)) + Ncolumns//2 + 1
 				)
 			else:
 				Nrows = self._max_stamp[1] - self._max_stamp[0]
@@ -413,6 +509,8 @@ class BasePhotometry(object):
 		# Force sum-image and catalog to be recalculated next time:
 		self._sumimage = None
 		self._catalog = None
+		self._images_cube = None
+		self._backgrounds_cube = None
 		return True
 
 	def get_pixel_grid(self):
@@ -438,6 +536,102 @@ class BasePhotometry(object):
 		return self._stamp
 
 	@property
+	def images_cube(self):
+		"""
+		Image cube containing all the images as a function of time.
+
+		Returns:
+			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
+			        ``rows`` is the number of rows in the image, ``cols`` is the number
+					   of columns and ``times`` is the number of timestamps.
+
+		Note:
+			The images has had the large-scale background subtracted. If needed
+			the backgrounds can be added again from :py:func:`backgrounds` or :py:func:`backgrounds_cube`.
+
+		Example:
+
+			>>> pho = BasePhotometry(starid)
+			>>> print(pho.images_cube.shape)
+			>>>   (10, 10, 1399)
+
+		See Also:
+			:py:func:`images`, :py:func:`backgrounds`, :py:func:`backgrounds_cube`
+		"""
+		if self._images_cube is None:
+			if self.datasource == 'ffi':
+				ir1 = self._stamp[0] - self.pixel_offset_row
+				ir2 = self._stamp[1] - self.pixel_offset_row
+				ic1 = self._stamp[2] - self.pixel_offset_col
+				ic2 = self._stamp[3] - self.pixel_offset_col
+				if self._images_cube_full is None:
+					# We dont have an in-memory version of the full cube, so let us
+					# create the cube by loading the cutouts of each image:
+					self._images_cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
+					for k in range(self.Ntimes):
+						self._images_cube[:, :, k] = self.hdf['images/%04d' % k][ir1:ir2, ic1:ic2]
+				else:
+					# We have an in-memory version of the full cube.
+					# TODO: Will this create copy of data in memory?
+					self._images_cube = self._images_cube_full[ir1:ir2, ic1:ic2, :]
+			else:
+				ir1 = self._stamp[0] - self._max_stamp[0]
+				ir2 = self._stamp[1] - self._max_stamp[0]
+				ic1 = self._stamp[2] - self._max_stamp[2]
+				ic2 = self._stamp[3] - self._max_stamp[2]
+				self._images_cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
+				for k in range(self.Ntimes):
+					self._images_cube[:, :, k] = self.tpf[1].data['FLUX'][k][ir1:ir2, ic1:ic2]
+
+		return self._images_cube
+
+	@property
+	def backgrounds_cube(self):
+		"""
+		Image cube containing all the background-images as a function of time.
+
+		Returns:
+			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
+			        ``rows`` is the number of rows in the image, ``cols`` is the number
+					   of columns and ``times`` is the number of timestamps.
+
+		Example:
+
+			>>> pho = BasePhotometry(starid)
+			>>> print(pho.backgrounds_cube.shape):
+			>>>   (10, 10, 1399)
+
+		See Also:
+			:py:func:`backgrounds`, :py:func:`images_cube`, :py:func:`images`
+		"""
+		if self._backgrounds_cube is None:
+			if self.datasource == 'ffi':
+				ir1 = self._stamp[0] - self.pixel_offset_row
+				ir2 = self._stamp[1] - self.pixel_offset_row
+				ic1 = self._stamp[2] - self.pixel_offset_col
+				ic2 = self._stamp[3] - self.pixel_offset_col
+				if self._backgrounds_cube_full is None:
+					# We dont have an in-memory version of the full cube, so let us
+					# create the cube by loading the cutouts of each image:
+					self._backgrounds_cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
+					for k in range(self.Ntimes):
+						self._backgrounds_cube[:, :, k] = self.hdf['backgrounds/%04d' % k][ir1:ir2, ic1:ic2]
+				else:
+					# We have an in-memory version of the full cube.
+					# TODO: Will this create copy of data in memory?
+					self._backgrounds_cube = self._backgrounds_cube_full[ir1:ir2, ic1:ic2, :]
+			else:
+				ir1 = self._stamp[0] - self._max_stamp[0]
+				ir2 = self._stamp[1] - self._max_stamp[0]
+				ic1 = self._stamp[2] - self._max_stamp[2]
+				ic2 = self._stamp[3] - self._max_stamp[2]
+				self._backgrounds_cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
+				for k in range(self.Ntimes):
+					self._backgrounds_cube[:, :, k] = self.tpf[1].data['FLUX_BKG'][k][ir1:ir2, ic1:ic2]
+
+		return self._backgrounds_cube
+
+	@property
 	def images(self):
 		"""
 		Iterator that will loop through the image stamps.
@@ -461,22 +655,11 @@ class BasePhotometry(object):
 			>>> 	print(img)
 
 		See Also:
-			:py:func:`backgrounds`
+			:py:func:`images_cube`, :py:func:`backgrounds`
 		"""
-		if self.datasource == 'ffi':
-			ir1 = self._stamp[0] - self.pixel_offset_row
-			ir2 = self._stamp[1] - self.pixel_offset_row
-			ic1 = self._stamp[2] - self.pixel_offset_col
-			ic2 = self._stamp[3] - self.pixel_offset_col
-			for k in range(len(self.hdf['images'])):
-				yield self.hdf['images/%04d' % k][ir1:ir2, ic1:ic2]
-		else:
-			ir1 = self._stamp[0] - self._max_stamp[0]
-			ir2 = self._stamp[1] - self._max_stamp[0]
-			ic1 = self._stamp[2] - self._max_stamp[2]
-			ic2 = self._stamp[3] - self._max_stamp[2]
-			for k in range(self.tpf[1].header['NAXIS2']):
-				yield self.tpf[1].data['FLUX'][k][ir1:ir2, ic1:ic2]
+		# Yield slices from the data-cube as an iterator:
+		for k in range(self.Ntimes):
+			yield self.images_cube[:, :, k]
 
 	@property
 	def backgrounds(self):
@@ -498,22 +681,11 @@ class BasePhotometry(object):
 			>>> 	print(img)
 
 		See Also:
-			:py:func:`images`
+			:py:func:`backgrounds_cube`, :py:func:`images`
 		"""
-		if self.datasource == 'ffi':
-			ir1 = self._stamp[0] - self.pixel_offset_row
-			ir2 = self._stamp[1] - self.pixel_offset_row
-			ic1 = self._stamp[2] - self.pixel_offset_col
-			ic2 = self._stamp[3] - self.pixel_offset_col
-			for k in range(len(self.hdf['backgrounds'])):
-				yield self.hdf['backgrounds/%04d' % k][ir1:ir2, ic1:ic2]
-		else:
-			ir1 = self._stamp[0] - self._max_stamp[0]
-			ir2 = self._stamp[1] - self._max_stamp[0]
-			ic1 = self._stamp[2] - self._max_stamp[2]
-			ic2 = self._stamp[3] - self._max_stamp[2]
-			for k in range(self.tpf[1].header['NAXIS2']):
-				yield self.tpf[1].data['FLUX_BKG'][k][ir1:ir2, ic1:ic2]
+		# Yield slices from the data-cube as an iterator:
+		for k in range(self.Ntimes):
+			yield self.backgrounds_cube[:, :, k]
 
 	@property
 	def sumimage(self):
@@ -533,7 +705,7 @@ class BasePhotometry(object):
 				ir2 = self._stamp[1] - self.pixel_offset_row
 				ic1 = self._stamp[2] - self.pixel_offset_col
 				ic2 = self._stamp[3] - self.pixel_offset_col
-				self._sumimage = self.hdf['sumimage'][ir1:ir2, ic1:ic2]
+				self._sumimage = self._sumimage_full[ir1:ir2, ic1:ic2]
 			else:
 				self._sumimage = np.zeros((self._stamp[1]-self._stamp[0], self._stamp[3]-self._stamp[2]), dtype='float64')
 				Nimg = np.zeros_like(self._sumimage, dtype='int32')
@@ -585,11 +757,11 @@ class BasePhotometry(object):
 		if not self._catalog:
 			# Pixel-positions of the corners of the current stamp:
 			corners = np.array([
-				[self._stamp[2], self._stamp[0]],
-				[self._stamp[2], self._stamp[1]],
-				[self._stamp[3], self._stamp[0]],
-				[self._stamp[3], self._stamp[1]]
-			], dtype='int32')
+				[self._stamp[2]-0.5, self._stamp[0]-0.5],
+				[self._stamp[2]-0.5, self._stamp[1]-0.5],
+				[self._stamp[3]-0.5, self._stamp[0]-0.5],
+				[self._stamp[3]-0.5, self._stamp[1]-0.5]
+			], dtype='float64')
 			# Because the TPF world coordinate solution is relative to the stamp,
 			# add the pixel offset to these:
 			if self.datasource == 'tpf':
@@ -785,9 +957,9 @@ class BasePhotometry(object):
 			The status of the photometry.
 
 		Raises:
-			NotImplemented
+			NotImplementedError
 		"""
-		raise NotImplemented("You have to implement the actual lightcurve extraction yourself... Sorry!")
+		raise NotImplementedError("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
 
 	def photometry(self, *args, **kwargs):
@@ -825,11 +997,18 @@ class BasePhotometry(object):
 
 		Parameters:
 			output_folder (string, optional): Path to directory where to save lightcurve. If ``None`` the directory specified in the attribute ``output_folder`` is used.
+
+		Returns:
+			string: Path to the generated file.
 		"""
 
 		# Check if another output folder was provided:
 		if output_folder is None:
 			output_folder = self.output_folder
+
+		# Make sure that the directory exists:
+		if not os.path.exists(output_folder):
+			os.makedirs(output_folder)
 
 		# Get the current date for the files:
 		now = datetime.datetime.now()
@@ -931,13 +1110,21 @@ class BasePhotometry(object):
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
 		# Make aperture image:
+		# TODO: Pixels used in background calculation (value=4)
+		cols, rows = self.get_pixel_grid()
 		mask = np.asarray(np.isfinite(self.sumimage), dtype='int32')
 		if self.final_mask is not None:
-			mask[self.final_mask] += 2 + 8
+			mask[self.final_mask] += 10 # 2 + 8
+		# Add mapping onto TESS output channels:
+		mask[(45 <= cols) & (cols <= 556)] += 32 # CCD output A
+		mask[(557 <= cols) & (cols <= 1068)] += 64 # CCD output B
+		mask[(1069 <= cols) & (cols <= 1580)] += 128 # CCD output C
+		mask[(1581 <= cols) & (cols <= 2092)] += 256 # CCD output D
 
 		# Construct FITS header for image extensions:
-		header = self.wcs.to_header(relax=True)
-		header.set('INHERIT', True, 'inherit the primary header', before=0) # Add
+		wcs = self.wcs[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+		header = wcs.to_header(relax=True)
+		header.set('INHERIT', True, 'inherit the primary header', before=0) # Add inherit header
 
 		# Create aperture image extension:
 		img_aperture = fits.ImageHDU(data=mask, header=header, name='APERTURE')
@@ -954,5 +1141,10 @@ class BasePhotometry(object):
 		)
 
 		# Write to file:
+		filepath = os.path.join(output_folder, filename)
 		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
-			hdulist.writeto(os.path.join(output_folder, filename), checksum=True, overwrite=True)
+			t1 = default_timer()
+			hdulist.writeto(filepath, checksum=True, overwrite=True)
+			self.report_details(error='I/O Output time: %f' % (default_timer() - t1))
+
+		return filepath

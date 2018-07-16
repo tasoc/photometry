@@ -49,7 +49,7 @@ def find_ffi_files(rootdir, camera=None, ccd=None):
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
 	filename_pattern = 'tess*-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(camera=camera, ccd=ccd)
-	logger.info("Searching for FFIs in '%s'", os.path.join(rootdir, filename_pattern))
+	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
@@ -81,7 +81,7 @@ def find_tpf_files(rootdir, starid=None):
 	# Create the filename pattern to search for:
 	starid = '*' if starid is None else '{0:016d}'.format(starid)
 	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid)
-	logger.info("Searching for TPFs in '%s'", os.path.join(rootdir, filename_pattern))
+	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
@@ -222,3 +222,33 @@ def mag2flux(mag):
 		float: Corresponding flux value
 	"""
 	return 10**(-0.4*(mag - 28.24))
+
+#------------------------------------------------------------------------------
+def sphere_distance(ra1, dec1, ra2, dec2):
+	"""
+	Calculate the great circle distance between two points using the Vincenty formulae.
+
+	Parameters:
+		ra1 (float or ndarray): Longitude of first point in degrees.
+		dec1 (float or ndarray): Lattitude of first point in degrees.
+		ra2 (float or ndarray): Longitude of second point in degrees.
+		dec2 (float or ndarray): Lattitude of second point in degrees.
+
+	Returns:
+		ndarray: Distance between points in degrees.
+
+	Note:
+		https://en.wikipedia.org/wiki/Great-circle_distance
+	"""
+
+	# Convert angles to radians:
+	ra1 = np.deg2rad(ra1)
+	ra2 = np.deg2rad(ra2)
+	dec1 = np.deg2rad(dec1)
+	dec2 = np.deg2rad(dec2)
+
+	# Calculate distance using Vincenty formulae:
+	return np.rad2deg(np.arctan2(
+		np.sqrt( (np.cos(dec2)*np.sin(ra2-ra1))**2 + (np.cos(dec1)*np.sin(dec2) - np.sin(dec1)*np.cos(dec2)*np.cos(ra2-ra1))**2 ),
+		np.sin(dec1)*np.sin(dec2) + np.cos(dec1)*np.cos(dec2)*np.cos(ra2-ra1)
+	))

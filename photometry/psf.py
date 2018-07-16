@@ -13,15 +13,29 @@ import numpy as np
 from astropy.io import fits
 from scipy.interpolate import RectBivariateSpline
 import glob
-import matplotlib.pyplot as plt
-from .plots import plot_image
+from .plots import plt, plot_image
 
 class PSF(object):
+	"""
+	Point Spread Function (PSF).
+
+	Attributes:
+		camera (integer): TESS camera (1-4).
+		ccd (integer): TESS CCD (1-4).
+		stamp (tuple): The pixel sub-stamp used to generate PSF.
+		shape (tuple): Shape of pixel sub-stamp.
+		PSFfile (string): Path to PSF file that was interpolated in.
+		ref_column (float): Reference CCD column that PSF is calculated for.
+		ref_row (float): Reference CCD row that PSF is calculated for.
+		splineInterpolation (`scipy.interpolate.RectBivariateSpline` object): Interpolation to evaluate PSF on arbitrery position relative to center of PSF.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
 
 	def __init__(self, camera, ccd, stamp):
 		"""
 		Point Spread Function (PSF).
-		
+
 		Parameters:
 			camera (integer): TESS camera number (1-4).
 			ccd (integer): TESS CCD number (1-4).
@@ -29,7 +43,7 @@ class PSF(object):
 
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
-	
+
 		# Store information given in call:
 		self.camera = camera
 		self.ccd = ccd
@@ -116,7 +130,7 @@ class PSF(object):
 						star_flux = star[2]
 						column_cen = j - star_column
 						row_cen = i - star_row
-						img[i,j] += star_flux * self.splineInterpolation.integral(column_cen-0.5, column_cen+0.5, row_cen-0.5, row_cen+0.5)
+						img[j,i] += star_flux * self.splineInterpolation.integral(column_cen-0.5, column_cen+0.5, row_cen-0.5, row_cen+0.5)
 
 		return img
 
