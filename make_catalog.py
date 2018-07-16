@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
 	# Setup logging:
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-	logger = logging.getLogger(__name__)
+	logger = logging.getLogger('photometry')
 	logger.setLevel(logging.INFO)
 	console = logging.StreamHandler()
 	console.setFormatter(formatter)

@@ -112,7 +112,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 		img_shape = img.shape
 
 		# Open the HDF5 file for editing:
-		with h5py.File(hdf_file, 'a', libver='latest', swmr=False) as hdf:
+		with h5py.File(hdf_file, 'a', libver='latest') as hdf:
 
 			images = hdf.require_group('images')
 			backgrounds = hdf.require_group('backgrounds')
