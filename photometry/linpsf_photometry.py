@@ -290,7 +290,8 @@ class LinPSFPhotometry(BasePhotometry):
 				# Add current fitted fluxes for contamination calculation:
 				fluxes_sum += fluxes
 
-				if self.plot:
+				if self.plot and k==0: # plot first time step
+					logger.info("Plotting time step:" + np.str(k))
 					# Make plot for debugging:
 					fig = plt.figure()
 
