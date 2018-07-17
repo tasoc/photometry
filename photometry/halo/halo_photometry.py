@@ -158,7 +158,7 @@ class HaloPhotometry(BasePhotometry):
 					interpolation='None',origin='lower')
 				plt.colorbar()
 				plt.title('TV-min Weightmap')
-				plt.savefig('%s%sweightmap.png' % (self.plot_folder,self.starid))
+				plt.savefig('%s/%sweightmap.png' % (self.plot_folder,self.starid))
 			except:
 				self.report_details(error="Failed to plot")
 				return STATUS.WARNING
