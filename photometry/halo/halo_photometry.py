@@ -147,21 +147,21 @@ class HaloPhotometry(BasePhotometry):
 		# 	return STATUS.ERROR
 
 		# plot
-
-		# try:
-		logger.info('Plotting weight map')
-		cmap = mpl.cm.seismic
-		norm = np.size(weightmap)
-		cmap.set_bad('k',1.)
-		im = np.log10(weightmap.T*norm)
-		plt.imshow(im,cmap=cmap, vmin=-2*np.nanmax(im),vmax=2*np.nanmax(im),
-			interpolation='None',origin='lower')
-		plt.colorbar()
-		plt.title('TV-min Weightmap')
-		plt.savefig('%sweightmap.png' % self.plot_folder)
-		# except:
-		# 	self.report_details(error="Failed to plot")
-		# 	return STATUS.WARNING
+		if self.plot:
+			try:
+				logger.info('Plotting weight map')
+				cmap = mpl.cm.seismic
+				norm = np.size(weightmap)
+				cmap.set_bad('k',1.)
+				im = np.log10(weightmap.T*norm)
+				plt.imshow(im,cmap=cmap, vmin=-2*np.nanmax(im),vmax=2*np.nanmax(im),
+					interpolation='None',origin='lower')
+				plt.colorbar()
+				plt.title('TV-min Weightmap')
+				plt.savefig('%s%sweightmap.png' % (self.plot_folder,self.starid))
+			except:
+				self.report_details(error="Failed to plot")
+				return STATUS.WARNING
 
 		# If something went seriouly wrong:
 		#self.report_details(error='What the hell?!')
