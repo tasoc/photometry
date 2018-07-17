@@ -9,12 +9,15 @@ Halo Photometry.
 
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
+
 import numpy as np
+import matplotlib as mpl
+import matplotlib.pyplot as plt 
+
 import logging
 from .. import BasePhotometry, STATUS
 from halophot.halo_tools import do_lc
 from astropy.table import Table
-
 
 #------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
@@ -135,7 +138,8 @@ class HaloPhotometry(BasePhotometry):
 					ts,splits,sub,order,maxiter=101,w_init=None,random_init=False,
 			thresh=0.8,minflux=100.,consensus=False,analytic=True,sigclip=False)
 
-		self.lightcurve['corr_flux'] = ts['corr_flux']
+		self.lightcurve['corr_flux'] = np.nan*np.ones(len(self.lightcurve['quality']))
+		self.lightcurve['corr_flux'][self.lightcurve['quality']==0] = ts['corr_flux']
 		self.halo_weightmap = weightmap
 		# except: 
 		# 	self.report_details(error='Halo optimization failed')
@@ -143,20 +147,20 @@ class HaloPhotometry(BasePhotometry):
 
 		# plot
 
-		try:
-			logger.info('Plotting weight map')
-			cmap = mpl.cm.seismic
-			norm = np.size(weightmap)
-			cmap.set_bad('k',1.)
-			im = np.log10(weightmap.T*norm)
-			plt.imshow(im,cmap=cmap, vmin=-2*np.nanmax(im),vmax=2*np.nanmax(im),
-				interpolation='None',origin='lower')
-			plt.colorbar()
-			plt.title('TV-min Weightmap')
-			plt.savefig('%sweightmap.png' % self.plot_folder)
-		except:
-			self.report_details(error="Failed to plot")
-			return STATUS.WARNING
+		# try:
+		logger.info('Plotting weight map')
+		cmap = mpl.cm.seismic
+		norm = np.size(weightmap)
+		cmap.set_bad('k',1.)
+		im = np.log10(weightmap.T*norm)
+		plt.imshow(im,cmap=cmap, vmin=-2*np.nanmax(im),vmax=2*np.nanmax(im),
+			interpolation='None',origin='lower')
+		plt.colorbar()
+		plt.title('TV-min Weightmap')
+		plt.savefig('%sweightmap.png' % self.plot_folder)
+		# except:
+		# 	self.report_details(error="Failed to plot")
+		# 	return STATUS.WARNING
 
 		# If something went seriouly wrong:
 		#self.report_details(error='What the hell?!')
