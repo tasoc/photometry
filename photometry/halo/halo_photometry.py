@@ -132,14 +132,15 @@ class HaloPhotometry(BasePhotometry):
 					'y':y,
 					'quality':quality})
 
+
 		# try:
-		logger.info('Attempting TV-min photometry')
 		pf, ts, weights, weightmap, pixels_sub = do_lc(flux,
 					ts,splits,sub,order,maxiter=101,w_init=None,random_init=False,
 			thresh=0.8,minflux=100.,consensus=False,analytic=True,sigclip=False)
+		logger.info(ts['corr_flux'])
 
 		self.lightcurve['corr_flux'] = np.nan*np.ones(len(self.lightcurve['quality']))
-		self.lightcurve['corr_flux'][self.lightcurve['quality']==0] = ts['corr_flux']
+		self.lightcurve['corr_flux'][self.lightcurve['quality']==0] = ts['corr_flux']/np.nanmedian(ts['corr_flux'])
 		self.halo_weightmap = weightmap
 		# except: 
 		# 	self.report_details(error='Halo optimization failed')
