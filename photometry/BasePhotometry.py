@@ -78,6 +78,7 @@ class BasePhotometry(object):
 		wcs (``astropy.wcs.WCS`` object): World Coordinate system solution.
 
 		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
+		pixelflags (numpy.ndarray): Flags for each pixel, as defined by the TESS data product manual.
 		final_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
 		additional_headers (dict): Additional headers to be included in FITS files.
 
