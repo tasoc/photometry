@@ -115,8 +115,10 @@ class HaloPhotometry(BasePhotometry):
 
 		logger.info('Formatting TPF data for halo')
 		
-		flux = self.images_cube
-		flux[self.pixelflags==0] = np.nan
+		flux = self.images_cube.T
+		flux[:,self.pixelflags==0] = np.nan
+		logger.info("Flux dimension")
+		logger.info(flux.shape)
 		time = self.lightcurve['time']
 		quality = self.lightcurve['quality']
 		x, y = self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']
