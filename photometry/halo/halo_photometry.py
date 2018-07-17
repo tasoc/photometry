@@ -118,10 +118,9 @@ class HaloPhotometry(BasePhotometry):
 
 		logger.info('Formatting TPF data for halo')
 		
+		# initialize 
 		flux = self.images_cube.T
 		flux[:,self.pixelflags==0] = np.nan
-		logger.info("Flux dimension")
-		logger.info(flux.shape)
 		time = self.lightcurve['time']
 		quality = self.lightcurve['quality']
 		x, y = self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']
@@ -132,19 +131,18 @@ class HaloPhotometry(BasePhotometry):
 					'y':y,
 					'quality':quality})
 
+		# run the halo photometry core function
+		try:
+			pf, ts, weights, weightmap, pixels_sub = do_lc(flux,
+						ts,splits,sub,order,maxiter=101,w_init=None,random_init=False,
+				thresh=0.8,minflux=100.,consensus=False,analytic=True,sigclip=False)
 
-		# try:
-		pf, ts, weights, weightmap, pixels_sub = do_lc(flux,
-					ts,splits,sub,order,maxiter=101,w_init=None,random_init=False,
-			thresh=0.8,minflux=100.,consensus=False,analytic=True,sigclip=False)
-		# logger.info(ts['corr_flux'])
-
-		self.lightcurve['flux'] = np.nan*np.ones(len(self.lightcurve['quality']))
-		self.lightcurve['flux'][self.lightcurve['quality']==0] = ts['corr_flux']/np.nanmedian(ts['corr_flux'])
-		self.halo_weightmap = weightmap
-		# except: 
-		# 	self.report_details(error='Halo optimization failed')
-		# 	return STATUS.ERROR
+			self.lightcurve['flux'] = np.nan*np.ones(len(self.lightcurve['quality']))
+			self.lightcurve['flux'][self.lightcurve['quality']==0] = ts['corr_flux']/np.nanmedian(ts['corr_flux'])
+			self.halo_weightmap = weightmap
+		except: 
+			self.report_details(error='Halo optimization failed')
+			return STATUS.ERROR
 
 		# plot
 		if self.plot:
