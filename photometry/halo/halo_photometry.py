@@ -153,7 +153,7 @@ class HaloPhotometry(BasePhotometry):
 				cmap = mpl.cm.seismic
 				norm = np.size(weightmap)
 				cmap.set_bad('k',1.)
-				im = np.log10(weightmap.T*norm)
+				im = np.log10(weightmap*norm)
 				plt.imshow(im,cmap=cmap, vmin=-2*np.nanmax(im),vmax=2*np.nanmax(im),
 					interpolation='None',origin='lower')
 				plt.colorbar()
