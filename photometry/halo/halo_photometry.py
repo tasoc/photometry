@@ -13,6 +13,7 @@ import numpy as np
 import logging
 from .. import BasePhotometry, STATUS
 from halophot.halo_tools import do_lc
+from astropy.table import Table
 
 
 #------------------------------------------------------------------------------
@@ -120,23 +121,23 @@ class HaloPhotometry(BasePhotometry):
 		quality = self.lightcurve['quality']
 		x, y = self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']
 		
-		ts = Table({'time':self.time,
+		ts = Table({'time':time,
 					'cadence':self.lightcurve['cadenceno'],
 					'x':x,
 					'y':y,
 					'quality':quality})
 
-		try:
-			logger.info('Attempting TV-min photometry')
-			pf, ts, weights, weightmap, pixels_sub = do_lc(flux,
-						ts,splits,sub,order,maxiter=101,w_init=None,random_init=False,
-				thresh=0.8,minflux=100.,consensus=False,analytic=True,sigclip=False)
+		# try:
+		logger.info('Attempting TV-min photometry')
+		pf, ts, weights, weightmap, pixels_sub = do_lc(flux,
+					ts,splits,sub,order,maxiter=101,w_init=None,random_init=False,
+			thresh=0.8,minflux=100.,consensus=False,analytic=True,sigclip=False)
 
-			self.lightcurve['corr_flux'] = ts['corr_flux']
-			self.halo_weightmap = weightmap
-		except: 
-			self.report_details(error='Halo optimization failed')
-			return STATUS.ERROR
+		self.lightcurve['corr_flux'] = ts['corr_flux']
+		self.halo_weightmap = weightmap
+		# except: 
+		# 	self.report_details(error='Halo optimization failed')
+		# 	return STATUS.ERROR
 
 		# plot
 
