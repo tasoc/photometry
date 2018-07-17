@@ -1154,6 +1154,13 @@ class BasePhotometry(object):
 		# Make sumimage image:
 		img_sumimage = fits.ImageHDU(data=self.sumimage, header=header, name="SUMIMAGE")
 
+		# List of the HDUs what will be put into the FITS file:
+		hdus = [hdu, tbhdu, img_sumimage, img_aperture]
+
+		# For Halo photometry, also add the weightmap to the FITS file:
+		if hasattr(self, 'halo_weightmap'):
+			hdus.append(fits.ImageHDU(data=self.halo_weightmap, header=header, name="WEIGHTMAP"))
+
 		# File name to save the lightcurve under:
 		filename = 'tess{starid:011d}-s{sector:02d}-{cadence:s}-v{version:02d}-tasoc_lc.fits'.format(
 			starid=self.starid,
@@ -1164,7 +1171,7 @@ class BasePhotometry(object):
 
 		# Write to file:
 		filepath = os.path.join(output_folder, filename)
-		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
+		with fits.HDUList(hdus) as hdulist:
 			t1 = default_timer()
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
 			self.report_details(error='I/O Output time: %f' % (default_timer() - t1))
