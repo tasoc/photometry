@@ -7,7 +7,7 @@
 from __future__ import division, print_function, with_statement, absolute_import
 import logging
 import traceback
-from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
+from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry, DiffImgPhotometry
 
 #------------------------------------------------------------------------------
 class _PhotErrorDummy(object):
@@ -82,6 +82,9 @@ def tessphot(method=None, *args, **kwargs):
 
 	elif method == 'linpsf':
 		pho = _try_photometry(LinPSFPhotometry, *args, **kwargs)
+
+	elif method == 'diffimg':
+		pho = _try_photometry(DiffImgPhotometry, *args, **kwargs)
 
 	else:
 		raise ValueError("Invalid method: '{0}'".format(method))

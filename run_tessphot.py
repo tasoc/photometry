@@ -10,14 +10,14 @@ Example:
 
 Example:
 	To run a specific star, you can provide the TIC-identifier:
-		
+
 	>>> python run_tessphot.py 182092046
 
 Example:
 	You can be very specific in the photometry methods and input to use.
 	The following example runs PSF photometry on Target Pixel Files (tpf) of TIC 182092046,
 	and produces plots in the output directory as well.
-		
+
 	>>> python run_tessphot.py --source=tpf --method=psf --plot 182092046
 
 Note:
@@ -39,7 +39,7 @@ if __name__ == '__main__':
 
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
-	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf', 'linpsf'))
+	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf', 'linpsf', 'diffimg'))
 	parser.add_argument('-s', '--source', help='Data-source to load.', default='ffi', choices=('ffi', 'tpf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
@@ -88,9 +88,9 @@ if __name__ == '__main__':
 	with TaskManager(input_folder) as tm:
 		if args.starid is not None:
 			task = tm.get_task(starid=args.starid)
-			task['method'] = args.method
-			task['datasource'] = args.source
-		elif args.random:	
+			if args.method: task['method'] = args.method
+			if args.source: task['datasource'] = args.source
+		elif args.random:
 			task = tm.get_random_task()
 
 		del task['priority']
