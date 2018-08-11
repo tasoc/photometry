@@ -49,6 +49,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if scale == 'log' or scale == 'sqrt':
 		img_min = np.nanmin(image)
 		if img_min <= 0:
+			image = image.copy()
 			image += np.abs(img_min) + 1.0
 
 	#print(scale, np.all(np.isfinite(image)), np.all(image > 0), np.min(image), np.max(image))
