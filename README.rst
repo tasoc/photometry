@@ -47,7 +47,7 @@ Set up directories
 The next thing to do is to set up the directories where input data is stored, and where output data (e.g. lightcurves) should be put. This is done by setting the enviroment variables ``TESSPHOT_INPUT`` and ``TESSPHOT_OUTPUT``.
 Depending on your operating system and shell this is done in slightly different ways.
 
-The directory defined in ``TESSPHOT_INPUT`` should contain all the data in FITS files that needs to be processed. The FITS files can be structured into sub-directories as you wish and may also be GZIP compressed (*.fits.gz). When the different programs runs, some of them will also add some more files to the ``TESSPHOT_INPUT`` directory. The directory in ``TESSPHOT_OUTPUT`` is used to store all the lightcurve FITS file that will be generated at the end.
+The directory defined in ``TESSPHOT_INPUT`` should contain all the data in FITS files that needs to be processed. The FITS files can be structured into sub-directories as you wish and may also be GZIP compressed (\*.fits.gz). When the different programs runs, some of them will also add some more files to the ``TESSPHOT_INPUT`` directory. The directory in ``TESSPHOT_OUTPUT`` is used to store all the lightcurve FITS file that will be generated at the end.
 
 Make star catalogs
 ------------------
