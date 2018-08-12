@@ -18,10 +18,12 @@ from astropy.io import fits
 from astropy.wcs import WCS
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import BasePhotometry
+#import photometry.BasePhotometry.hdf5_cache as bf
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 DUMMY_TARGET = 471012650
 
+#----------------------------------------------------------------------
 def test_stamp():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
@@ -57,6 +59,7 @@ def test_stamp():
 			assert(rows.shape == (22, 20))
 			assert(cols.shape == (22, 20))
 
+#----------------------------------------------------------------------
 def test_images():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
@@ -67,6 +70,7 @@ def test_images():
 			for img in pho.images:
 				assert(img.shape == (10, 20))
 
+#----------------------------------------------------------------------
 def test_backgrounds():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
@@ -77,6 +81,7 @@ def test_backgrounds():
 			for img in pho.backgrounds:
 				assert(img.shape == (10, 20))
 
+#----------------------------------------------------------------------
 def test_catalog():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
@@ -98,7 +103,7 @@ def test_catalog():
 				np.testing.assert_allclose(pho.catalog[indx_main]['column'], pho.target_pos_column)
 				np.testing.assert_allclose(pho.catalog[indx_main]['row'], pho.target_pos_row)
 
-
+#----------------------------------------------------------------------
 def test_catalog_attime():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
@@ -111,7 +116,16 @@ def test_catalog_attime():
 				assert(cat.colnames == pho.catalog.colnames)
 				# TODO: Add more tests here, once we change the test input data
 
+#----------------------------------------------------------------------
+def test_pixelflags():
+	with TemporaryDirectory() as OUTPUT_DIR:
+		for datasource in ('ffi', 'tpf'):
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+				print(pho.pixelflags)
 
+				assert(pho.sumimage.shape == pho.pixelflags.shape)
+
+#----------------------------------------------------------------------
 def test_wcs():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
@@ -142,11 +156,51 @@ def test_wcs():
 	print(radec_ffi - radec_fits)
 	np.testing.assert_allclose(radec_fits, radec_ffi)
 
+#----------------------------------------------------------------------
+"""
+def test_cache():
 
+	#global hdf5_cache
+	print(bf)
+
+	with TemporaryDirectory() as OUTPUT_DIR:
+		print("Running with no cache...")
+		#BasePhotometry.hdf5_cache = {}
+		#with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='none'):
+		#	assert(BasePhotometry.hdf5_cache == {})
+
+		print("Running with basic cache...")
+		#hdf5_cache = {}
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='basic') as pho:
+			print("WHAT?", BasePhotometry.hdf5_cache)
+			assert(pho.filepath_hdf5 in BasePhotometry.hdf5_cache)
+			c = BasePhotometry.hdf5_cache.get(pho.filepath_hdf5)
+			assert(c.get('_images_cube_full') is None)
+
+		#print(hdf5_cache)
+		BasePhotometry.hdf5_cache = {}
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='full') as pho:
+			c = BasePhotometry.hdf5_cache.get(pho.filepath_hdf5)
+			cube = c.get('_images_cube_full')
+			assert(cube.shape == (2048, 2048, 2))
+"""
+
+#----------------------------------------------------------------------
+def test_tpf_with_other_target():
+	sub_target = 444068153
+	with TemporaryDirectory() as OUTPUT_DIR:
+		with BasePhotometry(sub_target, INPUT_DIR, OUTPUT_DIR, datasource='tpf:471012650', camera=2, ccd=2) as pho:
+			assert(pho.starid == sub_target)
+			assert(pho.datasource == 'tpf')
+
+#----------------------------------------------------------------------
 if __name__ == '__main__':
 	test_stamp()
 	test_images()
 	test_backgrounds()
 	test_catalog()
 	test_catalog_attime()
+	test_pixelflags()
 	test_wcs()
+	#test_cache()
+	test_tpf_with_other_target()
