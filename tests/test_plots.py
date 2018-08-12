@@ -16,7 +16,7 @@ import os.path
 import numpy as np
 import scipy
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from photometry.plots import plt, plot_image
+from photometry.plots import plt, plot_image, plot_image_fit_residuals
 #import pytest
 
 kwargs = {'baseline_dir': 'baseline_images'}
@@ -77,9 +77,39 @@ def test_plot_image_grid_offset():
 	ax.grid(True)
 	return fig
 
+def test_plot_image_data_change():
+	"""Test that the plotting function does not change input data"""
+
+	# Construct random image:
+	img = np.random.randn(15, 10)
+	img[0,0] = -1.0 # Make 100% sure there is a negative point
+
+	# Save the original image for comparison:
+	img_before = np.copy(img)
+
+	# Make a couple of plots trying out the different settings:
+	fig = plt.figure()
+	ax1 = fig.add_subplot(131)
+	plot_image(img, ax=ax1, scale='linear')
+	np.testing.assert_allclose(img, img_before)
+
+	ax2 = fig.add_subplot(132)
+	plot_image(img, ax=ax2, scale='sqrt')
+	np.testing.assert_allclose(img, img_before)
+
+	ax3 = fig.add_subplot(133)
+	plot_image(img, ax=ax3, scale='log')
+	np.testing.assert_allclose(img, img_before)
+
+	fig = plt.figure()
+	plot_image_fit_residuals(fig, img, img, img)
+	np.testing.assert_allclose(img, img_before)
+
+
 if __name__ == '__main__':
 	plt.close('all')
-	test_plot_image()
-	test_plot_image_grid()
-	test_plot_image_grid_offset()
+	#test_plot_image()
+	#test_plot_image_grid()
+	#test_plot_image_grid_offset()
+	test_plot_image_data_change()
 	plt.show()

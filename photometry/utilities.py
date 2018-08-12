@@ -53,7 +53,7 @@ def find_ffi_files(rootdir, camera=None, ccd=None):
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
-	for root, dirnames, filenames in os.walk(rootdir):
+	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
 		for filename in fnmatch.filter(filenames, filename_pattern):
 			matches.append(os.path.join(root, filename))
 
@@ -85,7 +85,7 @@ def find_tpf_files(rootdir, starid=None):
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
-	for root, dirnames, filenames in os.walk(rootdir):
+	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
 		for filename in fnmatch.filter(filenames, filename_pattern):
 			matches.append(os.path.join(root, filename))
 

@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import AperturePhotometry, STATUS
 from photometry.plots import plot_image, plt
 
-def _test_aperturephotometry():
+def test_aperturephotometry():
 
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 	OUTPUT_DIR = tempfile.mkdtemp(prefix='tessphot_tests_aperture')
@@ -45,5 +45,27 @@ def _test_aperturephotometry():
 			assert( ~np.all(np.isnan(pho.lightcurve['pos_centroid'][:,1])) )
 
 
+def test_aperturephotometry_plots():
+
+	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+	OUTPUT_DIR = tempfile.mkdtemp(prefix='tessphot_tests_aperture')
+
+	with AperturePhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=False, datasource='ffi', camera=1, ccd=1) as pho_noplot:
+		pho_noplot.photometry()
+		assert(pho_noplot.plot == False)
+		print(pho_noplot.status)
+
+	with AperturePhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=True, datasource='ffi', camera=1, ccd=1) as pho_plot:
+		pho_plot.photometry()
+		assert(pho_plot.plot == True)
+		print(pho_plot.status)
+
+	assert(pho_plot.status == pho_noplot.status)
+	np.testing.assert_allclose(pho_noplot.sumimage, pho_plot.sumimage, equal_nan=True)
+	np.testing.assert_allclose(pho_noplot.lightcurve['time'], pho_plot.lightcurve['time'], equal_nan=True)
+	np.testing.assert_allclose(pho_noplot.lightcurve['flux'], pho_plot.lightcurve['flux'], equal_nan=True)
+
+
 if __name__ == '__main__':
-	_test_aperturephotometry()
+	test_aperturephotometry()
+	test_aperturephotometry_plots()
