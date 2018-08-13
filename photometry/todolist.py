@@ -280,6 +280,18 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	toc = default_timer()
 	logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(tpf_files))
 
+	# Remove secondary TPF targets if they are also the primary target:
+	indx_remove = np.zeros(len(cat), dtype='bool')
+	cat.add_index('starid')
+	for k, row in enumerate(cat):
+		if row['datasource'].startswith('tpf:'):
+			indx = cat.loc['starid', row['starid']]['datasource'] == 'tpf'
+			if np.any(indx):
+				indx_remove[k] = True
+	cat.remove_indices('starid')
+	logger.info("Removing %d secondary TPF files as they are also primary", np.sum(indx_remove))
+	cat = cat[~indx_remove]
+
 	# Find all targets in Full Frame Images:
 	inputs = itertools.product([input_folder], cameras, ccds)
 
@@ -298,13 +310,13 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	pool.close()
 	pool.join()
 
-	# Sort the final list:
-	cat.sort('tmag')
-
 	# Remove duplicates!
 	logger.info("Removing duplicate entries...")
 	_, idx = np.unique(cat[('starid', 'camera', 'ccd', 'datasource')], return_index=True, axis=0)
 	cat = cat[np.sort(idx)]
+
+	# Sort the final list:
+	cat.sort('tmag')
 
 	# TODO: Can we make decisions already now on methods?
 	# tmag < 2.5 : Halo photometry
