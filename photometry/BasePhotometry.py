@@ -1040,6 +1040,16 @@ class BasePhotometry(object):
 		# Get the current date for the files:
 		now = datetime.datetime.now()
 
+		# Extract which photmetric method is being used by checking the
+		# name of the class that is running:
+		photmethod = {
+			'BasePhotometry': 'base',
+			'AperturePhotometry': 'aperture',
+			'PSFPhotometry': 'psf',
+			'LinPSFPhotometry': 'linpsf',
+			'HaloPhotometry': 'halo'
+		}.get(self.__class__.__name__, None)
+
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3, 'number of standard extensions')
@@ -1053,7 +1063,7 @@ class BasePhotometry(object):
 		hdu.header['CAMERA'] = (self.camera, 'Camera number')
 		hdu.header['CCD'] = (self.ccd, 'CCD number')
 		hdu.header['SECTOR'] = (self.sector, 'Observing sector')
-		#hdu.header['PHOTMET'] = ('aperture', 'Photometric method used')
+		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Versions:
 		#hdu.header['VERPIXEL'] = (__version__, 'version of K2P2 pipeline')
