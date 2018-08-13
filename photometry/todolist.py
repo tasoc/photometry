@@ -30,7 +30,7 @@ def calc_cbv_area(catalog_row, settings):
 	# Distance to centre of the camera in degrees:
 	camera_centre_dist = sphere_distance(catalog_row['ra'], catalog_row['decl'], settings['camera_centre_ra'], settings['camera_centre_dec'])
 
-	cbv_area = settings['camera']*100 + settings['ccd']*10 
+	cbv_area = settings['camera']*100 + settings['ccd']*10
 
 	if camera_centre_dist < 0.25*camera_radius:
 		cbv_area += 1
@@ -42,7 +42,7 @@ def calc_cbv_area(catalog_row, settings):
 		cbv_area += 4
 
 	return cbv_area
-		
+
 def _ffi_todo_wrapper(args):
 	return _ffi_todo(*args)
 
@@ -53,7 +53,7 @@ def _ffi_todo(input_folder, camera, ccd):
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
 		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
+		dtype=('int64', 'int32', 'int32', 'S256', 'float32', 'int32')
 	)
 
 	# See if there are any FFIs for this camera and ccd.
@@ -125,9 +125,10 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the TODO list as a table which we will fill with targets:
+	# TODO: Could we avoid fixed-size strings in datasource column?
 	cat = Table(
 		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
+		dtype=('int64', 'int32', 'int32', 'S256', 'float32', 'int32')
 	)
 
 	logger.debug("Processing TPF file: '%s'", fname)
@@ -252,7 +253,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
 		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
+		dtype=('int64', 'int32', 'int32', 'S256', 'float32', 'int32')
 	)
 
 	# Load list of all Target Pixel files in the directory:
@@ -333,14 +334,14 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 			int(row['starid']),
 			int(row['camera']),
 			int(row['ccd']),
-			row['datasource'],
+			row['datasource'].strip(),
 			float(row['tmag']),
 			int(row['cbv_area'])
 		))
 
 	conn.commit()
 	cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
-	cursor.execute("CREATE INDEX starid_datasource_idx ON todolist (starid, datasource);") # FIXME: Should be "UNIQUE", but something is weird in ETE-6?!
+	cursor.execute("CREATE UNIQUE INDEX starid_datasource_idx ON todolist (starid, datasource);")
 	cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 	cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 	conn.commit()
