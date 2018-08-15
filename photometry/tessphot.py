@@ -18,7 +18,7 @@ class _PhotErrorDummy(object):
 #------------------------------------------------------------------------------
 def _try_photometry(PhotClass, *args, **kwargs):
 	logger = logging.getLogger(__name__)
-	tb = []
+	tbcollect = []
 	try:
 		with PhotClass(*args, **kwargs) as pho:
 			pho.photometry()
@@ -35,19 +35,19 @@ def _try_photometry(PhotClass, *args, **kwargs):
 
 	except:
 		logger.exception("Something happened")
-		tb.append(traceback.format_exc().strip())
+		tb = traceback.format_exc().strip()
 		try:
 			pho._status = STATUS.ERROR
 			pho.report_details(error=tb)
 		except UnboundLocalError:
 			pass
 		except:
-			tb.append(traceback.format_exc().strip())
+			tbcollect.append(tb)
 
 	try:
 		return pho
 	except UnboundLocalError:
-		return _PhotErrorDummy(tb, *args, **kwargs)
+		return _PhotErrorDummy(tbcollect, *args, **kwargs)
 
 #------------------------------------------------------------------------------
 def tessphot(method=None, *args, **kwargs):
