@@ -144,7 +144,7 @@ class TaskManager(object):
 			))
 
 		# Save additional diagnostics:
-		error_msg = result['details'].get('errors', None)
+		error_msg = result.get('details', {}).get('errors', None)
 		if error_msg: error_msg = '\n'.join(error_msg)
 		self.cursor.execute("INSERT INTO diagnostics (priority, starid, elaptime, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
