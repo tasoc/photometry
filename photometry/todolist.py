@@ -357,7 +357,17 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 	cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 	conn.commit()
+
+	# Change settings of SQLite file:
+	cursor.execute("PRAGMA page_size=4096;")
+	# Run a VACUUM of the table which will force a recreation of the
+	# underlying "pages" of the file.
+	# Please note that we are changing the "isolation_level" of the connection here,
+	# but since we closing the conmnection just after, we are not changing it back
+	conn.isolation_level = None
+	cursor.execute("VACUUM;")
+
+	# Close connection:
 	cursor.close()
 	conn.close()
-
 	logger.info("TODO done.")

@@ -33,6 +33,14 @@ class TaskManager(object):
 		if not os.path.exists(todo_file):
 			raise IOError('Could not find TODO-file')
 
+		# Setup logging:
+		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+		console = logging.StreamHandler()
+		console.setFormatter(formatter)
+		self.logger = logging.getLogger(__name__)
+		self.logger.addHandler(console)
+		self.logger.setLevel(logging.INFO)
+
 		# Load the SQLite file:
 		self.conn = sqlite3.connect(todo_file)
 		self.conn.row_factory = sqlite3.Row
@@ -60,13 +68,20 @@ class TaskManager(object):
 		);""")
 		self.conn.commit()
 
-		# Setup logging:
-		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-		console = logging.StreamHandler()
-		console.setFormatter(formatter)
-		self.logger = logging.getLogger(__name__)
-		self.logger.addHandler(console)
-		self.logger.setLevel(logging.INFO)
+		# Reset calculations with status STARTED or ABORT:
+		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (4,6));")
+		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (4,6);")
+		self.conn.commit()
+
+		# Run a cleanup/optimization of the database before we get started:
+		self.logger.info("Cleaning TODOLIST before run...")
+		try:
+			self.conn.isolation_level = None
+			self.cursor.execute("VACUUM;")
+		except:
+			raise
+		finally:
+			self.conn.isolation_level = ''
 
 	def close(self):
 		"""Close TaskManager and all associated objects."""
