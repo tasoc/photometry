@@ -166,6 +166,16 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 			cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
 			cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
 			conn.commit()
+
+			# Change settings of SQLite file:
+			cursor.execute("PRAGMA page_size=4096;")
+			# Run a VACUUM of the table which will force a recreation of the
+			# underlying "pages" of the file.
+			# Please note that we are changing the "isolation_level" of the connection here,
+			# but since we closing the connnection just after, we are not changing it back
+			conn.isolation_level = None
+			cursor.execute("VACUUM;")
+
 			cursor.close()
 			conn.close()
 
