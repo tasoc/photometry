@@ -16,12 +16,14 @@ class TaskManager(object):
 	A TaskManager which keeps track of which targets to process.
 	"""
 
-	def __init__(self, todo_file):
+	def __init__(self, todo_file, cleanup=False):
 		"""
 		Initialize the TaskManager which keeps track of which targets to process.
 
 		Parameters:
-			todo_file: Path to the TODO-file.
+			todo_file (string): Path to the TODO-file.
+			cleanup (boolean): Perform cleanup/optimization of TODO-file before
+			                   during initialization. Default=False.
 
 		Raises:
 			IOError: If TODO-file could not be found.
@@ -74,14 +76,15 @@ class TaskManager(object):
 		self.conn.commit()
 
 		# Run a cleanup/optimization of the database before we get started:
-		self.logger.info("Cleaning TODOLIST before run...")
-		try:
-			self.conn.isolation_level = None
-			self.cursor.execute("VACUUM;")
-		except:
-			raise
-		finally:
-			self.conn.isolation_level = ''
+		if cleanup:
+			self.logger.info("Cleaning TODOLIST before run...")
+			try:
+				self.conn.isolation_level = None
+				self.cursor.execute("VACUUM;")
+			except:
+				raise
+			finally:
+				self.conn.isolation_level = ''
 
 	def close(self):
 		"""Close TaskManager and all associated objects."""
