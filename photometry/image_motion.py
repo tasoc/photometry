@@ -254,3 +254,29 @@ class ImageMovementKernel(object):
 		kernel = self._interpolator(time)
 
 		return self.apply_kernel(xy, kernel)
+
+	#==============================================================================
+	def jitter(self, time, column, row):
+		"""
+		Calculate the change to a given position as a function of time.
+
+		Parameters:
+			time (ndarray): Array of timestamps to calculate position changes for.
+			column (float): Column position at reference time.
+			row (float): Row position at reference time.
+
+		Returns:
+			ndarray: 2D array with changes in column and row for each timestamp.
+		"""
+
+		# Find the kernels at the given timestamps
+		kernel = self._interpolator(time)
+		kernel = np.atleast_2d(kernel)
+
+		# For each timestamp calculate the changes to the positions:
+		xy = np.array([column, row])
+		jitter = np.empty((kernel.shape[0], 2), dtype='float64')
+		for k in range(kernel.shape[0]):
+			jitter[k, :] = self.apply_kernel(xy, kernel[k, :])
+
+		return jitter

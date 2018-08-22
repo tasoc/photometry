@@ -13,9 +13,9 @@ import os.path
 import numpy as np
 from ..plots import plt, save_figure, plot_image
 from .. import BasePhotometry, STATUS
+import halophot
 from halophot.halo_tools import do_lc
 from astropy.table import Table
-import sys
 
 #------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
@@ -88,19 +88,13 @@ class HaloPhotometry(BasePhotometry):
 		"""
 
 		# Start logger to use for print
-		sys.stderr.flush() 
-
 		logger = logging.getLogger(__name__)
-		# myhandler = logging.StreamHandler()  # writes to stderr
-		# filehandler_dbg = logging.FileHandler(logger.name + '-debug.log', mode='w')
-		# myformatter = logging.Formatter(fmt='%(levelname)s: %(message)s')
-		# myhandler.setFormatter(myformatter)
-		# logger.addHandler(myhandler)
 
 		logger.info("starid: %d", self.starid)
 
 		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
 
+		# Halophot settings:
 		splits=(None,None)
 		sub=1
 		order=1
@@ -113,20 +107,25 @@ class HaloPhotometry(BasePhotometry):
 		analytic=True
 		sigclip=False
 
-		logger.info('Formatting TPF data for halo')
-
 		# initialize
+		logger.info('Formatting data for halo')
 		flux = self.images_cube.T
 		flux[:,self.pixelflags==0] = np.nan
-		x, y = self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']
 
+		# Get the position of the main target
+		jitter = self.MovementKernel.jitter(self.lightcurve['time'], self.target_pos_column, self.target_pos_row)
+		col = self.target_pos_column + jitter[:, 0]
+		row = self.target_pos_column + jitter[:, 1]
+
+		# Put together timeseries table in the format that halophot likes:
 		ts = Table({
 			'time': self.lightcurve['time'],
 			'cadence': self.lightcurve['cadenceno'],
-			'x': x,
-			'y': y,
+			'x': col,
+			'y': row,
 			'quality': self.lightcurve['quality']
 		})
+
 		# Run the halo photometry core function
 		try:
 			pf, ts, weights, weightmap, pixels_sub = do_lc(
@@ -145,11 +144,14 @@ class HaloPhotometry(BasePhotometry):
 				sigclip=sigclip
 			)
 
-			self.lightcurve['flux'][:] = np.nan
-			self.lightcurve['flux']= ts['corr_flux']/np.nanmedian(ts['corr_flux'])
+			self.lightcurve['flux'] = ts['corr_flux']/np.nanmedian(ts['corr_flux'])
+			self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
+			self.lightcurve['pos_centroid'][:,1] = row
+
+			# Save the weightmap into special property which will make sure
+			# that it is saved into the final FITS output files:
 			self.halo_weightmap = weightmap
-			self.lightcurve['pos_centroid'][:,0] = x # we don't actually calculate centroids
-			self.lightcurve['pos_centroid'][:,1] = y
+
 		except:
 			logger.exception('Halo optimization failed')
 			self.report_details(error='Halo optimization failed')
@@ -184,10 +186,12 @@ class HaloPhotometry(BasePhotometry):
 		#self.report_details(error='')
 		#return STATUS.WARNING
 
-		# Save the mask to be stored in the output file:
-
 		# Add additional headers specific to this method:
-		#self.additional_headers['HDR_KEY'] = (value, 'comment')
+		self.additional_headers['HALO_VER'] = (halophot.__version__, 'Version of halophot')
+		self.additional_headers['HALO_ODR'] = (order, 'Halophot nth order TV')
+		self.additional_headers['HALO_THR'] = (thresh, 'Halophot saturated pixel threshold')
+		self.additional_headers['HALO_MXI'] = (maxiter, 'Halophot maximum optimisation iterations')
+		self.additional_headers['HALO_SCL'] = (sigclip, 'Halophot sigma clipping enabled')
 
 		# If some stars could be skipped:
 		#self.report_details(skip_targets=skip_targets)
