@@ -15,6 +15,7 @@ from ..plots import plt, save_figure, plot_image
 from .. import BasePhotometry, STATUS
 from halophot.halo_tools import do_lc
 from astropy.table import Table
+import sys
 
 #------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
@@ -87,12 +88,18 @@ class HaloPhotometry(BasePhotometry):
 		"""
 
 		# Start logger to use for print
+		sys.stderr.flush() 
+
 		logger = logging.getLogger(__name__)
+		# myhandler = logging.StreamHandler()  # writes to stderr
+		# filehandler_dbg = logging.FileHandler(logger.name + '-debug.log', mode='w')
+		# myformatter = logging.Formatter(fmt='%(levelname)s: %(message)s')
+		# myhandler.setFormatter(myformatter)
+		# logger.addHandler(myhandler)
 
 		logger.info("starid: %d", self.starid)
 
 		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
-
 
 		splits=(None,None)
 		sub=1
@@ -100,8 +107,8 @@ class HaloPhotometry(BasePhotometry):
 		maxiter=101
 		w_init=None
 		random_init=False
-		thresh=0.8
-		minflux=100.
+		thresh=0.9
+		minflux=0.0
 		consensus=False
 		analytic=True
 		sigclip=False
@@ -120,7 +127,6 @@ class HaloPhotometry(BasePhotometry):
 			'y': y,
 			'quality': self.lightcurve['quality']
 		})
-
 		# Run the halo photometry core function
 		try:
 			pf, ts, weights, weightmap, pixels_sub = do_lc(
@@ -140,8 +146,10 @@ class HaloPhotometry(BasePhotometry):
 			)
 
 			self.lightcurve['flux'][:] = np.nan
-			self.lightcurve['flux'][self.lightcurve['quality']==0] = ts['corr_flux']/np.nanmedian(ts['corr_flux'])
+			self.lightcurve['flux']= ts['corr_flux']/np.nanmedian(ts['corr_flux'])
 			self.halo_weightmap = weightmap
+			self.lightcurve['pos_centroid'][:,0] = x # we don't actually calculate centroids
+			self.lightcurve['pos_centroid'][:,1] = y
 		except:
 			logger.exception('Halo optimization failed')
 			self.report_details(error='Halo optimization failed')
