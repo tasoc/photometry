@@ -1,5 +1,21 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
+"""
+This program will prepare the photometry on individual stars by doing all the operations which requires the full-size FFI images, like the following:
+* Estimating sky background for all images.
+* Estimating spacecraft jitter.
+* Creating average image.
+* Restructuring data into HDF5 files for efficient I/O operations.
+
+The program can simply be run like the following, which will create a number of HDF5 files (`\*.hdf5`) in the ``TESSPHOT_INPUT`` directory.
+
+>>> python prepare_photometry.py
+
+The program internally calls the function :py:func:`photometry.prepare.create_hdf5` with the given parameters.
+
+.. author:: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+"""
 
 from __future__ import division, with_statement, print_function, absolute_import
 import argparse
