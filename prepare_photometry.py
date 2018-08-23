@@ -13,7 +13,6 @@ The program can simply be run like the following, which will create a number of 
 
 The program internally calls the function :py:func:`photometry.prepare.create_hdf5` with the given parameters.
 
-.. author:: Rasmus Handberg <rasmush@phys.au.dk>
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
