@@ -137,7 +137,7 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 
 			# Query the TESS Input Catalog table for all stars in the footprint.
 			# This is a MASSIVE table, so this query may take a while.
-			tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s);", (
+			tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s) AND disposition IS NULL;", (
 				footprint,
 			))
 
