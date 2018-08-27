@@ -39,7 +39,7 @@ def test_imagemotion():
 	desired2 = np.zeros_like(xy)
 	desired2[:, 1] = 1
 
-	for warpmode in ('translation', 'euclidian'):
+	for warpmode in ('unchanged', 'translation', 'euclidian'):
 		print("Testing warpmode=" + warpmode)
 
 		# Create ImageMovementKernel instance:

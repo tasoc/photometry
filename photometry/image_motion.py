@@ -29,6 +29,7 @@ from scipy.interpolate import interp1d
 class ImageMovementKernel(object):
 
 	N_PARAMS = {
+		'unchanged': 0,
 		'translation': 2,
 		'euclidian': 3
 	}
@@ -39,11 +40,11 @@ class ImageMovementKernel(object):
 		Initialize ImageMovementKernel.
 
 		Parameters:
-			warpmode (string): Options are ``'translation'`` and ``'euclidian'``. Default is ``'euclidian'``.
+			warpmode (string): Options are ``'unchanged'``, ``'translation'`` and ``'euclidian'``. Default is ``'euclidian'``.
 			image_ref (2D ndarray): Reference image used
 		"""
 
-		if warpmode not in ('translation', 'euclidian'):
+		if warpmode not in ('unchanged', 'translation', 'euclidian'):
 			raise ValueError("Invalid warpmode")
 
 		self.warpmode = warpmode
@@ -136,6 +137,9 @@ class ImageMovementKernel(object):
 			delta_pos[:, 0] = kernel[0]
 			delta_pos[:, 1] = kernel[1]
 
+		elif self.warpmode == 'unchanged':
+			delta_pos.fill(0)
+
 		return delta_pos
 
 	#==============================================================================
@@ -158,6 +162,9 @@ class ImageMovementKernel(object):
 		.. codeauthor:: Mikkel N. Lund
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
+
+		if self.warpmode == 'unchanged':
+			return []
 
 		# Check that reference image was actually given:
 		if self.image_ref is None:
