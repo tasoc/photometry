@@ -488,11 +488,18 @@ class BasePhotometry(object):
 				self._stamp = self._max_stamp
 
 		# Limit the stamp to not go outside the limits of the images:
+		# TODO: We really should have a thourgh cleanup in the self._stamp, self._maxstamp and self.pixel_offset_* mess!
 		self._stamp = list(self._stamp)
-		self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0] + self.pixel_offset_row))
-		self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1] + self.pixel_offset_row))
-		self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2] + self.pixel_offset_col))
-		self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3] + self.pixel_offset_col))
+		if self.datasource == 'ffi':
+			self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0] + self.pixel_offset_row))
+			self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1] + self.pixel_offset_row))
+			self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2] + self.pixel_offset_col))
+			self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3] + self.pixel_offset_col))
+		else:
+			self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0]))
+			self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1]))
+			self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2]))
+			self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3]))
 		self._stamp = tuple(self._stamp)
 
 		# Sanity checks:
