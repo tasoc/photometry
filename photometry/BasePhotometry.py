@@ -906,21 +906,12 @@ class BasePhotometry(object):
 
 		return self._catalog
 
-	def catalog_attime(self, time):
+	@property
+	def MovementKernel(self):
 		"""
-		Catalog of stars, calculated at a given time-stamp, so CCD positions are
-		modified according to the measured spacecraft jitter.
-
-		Parameters:
-			time (float): Time in MJD when to calculate catalog.
-
-		Returns:
-			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`, but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated at the given timestamp.
-
-		See Also:
-			:py:func:`catalog`
+		Movement Kernel which allows calculation of positions on the focal plane as a function of time.
+		Instance of :py:class:`image_motion.ImageMovementKernel`.
 		"""
-
 		if self._MovementKernel is None:
 			if self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
 				self._MovementKernel = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
@@ -945,15 +936,32 @@ class BasePhotometry(object):
 				# unaltered catalog:
 				self._MovementKernel = 'unchanged'
 
+		return self._MovementKernel
+
+	def catalog_attime(self, time):
+		"""
+		Catalog of stars, calculated at a given time-stamp, so CCD positions are
+		modified according to the measured spacecraft jitter.
+
+		Parameters:
+			time (float): Time in MJD when to calculate catalog.
+
+		Returns:
+			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`, but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated at the given timestamp.
+
+		See Also:
+			:py:func:`catalog`
+		"""
+
 		# If we didn't have enough information, just return the unchanged catalog:
-		if self._MovementKernel == 'unchanged':
+		if self.MovementKernel == 'unchanged':
 			return self.catalog
 
 		# Get the reference catalog:
 		xy = np.column_stack((self.catalog['column'], self.catalog['row']))
 
 		# Lookup the position corrections in CCD coordinates:
-		jitter = self._MovementKernel.interpolate(time, xy)
+		jitter = self.MovementKernel.interpolate(time, xy)
 
 		# Modify the reference catalog:
 		cat = deepcopy(self.catalog)
