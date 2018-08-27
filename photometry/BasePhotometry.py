@@ -349,7 +349,7 @@ class BasePhotometry(object):
 
 		# Project target position onto the pixel plane:
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
-		if self.datasource == 'tpf':
+		if self.datasource.startswith('tpf'):
 			self.target_pos_column += self.pixel_offset_col
 			self.target_pos_row += self.pixel_offset_row
 		logger.info("Target column: %f", self.target_pos_column)
@@ -489,10 +489,10 @@ class BasePhotometry(object):
 
 		# Limit the stamp to not go outside the limits of the images:
 		self._stamp = list(self._stamp)
-		self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0]))
-		self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1]))
-		self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2]))
-		self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3]))
+		self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0] + self.pixel_offset_row))
+		self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1] + self.pixel_offset_row))
+		self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2] + self.pixel_offset_col))
+		self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3] + self.pixel_offset_col))
 		self._stamp = tuple(self._stamp)
 
 		# Sanity checks:
@@ -791,7 +791,7 @@ class BasePhotometry(object):
 			], dtype='float64')
 			# Because the TPF world coordinate solution is relative to the stamp,
 			# add the pixel offset to these:
-			if self.datasource == 'tpf':
+			if self.datasource.startswith('tpf'):
 				corners[:, 0] -= self.pixel_offset_col
 				corners[:, 1] -= self.pixel_offset_row
 
@@ -879,7 +879,7 @@ class BasePhotometry(object):
 
 				# Because the TPF world coordinate solution is relative to the stamp,
 				# add the pixel offset to these:
-				if self.datasource == 'tpf':
+				if self.datasource.startswith('tpf'):
 					pixel_coords[:,0] += self.pixel_offset_col
 					pixel_coords[:,1] += self.pixel_offset_row
 
@@ -918,7 +918,7 @@ class BasePhotometry(object):
 			if self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
 				self._MovementKernel = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
 				self._MovementKernel.load_series(self.lightcurve['time'], self.hdf['movement_kernel'])
-			elif self.datasource == 'tpf':
+			elif self.datasource.startswith('tpf'):
 				# Create translation kernel from the positions provided in the
 				# target pixel file.
 				# Find the timestamp closest to the reference time:
