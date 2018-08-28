@@ -138,6 +138,22 @@ def test_imagemotion_wcs():
 		np.testing.assert_raises(ValueError, imk.interpolate, times[0] - 0.5, xy)
 		np.testing.assert_raises(ValueError, imk.interpolate, times[-1] + 0.5, xy)
 
+		# Overwrite the second WCS object to be identical to the first one:
+		imk.series_kernels[1] = imk.series_kernels[0]
+		jitter = imk.interpolate(0.5*(times[0] + times[1]), xy)
+		assert(jitter.shape == xy.shape)
+		np.testing.assert_allclose(jitter, 0, atol=1e-5, rtol=1e-5)
+
+		# Add one to the reference pixels of the second:
+		# Offset should now be one pixel over the entire FOV.
+		# We have to remove the SIP headers for this test to work
+		imk.wcs_ref.sip = None
+		imk.series_kernels[1].sip = None
+		imk.series_kernels[1].wcs.crpix += 1.0
+		jitter = imk.interpolate(times[1], xy)
+		assert(jitter.shape == xy.shape)
+		np.testing.assert_allclose(jitter, 1)
+
 	print("Done")
 
 if __name__ == '__main__':
