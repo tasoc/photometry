@@ -1193,4 +1193,7 @@ class BasePhotometry(object):
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
 			self.report_details(error='I/O Output time: %f' % (default_timer() - t1))
 
+		# Store the output file in the details object for future reference:
+		self._details['filepath_lightcurve'] = filepath
+
 		return filepath

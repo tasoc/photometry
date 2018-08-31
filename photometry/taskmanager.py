@@ -65,6 +65,7 @@ class TaskManager(object):
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
 			priority INT PRIMARY KEY NOT NULL,
 			starid BIGINT NOT NULL,
+			lightcurve TEXT,
 			elaptime REAL NOT NULL,
 			mean_flux DOUBLE PRECISION,
 			variance DOUBLE PRECISION,
@@ -176,16 +177,23 @@ class TaskManager(object):
 		Parameters:
 			results (dict): Dictionary of results and diagnostics.
 		"""
+
+		# Extract details dictionary:
+		details = result.get('details', {})
+
 		# Update the status in the TODO list:
-		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (result['status'].value, result['priority']))
+		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
+			result['status'].value,
+			result['priority']
+		))
 		self.summary['tasks_run'] += 1
 		self.summary[result['status'].name] += 1
 		self.summary['STARTED'] -= 1
 
 		# Also set status of targets that were marked as "SKIPPED" by this target:
-		if 'skip_targets' in result['details'] and len(result['details']['skip_targets']) > 0:
+		if 'skip_targets' in details and len(details['skip_targets']) > 0:
 			# Create unique list of starids to be masked as skipped:
-			skip_starids = [str(starid) for starid in set(result['details']['skip_targets'])]
+			skip_starids = [str(starid) for starid in set(details['skip_targets'])]
 			skip_starids = ','.join(skip_starids)
 			# Mark them as SKIPPED in the database:
 			self.cursor.execute("UPDATE todolist SET status=5 WHERE starid IN (" + skip_starids + ") AND datasource=? AND status IS NULL;", (
@@ -194,21 +202,22 @@ class TaskManager(object):
 			self.summary['SKIPPED'] += self.cursor.rowcount
 
 		# Save additional diagnostics:
-		error_msg = result.get('details', {}).get('errors', None)
+		error_msg = details.get('errors', None)
 		if error_msg:
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, elaptime, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
+			details.get('filepath_lightcurve', None),
 			result['time'],
-			result['details'].get('pos_centroid', (None, None))[0],
-			result['details'].get('pos_centroid', (None, None))[1],
-			result['details'].get('mean_flux', None),
-			result['details'].get('variance', None),
-			result['details'].get('mask_size', None),
-			result['details'].get('contamination', None),
-			result['details'].get('stamp_resizes', 0),
+			details.get('pos_centroid', (None, None))[0],
+			details.get('pos_centroid', (None, None))[1],
+			details.get('mean_flux', None),
+			details.get('variance', None),
+			details.get('mask_size', None),
+			details.get('contamination', None),
+			details.get('stamp_resizes', 0),
 			error_msg
 		))
 		self.conn.commit()
