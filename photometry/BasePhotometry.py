@@ -367,6 +367,7 @@ class BasePhotometry(object):
 		self._sumimage = None
 		self._images_cube = None
 		self._backgrounds_cube = None
+		self._pixelflags = None
 
 	def __enter__(self):
 		return self
@@ -515,6 +516,7 @@ class BasePhotometry(object):
 		self._catalog = None
 		self._images_cube = None
 		self._backgrounds_cube = None
+		self._pixelflags = None
 		return True
 
 	def get_pixel_grid(self):
@@ -729,6 +731,31 @@ class BasePhotometry(object):
 				plt.close(fig)
 
 		return self._sumimage
+
+	@property
+	def pixelflags(self):
+		"""
+		Flags for each pixel, as defined by the TESS data product manual.
+
+		Returns:
+			numpy.array: 2D array of flags for each pixel.
+		"""
+		if self._pixelflags is None:
+			if self.datasource == 'ffi':
+				# Make aperture image:
+				# TODO: Pixels used in background calculation (value=4)
+				cols, rows = self.get_pixel_grid()
+				self._pixelflags = np.asarray(np.isfinite(self.sumimage), dtype='int32')
+				# Add mapping onto TESS output channels:
+				self._pixelflags[(45 <= cols) & (cols <= 556)] += 32 # CCD output A
+				self._pixelflags[(557 <= cols) & (cols <= 1068)] += 64 # CCD output B
+				self._pixelflags[(1069 <= cols) & (cols <= 1580)] += 128 # CCD output C
+				self._pixelflags[(1581 <= cols) & (cols <= 2092)] += 256 # CCD output D
+			else:
+				# FIXME: Use actual stamp!
+				self._pixelflags = np.asarray(self.tpf['APERTURE'].data, dtype='int32')
+
+		return self._pixelflags
 
 	@property
 	def catalog(self):
@@ -1117,15 +1144,9 @@ class BasePhotometry(object):
 
 		# Make aperture image:
 		# TODO: Pixels used in background calculation (value=4)
-		cols, rows = self.get_pixel_grid()
-		mask = np.asarray(np.isfinite(self.sumimage), dtype='int32')
+		mask = self.pixelflags
 		if self.final_mask is not None:
 			mask[self.final_mask] += 10 # 2 + 8
-		# Add mapping onto TESS output channels:
-		mask[(45 <= cols) & (cols <= 556)] += 32 # CCD output A
-		mask[(557 <= cols) & (cols <= 1068)] += 64 # CCD output B
-		mask[(1069 <= cols) & (cols <= 1580)] += 128 # CCD output C
-		mask[(1581 <= cols) & (cols <= 2092)] += 256 # CCD output D
 
 		# Construct FITS header for image extensions:
 		wcs = self.wcs[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]

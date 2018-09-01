@@ -59,7 +59,7 @@ def test_stamp():
 			assert(rows.shape == (22, 20))
 			assert(cols.shape == (22, 20))
 
-#----------------------------------------------------------------------			
+#----------------------------------------------------------------------
 def test_images():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
@@ -115,6 +115,15 @@ def test_catalog_attime():
 
 				assert(cat.colnames == pho.catalog.colnames)
 				# TODO: Add more tests here, once we change the test input data
+
+#----------------------------------------------------------------------
+def test_pixelflags():
+	with TemporaryDirectory() as OUTPUT_DIR:
+		for datasource in ('ffi', 'tpf'):
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+				print(pho.pixelflags)
+
+				assert(pho.sumimage.shape == pho.pixelflags.shape)
 
 #----------------------------------------------------------------------
 def test_wcs():
@@ -191,6 +200,7 @@ if __name__ == '__main__':
 	test_backgrounds()
 	test_catalog()
 	test_catalog_attime()
+	test_pixelflags()
 	test_wcs()
 	#test_cache()
 	test_tpf_with_other_target()
