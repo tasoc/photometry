@@ -30,7 +30,7 @@ def calc_cbv_area(catalog_row, settings):
 	# Distance to centre of the camera in degrees:
 	camera_centre_dist = sphere_distance(catalog_row['ra'], catalog_row['decl'], settings['camera_centre_ra'], settings['camera_centre_dec'])
 
-	cbv_area = settings['camera']*100 + settings['ccd']*10 
+	cbv_area = settings['camera']*100 + settings['ccd']*10
 
 	if camera_centre_dist < 0.25*camera_radius:
 		cbv_area += 1
@@ -42,7 +42,7 @@ def calc_cbv_area(catalog_row, settings):
 		cbv_area += 4
 
 	return cbv_area
-		
+
 def _ffi_todo_wrapper(args):
 	return _ffi_todo(*args)
 
@@ -53,7 +53,7 @@ def _ffi_todo(input_folder, camera, ccd):
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
 		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
+		dtype=('int64', 'int32', 'int32', 'S256', 'float32', 'int32')
 	)
 
 	# See if there are any FFIs for this camera and ccd.
@@ -125,9 +125,10 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the TODO list as a table which we will fill with targets:
+	# TODO: Could we avoid fixed-size strings in datasource column?
 	cat = Table(
 		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
+		dtype=('int64', 'int32', 'int32', 'S256', 'float32', 'int32')
 	)
 
 	logger.debug("Processing TPF file: '%s'", fname)
@@ -252,7 +253,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
 		names=('starid', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'S3', 'float32', 'int32')
+		dtype=('int64', 'int32', 'int32', 'S256', 'float32', 'int32')
 	)
 
 	# Load list of all Target Pixel files in the directory:
@@ -279,6 +280,18 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	toc = default_timer()
 	logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(tpf_files))
 
+	# Remove secondary TPF targets if they are also the primary target:
+	indx_remove = np.zeros(len(cat), dtype='bool')
+	cat.add_index('starid')
+	for k, row in enumerate(cat):
+		if row['datasource'].startswith('tpf:'):
+			indx = cat.loc['starid', row['starid']]['datasource'] == 'tpf'
+			if np.any(indx):
+				indx_remove[k] = True
+	cat.remove_indices('starid')
+	logger.info("Removing %d secondary TPF files as they are also primary", np.sum(indx_remove))
+	cat = cat[~indx_remove]
+
 	# Find all targets in Full Frame Images:
 	inputs = itertools.product([input_folder], cameras, ccds)
 
@@ -297,13 +310,13 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	pool.close()
 	pool.join()
 
-	# Sort the final list:
-	cat.sort('tmag')
-
 	# Remove duplicates!
 	logger.info("Removing duplicate entries...")
 	_, idx = np.unique(cat[('starid', 'camera', 'ccd', 'datasource')], return_index=True, axis=0)
 	cat = cat[np.sort(idx)]
+
+	# Sort the final list:
+	cat.sort('tmag')
 
 	# TODO: Can we make decisions already now on methods?
 	# tmag < 2.5 : Halo photometry
@@ -333,7 +346,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 			int(row['starid']),
 			int(row['camera']),
 			int(row['ccd']),
-			row['datasource'],
+			row['datasource'].strip(),
 			float(row['tmag']),
 			int(row['cbv_area'])
 		))
@@ -344,7 +357,17 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 	cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 	conn.commit()
+
+	# Change settings of SQLite file:
+	cursor.execute("PRAGMA page_size=4096;")
+	# Run a VACUUM of the table which will force a recreation of the
+	# underlying "pages" of the file.
+	# Please note that we are changing the "isolation_level" of the connection here,
+	# but since we closing the conmnection just after, we are not changing it back
+	conn.isolation_level = None
+	cursor.execute("VACUUM;")
+
+	# Close connection:
 	cursor.close()
 	conn.close()
-
 	logger.info("TODO done.")

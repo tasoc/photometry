@@ -40,7 +40,7 @@ if __name__ == '__main__':
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
 	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf', 'linpsf'))
-	parser.add_argument('-s', '--source', help='Data-source to load.', default='ffi', choices=('ffi', 'tpf'))
+	parser.add_argument('-s', '--source', help='Data-source to load.', default=None, choices=('ffi', 'tpf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
@@ -88,8 +88,9 @@ if __name__ == '__main__':
 	with TaskManager(input_folder) as tm:
 		if args.starid is not None:
 			task = tm.get_task(starid=args.starid)
-			task['method'] = args.method
-			task['datasource'] = args.source
+			if task is None: parser.error("The STARID '%d' was not found in TODOLIST." % args.starid)
+			if args.method: task['method'] = args.method
+			if args.source: task['datasource'] = args.source
 		elif args.random:	
 			task = tm.get_random_task()
 

@@ -353,7 +353,7 @@ class BasePhotometry(object):
 
 		# Project target position onto the pixel plane:
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
-		if self.datasource == 'tpf':
+		if self.datasource.startswith('tpf'):
 			self.target_pos_column += self.pixel_offset_col
 			self.target_pos_row += self.pixel_offset_row
 		logger.info("Target column: %f", self.target_pos_column)
@@ -492,11 +492,18 @@ class BasePhotometry(object):
 				self._stamp = self._max_stamp
 
 		# Limit the stamp to not go outside the limits of the images:
+		# TODO: We really should have a thourgh cleanup in the self._stamp, self._maxstamp and self.pixel_offset_* mess!
 		self._stamp = list(self._stamp)
-		self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0]))
-		self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1]))
-		self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2]))
-		self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3]))
+		if self.datasource == 'ffi':
+			self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0] + self.pixel_offset_row))
+			self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1] + self.pixel_offset_row))
+			self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2] + self.pixel_offset_col))
+			self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3] + self.pixel_offset_col))
+		else:
+			self._stamp[0] = int(np.maximum(self._stamp[0], self._max_stamp[0]))
+			self._stamp[1] = int(np.minimum(self._stamp[1], self._max_stamp[1]))
+			self._stamp[2] = int(np.maximum(self._stamp[2], self._max_stamp[2]))
+			self._stamp[3] = int(np.minimum(self._stamp[3], self._max_stamp[3]))
 		self._stamp = tuple(self._stamp)
 
 		# Sanity checks:
@@ -795,7 +802,7 @@ class BasePhotometry(object):
 			], dtype='float64')
 			# Because the TPF world coordinate solution is relative to the stamp,
 			# add the pixel offset to these:
-			if self.datasource == 'tpf':
+			if self.datasource.startswith('tpf'):
 				corners[:, 0] -= self.pixel_offset_col
 				corners[:, 1] -= self.pixel_offset_row
 
@@ -883,7 +890,7 @@ class BasePhotometry(object):
 
 				# Because the TPF world coordinate solution is relative to the stamp,
 				# add the pixel offset to these:
-				if self.datasource == 'tpf':
+				if self.datasource.startswith('tpf'):
 					pixel_coords[:,0] += self.pixel_offset_col
 					pixel_coords[:,1] += self.pixel_offset_row
 
@@ -903,27 +910,17 @@ class BasePhotometry(object):
 
 		return self._catalog
 
-	def catalog_attime(self, time, correct_jitter=True):
+	@property
+	def MovementKernel(self):
 		"""
-		Catalog of stars, calculated at a given time-stamp, so CCD positions are
-		modified according to the measured spacecraft jitter.
-
-		Parameters:
-			time (float): Time in MJD when to calculate catalog.
-			correct_jitter (boolean): Correct for jitter if true.
-
-		Returns:
-			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`, but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated at the given timestamp.
-
-		See Also:
-			:py:func:`catalog`
+		Movement Kernel which allows calculation of positions on the focal plane as a function of time.
+		Instance of :py:class:`image_motion.ImageMovementKernel`.
 		"""
-
 		if self._MovementKernel is None:
 			if self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
 				self._MovementKernel = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
 				self._MovementKernel.load_series(self.lightcurve['time'], self.hdf['movement_kernel'])
-			elif self.datasource == 'tpf':
+			elif self.datasource.startswith('tpf'):
 				# Create translation kernel from the positions provided in the
 				# target pixel file.
 				# Find the timestamp closest to the reference time:
@@ -943,15 +940,32 @@ class BasePhotometry(object):
 				# unaltered catalog:
 				self._MovementKernel = 'unchanged'
 
+		return self._MovementKernel
+
+	def catalog_attime(self, time):
+		"""
+		Catalog of stars, calculated at a given time-stamp, so CCD positions are
+		modified according to the measured spacecraft jitter.
+
+		Parameters:
+			time (float): Time in MJD when to calculate catalog.
+
+		Returns:
+			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`, but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated at the given timestamp.
+
+		See Also:
+			:py:func:`catalog`
+		"""
+
 		# If we didn't have enough information, just return the unchanged catalog:
-		if self._MovementKernel == 'unchanged':
+		if self.MovementKernel == 'unchanged':
 			return self.catalog
 
 		# Get the reference catalog:
 		xy = np.column_stack((self.catalog['column'], self.catalog['row']))
 
 		# Lookup the position corrections in CCD coordinates:
-		jitter = self._MovementKernel.interpolate(time, xy)
+		jitter = self.MovementKernel.interpolate(time, xy)
 
 		# Modify the reference catalog:
 		cat = deepcopy(self.catalog)
@@ -1046,6 +1060,16 @@ class BasePhotometry(object):
 		# Get the current date for the files:
 		now = datetime.datetime.now()
 
+		# Extract which photmetric method is being used by checking the
+		# name of the class that is running:
+		photmethod = {
+			'BasePhotometry': 'base',
+			'AperturePhotometry': 'aperture',
+			'PSFPhotometry': 'psf',
+			'LinPSFPhotometry': 'linpsf',
+			'HaloPhotometry': 'halo'
+		}.get(self.__class__.__name__, None)
+
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3, 'number of standard extensions')
@@ -1059,7 +1083,7 @@ class BasePhotometry(object):
 		hdu.header['CAMERA'] = (self.camera, 'Camera number')
 		hdu.header['CCD'] = (self.ccd, 'CCD number')
 		hdu.header['SECTOR'] = (self.sector, 'Observing sector')
-		#hdu.header['PHOTMET'] = ('aperture', 'Photometric method used')
+		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Versions:
 		#hdu.header['VERPIXEL'] = (__version__, 'version of K2P2 pipeline')
@@ -1173,5 +1197,8 @@ class BasePhotometry(object):
 			t1 = default_timer()
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
 			self.report_details(error='I/O Output time: %f' % (default_timer() - t1))
+
+		# Store the output file in the details object for future reference:
+		self._details['filepath_lightcurve'] = filepath
 
 		return filepath

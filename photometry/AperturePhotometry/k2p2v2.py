@@ -53,6 +53,9 @@ mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
 class K2P2NoFlux(Exception):
 	pass
 
+class K2P2NoStars(Exception):
+	pass
+
 #==============================================================================
 # Mask outline
 #==============================================================================
@@ -366,8 +369,13 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 	if len(Flux) == 0:
 		raise K2P2NoFlux("No measured flux in sum-image")
 
-	# Cut away the top 10% of the fluxes:
+	# Cut away the top 15% of the fluxes:
 	flux_cut = stats.trim1(np.sort(Flux), 0.15)
+	# Also doa cut on the absolute values of pixel - This helps in cases where
+	# the image is dominated by saturated pixels. The exact value is of course
+	# in principle dependent on the CCD, but we have found this value to be
+	# reasonable in TESS simulated data:
+	flux_cut = flux_cut[flux_cut < 70000]
 
 	# Estimate the bandwidth we are going to use for the background:
 	background_bandwidth = select_bandwidth(flux_cut, bw='scott', kernel='gau')
@@ -409,6 +417,9 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 	idx = (SumImage > CUT)
 	X2 = X[idx]
 	Y2 = Y[idx]
+
+	if np.all(~idx):
+		raise K2P2NoStars("No flux above threshold")
 
 	logger.debug("  Min for cluster is: %f", min_for_cluster)
 	logger.debug("  Cluster radius is: %f", cluster_radius)
