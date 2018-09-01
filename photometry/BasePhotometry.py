@@ -176,6 +176,10 @@ class BasePhotometry(object):
 					load_into_cache = True
 				attrs = hdf5_cache[filepath_hdf5] # Pointer to global variable
 
+			# Bugfix for Kepler:
+			if attrs:
+				load_into_cache = True
+
 			# Open the HDF5 file for reading if we are not holding everything in memory:
 			if load_into_cache or cache != 'full':
 				self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
