@@ -1,14 +1,19 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
 
-"""K2 Pixel Photometry (K2P2)
+"""K2 Pixel Photometry (K2P\ :sup:`2`)
 
 Create pixel masks and extract light curves from Kepler and K2 pixel data
 using clustering algorithms.
 
-@version: $Revision: 723 $
-@author:  Rasmus Handberg & Mikkel Lund ($Author: rasmush $)
-@date:    $Date: 2016-09-28 10:47:06 +0200 (Wed, 28 Sep 2016) $"""
+To read more about the methods used, please see the following papers:
+
+* Lund et al. (2015): K2P\ :sup:`2` - A photometric pipeline for the K2 mission `<https://doi.org/10.1088/0004-637X/806/1/30>`_
+* Handberg & Lund (2017): K2P\ :sup:`2`: Reduced data from campaigns 0-4 of the K2 mission `<https://doi.org/10.1051/0004-6361/201527753>`_
+
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Mikkel Lund <mnl@phys.au.dk>
+"""
 
 #==============================================================================
 # TODO
@@ -30,12 +35,11 @@ import numpy as np
 from ..plots import plot_image, save_figure, plt
 import matplotlib as mpl
 from matplotlib.backends.backend_pdf import PdfPages
-from scipy import stats
+from scipy import stats, ndimage
+from scipy import optimize as OP
 from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from statsmodels.nonparametric.bandwidths import select_bandwidth
-from scipy import ndimage
 import os
-from scipy import optimize as OP
 from sklearn.cluster import DBSCAN
 from skimage.feature import peak_local_max
 from skimage.morphology import watershed
