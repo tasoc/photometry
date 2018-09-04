@@ -186,15 +186,16 @@ class BasePhotometry(object):
 				logger.debug('Loading basic data into cache...')
 
 				# Start filling out the basic vectors:
-				attrs['lightcurve'] = Table()
-				attrs['lightcurve']['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
-				N = len(attrs['lightcurve']['time'])
-				attrs['lightcurve']['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
-				attrs['lightcurve']['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
+				self.lightcurve = Table()
+				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
+				N = len(self.lightcurve['time'])
+				self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
+				self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
 				if 'timecorr' in self.hdf:
-					attrs['lightcurve']['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
+					self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
 				else:
-					attrs['lightcurve']['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+				attrs['lightcurve'] = self.lightcurve
 
 				# World Coordinate System solution:
 				if isinstance(self.hdf['wcs'], h5py.Group):
@@ -216,9 +217,7 @@ class BasePhotometry(object):
 				attrs['n_readout'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
 
 				# Load MovementKernel into memory:
-				# TODO: But what if its not needed?!
-				attrs['_MovementKernel'] = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
-				attrs['_MovementKernel'].load_series(attrs['lightcurve']['time'], self.hdf['movement_kernel'])
+				attrs['_MovementKernel'] = self.MovementKernel
 
 				# The full sum-image:
 				attrs['_sumimage_full'] = np.asarray(self.hdf['sumimage'])
@@ -914,7 +913,11 @@ class BasePhotometry(object):
 		Instance of :py:class:`image_motion.ImageMovementKernel`.
 		"""
 		if self._MovementKernel is None:
-			if self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
+			default_movement_kernel = 'hdf5' # The default kernel to use - set to 'wcs' if we should use WCS instead
+			if self.datasource == 'ffi' and default_movement_kernel == 'wcs' and isinstance(self.hdf['wcs'], h5py.Group):
+				self._MovementKernel = ImageMovementKernel(warpmode='wcs', wcs_ref=attrs['wcs'])
+				self._MovementKernel.load_series(self.lightcurve['time'], [self.hdf['wcs'][dset][0] for dset in self.hdf['wcs']])
+			elif self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
 				self._MovementKernel = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
 				self._MovementKernel.load_series(self.lightcurve['time'], self.hdf['movement_kernel'])
 			elif self.datasource.startswith('tpf'):
@@ -935,7 +938,7 @@ class BasePhotometry(object):
 				# If we reached this point, we dont have enough information to
 				# define the ImageMovementKernel, so we should just return the
 				# unaltered catalog:
-				self._MovementKernel = 'unchanged'
+				self._MovementKernel = ImageMovementKernel(warpmode='unchanged')
 
 		return self._MovementKernel
 
@@ -955,7 +958,7 @@ class BasePhotometry(object):
 		"""
 
 		# If we didn't have enough information, just return the unchanged catalog:
-		if self.MovementKernel == 'unchanged':
+		if self.MovementKernel.warpmode == 'unchanged':
 			return self.catalog
 
 		# Get the reference catalog:
