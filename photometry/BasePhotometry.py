@@ -409,7 +409,7 @@ class BasePhotometry(object):
 		"""
 		# Decide how many pixels to use based on lookup tables as a function of Tmag:
 		Ncolumns = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0]), np.array([19, 15, 11]))
-		Nrows = np.interp(self.target_tmag, np.array([1.0, 8.0, 9.0, 10.0]), np.array([300, 19, 15, 11]))
+		Nrows = np.interp(self.target_tmag, np.array([1.0, 1.7, 3.5, 8.0, 9.0, 10.0]), np.array([300, 150, 45, 19, 15, 11]))
 		# Round off and make sure we have minimum 11 pixels:
 		Nrows = np.maximum(np.ceil(Nrows), 11)
 		Ncolumns = np.maximum(np.ceil(Ncolumns), 11)
