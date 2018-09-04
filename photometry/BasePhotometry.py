@@ -407,11 +407,12 @@ class BasePhotometry(object):
 		See Also:
 			:py:func:`resize_stamp`
 		"""
-
 		# Decide how many pixels to use based on lookup tables as a function of Tmag:
-		Npixels = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0, 12.0, 14.0, 16.0]), np.array([350.0, 200.0, 125.0, 100.0, 50.0, 40.0]))
-		Nrows = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
-		Ncolumns = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
+		Ncolumns = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0]), np.array([19, 15, 11]))
+		Nrows = np.interp(self.target_tmag, np.array([1.0, 8.0, 9.0, 10.0]), np.array([300, 19, 15, 11]))
+		# Round off and make sure we have minimum 11 pixels:
+		Nrows = np.maximum(np.ceil(Nrows), 11)
+		Ncolumns = np.maximum(np.ceil(Ncolumns), 11)
 		return Nrows, Ncolumns
 
 	def resize_stamp(self, down=None, up=None, left=None, right=None):

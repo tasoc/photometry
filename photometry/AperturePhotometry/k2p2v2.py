@@ -36,7 +36,7 @@ from ..plots import plot_image, save_figure, plt
 import matplotlib as mpl
 from matplotlib.backends.backend_pdf import PdfPages
 from scipy import stats, ndimage
-from scipy import optimize as OP
+from scipy.optimize import minimize
 from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from statsmodels.nonparametric.bandwidths import select_bandwidth
 import os
@@ -52,6 +52,14 @@ import logging
 
 # Constants:
 mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
+
+# Saturation limit (magnitudes) above which we allow targets
+# to extend their overflow columns:
+saturation_limit = 7.0
+
+#==============================================================================
+# Exceptions
+#==============================================================================
 
 # Custom exceptions we may raise:
 class K2P2NoFlux(Exception):
@@ -392,7 +400,7 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 	# MODE
 	def kernel_opt(x): return -1*kernel.evaluate(x)
 	max_guess = kernel.support[np.argmax(kernel.density)]
-	MODE = OP.fmin_powell(kernel_opt, max_guess, disp=0)
+	MODE = minimize(kernel_opt, max_guess, method='Powell').x
 
 	# MAD (around mode)
 	MAD1 = mad_to_sigma * nanmedian( np.abs( Flux[(Flux < MODE)] - MODE ) )
@@ -541,6 +549,35 @@ def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=
 			# be added to the mask:
 			saturated_mask, pixels_added = k2p2_saturated(SumImage, MASKS, idx)
 			logger.info("Overflow will add %d pixels in total to the masks.", pixels_added)
+
+			# If we have a catalog of stars, we will only allow stars above the saturation
+			# limit to get their masks extended:
+			if catalog is not None:
+				# Filter that catalog, only keeping stars actully inside current image:
+				c = np.asarray(np.round(catalog[:, 0]), dtype='int32')
+				r = np.asarray(np.round(catalog[:, 1]), dtype='int32')
+				tmag = catalog[:, 2]
+				indx = (c >= 0) & (c < SumImage.shape[1]) & (r >= 0) & (r < SumImage.shape[0])
+				c = c[indx]
+				r = r[indx]
+				tmag = tmag[indx]
+				# Loop through the masks:
+				for u in range(no_masks):
+					if np.any(saturated_mask[u, :, :]):
+						# Find out which stars fall inside this mask:
+						which_stars = np.asarray(MASKS[u, :, :][r, c], dtype='bool')
+						if np.any(which_stars):
+							# Only allow extension of columns if the combined light of
+							# the targts in the mask exceeds the saturation limit:
+							mags_in_mask = tmag[which_stars]
+							mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
+							if mags_total > saturation_limit:
+								# The combined magnitude of the targets is now
+								# above saturation
+								saturated_mask[u, :, :] = False
+						else:
+							# Do not add saturation columns if no stars were found:
+							saturated_mask[u, :, :] = False
 
 			# If we are going to plot later on, make a note
 			# of how the outline of the masks looked before
