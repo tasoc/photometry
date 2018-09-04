@@ -111,6 +111,18 @@ def k2p2maks(frame, no_combined_images, threshold=0.5):
 # DBSCAN subroutine
 #==============================================================================
 def run_DBSCAN(X2, Y2, cluster_radius, min_for_cluster):
+	"""
+	Run the DBSCAN clustering algorithm.
+
+	Parameters:
+		cluster_radius (float): Radius from each point to consider inside cluster.
+		min_for_cluster (integer): Minimum number of points to consider a cluster.
+
+	Returns:
+		ndarray: Coordinates of points.
+		ndarray: Labels of each point.
+		ndarray: Boolean array which is `True` if the correspondig point is considered a core point.
+	"""
 
 	XX = np.array([[x,y] for x,y in zip(X2,Y2)])
 
@@ -127,6 +139,9 @@ def run_DBSCAN(X2, Y2, cluster_radius, min_for_cluster):
 # Segment clusters using watershed
 #==============================================================================
 def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=None, ws_thres=0.1, ws_footprint=3, ws_blur=0.5, ws_alg='flux', output_folder=None, catalog=None):
+	"""
+	Segment clusters using Watershed.
+	"""
 
 	# Get logger for printing messages:
 	logger = logging.getLogger(__name__)
@@ -352,24 +367,46 @@ def k2p2_saturated(SumImage, MASKS, idx):
 	return saturated_mask, pixels_added
 
 #==============================================================================
-#
+# Create pixel masks from Sum-image.
 #==============================================================================
-def k2p2FixFromSum(SumImage, pixfile, thresh=1, output_folder=None, plot_folder=None, show_plot=True,
+def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, show_plot=True,
 				   min_no_pixels_in_mask=8, min_for_cluster=4, cluster_radius=np.sqrt(2),
 				   segmentation=True, ws_alg='flux', ws_blur=0.5, ws_thres=0.05, ws_footprint=3,
 				   extend_overflow=True, catalog=None):
+	"""
+	Create pixel masks from Sum-image.
+
+	Parameters:
+		SumImage (ndarray): Sum-image.
+		thres (float, optional): Threshold for significant flux. The threshold is calculated as MODE+thres*MAD. Default=1.
+		output_folder (string, optional): Path to directory where output should be saved. Default=None.
+		plot_folder (string, optional): Path to directory where plots should be saved. Default=None.
+		show_plot (boolean, optional): Should plots be shown to the user? Default=True.
+		min_no_pixels_in_mask (integer, optional): Minimim number of pixels to constitute a mask.
+		min_for_cluster (integer, optional): Minimum number of pixels to be considered a cluster in DBSCAN clustering.
+		cluster_radius (float, optional): Radius around points to consider cluster in DBSCAN clustering.
+		segmentation (boolean, optional): Perform segmentation of clusters using Watershed segmentation.
+		ws_alg (string, optional): Watershed method to use. Default='flux'.
+		ws_thres (float, optional): Threshold for watershed segmentation.
+		ws_footprint (integer, optional): Footprint to use in watershed segmentation.
+		extend_overflow (boolean, optional): Enable extension of overflow columns for bright stars.
+		catalog (ndarray, optional): Catalog of stars as an array with three columns (column, row and magnitude). If this is provided
+			the results will only allow masks to be returned for stars in the catalog and the information is
+			also used in the extension of overflow columns.
+
+	Returns:
+		tuple: Tuple with two elements: A 3D boolean ndarray of masks and a float indicating the bandwidth used for the estimation background-levels.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	.. codeauthor:: Mikkel Lund <mnl@phys.au.dk>
+	"""
 
 	# Get logger for printing messages:
 	logger = logging.getLogger(__name__)
 	logger.info("Creating masks from sum-image...")
 
-	if pixfile is None:
-		NY, NX = np.shape(SumImage)
-		ori_mask = ~np.isnan(SumImage)
-	else:
-		ori_mask = pixfile[2].data > 0
-		NX = pixfile[2].header['NAXIS1']
-		NY = pixfile[2].header['NAXIS2']
+	NY, NX = np.shape(SumImage)
+	ori_mask = ~np.isnan(SumImage)
 	X, Y = np.meshgrid(np.arange(NX), np.arange(NY))
 
 	# Cut out pixels from sum image which were collected and contains flux
