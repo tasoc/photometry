@@ -186,7 +186,6 @@ class BasePhotometry(object):
 				logger.debug('Loading basic data into cache...')
 
 				# Start filling out the basic vectors:
-				self.lightcurve = Table()
 				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
 				N = len(self.lightcurve['time'])
 				self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
@@ -204,7 +203,8 @@ class BasePhotometry(object):
 				else:
 					hdr_string = self.hdf['wcs'][0]
 				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-				attrs['wcs'] = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+				self.wcs = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+				attrs['wcs'] = self.wcs
 
 				# Get shape of sumimage from hdf5 file:
 				attrs['_max_stamp'] = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
@@ -915,7 +915,7 @@ class BasePhotometry(object):
 		if self._MovementKernel is None:
 			default_movement_kernel = 'hdf5' # The default kernel to use - set to 'wcs' if we should use WCS instead
 			if self.datasource == 'ffi' and default_movement_kernel == 'wcs' and isinstance(self.hdf['wcs'], h5py.Group):
-				self._MovementKernel = ImageMovementKernel(warpmode='wcs', wcs_ref=attrs['wcs'])
+				self._MovementKernel = ImageMovementKernel(warpmode='wcs', wcs_ref=self.wcs)
 				self._MovementKernel.load_series(self.lightcurve['time'], [self.hdf['wcs'][dset][0] for dset in self.hdf['wcs']])
 			elif self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
 				self._MovementKernel = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
@@ -1193,9 +1193,7 @@ class BasePhotometry(object):
 		# Write to file:
 		filepath = os.path.join(output_folder, filename)
 		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
-			t1 = default_timer()
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
-			self.report_details(error='I/O Output time: %f' % (default_timer() - t1))
 
 		# Store the output file in the details object for future reference:
 		self._details['filepath_lightcurve'] = filepath
