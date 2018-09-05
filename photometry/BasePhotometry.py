@@ -26,7 +26,6 @@ from copy import deepcopy
 from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian, ss
-from timeit import default_timer
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
 from .utilities import find_tpf_files
@@ -115,6 +114,7 @@ class BasePhotometry(object):
 		# Store the input:
 		self.starid = starid
 		self.input_folder = input_folder
+		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
 
@@ -131,8 +131,8 @@ class BasePhotometry(object):
 
 		# Directory where output files will be saved:
 		self.output_folder = os.path.join(
-			output_folder,
-			self.datasource,
+			self.output_folder_base,
+			self.datasource[:3], # Only three first characters for cases with "tpf:XXXXXX"
 			'{0:011d}'.format(self.starid)[:5]
 		)
 
@@ -1085,7 +1085,7 @@ class BasePhotometry(object):
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Versions:
-		#hdu.header['VERPIXEL'] = (__version__, 'version of K2P2 pipeline')
+		#hdu.header['VERPIPE'] = (__version__, 'Version of photometry pipeline')
 		#hdu.header['DATA_REL'] = (__version__, 'version of K2P2 pipeline')
 
 		# Object properties:
@@ -1186,7 +1186,7 @@ class BasePhotometry(object):
 		filename = 'tess{starid:011d}-s{sector:02d}-{cadence:s}-v{version:02d}-tasoc_lc.fits'.format(
 			starid=self.starid,
 			sector=self.sector,
-			cadence={'ffi': 'ffi', 'tpf': '120'}[self.datasource],
+			cadence='120' if self.datasource.startswith('tpf') else 'ffi',
 			version=0 # FIXME: This needs to be set
 		)
 
@@ -1196,6 +1196,6 @@ class BasePhotometry(object):
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
 
 		# Store the output file in the details object for future reference:
-		self._details['filepath_lightcurve'] = filepath
+		self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base)
 
 		return filepath
