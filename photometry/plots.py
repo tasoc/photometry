@@ -49,6 +49,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if scale == 'log' or scale == 'sqrt':
 		img_min = np.nanmin(image)
 		if img_min <= 0:
+			image = image.copy()
 			image += np.abs(img_min) + 1.0
 
 	#print(scale, np.all(np.isfinite(image)), np.all(image > 0), np.min(image), np.max(image))
@@ -113,10 +114,8 @@ def mark_pixels(maskidxs, axes, edgecolor='red'):
 		axes (axes object): Axes to add the marking to.
 		color (string): Color of the marking. Default is ``'red'``.
 	'''
-	# Set center to lower left of pixel
-	print(maskidxs)
+	# Move down half a pixel:
 	maskidxs = maskidxs - 0.5
-	print(maskidxs)
 
 	# Mark each pixel in maskidxs array:
 	for maskidx in maskidxs:

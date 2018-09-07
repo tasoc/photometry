@@ -11,13 +11,14 @@ from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry
 
 #------------------------------------------------------------------------------
 class _PhotErrorDummy(object):
-	def __init__(self, *args, **kwargs):
+	def __init__(self, traceback, *args, **kwargs):
 		self.status = STATUS.ERROR
-		self._details = {}
+		self._details = {'errors': traceback} if traceback else {}
 
 #------------------------------------------------------------------------------
 def _try_photometry(PhotClass, *args, **kwargs):
 	logger = logging.getLogger(__name__)
+	tbcollect = []
 	try:
 		with PhotClass(*args, **kwargs) as pho:
 			pho.photometry()
@@ -39,12 +40,12 @@ def _try_photometry(PhotClass, *args, **kwargs):
 			pho._status = STATUS.ERROR
 			pho.report_details(error=tb)
 		except:
-			pass
+			tbcollect.append(tb)
 
 	try:
 		return pho
 	except UnboundLocalError:
-		return _PhotErrorDummy(*args, **kwargs)
+		return _PhotErrorDummy(tbcollect, *args, **kwargs)
 
 #------------------------------------------------------------------------------
 def tessphot(method=None, *args, **kwargs):

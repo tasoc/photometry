@@ -77,6 +77,8 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 				reference_time DOUBLE PRECISION NOT NULL,
 				epoch DOUBLE PRECISION NOT NULL,
 				coord_buffer DOUBLE PRECISION NOT NULL,
+				camera_centre_ra DOUBLE PRECISION NOT NULL,
+				camera_centre_dec DOUBLE PRECISION NOT NULL,
 				footprint TEXT NOT NULL
 			);""")
 
@@ -90,15 +92,17 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 			);""")
 
 			# Get the footprint on the sky of this sector:
-			tasocdb.cursor.execute("SELECT footprint FROM tasoc.pointings WHERE sector=%s AND camera=%s AND ccd=%s;", (
+			tasocdb.cursor.execute("SELECT footprint,camera_centre_ra,camera_centre_dec FROM tasoc.pointings WHERE sector=%s AND camera=%s AND ccd=%s;", (
 				sector,
 				camera,
 				ccd
 			))
-			footprint = tasocdb.cursor.fetchone()
-			if footprint is None:
+			row = tasocdb.cursor.fetchone()
+			if row is None:
 				raise IOError("The given sector, camera, ccd combination was not found in TASOC database: (%s,%s,%s)", sector, camera, ccd)
-			footprint = footprint[0]
+			footprint = row[0]
+			camera_centre_ra = row[1]
+			camera_centre_dec = row[2]
 
 			# Transform footprint into numpy array:
 			a = footprint[2:-2].split('),(')
@@ -118,21 +122,22 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 			logger.info(footprint)
 
 			# Save settings to SQLite:
-			cursor.execute("INSERT INTO settings (sector,camera,ccd,reference_time,epoch,coord_buffer,footprint) VALUES (?,?,?,?,?,?,?);", (
+			cursor.execute("INSERT INTO settings (sector,camera,ccd,reference_time,epoch,coord_buffer,footprint,camera_centre_ra,camera_centre_dec) VALUES (?,?,?,?,?,?,?,?,?);", (
 				sector,
 				camera,
 				ccd,
 				sector_reference_time,
 				epoch + 2000.0,
 				coord_buffer,
-				footprint
+				footprint,
+				camera_centre_ra,
+				camera_centre_dec
 			))
 			conn.commit()
 
 			# Query the TESS Input Catalog table for all stars in the footprint.
 			# This is a MASSIVE table, so this query may take a while.
-			# Don't include anything left over from before 2016-04-11 (TIC-2).
-			tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",version FROM tasoc.tic WHERE q3c_poly_query(ra, decl, %s) AND version > '2016-04-11'::date;", (
+			tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s) AND disposition IS NULL;", (
 				footprint,
 			))
 
@@ -161,6 +166,16 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 			cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
 			cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
 			conn.commit()
+
+			# Change settings of SQLite file:
+			cursor.execute("PRAGMA page_size=4096;")
+			# Run a VACUUM of the table which will force a recreation of the
+			# underlying "pages" of the file.
+			# Please note that we are changing the "isolation_level" of the connection here,
+			# but since we closing the connnection just after, we are not changing it back
+			conn.isolation_level = None
+			cursor.execute("VACUUM;")
+
 			cursor.close()
 			conn.close()
 

@@ -41,6 +41,7 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Create TODO file for TESS Photometry.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-o', '--overwrite', help='Overwrite existing TODO file.', action='store_true')
 	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
 	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
 	parser.add_argument('input_folder', type=str, help='TESSPhot input directory to create TODO file in.', nargs='?', default=None)
@@ -69,4 +70,4 @@ if __name__ == '__main__':
 		parser.error("The given path does not exist or is not a directory")
 
 	# Run the program:
-	make_todo(args.input_folder, cameras=args.camera, ccds=args.ccd)
+	make_todo(args.input_folder, cameras=args.camera, ccds=args.ccd, overwrite=args.overwrite)

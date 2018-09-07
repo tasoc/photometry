@@ -185,7 +185,6 @@ class LinPSFPhotometry(BasePhotometry):
 
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
-
 			# Get catalog at current time in MJD:
 			cat = self.catalog_attime(self.lightcurve['time'][k])
 
@@ -257,12 +256,20 @@ class LinPSFPhotometry(BasePhotometry):
 				logger.debug('PSF fitted result is: ' + np.str(result))
 
 				# Generate fitted and residual images from A and fitted fluxes:
+				logger.debug('Shape of A is: ' + np.str(np.shape(A)))
+				logger.debug('Shape of img is: ' + np.str(np.shape(img)))
+				logger.debug('Shape of fluxes is: ' + np.str(np.shape(fluxes)))
+				logger.debug('Shape of A*fluxes is: ' + np.str(np.shape(A*fluxes)))
+				logger.debug('Shape of np.sum(A*fluxes, 1) is: ' + np.str(np.shape(np.sum(A*fluxes, 1))))
 				img_fit = np.reshape(np.sum(A*fluxes, 1), img.shape)
+#				img_fit = np.transpose(np.reshape(np.flip(np.sum(A*fluxes, 1), 0), np.flip(img.shape,0)))
+#				img_fit = np.transpose(np.reshape(np.sum(A*fluxes, 1), np.flip(img.shape,axis=0)))
 				img_res = img - img_fit
 
-				# Get indices of mask in residual image:
-#				res_mask = four_pixel_mask(target_row, target_col)
-				res_mask_2D = nine_pixel_mask(target_row, target_col)
+				# Get indices of mask in residual image (only first time step):
+				if k == 0:
+	#				res_mask_2D = four_pixel_mask(target_row, target_col)
+					res_mask_2D = nine_pixel_mask(target_row, target_col)
 				logger.debug('Indices of residual mask, 2D: ' + np.array_str(res_mask_2D))
 				res_mask_for_ravel = ([idx[0] for idx in res_mask_2D],[idx[1] for idx in res_mask_2D])
 				res_mask = np.ravel_multi_index(res_mask_for_ravel, dims=img.shape)
@@ -283,7 +290,8 @@ class LinPSFPhotometry(BasePhotometry):
 				# Add current fitted fluxes for contamination calculation:
 				fluxes_sum += fluxes
 
-				if self.plot:
+				if self.plot and k==0: # plot first time step
+					logger.info("Plotting time step:" + np.str(k))
 					# Make plot for debugging:
 					fig = plt.figure()
 
@@ -309,7 +317,7 @@ class LinPSFPhotometry(BasePhotometry):
 
 					# Save figure to file:
 					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
-					save_figure(os.path.join(self.plot_folder, fig_name))
+					save_figure(os.path.join(self.plot_folder, fig_name), format='png')
 					plt.close(fig)
 
 			# Pass result if fit failed:

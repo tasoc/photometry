@@ -14,6 +14,7 @@ from astropy.table import Table, Column
 from astropy.wcs import WCS
 from copy import deepcopy
 import sqlite3
+from multiprocessing import Pool
 
 # Import stuff from the photometry directory:
 import sys
@@ -26,8 +27,11 @@ from photometry.utilities import mag2flux, add_proper_motion
 
 
 class simulateFITS(object):
-	def __init__(self, Nstars = 5, Ntimes = 5,
-			save_images=True, overwrite_images=True):
+	def __init__(self, Nstars = 2, Ntimes = 2,
+			save_images=True, overwrite_images=True,
+			include_jitter=True, include_noise=True,
+			include_bkg=True, inaccurate_catalog=False,
+			Nvariables=1, multiprocess=True):
 		"""
 		Simulate FITS images with stars, background and noise.
 
@@ -37,12 +41,18 @@ class simulateFITS(object):
 		photometry methods in the photometry pipeline.
 
 		Parameters:
-			Nstars (int): Number of stars in image. Default is 5.
-			Ntimes (int): Number of time steps in timeseries. Default is 5.
+			Nstars (int): Number of stars in image. Default is 2.
+			Ntimes (int): Number of time steps in timeseries. Default is 2.
 			save_images (boolean): True if images and catalog should be saved.
 			Default is True.
 			overwrite_images (boolean): True if image and catalog files should
 			be overwritten. Default is True.
+			include_jitter (boolean): True if jitter is to be used (default).
+			include_noise (boolean): True if noise is to be added to the image (default).
+			include_bkg (boolean): True if background is to be added to the image (default).
+			inaccurate_catalog (boolean): True if catalog positional inaccuracies at Gaia level should be included (default is False).
+			Nvariables (int): Number of stars that are variable (default is 1).
+			multiprocess (boolean): True if multiprocessing is to be used (default).
 
 		Output:
 			The output FITS images are saved to a subdirectory images in the
@@ -77,6 +87,13 @@ class simulateFITS(object):
 		self.Ntimes = np.int(Ntimes) # Number of images in time series
 		self.save_images = save_images # True if images+catalog should be saved
 		self.overwrite_images = overwrite_images # True if overwrite in saving
+		self.include_jitter = include_jitter
+		self.include_noise = include_noise
+		self.include_bkg = include_bkg
+		self.inaccurate_catalog = inaccurate_catalog
+		self.Nvariables = Nvariables # Number of oscillating stars
+		self.multiprocess = multiprocess
+
 
 		# Get output directory from enviroment variable:
 		self.output_folder = os.environ.get('TESSPHOT_INPUT',
@@ -84,8 +101,8 @@ class simulateFITS(object):
 
 		# Set image parameters:
 		self.pixel_scale = 21.0 # Size of single pixel in arcsecs
-		self.Nrows = 128
-		self.Ncols = 128
+		self.Nrows = 256
+		self.Ncols = 256
 		self.stamp = (0,self.Nrows,0,self.Ncols)
 		self.coord_zero_point = [0.,0.] # Zero point
 		self.sector = 0
@@ -95,7 +112,6 @@ class simulateFITS(object):
 		self.TmagHigh = 16.
 		self.gain = 5.3 # electrons/count, CCD output gain (ETE6 estimate)
 
-		# TODO: move part of __init__ to a file run_simulateFITS in parent dir
 		# Define time stamps:
 		self.exposure_time = 1800. # 30 min
 		self.times = self.make_times(cadence=self.exposure_time)
@@ -110,16 +126,12 @@ class simulateFITS(object):
 		self.w.wcs.ctype = ["RA---AIR", "DEC--AIR"]
 		self.header = self.w.to_header()
 
-		# Set random number generator seed:
+		# Set random number generator seeds:
 		random.seed(0)
 		np.random.seed(0)
 
 		# Make catalog:
 		self.catalog = self.make_catalog()
-
-		# Adjust catalog for debugging purposes:
-#		self.catalog['row'][4] = 13
-#		self.catalog['col'][4] = 13
 
 		# Save catalog to txt.gz file:
 		self.make_catalog_file(self.catalog)
@@ -127,27 +139,43 @@ class simulateFITS(object):
 		# Generate sqlite catalog file from catalog.txt.gzfile:
 		self.create_catalog(self.sector, self.camera, self.ccd)
 
-		# Generate TODO list:
-		self.create_todo(sector=self.sector)
+		# Generate TODO list for each photometry method:
+		for method in ['linpsf','aperture','psf']:
+			self.create_todo(sector=self.sector, method=method, filename='todo_'+method+'.sqlite')
 
 		# Apply time-independent changes to catalog:
-#		self.catalog = self.apply_inaccurate_catalog(self.catalog)
+		if self.inaccurate_catalog:
+			self.catalog = self.apply_inaccurate_catalog(self.catalog)
 		master_catalog = deepcopy(self.catalog)
 
 		# Generate jitter array:
-		self.jitter = self.apply_jitter()
-		print(self.jitter)
+		if include_jitter:
+			self.jitter = self.apply_jitter()
+			print("Jitter included.")
+		else:
+			self.jitter = np.zeros([self.Ntimes, 2])
+			print("Jitter excluded. Jitter array set to 0.")
+		print("Saving jitter array to jitter.txt")
+		np.savetxt(os.path.join(self.output_folder, "jitter.txt"), self.jitter)
+
+		# Generate light curves:
+		if self.Nvariables > 0:
+			self.light_curves, params = self.generate_light_curves()
+		else:
+			self.light_curves = np.ones([self.Nstars, self.Ntimes])
+			params = [np.nan]
+			print("No variable stars included.")
+		print("Saving light curve parameters to light_curve_params")
+		np.savetxt(os.path.join(self.output_folder, "light_curve_params.txt"), params)
+		print("Saving light curves to light_curves.txt")
+		np.savetxt(os.path.join(self.output_folder, "light_curves.txt"), self.light_curves)
 
 		# Loop through the time steps:
 		for t, timestep in enumerate(self.times):
-			print("Making time step: "+str(timestep/3600/24))
+			print("Making time step "+str(t)+" out of "+str(self.Ntimes))
 
 			# Set catalog to master_catalog:
 			self.catalog = master_catalog
-
-			# Apply time-dependent changes to catalog:
-#			self.catalog = self.apply_variable_magnitudes(self.catalog,
-#														timestamp)
 
 			# Make stars from catalog:
 			stars = self.make_stars(t)
@@ -159,12 +187,14 @@ class simulateFITS(object):
 			noise = self.make_noise()
 
 			# Sum image from its parts:
-			img = stars + bkg + noise
-#			img = stars
+			img = stars
+			if self.include_noise:
+				img += noise
+			if self.include_bkg:
+				img += bkg
 
 			if self.save_images:
 				# Write img to FITS file:
-				# TODO: Add possibility to write to custom directory
 				self.make_fits(img, timestep, t)
 
 
@@ -209,19 +239,15 @@ class simulateFITS(object):
 		starids = np.arange(self.Nstars, dtype=int)
 
 		# Set buffer pixel size around edge where not to put stars:
-		# TODO: Add possibility of stars on the edges
 		bufferpx = 3
 
 		# Draw uniform row positions:
-		starrows =  np.random.uniform(bufferpx, self.Nrows-bufferpx,
-								self.Nstars)
+		starrows =  np.random.uniform(bufferpx, self.Nrows-bufferpx, self.Nstars)
 
 		# Draw uniform column positions:
-		starcols =  np.random.uniform(bufferpx, self.Ncols-bufferpx,
-								self.Nstars)
+		starcols =  np.random.uniform(bufferpx, self.Ncols-bufferpx, self.Nstars)
 
 		# Draw stellar magnitudes:
-#		starmag = np.random.uniform(self.TmagLow, self.TmagHigh, self.Nstars)
 		starmag = np.random.triangular(self.TmagLow, self.TmagHigh, self.TmagHigh, self.Nstars)
 
 		# Collect star parameters in list for catalog:
@@ -262,9 +288,9 @@ class simulateFITS(object):
 		catalog.remove_column('starid')
 
 		# Set ra and dec from pixel coordinates using WCS solution:
-		ra, decl = self.w.all_pix2world(catalog['row'],catalog['col'],0,ra_dec_order=True)
+		ra, decl = self.w.all_pix2world(catalog['col'],catalog['row'],0,ra_dec_order=True)
 
-		# Set proper motion:
+		# Set proper motion to zero:
 		prop_mot_ra = np.zeros_like(catalog['tmag'])
 		prop_mot_dec = np.zeros_like(catalog['tmag'])
 
@@ -294,33 +320,27 @@ class simulateFITS(object):
 				txtfiledir = os.path.join(self.output_folder, fname+fextension)
 
 				# Write catalog to txt file:
+				print("Writing catalog to file: "+txtfiledir)
 				np.savetxt(txtfiledir, catalog_out,
 							delimiter='\t',
 							header='    '.join(catalog.colnames))
 			else:
-				# TODO: add check and error if file exists
 				pass
 		else:
 			pass
 
 		# Print the catalog:
-		print("Writing catalog to file: "+txtfiledir)
 		print(catalog)
 
 
 	def create_catalog(self, sector, camera, ccd):
 		""" Original function by Rasmus Handberg. Create sqlite file """
-
-#			logger = logging.getLogger(__name__)
-
 		input_folder = os.environ['TESSPHOT_INPUT']
 
 		# We need a list of when the sectors are in time:
 		sector_reference_time = 2457827.0 + 13.5
-#			logger.info('Projecting catalog {0:.3f} years relative to 2000'.format((sector_reference_time - 2451544.5)/365.25))
 
 		# Load the catalog from file:
-		# TODO: In the future this will be loaded from the TASOC database:
 		cat = np.genfromtxt(os.path.join(input_folder, 'catalog.txt.gz'), skip_header=1, usecols=(0,1,2,3,6), dtype='float64')
 		if cat.ndim == 1:
 			cat = np.expand_dims(cat, axis=0)
@@ -345,7 +365,6 @@ class simulateFITS(object):
 		for row in cat:
 			# Add the proper motion to each coordinate:
 			ra, dec = add_proper_motion(row[1], row[2], row[3], row[4], sector_reference_time, epoch=2000.0)
-#				logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
 
 			# Save the coordinates in SQLite database:
 			cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,tmag) VALUES (?,?,?,?,?,?);", (
@@ -386,10 +405,8 @@ class simulateFITS(object):
 		cursor.close()
 		conn.close()
 
-#			logger.info("Catalog done.")
 
-
-	def create_todo(self, sector):
+	def create_todo(self, sector, method, filename):
 		"""Create the TODO list which is used by the pipeline to keep track of the
 		targets that needs to be processed.
 
@@ -401,8 +418,6 @@ class simulateFITS(object):
 
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
-
-	#	logger = logging.getLogger(__name__)
 
 		input_folder = os.environ['TESSPHOT_INPUT']
 
@@ -417,7 +432,7 @@ class simulateFITS(object):
 			dtype=('int64', 'float64', 'float64', 'float32')
 		)
 
-		todo_file = os.path.join(input_folder, 'todo.sqlite')
+		todo_file = os.path.join(input_folder, filename)
 		if os.path.exists(todo_file): os.remove(todo_file)
 		conn = sqlite3.connect(todo_file)
 		cursor = conn.cursor()
@@ -442,7 +457,7 @@ class simulateFITS(object):
 		for pri, row in enumerate(cat):
 			starid = int(row['starid'])
 			tmag = float(row['tmag'])
-			cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,x,y,tmag) VALUES (?,?,?,?,?,?,?);", (pri+1, starid, 1, 1, row['x'], row['y'], tmag))
+			cursor.execute("INSERT INTO todolist (priority,starid,camera,ccd,method,x,y,tmag) VALUES (?,?,?,?,?,?,?,?);", (pri+1, starid, 1, 1, method, row['x'], row['y'], tmag))
 
 		cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
@@ -483,14 +498,11 @@ class simulateFITS(object):
 #		sigma_DEC = 0.233 # (milliarcsec)
 #		sigma_row = self.pixel_scale * sigma_DEC / 1e3
 
-#		# Scatter of Gaia band to TESS band calibration (Stassun, 28 Jun 2017):
-#		sigma_tmag = 0.015 # (magnitudes)
-
-		# Median RA std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
+		# Median RA std. in Gaia DR2 (Gaia coll. 2018, tbl. 3) for 17 Gmag star (ignore proper motion)
 		sigma_RA = 0.1 # (milliarcsec)
 		sigma_col = self.pixel_scale * sigma_RA / 1e3
 
-		# Median DEC std. in Gaia DR1 (Lindegren, 29 June 2016, Table 1):
+		# Median DEC std. in Gaia DR2 (Gaia coll. 2018, tbl. 3) for 17 Gmag star (ignore proper motion)
 		sigma_DEC = 0.1 # (milliarcsec)
 		sigma_row = self.pixel_scale * sigma_DEC / 1e3
 
@@ -506,6 +518,41 @@ class simulateFITS(object):
 			catalog['row'][star] += random.gauss(0, sigma_row)
 
 		return catalog
+
+
+	def generate_light_curves(self):
+		"""
+		Generate light curves to scale the stellar flux with. Half of all will be constant.
+
+		Returns:
+			light_curves (numpy array, 2D): Light curves formatted to be multiplied with the constant star flux value, (Nstars,Ntimes).
+			params (list): List of oscillation parameters used to generate the light curve, ([amplitudes, frequency, phase] for each star).
+		"""
+		# Indices of half the stars that are not constant:
+		osc_star_indices = np.random.choice(self.Nstars, self.Nvariables)
+
+		# Preallocate light curves array:
+		light_curves = np.ones([self.Nstars, self.Ntimes])
+
+		# Set oscillation parameters:
+		amplitudes = 0.1*np.ones(self.Nvariables)
+		frequencies = 3*1e-3*np.ones(self.Nvariables) # RGB star, solarlike osc.
+		phases = np.array([random.uniform(0, self.exposure_time)
+				for star in range(self.Nvariables)])
+		params = [[amplitude, frequency, phase] \
+				for amplitude, frequency, phase \
+				in zip(amplitudes, frequencies, phases)]
+
+		k = 0
+		for star in range(self.Nstars):
+			if star in osc_star_indices:
+				amplitude = params[k][0]
+				frequency = params[k][1]
+				phase = params[k][2]
+				light_curves[star,:] += amplitude*np.sin(frequency*self.times + phase)
+				k += 1
+
+		return light_curves, params
 
 
 	def apply_variable_magnitudes(self, catalog, timestamp):
@@ -537,12 +584,12 @@ class simulateFITS(object):
 
 
 		Returns:
-			catalog (`astropy.table.Table`): Table formatted like the catalog
-			parameter, but with changes to its entries.
+			catalog (numpy array): Jitter changes in each timestep (dim. 1) and
+			dimension (dim. 2).
 		"""
 
 		# Set jitter scale:
-		jitter_scale = 0.01
+		jitter_scale = 0.1
 
 		# Define distribution properties:
 		if var is None:
@@ -555,7 +602,7 @@ class simulateFITS(object):
 		return jitter
 
 
-	def make_stars(self, t, camera=1, ccd=1, apply=False):
+	def make_stars(self, t, camera=1, ccd=1):
 		"""
 		Make stars for the image and append catalog with flux column.
 
@@ -563,8 +610,7 @@ class simulateFITS(object):
 			t (int): Time loop index.
 			camera (int): Kepler camera. Used to get PSF. Default is 1.
 			ccd (int): Kepler CCD. Used to get PSF. Default is 1.
-			apply (boolean): True if jitter should be applied (default), false
-			if else.
+
 
 		Returns:
 			stars (numpy array): Summed PRFs of stars in the image of the same
@@ -572,30 +618,27 @@ class simulateFITS(object):
 		"""
 
 		# Create PSF class instance:
-		KPSF = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
+		kpsf = PSF(camera=camera, ccd=ccd, stamp=self.stamp)
 
 		# Make list with parameter numpy arrays for the pixel integrater:
-		if apply:
-			params = [
-						np.array(
-							[self.catalog['row'][i] + self.jitter[t][0],
-							self.catalog['col'][i] + self.jitter[t][1],
-							self.exposure_time*mag2flux(self.catalog['tmag'][i])/self.gain]
-						)
-					for i in range(self.Nstars)
-					]
-		else:
-			params = [
-						np.array(
-							[self.catalog['row'][i],
-							self.catalog['col'][i],
-							self.exposure_time*mag2flux(self.catalog['tmag'][i])/self.gain]
-						)
-					for i in range(self.Nstars)
-					]
+		params = [
+					np.array(
+						[self.catalog['row'][i] + self.jitter[t][0],
+						self.catalog['col'][i] + self.jitter[t][1],
+						self.light_curves[i][t]*mag2flux(self.catalog['tmag'][i])]
+					)
+				for i in range(self.Nstars)
+				]
 
 		# Integrate stars to image:
-		return KPSF.integrate_to_image(params, cutoff_radius=20)
+		if self.multiprocess:
+			img = np.zeros([self.Nrows, self.Ncols], dtype='float64')
+			with Pool(8) as p:
+				for i in p.imap_unordered(kpsf.integrate_single, params):
+					img += i
+			return img
+		else:
+			return kpsf.integrate_to_image(params, cutoff_radius=20)
 
 
 	def make_background(self, bkg_level=337000.):
@@ -611,7 +654,7 @@ class simulateFITS(object):
 		"""
 
 		# Apply background level by multiplying:
-		return bkg_level * np.ones([self.Nrows, self.Ncols])
+		return bkg_level * np.ones([self.Nrows, self.Ncols]) * self.gain
 
 
 	def make_noise(self, sigma=52000.):
@@ -634,7 +677,7 @@ class simulateFITS(object):
 		for row in range(self.Nrows):
 			for col in range(self.Ncols):
 				# Draw a random value from a Gaussian (normal) distribution:
-				noise[row,col] = random.gauss(mu=0, sigma=sigma)
+				noise[row,col] = random.gauss(mu=0, sigma=sigma) * self.gain
 
 		return noise
 

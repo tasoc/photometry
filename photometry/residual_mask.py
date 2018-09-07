@@ -68,8 +68,8 @@ def nine_pixel_mask(row, col):
 		mask (numpy array, dtype=int): 2D indices of the four pixels in the mask. Convert to 1D using NumPy's ravel_multi_index.
 	"""
 	# Convert to integer, discarding the non-integer part:
-	row_int = int(row)
-	col_int = int(col)
+	row_int = int(row+0.5)
+	col_int = int(col+0.5)
 
 	# Define row and column indexes around center pixel:
 	rows = np.array([row_int-1, row_int, row_int+1])

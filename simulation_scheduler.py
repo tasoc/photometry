@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Simulate data, prepare it for and do photometry with the TESS Photometry pipeline.
+Simulate data for the TASOC photometry pipeline.
 
 @author: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 """
 
 import os
 import argparse
-import numpy as np
 import logging
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
-import h5py
 
 from photometry.prepare import create_hdf5
+from simulation.simulateFITS import simulateFITS
 
 
 if __name__ == '__main__':
@@ -44,69 +43,129 @@ if __name__ == '__main__':
 
 
 	""" Create dictionaries with simulations """
-	single_star_mov_kernel = {
-		'name':				'single_star_mov_kernel',
+
+	multi_star_2000 = {
+		'name':				'multi_star_2000',
 		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[1, 150], # 1 star, 150 samples
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
+		'run_simulateFITS': 	[2000, 350], # stars, samples
 		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
-	}
-	single_star = {
-		'name':				'single_star',
-		'ignore_mov_kernel': 	True,
-		'run_simulateFITS': 	[1, 150], # 1 star, 150 samples
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
-		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,2, dtype=int) # stars to do photometry on
-	}
-	multi_star_100 = {
-		'name':				'multi_star_100',
-		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[100, 2], # 100 stars, 2 samples
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
-		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			[84, 63, 15, 5, 34] # stars to do photometry on
-	}
-	multi_star_5000 = {
-		'name':				'multi_star_5000_150t',
-		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[5000, 150], # 5000 stars, 150 samples
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
-		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,501, dtype=int) # stars to do photometry on
-	}
-	multi_star_2 = {
-		'name':				'multi_star_2_exact',
-		'ignore_mov_kernel': 	True,
-		'run_simulateFITS': 	[2, 2], # 2 stars, 2 samples
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
-		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,3, dtype=int) # stars to do photometry on
-	}
-	multi_star_500 = {
-		'name':				'multi_star_500',
-		'ignore_mov_kernel': 	False,
-		'run_simulateFITS': 	[500, 142], # 500 stars, 142 samples
-#		'run_simulateFITS': 	[1, 27*24*2], # 1 star, 27 days long cadence
-#		'run_simulateFITS': 	[1, 2], # test run with just 2 time steps
-		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
-		'methods': 			['aperture', 'linpsf', 'psf'], # photometry methods
-		'stars': 			np.arange(1,501, dtype=int) # stars to do photometry on
+		'methods': 			['aperture', 'linpsf'] # photometry methods
 	}
 
+	multi_star_test_noise = {
+		'name':				'multi_star_test_noise',
+		'ignore_mov_kernel': 	True,
+		'run_simulateFITS': 	[100, 2, True, True, True, True, True, True, 1, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf'] # photometry methods
+	}
+
+	multi_star_test_no_noise = {
+		'name':				'multi_star_test_no_noise',
+		'ignore_mov_kernel': 	True,
+		'run_simulateFITS': 	[100, 2, True, True, True, False, True, True, 1, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+
+	""" Noise investigation simulation runs """
+	# jitter, noise, inaccurate catalog, variables
+
+	multi_star_no_noise = {
+		'name':				'multi_star_no_noise',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, False, True, False, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise = {
+		'name':				'multi_star_noise',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, True, True, False, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_jitter = {
+		'name':				'multi_star_jitter',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, True, False, True, False, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_inaccurate = {
+		'name':				'multi_star_inaccurate',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, False, True, True, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_variable = {
+		'name':				'multi_star_variable',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, False, True, False, 1000, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise_jitter = {
+		'name':				'multi_star_noise_jitter',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, True, True, True, False, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise_inaccurate = {
+		'name':				'multi_star_noise_inaccurate',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, True, True, True, 0, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise_variable = {
+		'name':				'multi_star_noise_variable',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, False, True, True, False, 1000, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_no_noise_jitter_inaccurate_variable = {
+		'name':				'multi_star_no_noise_jitter_inaccurate_variable',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, True, False, True, True, 1000, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+	multi_star_noise_jitter_inaccurate_variable = {
+		'name':				'multi_star_noise_jitter_inaccurate_variable',
+		'ignore_mov_kernel': 	False,
+		'run_simulateFITS': 	[2000, 150, True, True, True, True, True, True, 1000, True],
+		'create_hdf5': 		[0, 1, 1], # sector, camera, ccd
+		'methods': 			['linpsf', 'aperture'] # photometry methods
+	}
+
+
 	# Collect dictionaries in list:
-	simulations = [multi_star_500]
+	simulations = [
+				multi_star_no_noise,
+				multi_star_noise,
+				multi_star_jitter,
+				multi_star_inaccurate,
+				multi_star_variable,
+				multi_star_noise_jitter,
+				multi_star_noise_inaccurate,
+				multi_star_noise_variable,
+				multi_star_no_noise_jitter_inaccurate_variable,
+				multi_star_noise_jitter_inaccurate_variable
+				]
 	logger.info("Simulations being run: \n %s", simulations)
 
 
@@ -150,12 +209,22 @@ if __name__ == '__main__':
 		logger.info("TESSPHOT_INPUT set to '%s'", os.environ.get('TESSPHOT_INPUT'))
 
 		# Run run_simulateFITS.py:
-		run_simulateFITS_call = "python run_simulateFITS.py" \
-			+ " -s " + np.str(simulation['run_simulateFITS'][0]) \
-			+ " -t " + np.str(simulation['run_simulateFITS'][1])
-
-		logger.info("Running run_simulateFITS.py: " + run_simulateFITS_call)
-		os.system(run_simulateFITS_call)
+		Nstars =				simulation['run_simulateFITS'][0]
+		Ntimes =				simulation['run_simulateFITS'][1]
+		save_images =		simulation['run_simulateFITS'][2]
+		overwrite_images =	simulation['run_simulateFITS'][3]
+		include_jitter =		simulation['run_simulateFITS'][4]
+		include_noise =		simulation['run_simulateFITS'][5]
+		include_bkg =		simulation['run_simulateFITS'][6]
+		inaccurate_catalog =	simulation['run_simulateFITS'][7]
+		Nvariables =			simulation['run_simulateFITS'][8]
+		multiprocess =		simulation['run_simulateFITS'][9]
+		# TODO: add the rest of the parameters to the simulateFITS call
+		simulateFITS(Nstars=Nstars, Ntimes=Ntimes,
+					save_images=save_images, overwrite_images=overwrite_images,
+					include_jitter=include_jitter, include_noise=include_noise,
+					include_bkg=include_bkg, inaccurate_catalog=inaccurate_catalog,
+					Nvariables=Nvariables, multiprocess=multiprocess)
 
 		# Run create_hdf5 from prepare_photometry.py:
 		logger.info("Running create_hdf5 from prepare_photometry.py")
@@ -164,46 +233,3 @@ if __name__ == '__main__':
 			cameras = simulation['create_hdf5'][1],
 			ccds    = simulation['create_hdf5'][2]
 		)
-
-		# Rewrite motion_kernel in hdf5 file: WARNING: this appears to be faulty
-		if simulation['ignore_mov_kernel'] is True:
-			logger.info("Rewriting motion_kernel in hdf5 file")
-			hdf_file = os.path.join(input_folder,
-				'camera{0:d}_ccd{1:d}.hdf5'.format(
-					simulation['create_hdf5'][1],
-					simulation['create_hdf5'][2]
-					)
-			)
-			with h5py.File(hdf_file) as hdf:
-				# Get movement kernel data:
-				data = hdf['movement_kernel']
-				data_np = np.array(data)
-				logger.debug("Original movement kernel: \n{}".format(data_np))
-
-				# Define new movement kernel:
-				movement_kernel_new = np.zeros_like(data_np)
-
-				# Replace values of movement kernel in hdf5 file:
-				data[...] = movement_kernel_new
-				logger.debug("New movement kernel: \n{}".format(np.array(data)))
-
-
-		# Run run_tessphot for each method:
-		for i, method in enumerate(simulation['methods']):
-			# Set the output environment variable:
-			os.environ['TESSPHOT_OUTPUT'] = simulation['output_folders'][i]
-			logger.info("TESSPHOT_OUTPUT set to '%s'", os.environ.get('TESSPHOT_OUTPUT'))
-
-			# Run run_tessphot:
-			for star in simulation['stars']:
-				run_tessphot_call = "python run_tessphot.py" \
-					+ ' ' + np.str(star) + ' ' \
-					+ ' --method ' + method \
-					+ ' --plot'
-				if args.debug:
-					run_tessphot_call += ' --debug'
-				if args.quiet:
-					run_tessphot_call += ' --quiet'
-
-				logger.info("Doing %s photometry: %s", method, run_tessphot_call)
-				os.system(run_tessphot_call)
