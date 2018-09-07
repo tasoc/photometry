@@ -973,11 +973,10 @@ class BasePhotometry(object):
 
 		# Modify the reference catalog:
 		cat = deepcopy(self.catalog)
-		if correct_jitter:
-			cat['column'] += jitter[:, 0]
-			cat['row'] += jitter[:, 1]
-			cat['column_stamp'] += jitter[:, 0]
-			cat['row_stamp'] += jitter[:, 1]
+		cat['column'] += jitter[:, 0]
+		cat['row'] += jitter[:, 1]
+		cat['column_stamp'] += jitter[:, 0]
+		cat['row_stamp'] += jitter[:, 1]
 
 		return cat
 
