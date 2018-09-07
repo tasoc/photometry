@@ -44,7 +44,7 @@ class AperturePhotometry(BasePhotometry):
 
 		logger = logging.getLogger(__name__)
 		logger.info("Running aperture photometry...")
-		
+
 		k2p2_settings = {
 			'thresh': 1.0,
 			'min_no_pixels_in_mask': 4,
@@ -54,9 +54,9 @@ class AperturePhotometry(BasePhotometry):
 			'ws_blur': 0.5,
 			'ws_thres': 0.05, # K2: 0.05
 			'ws_footprint': 3,
-			'extend_overflow': True # Turn this off for Tmag>7 targets?
+			'extend_overflow': True
 		}
-		
+
 		for retries in range(5):
 
 			SumImage = self.sumimage
@@ -67,22 +67,25 @@ class AperturePhotometry(BasePhotometry):
 			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
-			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, None, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
+			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
 			masks = np.asarray(masks, dtype='bool')
 
+			using_minimum_mask = False
 			if len(masks.shape) == 0:
 				logger.warning("No masks found")
-				self.report_details(error='No masks found')
+				self.report_details(error='No masks found. Using minimum aperture.')
 				mask_main = self._minimum_aperture()
+				using_minimum_mask = True
 
 			else:
 				# Look at the central pixel where the target should be:
 				indx_main = masks[:, int(round(self.target_pos_row_stamp)), int(round(self.target_pos_column_stamp))].flatten()
 
 				if not np.any(indx_main):
-					logger.warning('No pixels')
-					self.report_details(error='No pixels')
+					logger.warning('No mask found for main target. Using minimum aperture.')
+					self.report_details(error='No mask found for main target. Using minimum aperture.')
 					mask_main = self._minimum_aperture()
+					using_minimum_mask = True
 
 				elif np.sum(indx_main) > 1:
 					logger.error('Too many masks')
@@ -159,7 +162,9 @@ class AperturePhotometry(BasePhotometry):
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.round(t['row'])+1 in rows[mask_main] and np.round(t['column'])+1 in cols[mask_main]]
 
 		# Calculate contamination from the other targets in the mask:
-		if len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
+		if len(target_in_mask) == 0:
+			contamination = np.nan
+		elif len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
 			contamination = 0
 		else:
 			# Calculate contamination metric as defined in Lund & Handberg (2014):
@@ -169,11 +174,15 @@ class AperturePhotometry(BasePhotometry):
 			contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
 
 		logger.info("Contamination: %f", contamination)
-		self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
+		if not np.isnan(contamination):
+			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
 
 		# If contamination is high, return a warning:
 		if contamination > 0.1:
 			self.report_details(error='High contamination')
+			return STATUS.WARNING
+
+		if using_minimum_mask:
 			return STATUS.WARNING
 
 		#

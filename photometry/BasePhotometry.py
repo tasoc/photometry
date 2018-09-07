@@ -26,7 +26,6 @@ from copy import deepcopy
 from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian, ss
-from timeit import default_timer
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
 from .utilities import find_tpf_files
@@ -115,6 +114,7 @@ class BasePhotometry(object):
 		# Store the input:
 		self.starid = starid
 		self.input_folder = input_folder
+		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
 
@@ -131,8 +131,8 @@ class BasePhotometry(object):
 
 		# Directory where output files will be saved:
 		self.output_folder = os.path.join(
-			output_folder,
-			self.datasource,
+			self.output_folder_base,
+			self.datasource[:3], # Only three first characters for cases with "tpf:XXXXXX"
 			'{0:011d}'.format(self.starid)[:5]
 		)
 
@@ -190,15 +190,15 @@ class BasePhotometry(object):
 				logger.debug('Loading basic data into cache...')
 
 				# Start filling out the basic vectors:
-				attrs['lightcurve'] = Table()
-				attrs['lightcurve']['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
-				N = len(attrs['lightcurve']['time'])
-				attrs['lightcurve']['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
-				attrs['lightcurve']['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
+				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
+				N = len(self.lightcurve['time'])
+				self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
+				self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
 				if 'timecorr' in self.hdf:
-					attrs['lightcurve']['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
+					self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
 				else:
-					attrs['lightcurve']['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+				attrs['lightcurve'] = self.lightcurve
 
 				# World Coordinate System solution:
 				if isinstance(self.hdf['wcs'], h5py.Group):
@@ -207,7 +207,8 @@ class BasePhotometry(object):
 				else:
 					hdr_string = self.hdf['wcs'][0]
 				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-				attrs['wcs'] = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+				self.wcs = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+				attrs['wcs'] = self.wcs
 
 				# Get shape of sumimage from hdf5 file:
 				attrs['_max_stamp'] = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
@@ -220,9 +221,7 @@ class BasePhotometry(object):
 				attrs['n_readout'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
 
 				# Load MovementKernel into memory:
-				# TODO: But what if its not needed?!
-				attrs['_MovementKernel'] = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
-				attrs['_MovementKernel'].load_series(attrs['lightcurve']['time'], self.hdf['movement_kernel'])
+				attrs['_MovementKernel'] = self.MovementKernel
 
 				# The full sum-image:
 				attrs['_sumimage_full'] = np.asarray(self.hdf['sumimage'])
@@ -411,11 +410,12 @@ class BasePhotometry(object):
 		See Also:
 			:py:func:`resize_stamp`
 		"""
-
 		# Decide how many pixels to use based on lookup tables as a function of Tmag:
-		Npixels = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0, 12.0, 14.0, 16.0]), np.array([350.0, 200.0, 125.0, 100.0, 50.0, 40.0]))
-		Nrows = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
-		Ncolumns = np.maximum(np.ceil(np.sqrt(Npixels)), 10)
+		Ncolumns = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0]), np.array([19, 15, 11]))
+		Nrows = np.interp(self.target_tmag, np.array([1.0, 1.7, 3.5, 8.0, 9.0, 10.0]), np.array([300, 150, 45, 19, 15, 11]))
+		# Round off and make sure we have minimum 11 pixels:
+		Nrows = np.maximum(np.ceil(Nrows), 11)
+		Ncolumns = np.maximum(np.ceil(Ncolumns), 11)
 		return Nrows, Ncolumns
 
 	def resize_stamp(self, down=None, up=None, left=None, right=None):
@@ -917,7 +917,11 @@ class BasePhotometry(object):
 		Instance of :py:class:`image_motion.ImageMovementKernel`.
 		"""
 		if self._MovementKernel is None:
-			if self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
+			default_movement_kernel = 'hdf5' # The default kernel to use - set to 'wcs' if we should use WCS instead
+			if self.datasource == 'ffi' and default_movement_kernel == 'wcs' and isinstance(self.hdf['wcs'], h5py.Group):
+				self._MovementKernel = ImageMovementKernel(warpmode='wcs', wcs_ref=self.wcs)
+				self._MovementKernel.load_series(self.lightcurve['time'], [self.hdf['wcs'][dset][0] for dset in self.hdf['wcs']])
+			elif self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
 				self._MovementKernel = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
 				self._MovementKernel.load_series(self.lightcurve['time'], self.hdf['movement_kernel'])
 			elif self.datasource.startswith('tpf'):
@@ -938,7 +942,7 @@ class BasePhotometry(object):
 				# If we reached this point, we dont have enough information to
 				# define the ImageMovementKernel, so we should just return the
 				# unaltered catalog:
-				self._MovementKernel = 'unchanged'
+				self._MovementKernel = ImageMovementKernel(warpmode='unchanged')
 
 		return self._MovementKernel
 
@@ -958,7 +962,7 @@ class BasePhotometry(object):
 		"""
 
 		# If we didn't have enough information, just return the unchanged catalog:
-		if self.MovementKernel == 'unchanged':
+		if self.MovementKernel.warpmode == 'unchanged':
 			return self.catalog
 
 		# Get the reference catalog:
@@ -1086,7 +1090,7 @@ class BasePhotometry(object):
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Versions:
-		#hdu.header['VERPIXEL'] = (__version__, 'version of K2P2 pipeline')
+		#hdu.header['VERPIPE'] = (__version__, 'Version of photometry pipeline')
 		#hdu.header['DATA_REL'] = (__version__, 'version of K2P2 pipeline')
 
 		# Object properties:
@@ -1187,18 +1191,16 @@ class BasePhotometry(object):
 		filename = 'tess{starid:011d}-s{sector:02d}-{cadence:s}-v{version:02d}-tasoc_lc.fits'.format(
 			starid=self.starid,
 			sector=self.sector,
-			cadence={'ffi': 'ffi', 'tpf': '120'}[self.datasource],
+			cadence='120' if self.datasource.startswith('tpf') else 'ffi',
 			version=0 # FIXME: This needs to be set
 		)
 
 		# Write to file:
 		filepath = os.path.join(output_folder, filename)
 		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
-			t1 = default_timer()
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
-			self.report_details(error='I/O Output time: %f' % (default_timer() - t1))
 
 		# Store the output file in the details object for future reference:
-		self._details['filepath_lightcurve'] = filepath
+		self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base)
 
 		return filepath
