@@ -347,7 +347,8 @@ class LinPSFPhotometry(BasePhotometry):
 				/fluxes_mean[staridx]
 
 			logger.info("Contamination: %f", contamination)
-			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
+			if np.isfinite(contamination):
+				self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
 
 			# If contamination is high, return a warning:
 			if contamination > 0.1:
