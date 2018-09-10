@@ -1055,6 +1055,8 @@ class BasePhotometry(object):
 			string: Path to the generated file.
 		"""
 
+		logger = logging.getLogger(__name__)
+
 		# Check if another output folder was provided:
 		if output_folder is None:
 			output_folder = self.output_folder
@@ -1103,6 +1105,8 @@ class BasePhotometry(object):
 		hdu.header['TESSMAG'] = (self.target_tmag, '[mag] TESS magnitude')
 
 		# Add K2P2 Settings to the header of the file:
+		logger.debug('Additional headers:')
+		logger.debug(self.additional_headers)
 		if self.additional_headers:
 			for key, value in self.additional_headers.items():
 				hdu.header[key] = value
