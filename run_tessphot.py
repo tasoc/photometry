@@ -10,14 +10,14 @@ Example:
 
 Example:
 	To run a specific star, you can provide the TIC-identifier:
-		
+
 	>>> python run_tessphot.py 182092046
 
 Example:
 	You can be very specific in the photometry methods and input to use.
 	The following example runs PSF photometry on Target Pixel Files (tpf) of TIC 182092046,
 	and produces plots in the output directory as well.
-		
+
 	>>> python run_tessphot.py --source=tpf --method=psf --plot 182092046
 
 Note:
@@ -91,8 +91,9 @@ if __name__ == '__main__':
 			if task is None: parser.error("The STARID '%d' was not found in TODOLIST." % args.starid)
 			if args.method: task['method'] = args.method
 			if args.source: task['datasource'] = args.source
-		elif args.random:	
+		elif args.random:
 			task = tm.get_random_task()
+			if args.method: task['method'] = args.method
 
 		del task['priority']
 		pho = f(**task)
