@@ -327,7 +327,8 @@ class BasePhotometry(object):
 		target = cursor.fetchone()
 		if target is None:
 			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
-		self.target_tmag = target['tmag'] # TESS magnitude of the main target.
+#		self.target_tmag = target['tmag'] # TESS magnitude of the main target.
+		self.target_tmag = target['tmag'] - 5 # Kepler equiv. TESS magnitude of the main target.
 		self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
 		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
 		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
