@@ -85,7 +85,7 @@ if __name__ == '__main__':
 	f = functools.partial(tessphot, input_folder=input_folder, output_folder=output_folder, plot=args.plot)
 
 	# Run the program:
-	with TaskManager(input_folder) as tm:
+	with TaskManager(todo_file=os.path.join(input_folder,'todo.sqlite'), cleanup=False) as tm:
 		if args.starid is not None:
 			task = tm.get_task(starid=args.starid)
 			if task is None: parser.error("The STARID '%d' was not found in TODOLIST." % args.starid)
