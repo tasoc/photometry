@@ -351,6 +351,8 @@ class BasePhotometry(object):
 		self.additional_headers = {} # Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
+		logger.debug("Target ra: %f", self.target_pos_ra)
+		logger.debug("Target dec: %f", self.target_pos_dec)
 		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
 		if self.datasource.startswith('tpf'):
 			self.target_pos_column += self.pixel_offset_col
@@ -508,6 +510,7 @@ class BasePhotometry(object):
 
 		# Sanity checks:
 		if self._stamp[0] > self._stamp[1] or self._stamp[2] > self._stamp[3]:
+			logger.info(self._stamp)
 			raise ValueError("Invalid stamp selected")
 
 		# Check if the stamp actually changed:
