@@ -290,6 +290,7 @@ class LinPSFPhotometry(BasePhotometry):
 				# Add current fitted fluxes for contamination calculation:
 				fluxes_sum += fluxes
 
+
 				if self.plot and k==0: # plot first time step
 					logger.info("Plotting time step:" + np.str(k))
 					# Make plot for debugging:
@@ -302,7 +303,7 @@ class LinPSFPhotometry(BasePhotometry):
 							residuals=img_res)
 
 					# Set subplot titles:
-					title_list = ['Simulated image', 'Least squares PSF fit', 'Residual image']
+					title_list = ['Data', 'PSF fit', 'Residuals']
 					for ax, title in zip(ax_list, title_list):
 						# Add title to subplot:
 						ax.set_title(title)
@@ -319,6 +320,7 @@ class LinPSFPhotometry(BasePhotometry):
 					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
 					save_figure(os.path.join(self.plot_folder, fig_name), format='png')
 					plt.close(fig)
+
 
 			# Pass result if fit failed:
 			else:
