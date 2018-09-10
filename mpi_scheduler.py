@@ -51,7 +51,7 @@ if __name__ == '__main__':
 		from photometry import TaskManager
 
 		try:
-			with TaskManager(todo_file, cleanup=True, summary=os.path.join(output_folder, 'summary.json')) as tm:
+			with TaskManager(todo_file, cleanup=False, summary=os.path.join(output_folder, 'summary.json')) as tm:
 				# Get list of tasks:
 				numtasks = tm.get_number_tasks()
 				tm.logger.info("%d tasks to be run", numtasks)
