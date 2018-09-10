@@ -284,7 +284,7 @@ class LinPSFPhotometry(BasePhotometry):
 
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result
-				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
+				self.lightcurve['pos_centroid'][k] = [0, 0]
 				self.lightcurve['quality'][k] = 0
 
 				# Add current fitted fluxes for contamination calculation:
@@ -327,7 +327,7 @@ class LinPSFPhotometry(BasePhotometry):
 				logger.warning("We should flag that this has not gone well.")
 
 				self.lightcurve['flux'][k] = np.NaN
-				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
+				self.lightcurve['pos_centroid'][k] = [0, 0]
 				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
 
 
