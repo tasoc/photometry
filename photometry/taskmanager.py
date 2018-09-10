@@ -238,7 +238,8 @@ class TaskManager(object):
 		"""Write summary of progress to file. The summary file will be in JSON format."""
 		if self.summary_file:
 			try:
-				with open(self.summary_file, 'w') as fid:
+				self.logger.info(self.summary_file)
+				with open(self.summary_file, 'w+') as fid:
 					json.dump(self.summary, fid)
 			except:
 				self.logger.exception("Could not write summary file")
