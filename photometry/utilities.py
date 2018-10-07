@@ -79,15 +79,21 @@ def find_tpf_files(rootdir, starid=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
-	starid = '*' if starid is None else '{0:016d}'.format(starid)
-	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid)
+	starid_str = '*' if starid is None else '{0:016d}'.format(starid)
+	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid_str)
+
+	# Pattern used for TESS Alert data:
+	starid_str = '*' if starid is None else '{0:011d}'.format(starid)
+	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s??_tess_v?_tp.fits*'.format(starid=starid_str)
+
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
 	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
-		for filename in fnmatch.filter(filenames, filename_pattern):
-			matches.append(os.path.join(root, filename))
+		for filename in filenames:
+			if fnmatch.fnmatch(filename, filename_pattern) or fnmatch.fnmatch(filename, filename_pattern2):
+				matches.append(os.path.join(root, filename))
 
 	# Sort the list of files by thir filename:
 	matches.sort(key = lambda x: os.path.basename(x))
