@@ -148,10 +148,16 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None):
 
 			cursor.execute("SELECT * FROM settings WHERE camera=? AND ccd=? LIMIT 1;", (camera, ccd))
 			settings = cursor.fetchone()
+			if settings is None:
+				logger.error("Settings could not be loaded for camera=%d, ccd=%d.", camera, ccd)
+				raise ValueError("Settings could not be loaded for camera=%d, ccd=%d." % (camera, ccd))
 
 			# Get information about star:
 			cursor.execute("SELECT * FROM catalog WHERE starid=? LIMIT 1;", (starid, ))
 			row = cursor.fetchone()
+			if row is None:
+				logger.error("Starid %d was not found in catalog (camera=%d, ccd=%d).", starid, camera, ccd)
+				raise ValueError("Starid %d was not found in catalog (camera=%d, ccd=%d)." %(starid, camera, ccd))
 
 			# Calculate CBV area that target falls in:
 			cbv_area = calc_cbv_area(row, settings)
@@ -260,37 +266,38 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	tpf_files = find_tpf_files(input_folder)
 	logger.info("Number of TPF files: %d", len(tpf_files))
 
-	# Open a pool of workers:
-	logger.info("Starting pool of workers for TPFs...")
-	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
-	threads = min(threads, len(tpf_files)) # No reason to use more than the number of jobs in total
-	logger.info("Using %d processes.", threads)
-	pool = multiprocessing.Pool(threads)
+	if len(tpf_files) > 0:
+		# Open a pool of workers:
+		logger.info("Starting pool of workers for TPFs...")
+		threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
+		threads = min(threads, len(tpf_files)) # No reason to use more than the number of jobs in total
+		logger.info("Using %d processes.", threads)
+		pool = multiprocessing.Pool(threads)
 
-	# Run the TPF files in parallel:
-	tic = default_timer()
-	_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds)
-	for cat2 in pool.imap_unordered(_tpf_todo_wrapper, tpf_files):
-		cat = vstack([cat, cat2], join_type='exact')
+		# Run the TPF files in parallel:
+		tic = default_timer()
+		_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds)
+		for cat2 in pool.imap_unordered(_tpf_todo_wrapper, tpf_files):
+			cat = vstack([cat, cat2], join_type='exact')
 
-	pool.close()
-	pool.join()
+		pool.close()
+		pool.join()
 
-	# Amount of time it took to process TPF files:
-	toc = default_timer()
-	logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(tpf_files))
+		# Amount of time it took to process TPF files:
+		toc = default_timer()
+		logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(tpf_files))
 
-	# Remove secondary TPF targets if they are also the primary target:
-	indx_remove = np.zeros(len(cat), dtype='bool')
-	cat.add_index('starid')
-	for k, row in enumerate(cat):
-		if row['datasource'].startswith('tpf:'):
-			indx = cat.loc['starid', row['starid']]['datasource'] == 'tpf'
-			if np.any(indx):
-				indx_remove[k] = True
-	cat.remove_indices('starid')
-	logger.info("Removing %d secondary TPF files as they are also primary", np.sum(indx_remove))
-	cat = cat[~indx_remove]
+		# Remove secondary TPF targets if they are also the primary target:
+		indx_remove = np.zeros(len(cat), dtype='bool')
+		cat.add_index('starid')
+		for k, row in enumerate(cat):
+			if row['datasource'].startswith('tpf:'):
+				indx = cat.loc['starid', row['starid']]['datasource'] == 'tpf'
+				if np.any(indx):
+					indx_remove[k] = True
+		cat.remove_indices('starid')
+		logger.info("Removing %d secondary TPF files as they are also primary", np.sum(indx_remove))
+		cat = cat[~indx_remove]
 
 	# Find all targets in Full Frame Images:
 	inputs = itertools.product([input_folder], cameras, ccds)

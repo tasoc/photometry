@@ -293,16 +293,16 @@ class BasePhotometry(object):
 			# Get the positions of the stamp from the FITS header:
 			self._max_stamp = (
 				self.tpf[2].header['CRVAL2P'] - 1,
-				self.tpf[2].header['CRVAL2P'] - 1 + self.tpf[2].header['NAXIS1'],
+				self.tpf[2].header['CRVAL2P'] - 1 + self.tpf[2].header['NAXIS2'],
 				self.tpf[2].header['CRVAL1P'] - 1,
-				self.tpf[2].header['CRVAL1P'] - 1 + self.tpf[2].header['NAXIS2']
+				self.tpf[2].header['CRVAL1P'] - 1 + self.tpf[2].header['NAXIS1']
 			)
 			self.pixel_offset_row = self.tpf[2].header['CRVAL2P'] - 1
 			self.pixel_offset_col = self.tpf[2].header['CRVAL1P'] - 1
 
 			logger.debug('Max stamp size: (%d, %d)',
 				self._max_stamp[1] - self._max_stamp[0],
-				self._max_stamp[2] - self._max_stamp[3]
+				self._max_stamp[3] - self._max_stamp[2]
 			)
 
 			# Get info for psf fit Gaussian statistic:
@@ -1037,12 +1037,13 @@ class BasePhotometry(object):
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
-	def save_lightcurve(self, output_folder=None):
+	def save_lightcurve(self, output_folder=None, data_rel=0):
 		"""
 		Save generated lightcurve to file.
 
 		Parameters:
 			output_folder (string, optional): Path to directory where to save lightcurve. If ``None`` the directory specified in the attribute ``output_folder`` is used.
+			data_rel (integer, optional): Data release number to put in FITS header.
 
 		Returns:
 			string: Path to the generated file.
@@ -1082,11 +1083,13 @@ class BasePhotometry(object):
 		hdu.header['CAMERA'] = (self.camera, 'Camera number')
 		hdu.header['CCD'] = (self.ccd, 'CCD number')
 		hdu.header['SECTOR'] = (self.sector, 'Observing sector')
-		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Versions:
-		#hdu.header['VERPIPE'] = (__version__, 'Version of photometry pipeline')
-		#hdu.header['DATA_REL'] = (__version__, 'version of K2P2 pipeline')
+		#hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline') # TODO: Automatic add this information
+		hdu.header['PROCVER'] = ('', 'Version of photometry pipeline')
+		hdu.header['FILEVER'] = ('0.1', 'File format version')
+		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
+		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Object properties:
 		hdu.header['RADESYS'] = ('ICRS', 'reference frame of celestial coordinates')
@@ -1105,15 +1108,16 @@ class BasePhotometry(object):
 		c1 = fits.Column(name='TIME', format='D', array=self.lightcurve['time'])
 		c2 = fits.Column(name='TIMECORR', format='E', array=self.lightcurve['timecorr'])
 		c3 = fits.Column(name='CADENCENO', format='J', array=self.lightcurve['cadenceno'])
-		c4 = fits.Column(name='FLUX', format='D', unit='e-/s', array=self.lightcurve['flux'])
-		c5 = fits.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
-		c6 = fits.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
-		c7 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
-		c8 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
+		c4 = fits.Column(name='FLUX_RAW', format='D', unit='e-/s', array=self.lightcurve['flux'])
+		c5 = fits.Column(name='FLUX_RAW_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
+		c6 = fits.Column(name='FLUX_CORR', format='D', unit='e-/s', array=np.full_like(self.lightcurve['time'], np.nan))
+		c7 = fits.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
+		c8 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
+		c9 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
 		#c10 = fits.Column(name='POS_CORR1', format='E', unit='pixels', array=poscorr1) # column
 		#c11 = fits.Column(name='POS_CORR2', format='E', unit='pixels', array=poscorr2) # row
 
-		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8], name='LIGHTCURVE')
+		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9], name='LIGHTCURVE')
 
 		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
 		tbhdu.header['TFORM1'] = ('D', 'column format: 64-bit floating point')
@@ -1129,29 +1133,34 @@ class BasePhotometry(object):
 		tbhdu.header['TFORM3'] = ('J', 'column format: signed 32-bit integer')
 		tbhdu.header['TDISP3'] = ('I10', 'column display format')
 
-		tbhdu.header['TTYPE4'] = ('FLUX', 'column title: photometric flux')
+		tbhdu.header['TTYPE4'] = ('FLUX_RAW', 'column title: photometric flux')
 		tbhdu.header['TFORM4'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT4'] = ('e-/s', 'column units: electrons per second')
 		tbhdu.header['TDISP4'] = ('E26.17', 'column display format')
 
-		tbhdu.header['TTYPE5'] = ('FLUX_BKG', 'column title: photometric background flux')
+		tbhdu.header['TTYPE5'] = ('FLUX_RAW_BKG', 'column title: photometric background flux')
 		tbhdu.header['TFORM5'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT5'] = ('e-/s', 'column units: electrons per second')
 		tbhdu.header['TDISP5'] = ('E26.17', 'column display format')
 
-		tbhdu.header['TTYPE6'] = ('QUALITY', 'column title: photometry quality flag')
-		tbhdu.header['TFORM6'] = ('J', 'column format: signed 32-bit integer')
-		tbhdu.header['TDISP6'] = ('B16.16', 'column display format')
+		tbhdu.header['TTYPE6'] = ('FLUX_CORR', 'column title: corrected photometric flux')
+		tbhdu.header['TFORM6'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT6'] = ('e-/s', 'column units: electrons per second')
+		tbhdu.header['TDISP6'] = ('E26.17', 'column display format')
 
-		tbhdu.header['TTYPE7'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
-		tbhdu.header['TFORM7'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT7'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP7'] = ('F10.5', 'column display format')
+		tbhdu.header['TTYPE7'] = ('QUALITY', 'column title: photometry quality flag')
+		tbhdu.header['TFORM7'] = ('J', 'column format: signed 32-bit integer')
+		tbhdu.header['TDISP7'] = ('B16.16', 'column display format')
 
-		tbhdu.header['TTYPE8'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
+		tbhdu.header['TTYPE8'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
 		tbhdu.header['TFORM8'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT8'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP8'] = ('F10.5', 'column display format')
+
+		tbhdu.header['TTYPE9'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
+		tbhdu.header['TFORM9'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT9'] = ('pixel', 'column units: pixels')
+		tbhdu.header['TDISP9'] = ('F10.5', 'column display format')
 
 		#tbhdu.header['TTYPE10'] = ('POS_CORR1', 'column title: column position correction')
 		#tbhdu.header['TFORM10'] = ('E', 'column format: 32-bit floating point')
@@ -1183,11 +1192,11 @@ class BasePhotometry(object):
 		img_sumimage = fits.ImageHDU(data=self.sumimage, header=header, name="SUMIMAGE")
 
 		# File name to save the lightcurve under:
-		filename = 'tess{starid:011d}-s{sector:02d}-{cadence:s}-v{version:02d}-tasoc_lc.fits'.format(
+		filename = 'tess{starid:011d}-s{sector:02d}-{cadence:s}-dr{datarel:02d}-tasoc_lc.fits'.format(
 			starid=self.starid,
 			sector=self.sector,
 			cadence='120' if self.datasource.startswith('tpf') else 'ffi',
-			version=0 # FIXME: This needs to be set
+			datarel=data_rel
 		)
 
 		# Write to file:
