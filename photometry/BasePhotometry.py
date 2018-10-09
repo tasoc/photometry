@@ -336,6 +336,11 @@ class BasePhotometry(object):
 		cursor.close()
 		conn.close()
 
+		# Remove timestamps that have no defined time:
+		# This is a problem in the Sector 1 alert data.
+		indx = np.isfinite(self.lightcurve['time'])
+		self.lightcurve = self.lightcurve[indx]
+
 		# Define the columns that have to be filled by the do_photometry method:
 		self.Ntimes = len(self.lightcurve['time'])
 		self.lightcurve['flux'] = Column(length=self.Ntimes, description='Flux', dtype='float64')
@@ -757,6 +762,8 @@ class BasePhotometry(object):
 			else:
 				# FIXME: Use actual stamp!
 				self._pixelflags = np.asarray(self.tpf['APERTURE'].data, dtype='int32')
+				self._pixelflags[(self._pixelflags & 2) != 0] -= 2
+				self._pixelflags[(self._pixelflags & 8) != 0] -= 8
 
 		return self._pixelflags
 

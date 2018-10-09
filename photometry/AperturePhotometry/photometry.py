@@ -9,6 +9,7 @@ Simple Aperture Photometry using K2P2 to define masks.
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
+from bottleneck import allnan
 import logging
 from .. import BasePhotometry, STATUS
 from . import k2p2v2 as k2p2
@@ -132,8 +133,15 @@ class AperturePhotometry(BasePhotometry):
 			flux_in_cluster = img[mask_main]
 
 			# Calculate flux in mask:
-			self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
-			self.lightcurve['flux_background'][k] = np.sum(bck[mask_main])
+			if allnan(flux_in_cluster):
+				self.lightcurve['flux'][k] = np.NaN
+			else:
+				self.lightcurve['flux'][k] = np.nansum(flux_in_cluster)
+
+			if allnan(bck[mask_main]):
+				self.lightcurve['flux_background'][k] = np.NaN
+			else:
+				self.lightcurve['flux_background'][k] = np.nansum(bck[mask_main])
 
 			# Calculate flux centroid:
 			finite_vals = (flux_in_cluster > 0)
