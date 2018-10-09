@@ -24,13 +24,20 @@ execute the following command:
 
 from __future__ import with_statement, print_function
 from mpi4py import MPI
+import argparse
 import logging
 import traceback
 import os
 import enum
 
 #------------------------------------------------------------------------------
-if __name__ == '__main__':
+def main():
+	# Parse command line arguments:
+	parser = argparse.ArgumentParser(description='Run TESS Photometry in parallel using MPI.')
+	#parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
+	#parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
+	args = parser.parse_args()
 
 	# Get paths to input and output files from environment variables:
 	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
@@ -128,7 +135,7 @@ if __name__ == '__main__':
 					del task['priority']
 
 					t1 = default_timer()
-					pho = tessphot(input_folder=input_folder, output_folder=output_folder, **task)
+					pho = tessphot(input_folder=input_folder, output_folder=output_folder, plot=args.plot, **task)
 					t2 = default_timer()
 
 					# Construct result message:
@@ -159,3 +166,6 @@ if __name__ == '__main__':
 
 		finally:
 			comm.send(None, dest=0, tag=tags.EXIT)
+
+if __name__ == '__main__':
+	main()
