@@ -13,6 +13,8 @@ from six.moves import range
 import numpy as np
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
+warnings.filterwarnings('ignore', category=FutureWarning, module="scipy") # they are simply annoying!
+warnings.filterwarnings('ignore', category=FutureWarning, module="skimage") # they are simply annoying!
 from astropy.io import fits
 from astropy.table import Table, Column
 #from mpi4py import MPI
@@ -22,7 +24,8 @@ import logging
 import datetime
 import os.path
 from copy import deepcopy
-#from astropy import time, coordinates, units
+#from astropy import coordinates, units
+from astropy.time import Time
 from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian, ss
@@ -335,11 +338,6 @@ class BasePhotometry(object):
 			self.sector = target['sector']
 		cursor.close()
 		conn.close()
-
-		# Remove timestamps that have no defined time:
-		# This is a problem in the Sector 1 alert data.
-		indx = np.isfinite(self.lightcurve['time'])
-		self.lightcurve = self.lightcurve[indx]
 
 		# Define the columns that have to be filled by the do_photometry method:
 		self.Ntimes = len(self.lightcurve['time'])
@@ -1064,6 +1062,11 @@ class BasePhotometry(object):
 		if not os.path.exists(output_folder):
 			os.makedirs(output_folder)
 
+		# Remove timestamps that have no defined time:
+		# This is a problem in the Sector 1 alert data.
+		indx = np.isfinite(self.lightcurve['time'])
+		self.lightcurve = self.lightcurve[indx]
+
 		# Get the current date for the files:
 		now = datetime.datetime.now()
 
@@ -1118,17 +1121,18 @@ class BasePhotometry(object):
 		c4 = fits.Column(name='FLUX_RAW', format='D', unit='e-/s', array=self.lightcurve['flux'])
 		c5 = fits.Column(name='FLUX_RAW_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
 		c6 = fits.Column(name='FLUX_CORR', format='D', unit='e-/s', array=np.full_like(self.lightcurve['time'], np.nan))
-		c7 = fits.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
-		c8 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
-		c9 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
+		c7 = fits.Column(name='FLUX_CORR_ERR', format='D', unit='e-/s', array=np.full_like(self.lightcurve['time'], np.nan))
+		c8 = fits.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
+		c9 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
+		c10 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
 		#c10 = fits.Column(name='POS_CORR1', format='E', unit='pixels', array=poscorr1) # column
 		#c11 = fits.Column(name='POS_CORR2', format='E', unit='pixels', array=poscorr2) # row
 
-		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9], name='LIGHTCURVE')
+		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10], name='LIGHTCURVE')
 
 		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
 		tbhdu.header['TFORM1'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT1'] = ('BJD', 'column unit: barycenter corrected JD')
+		tbhdu.header['TUNIT1'] = ('BJD - 2457000, days', 'column units: Barycenter corrected TESS Julian')
 		tbhdu.header['TDISP1'] = ('D14.7', 'column display format')
 
 		tbhdu.header['TTYPE2'] = ('TIMECORR', 'column title: barycenter - timeslice correction')
@@ -1155,19 +1159,24 @@ class BasePhotometry(object):
 		tbhdu.header['TUNIT6'] = ('e-/s', 'column units: electrons per second')
 		tbhdu.header['TDISP6'] = ('E26.17', 'column display format')
 
-		tbhdu.header['TTYPE7'] = ('QUALITY', 'column title: photometry quality flag')
-		tbhdu.header['TFORM7'] = ('J', 'column format: signed 32-bit integer')
-		tbhdu.header['TDISP7'] = ('B16.16', 'column display format')
+		tbhdu.header['TTYPE7'] = ('FLUX_CORR_ERR', 'column title: corrected photometric flux error')
+		tbhdu.header['TFORM7'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT7'] = ('e-/s', 'column units: electrons per second')
+		tbhdu.header['TDISP7'] = ('E26.17', 'column display format')
 
-		tbhdu.header['TTYPE8'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
-		tbhdu.header['TFORM8'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT8'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP8'] = ('F10.5', 'column display format')
+		tbhdu.header['TTYPE8'] = ('QUALITY', 'column title: photometry quality flag')
+		tbhdu.header['TFORM8'] = ('J', 'column format: signed 32-bit integer')
+		tbhdu.header['TDISP8'] = ('B16.16', 'column display format')
 
-		tbhdu.header['TTYPE9'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
+		tbhdu.header['TTYPE9'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
 		tbhdu.header['TFORM9'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT9'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP9'] = ('F10.5', 'column display format')
+
+		tbhdu.header['TTYPE10'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
+		tbhdu.header['TFORM10'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT10'] = ('pixel', 'column units: pixels')
+		tbhdu.header['TDISP10'] = ('F10.5', 'column display format')
 
 		#tbhdu.header['TTYPE10'] = ('POS_CORR1', 'column title: column position correction')
 		#tbhdu.header['TFORM10'] = ('E', 'column format: 32-bit floating point')
@@ -1180,6 +1189,22 @@ class BasePhotometry(object):
 		#tbhdu.header['TDISP11'] = ('F14.7', 'column display format')
 
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
+
+		# Headers related to time to be added to LIGHTCURVE extension:
+		tbhdu.header['TIMEREF'] = ('SOLARSYSTEM', 'barycentric correction applied to times')
+		tbhdu.header['TIMESYS'] = ('TDB', 'time system is Barycentric Dynamical Time (TDB)')
+		tbhdu.header['TIMEUNIT'] = ('d', 'time unit for TIME, TSTART and TSTOP')
+		tbhdu.header['TSTART'] = (self.lightcurve['time'][0], 'observation start time in BTJD')
+		tbhdu.header['TSTOP'] = (self.lightcurve['time'][-1], 'observation stop time in BTJD')
+		#tbhdu.header['DATE-BEG'] = (Time(tbhdu.header['TSTART'] + 2457000 - self.lightcurve['timecorr'][0], format='jd', scale='tdb').isot, 'TSTART as UTC calendar date')
+		#tbhdu.header['DATE-END'] = (Time(tbhdu.header['TSTOP'] + 2457000 - self.lightcurve['timecorr'][-1], format='jd', scale='tdb').isot, 'TSTOP as UTC calendar date')
+		tbhdu.header['TELAPSE'] = (tbhdu.header['TSTOP'] - tbhdu.header['TSTART'], '[d] TSTOP - TSTART')
+		tbhdu.header['TIMEPIXR'] = (0.5, 'bin time beginning=0 middle=0.5 end=1')
+		tbhdu.header['TIMEDEL'] = (120/86400 if self.datasource.startswith('tpf') else 3600/86400, '[d] time resolution of data')
+		tbhdu.header['INT_TIME'] = (1.98, '[s] photon accumulation time per frame')
+		tbhdu.header['READTIME'] = (0.02, '[s] readout time per frame')
+		tbhdu.header['FRAMETIM'] = (2.00, '[s] frame time (INT_TIME + READTIME)')
+		tbhdu.header['NUM_FRM'] = (self.n_readout, 'number of frames per time stamp')
 
 		# Make aperture image:
 		# TODO: Pixels used in background calculation (value=4)
