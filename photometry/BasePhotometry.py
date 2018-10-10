@@ -1156,12 +1156,12 @@ class BasePhotometry(object):
 
 		tbhdu.header['TTYPE6'] = ('FLUX_CORR', 'column title: corrected photometric flux')
 		tbhdu.header['TFORM6'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT6'] = ('e-/s', 'column units: electrons per second')
+		tbhdu.header['TUNIT6'] = ('ppm', 'column units: rel. flux in parts-per-million')
 		tbhdu.header['TDISP6'] = ('E26.17', 'column display format')
 
 		tbhdu.header['TTYPE7'] = ('FLUX_CORR_ERR', 'column title: corrected photometric flux error')
 		tbhdu.header['TFORM7'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT7'] = ('e-/s', 'column units: electrons per second')
+		tbhdu.header['TUNIT7'] = ('ppm', 'column units: parts-per-million')
 		tbhdu.header['TDISP7'] = ('E26.17', 'column display format')
 
 		tbhdu.header['TTYPE8'] = ('QUALITY', 'column title: photometry quality flag')
@@ -1193,6 +1193,8 @@ class BasePhotometry(object):
 		# Headers related to time to be added to LIGHTCURVE extension:
 		tbhdu.header['TIMEREF'] = ('SOLARSYSTEM', 'barycentric correction applied to times')
 		tbhdu.header['TIMESYS'] = ('TDB', 'time system is Barycentric Dynamical Time (TDB)')
+		tbhdu.header['BJDREFI'] = (2457000, 'integer part of BTJD reference date')
+		tbhdu.header['BJDREFF'] = (0.0, 'fraction of the day in BTJD reference date')
 		tbhdu.header['TIMEUNIT'] = ('d', 'time unit for TIME, TSTART and TSTOP')
 		tbhdu.header['TSTART'] = (self.lightcurve['time'][0], 'observation start time in BTJD')
 		tbhdu.header['TSTOP'] = (self.lightcurve['time'][-1], 'observation stop time in BTJD')

@@ -133,22 +133,24 @@ class AperturePhotometry(BasePhotometry):
 			flux_in_cluster = img[mask_main]
 
 			# Calculate flux in mask:
-			if allnan(flux_in_cluster):
+			if allnan(flux_in_cluster) or np.all(flux_in_cluster == 0):
 				self.lightcurve['flux'][k] = np.NaN
+				self.lightcurve['pos_centroid'][k, :] = np.NaN
+				#self.lightcurve['quality']
 			else:
-				self.lightcurve['flux'][k] = np.nansum(flux_in_cluster)
+				self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
+
+				# Calculate flux centroid:
+				finite_vals = (flux_in_cluster > 0)
+				if np.any(finite_vals):
+					self.lightcurve['pos_centroid'][k, :] = np.average(members[finite_vals], weights=flux_in_cluster[finite_vals], axis=0)
+				else:
+					self.lightcurve['pos_centroid'][k, :] = np.NaN
 
 			if allnan(bck[mask_main]):
 				self.lightcurve['flux_background'][k] = np.NaN
 			else:
 				self.lightcurve['flux_background'][k] = np.nansum(bck[mask_main])
-
-			# Calculate flux centroid:
-			finite_vals = (flux_in_cluster > 0)
-			if np.any(finite_vals):
-				self.lightcurve['pos_centroid'][k, :] = np.average(members[finite_vals], weights=flux_in_cluster[finite_vals], axis=0)
-			else:
-				self.lightcurve['pos_centroid'][k, :] = np.NaN
 
 		# Save the mask to be stored in the outout file:
 		self.final_mask = mask_main
