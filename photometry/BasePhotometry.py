@@ -1111,13 +1111,18 @@ class BasePhotometry(object):
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Object properties:
+		if isinstance(hdr['PMRA'], fits.card.Undefined) or isinstance(hdr['PMDEC'], fits.card.Undefined):
+			pmtotal = fits.card.Undefined()
+		else:
+			pmtotal = np.sqrt(hdr['PMRA']**2 + hdr['PMDEC']**2)
+
 		hdu.header['RADESYS'] = ('ICRS', 'reference frame of celestial coordinates')
 		hdu.header['EQUINOX'] = (2000.0, 'equinox of celestial coordinate system')
 		hdu.header['RA_OBJ'] = (self.target_pos_ra_J2000, '[deg] Right ascension')
 		hdu.header['DEC_OBJ'] = (self.target_pos_dec_J2000, '[deg] Declination')
 		hdu.header['PMRA'] = (hdr['PMRA'], '[mas/yr] RA proper motion')
 		hdu.header['PMDEC'] = (hdr['PMDEC'], '[mas/yr] Dec proper motion')
-		hdu.header['PMTOTAL'] = (np.sqrt(hdr['PMRA']**2 + hdr['PMDEC']**2), '[mas/yr] total proper motion')
+		hdu.header['PMTOTAL'] = (pmtotal, '[mas/yr] total proper motion')
 		hdu.header['TESSMAG'] = (self.target_tmag, '[mag] TESS magnitude')
 		hdu.header['TICVER'] = (7, 'TESS Input Catalog version')
 
