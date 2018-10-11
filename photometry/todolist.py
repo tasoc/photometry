@@ -120,7 +120,7 @@ def _ffi_todo(input_folder, camera, ccd):
 	return cat
 
 #------------------------------------------------------------------------------
-def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None):
+def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_targets=True):
 
 	logger = logging.getLogger(__name__)
 
@@ -172,38 +172,39 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None):
 				'cbv_area': cbv_area
 			})
 
-			# Load all other targets in this stamp:
-			# Use the WCS of the stamp to find all stars that fall within
-			# the footprint of the stamp.
-			image_shape = hdu[2].shape
-			wcs = WCS(header=hdu[2].header)
-			footprint = wcs.calc_footprint()
-			radec_min = np.min(footprint, axis=0)
-			radec_max = np.max(footprint, axis=0)
-			# TODO: This can fail to find all targets e.g. if the footprint is across the ra=0 line
-			cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND starid != ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1], starid))
-			for row in cursor.fetchall():
-				# Calculate the position of this star on the CCD using the WCS:
-				ra_dec = np.atleast_2d([row['ra'], row['decl']])
-				x, y = wcs.all_world2pix(ra_dec, 0)[0]
+			if find_secondary_targets:
+				# Load all other targets in this stamp:
+				# Use the WCS of the stamp to find all stars that fall within
+				# the footprint of the stamp.
+				image_shape = hdu[2].shape
+				wcs = WCS(header=hdu[2].header)
+				footprint = wcs.calc_footprint()
+				radec_min = np.min(footprint, axis=0)
+				radec_max = np.max(footprint, axis=0)
+				# TODO: This can fail to find all targets e.g. if the footprint is across the ra=0 line
+				cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND starid != ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1], starid))
+				for row in cursor.fetchall():
+					# Calculate the position of this star on the CCD using the WCS:
+					ra_dec = np.atleast_2d([row['ra'], row['decl']])
+					x, y = wcs.all_world2pix(ra_dec, 0)[0]
 
-				# If the target falls outside silicon, do not add it to the todo list:
-				# The reason for the strange 0.5's is that pixel centers are at integers.
-				if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
-					continue
+					# If the target falls outside silicon, do not add it to the todo list:
+					# The reason for the strange 0.5's is that pixel centers are at integers.
+					if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
+						continue
 
-				# Add this secondary target to the list:
-				# Note that we are storing the starid of the target
-				# in which target pixel file the target can be found.
-				logger.debug("Adding extra target: TIC %d", row['starid'])
-				cat.add_row({
-					'starid': row['starid'],
-					'camera': camera,
-					'ccd': ccd,
-					'datasource': 'tpf:' + str(starid),
-					'tmag': row['tmag'],
-					'cbv_area': cbv_area
-				})
+					# Add this secondary target to the list:
+					# Note that we are storing the starid of the target
+					# in which target pixel file the target can be found.
+					logger.debug("Adding extra target: TIC %d", row['starid'])
+					cat.add_row({
+						'starid': row['starid'],
+						'camera': camera,
+						'ccd': ccd,
+						'datasource': 'tpf:' + str(starid),
+						'tmag': row['tmag'],
+						'cbv_area': cbv_area
+					})
 
 			# Close the connection to the catalog SQLite database:
 			cursor.close()
@@ -276,7 +277,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 
 		# Run the TPF files in parallel:
 		tic = default_timer()
-		_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds)
+		_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds, find_secondary_targets=False)
 		for cat2 in pool.imap_unordered(_tpf_todo_wrapper, tpf_files):
 			cat = vstack([cat, cat2], join_type='exact')
 

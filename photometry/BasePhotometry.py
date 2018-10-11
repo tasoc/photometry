@@ -33,6 +33,9 @@ from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
 from .utilities import find_tpf_files
 from .plots import plot_image, plt, save_figure
+from .version import get_version
+
+__version__ = get_version()
 
 __docformat__ = 'restructuredtext'
 
@@ -1080,6 +1083,13 @@ class BasePhotometry(object):
 			'HaloPhotometry': 'halo'
 		}.get(self.__class__.__name__, None)
 
+		# TODO: This really should be done in another way,
+		# but for now it will work...
+		if self.datasource.startswith('tpf'):
+			hdr = self.tpf[0].header
+		else:
+			hdr = self.hdf['images'].attrs
+
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3, 'number of standard extensions')
@@ -1095,9 +1105,8 @@ class BasePhotometry(object):
 		hdu.header['SECTOR'] = (self.sector, 'Observing sector')
 
 		# Versions:
-		#hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline') # TODO: Automatic add this information
-		hdu.header['PROCVER'] = ('', 'Version of photometry pipeline')
-		hdu.header['FILEVER'] = ('0.1', 'File format version')
+		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
+		hdu.header['FILEVER'] = ('1.0', 'File format version')
 		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
@@ -1106,7 +1115,16 @@ class BasePhotometry(object):
 		hdu.header['EQUINOX'] = (2000.0, 'equinox of celestial coordinate system')
 		hdu.header['RA_OBJ'] = (self.target_pos_ra_J2000, '[deg] Right ascension')
 		hdu.header['DEC_OBJ'] = (self.target_pos_dec_J2000, '[deg] Declination')
+		hdu.header['PMRA'] = (hdr['PMRA'], '[mas/yr] RA proper motion')
+		hdu.header['PMDEC'] = (hdr['PMDEC'], '[mas/yr] Dec proper motion')
+		hdu.header['PMTOTAL'] = (np.sqrt(hdr['PMRA']**2 + hdr['PMDEC']**2), '[mas/yr] total proper motion')
 		hdu.header['TESSMAG'] = (self.target_tmag, '[mag] TESS magnitude')
+		hdu.header['TICVER'] = (7, 'TESS Input Catalog version')
+
+		# Cosmic ray headers:
+		hdu.header['CRMITEN'] = (hdr['CRMITEN'], 'spacecraft cosmic ray mitigation enabled')
+		hdu.header['CRBLKSZ'] = (hdr['CRBLKSZ'], '[exposures] s/c cosmic ray mitigation block siz')
+		hdu.header['CRSPOC'] = (hdr['CRSPOC'], 'SPOC cosmic ray cleaning enabled')
 
 		# Add K2P2 Settings to the header of the file:
 		if self.additional_headers:
@@ -1190,19 +1208,26 @@ class BasePhotometry(object):
 
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
+		# Timestamps of start and end of timeseries:
+		tdel = 120/86400 if self.datasource.startswith('tpf') else 3600/86400
+		tstart = self.lightcurve['time'][0] - tdel/2
+		tstop = self.lightcurve['time'][-1] + tdel/2
+
 		# Headers related to time to be added to LIGHTCURVE extension:
 		tbhdu.header['TIMEREF'] = ('SOLARSYSTEM', 'barycentric correction applied to times')
 		tbhdu.header['TIMESYS'] = ('TDB', 'time system is Barycentric Dynamical Time (TDB)')
 		tbhdu.header['BJDREFI'] = (2457000, 'integer part of BTJD reference date')
 		tbhdu.header['BJDREFF'] = (0.0, 'fraction of the day in BTJD reference date')
 		tbhdu.header['TIMEUNIT'] = ('d', 'time unit for TIME, TSTART and TSTOP')
-		tbhdu.header['TSTART'] = (self.lightcurve['time'][0], 'observation start time in BTJD')
-		tbhdu.header['TSTOP'] = (self.lightcurve['time'][-1], 'observation stop time in BTJD')
-		#tbhdu.header['DATE-BEG'] = (Time(tbhdu.header['TSTART'] + 2457000 - self.lightcurve['timecorr'][0], format='jd', scale='tdb').isot, 'TSTART as UTC calendar date')
-		#tbhdu.header['DATE-END'] = (Time(tbhdu.header['TSTOP'] + 2457000 - self.lightcurve['timecorr'][-1], format='jd', scale='tdb').isot, 'TSTOP as UTC calendar date')
+		tbhdu.header['TSTART'] = (tstart, 'observation start time in BTJD')
+		tbhdu.header['TSTOP'] = (tstop, 'observation stop time in BTJD')
+		tbhdu.header['DATE-OBS'] = (Time(tstart + 2457000, format='jd', scale='tdb').utc.isot + 'Z', 'TSTART as UTC calendar date')
+		tbhdu.header['DATE-END'] = (Time(tstop + 2457000, format='jd', scale='tdb').utc.isot + 'Z', 'TSTOP as UTC calendar date')
 		tbhdu.header['TELAPSE'] = (tbhdu.header['TSTOP'] - tbhdu.header['TSTART'], '[d] TSTOP - TSTART')
+		#tbhdu.header['DEADC'] = (0.7920000000000000, 'deadtime correction')
+		#tbhdu.header['EXPOSURE'] = (22.083701445106, '[d] time on source')
 		tbhdu.header['TIMEPIXR'] = (0.5, 'bin time beginning=0 middle=0.5 end=1')
-		tbhdu.header['TIMEDEL'] = (120/86400 if self.datasource.startswith('tpf') else 3600/86400, '[d] time resolution of data')
+		tbhdu.header['TIMEDEL'] = (tdel, '[d] time resolution of data')
 		tbhdu.header['INT_TIME'] = (1.98, '[s] photon accumulation time per frame')
 		tbhdu.header['READTIME'] = (0.02, '[s] readout time per frame')
 		tbhdu.header['FRAMETIM'] = (2.00, '[s] frame time (INT_TIME + READTIME)')
@@ -1239,6 +1264,6 @@ class BasePhotometry(object):
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
 
 		# Store the output file in the details object for future reference:
-		self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base)
+		self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base).replace('\\', '/')
 
 		return filepath

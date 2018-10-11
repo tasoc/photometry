@@ -8,12 +8,12 @@ git-describe is used to get the version information.
 If this is not a git repository, then it is reasonable to
 assume that the version is not being incremented and the
 version returned will be the release version as read from
-the VERSION file, which holds the version information. 
+the VERSION file, which holds the version information.
 
 The file VERSION will need to be changed by manually. This should be done
 before running git tag (set to the same as the version in the tag).
 
-Inspired by 
+Inspired by
 https://github.com/aebrahim/python-git-version
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -72,7 +72,7 @@ def call_git_describe(abbrev=7):
 	"""return the string output of git desribe"""
 	try:
 		with open(devnull, "w") as fnull:
-			arguments = [GIT_COMMAND, "describe", "--tags", "--dirty",
+			arguments = [GIT_COMMAND, "describe", "--tags",
 						 "--abbrev=%d" % abbrev]
 			return check_output(arguments, cwd=CURRENT_DIRECTORY,
 								stderr=fnull).decode("ascii").strip()
@@ -129,12 +129,12 @@ def get_version(pep440=False):
 
 	The file VERSION will need to be changed by manually. This should be done
 	before running git tag (set to the same as the version in the tag).
-	
+
 	Parameters:
 		pep440 (bool): When True, this function returns a version string suitable for
 		a release as defined by PEP 440. When False, the githash (if
 		available) will be appended to the version string.
-		
+
 	Returns:
 		string: Version sting.
 	"""
