@@ -198,6 +198,13 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				hdf.require_dataset('imagespaths', (numfiles,), data=filenames, dtype=h5py.special_dtype(vlen=bytes), **args)
 
 				is_tess = False
+				attributes = {
+					'DATA_REL': None,
+					'NUM_FRM': None,
+					'CRMITEN': None,
+					'CRBLKSZ': None,
+					'CRSPOC': None
+				}
 				for k, fname in enumerate(files):
 					logger.debug("Processing image: %.2f%% - %s", 100*k/numfiles, fname)
 					dset_name ='%04d' % k
@@ -217,9 +224,13 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 					quality[k] = hdr.get('DQUALITY', 0)
 
 					if k == 0:
-						num_frm = hdr.get('NUM_FRM')
-					elif hdr.get('NUM_FRM') != num_frm:
-						logger.error("NUM_FRM is not constant!")
+						for key in attributes.keys():
+							attributes[key] = hdr.get(key)
+					else:
+						for key, value in attributes.items():
+							if hdr.get(key) != value:
+								logger.error("%s is not constant!", key)
+
 					#if hdr.get('SECTOR') != sector:
 					#	logger.error("Incorrect SECTOR: Catalog=%s, FITS=%s", sector, hdr.get('SECTOR'))
 					if hdr.get('CAMERA') != camera or hdr.get('CCD') != ccd:
@@ -249,7 +260,8 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				SumImage /= numfiles
 
 				# Save attributes
-				images.attrs['NUM_FRM'] = num_frm
+				for key, value in attributes.items():
+					images.attrs[key] = value
 
 				# Set pixel offsets:
 				if is_tess:

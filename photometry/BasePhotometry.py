@@ -1045,7 +1045,7 @@ class BasePhotometry(object):
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
-	def save_lightcurve(self, output_folder=None, data_rel=0):
+	def save_lightcurve(self, output_folder=None, version=1):
 		"""
 		Save generated lightcurve to file.
 
@@ -1090,6 +1090,9 @@ class BasePhotometry(object):
 		else:
 			hdr = self.hdf['images'].attrs
 
+		# Get data release number of original file:
+		data_rel = hdr['DATA_REL']
+
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3, 'number of standard extensions')
@@ -1108,6 +1111,7 @@ class BasePhotometry(object):
 		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
 		hdu.header['FILEVER'] = ('1.0', 'File format version')
 		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
+		hdu.header['VERSION'] = (version, 'Version of the processing')
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Object properties:
@@ -1214,7 +1218,8 @@ class BasePhotometry(object):
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
 		# Timestamps of start and end of timeseries:
-		tdel = 120/86400 if self.datasource.startswith('tpf') else 3600/86400
+		cadence = 120 if self.datasource.startswith('tpf') else 1800
+		tdel = cadence/86400
 		tstart = self.lightcurve['time'][0] - tdel/2
 		tstop = self.lightcurve['time'][-1] + tdel/2
 
@@ -1256,11 +1261,12 @@ class BasePhotometry(object):
 		img_sumimage = fits.ImageHDU(data=self.sumimage, header=header, name="SUMIMAGE")
 
 		# File name to save the lightcurve under:
-		filename = 'tess{starid:011d}-s{sector:02d}-{cadence:s}-dr{datarel:02d}-tasoc_lc.fits'.format(
+		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits'.format(
 			starid=self.starid,
 			sector=self.sector,
-			cadence='120' if self.datasource.startswith('tpf') else 'ffi',
-			datarel=data_rel
+			cadence=cadence,
+			datarel=data_rel,
+			version=version
 		)
 
 		# Write to file:
