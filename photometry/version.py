@@ -79,6 +79,14 @@ def call_git_describe(abbrev=7):
 	except (OSError, CalledProcessError):
 		return None
 
+def call_git_getbranch():
+	try:
+		with open(devnull, "w") as fnull:
+			arguments = [GIT_COMMAND, "symbolic-ref", "--short", "HEAD"]
+			return check_output(arguments, cwd=CURRENT_DIRECTORY,
+						stderr=fnull).decode("ascii").strip()
+	except (OSError, CalledProcessError):
+		return None
 
 def format_git_describe(git_str, pep440=False):
 	"""format the result of calling 'git describe' as a python version"""
@@ -94,7 +102,6 @@ def format_git_describe(git_str, pep440=False):
 			return git_str.split("-")[0]
 		else:
 			return git_str.replace("-g", "+git")
-
 
 def read_release_version():
 	"""Read version information from VERSION file"""
@@ -115,7 +122,7 @@ def update_release_version():
 		outfile.write(version)
 
 
-def get_version(pep440=False):
+def get_version(pep440=False, include_branch=True):
 	"""
 	Tracks the version number.
 
@@ -142,6 +149,10 @@ def get_version(pep440=False):
 	git_version = format_git_describe(call_git_describe(), pep440=pep440)
 	if git_version is None: # not a git repository
 		return read_release_version()
+
+	if include_branch:
+		git_version = call_git_getbranch() + '-' + git_version
+
 	return git_version
 
 
