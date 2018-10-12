@@ -1,13 +1,17 @@
 six
 pytest
+pytest-mpl
 numpy
-scipy
-matplotlib
-astropy
-photutils
-Bottleneck
+scipy >= 0.16
+matplotlib == 2.1.2
+astropy >= 2.0, < 3.0
+photutils >= 0.4
+Bottleneck >= 1.2
 h5py
 enum-compat
-scikit-image==0.13.0
-scikit-learn==0.19.0
-statsmodels==0.8.0
+scikit-image == 0.13.0
+scikit-learn == 0.19.0
+statsmodels == 0.8.0
+opencv-python
+psycopg2-binary
+backports.tempfile

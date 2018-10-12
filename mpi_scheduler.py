@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Scheduler using MPI for running the TESS photometry
-pipeline on a large scale multicore computer.
+pipeline on a large scale multi-core computer.
 
 The setup uses the task-pull paradigm for high-throughput computing
 using ``mpi4py``. Task pull is an efficient way to perform a large number of
@@ -10,164 +10,162 @@ independent tasks when there are more tasks than processors, especially
 when the run times vary for each task.
 
 The basic example was inspired by
-http://math.acadiau.ca/ACMMaC/Rmpi/index.html
+https://github.com/jbornschein/mpi4py-examples/blob/master/09-task-pull.py
 
-Example:
+Example
+-------
+To run the program using four processes (one master and three workers) you can
+execute the following command:
 
->> mpiexec -n 4 python mpi_scheduler.py
+>>> mpiexec -n 4 python mpi_scheduler.py
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 from __future__ import with_statement, print_function
 from mpi4py import MPI
-import sys
+import argparse
+import logging
+import traceback
 import os
 import enum
-import logging
-
-# Get paths to input and output files from environment variables:
-input_folder = os.environ['TESSPHOT_INPUT']
-output_folder = os.environ['TESSPHOT_OUTPUT']
-todo_file = os.path.join(input_folder, 'todo.sqlite')
 
 #------------------------------------------------------------------------------
-class TaskManager(object):
-	def __init__(self, todo_file):
-		self.conn = sqlite3.connect(todo_file)
-		self.conn.row_factory = sqlite3.Row
-		self.cursor = self.conn.cursor()
+def main():
+	# Parse command line arguments:
+	parser = argparse.ArgumentParser(description='Run TESS Photometry in parallel using MPI.')
+	#parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
+	#parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
+	args = parser.parse_args()
 
-		# Reset the status of everything for a new run:
-		# TODO: This should obviously be removed once we start running for real
-		self.cursor.execute("UPDATE todolist SET status=NULL,elaptime=NULL;")
-		self.conn.commit()
-		
-		# Setup logging:
+	# Get paths to input and output files from environment variables:
+	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
+	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
+	todo_file = os.path.join(input_folder, 'todo.sqlite')
+
+	# Define MPI message tags
+	tags = enum.IntEnum('tags', ('READY', 'DONE', 'EXIT', 'START'))
+
+	# Initializations and preliminaries
+	comm = MPI.COMM_WORLD   # get MPI communicator object
+	size = comm.size        # total number of processes
+	rank = comm.rank        # rank of this process
+	status = MPI.Status()   # get MPI status object
+
+	if rank == 0:
+		# Master process executes code below
+		from photometry import TaskManager
+
+		try:
+			with TaskManager(todo_file, cleanup=True, summary=os.path.join(output_folder, 'summary.json')) as tm:
+				# Get list of tasks:
+				numtasks = tm.get_number_tasks()
+				tm.logger.info("%d tasks to be run", numtasks)
+
+				# Start the master loop that will assign tasks
+				# to the workers:
+				num_workers = size - 1
+				closed_workers = 0
+				tm.logger.info("Master starting with %d workers", num_workers)
+				while closed_workers < num_workers:
+					# Ask workers for information:
+					data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
+					source = status.Get_source()
+					tag = status.Get_tag()
+
+					if tag == tags.DONE:
+						# The worker is done with a task
+						tm.logger.info("Got data from worker %d: %s", source, data)
+						tm.save_result(data)
+
+					if tag in (tags.DONE, tags.READY):
+						# Worker is ready, so send it a task
+						task = tm.get_task()
+						if task:
+							task_index = task['priority']
+							tm.start_task(task_index)
+							comm.send(task, dest=source, tag=tags.START)
+							tm.logger.info("Sending task %d to worker %d", task_index, source)
+						else:
+							comm.send(None, dest=source, tag=tags.EXIT)
+
+					elif tag == tags.EXIT:
+						# The worker has exited
+						tm.logger.info("Worker %d exited.", source)
+						closed_workers += 1
+
+					else:
+						# This should never happen, but just to
+						# make sure we don't run into an infinite loop:
+						raise Exception("Master received an unknown tag: '{0}'".format(tag))
+
+				tm.logger.info("Master finishing")
+
+		except:
+			# If something fails in the master
+			print(traceback.format_exc().strip())
+			comm.Abort(1)
+
+	else:
+		# Worker processes execute code below
+		from photometry import tessphot
+		from timeit import default_timer
+
+		# Configure logging within photometry:
 		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 		console = logging.StreamHandler()
 		console.setFormatter(formatter)
-		self.logger = logging.getLogger(__name__)
-		self.logger.addHandler(console)
-		self.logger.setLevel(logging.INFO)
+		logger = logging.getLogger('photometry')
+		logger.addHandler(console)
+		logger.setLevel(logging.WARNING)
 
-	def close(self):
-		self.cursor.close()
-		self.conn.close()
+		try:
+			# Send signal that we are ready for task:
+			comm.send(None, dest=0, tag=tags.READY)
 
-	def __exit__(self, *args):
-		self.close()
+			while True:
+				# Receive a task from the master:
+				task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
+				tag = status.Get_tag()
 
-	def __enter__(self):
-		return self
+				if tag == tags.START:
+					# Do the work here
+					result = task.copy()
+					del task['priority']
 
-	def get_tasks(self):
-		self.cursor.execute("SELECT starid,method FROM todolist WHERE status IS NULL ORDER BY priority;")
-		tasks = self.cursor.fetchall()
-		tasks = [dict(t) for t in tasks]
-		return tasks
+					t1 = default_timer()
+					pho = tessphot(input_folder=input_folder, output_folder=output_folder, plot=args.plot, **task)
+					t2 = default_timer()
 
-	def save_result(self, result):
-		self.cursor.execute("UPDATE todolist SET status=?,elaptime=? WHERE starid=?;", (result['status'].value, result['time'], result['starid']))
-		self.conn.commit()
+					# Construct result message:
+					result.update({
+						'status': pho.status,
+						'time': t2 - t1,
+						'details': pho._details
+					})
 
+					# Send the result back to the master:
+					comm.send(result, dest=0, tag=tags.DONE)
 
-#------------------------------------------------------------------------------
+					# Attempt some cleanup:
+					# TODO: Is this even needed?
+					del pho, task, result
 
-# Define MPI message tags
-tags = enum.IntEnum('tags', ('READY', 'DONE', 'EXIT', 'START'))
+				elif tag == tags.EXIT:
+					# We were told to EXIT, so lets do that
+					break
 
-# Initializations and preliminaries
-comm = MPI.COMM_WORLD   # get MPI communicator object
-size = comm.size        # total number of processes
-rank = comm.rank        # rank of this process
-status = MPI.Status()   # get MPI status object
-
-if rank == 0:
-	# Master process executes code below
-	import sqlite3
-
-	with TaskManager(todo_file) as tm:
-		# Get list of tasks:
-		tasks = tm.get_tasks()
-		tm.logger.info("%d tasks to be run", len(tasks))
-
-		# Start the master loop that will assing tasks
-		# to the workers:
-		task_index = 0
-		num_workers = size - 1
-		closed_workers = 0
-		tm.logger.info("Master starting with %d workers", num_workers)
-		while closed_workers < num_workers:
-			# Ask workers for information:
-			data = comm.recv(source=MPI.ANY_SOURCE, tag=MPI.ANY_TAG, status=status)
-			source = status.Get_source()
-			tag = status.Get_tag()
-
-			if tag == tags.READY:
-				# Worker is ready, so send it a task
-				if task_index < len(tasks):
-					comm.send(tasks[task_index], dest=source, tag=tags.START)
-					tm.logger.info("Sending task %d to worker %d", task_index, source)
-					task_index += 1
 				else:
-					comm.send(None, dest=source, tag=tags.EXIT)
+					# This should never happen, but just to
+					# make sure we don't run into an infinite loop:
+					raise Exception("Worker received an unknown tag: '{0}'".format(tag))
 
-			elif tag == tags.DONE:
-				# The worker is done with a task
-				tm.logger.info("Got data from worker %d: %s", source, data)
-				tm.save_result(data)
+		except:
+			logger.exception("Something failed in worker")
 
-			elif tag == tags.EXIT:
-				# The worker has exited
-				tm.logger.info("Worker %d exited.", source)
-				closed_workers += 1
-				
-			else:
-				# This should never happen, but just to
-				# make sure we dont run into an infinite loop:
-				raise Exception("Master recieved an unknown tag: '{0}'".format(tag))
+		finally:
+			comm.send(None, dest=0, tag=tags.EXIT)
 
-	tm.logger.info("Master finishing")
-
-else:
-	# Worker processes execute code below
-	from photometry import tessphot
-	from timeit import default_timer
-
-	while True:
-		# Send signal that we are ready for task,
-		# and recieve a task from the master:
-		comm.send(None, dest=0, tag=tags.READY)
-		task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
-		tag = status.Get_tag()
-
-		if tag == tags.START:
-			# Do the work here
-			task['input_folder'] = input_folder
-			task['output_folder'] = output_folder
-
-			t1 = default_timer()
-			pho = tessphot(**task)
-			t2 = default_timer()
-
-			# Construct result message:
-			result = {
-				'starid': pho.starid,
-				'status': pho.status,
-				'time': t2 - t1
-			}
-
-			# Send the result back to the master:
-			comm.send(result, dest=0, tag=tags.DONE)
-
-		elif tag == tags.EXIT:
-			# We were told to EXIT, so lets do that
-			break
-			
-		else:
-			# This should never happen, but just to
-			# make sure we dont run into an infinite loop:
-			raise Exception("Worker recieved an unknown tag: '{0}'".format(tag))
-
-	comm.send(None, dest=0, tag=tags.EXIT)
+if __name__ == '__main__':
+	main()
