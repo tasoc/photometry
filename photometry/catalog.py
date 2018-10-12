@@ -74,6 +74,7 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 				sector INT NOT NULL,
 				camera INT NOT NULL,
 				ccd INT NOT NULL,
+				ticver INT NOT NULL,
 				reference_time DOUBLE PRECISION NOT NULL,
 				epoch DOUBLE PRECISION NOT NULL,
 				coord_buffer DOUBLE PRECISION NOT NULL,
@@ -88,6 +89,8 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 				decl DOUBLE PRECISION NOT NULL,
 				ra_J2000 DOUBLE PRECISION NOT NULL,
 				decl_J2000 DOUBLE PRECISION NOT NULL,
+				pm_ra REAL,
+				pm_decl REAL,
 				tmag REAL NOT NULL
 			);""")
 
@@ -122,7 +125,7 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 			logger.info(footprint)
 
 			# Save settings to SQLite:
-			cursor.execute("INSERT INTO settings (sector,camera,ccd,reference_time,epoch,coord_buffer,footprint,camera_centre_ra,camera_centre_dec) VALUES (?,?,?,?,?,?,?,?,?);", (
+			cursor.execute("INSERT INTO settings (sector,camera,ccd,reference_time,epoch,coord_buffer,footprint,camera_centre_ra,camera_centre_dec,ticver) VALUES (?,?,?,?,?,?,?,?,?,?);", (
 				sector,
 				camera,
 				ccd,
@@ -131,7 +134,8 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 				coord_buffer,
 				footprint,
 				camera_centre_ra,
-				camera_centre_dec
+				camera_centre_dec,
+				7 # TODO: TIC Version hard-coded to TIC-7. This should obviously be changed when TIC is updated
 			))
 			conn.commit()
 
@@ -154,12 +158,14 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 					dec = row['decl']
 
 				# Save the coordinates in SQLite database:
-				cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,tmag) VALUES (?,?,?,?,?,?);", (
+				cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag) VALUES (?,?,?,?,?,?,?,?);", (
 					int(row['starid']),
 					ra,
 					dec,
 					row['ra'],
 					row['decl'],
+					row['pm_ra'],
+					row['pm_decl'],
 					row['Tmag']
 				))
 

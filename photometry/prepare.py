@@ -261,6 +261,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 				# Save attributes
 				for key, value in attributes.items():
+					logger.debug("Saving attribute %s = %s", key, value)
 					images.attrs[key] = value
 
 				# Set pixel offsets:

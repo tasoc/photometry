@@ -325,20 +325,22 @@ class BasePhotometry(object):
 		conn = sqlite3.connect(self.catalog_file)
 		conn.row_factory = sqlite3.Row
 		cursor = conn.cursor()
-		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,tmag FROM catalog WHERE starid={0:d};".format(self.starid))
+		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag FROM catalog WHERE starid={0:d};".format(self.starid))
 		target = cursor.fetchone()
 		if target is None:
 			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
+		self.target = dict(target) # Dictionary of all main target properties.
 		self.target_tmag = target['tmag'] # TESS magnitude of the main target.
 		self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
 		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
 		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
 		self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
-		cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
+		cursor.execute("SELECT sector,reference_time,ticver FROM settings LIMIT 1;")
 		target = cursor.fetchone()
 		if target is not None:
 			self._catalog_reference_time = target['reference_time']
 			self.sector = target['sector']
+			self.ticver = target['ticver']
 		cursor.close()
 		conn.close()
 
@@ -1115,20 +1117,20 @@ class BasePhotometry(object):
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
 		# Object properties:
-		if isinstance(hdr['PMRA'], fits.card.Undefined) or isinstance(hdr['PMDEC'], fits.card.Undefined):
+		if self.target['pm_ra'] is None or self.target['pm_decl'] is None:
 			pmtotal = fits.card.Undefined()
 		else:
-			pmtotal = np.sqrt(hdr['PMRA']**2 + hdr['PMDEC']**2)
+			pmtotal = np.sqrt(self.target['pm_ra']**2 + self.target['pm_decl']**2)
 
 		hdu.header['RADESYS'] = ('ICRS', 'reference frame of celestial coordinates')
 		hdu.header['EQUINOX'] = (2000.0, 'equinox of celestial coordinate system')
 		hdu.header['RA_OBJ'] = (self.target_pos_ra_J2000, '[deg] Right ascension')
 		hdu.header['DEC_OBJ'] = (self.target_pos_dec_J2000, '[deg] Declination')
-		hdu.header['PMRA'] = (hdr['PMRA'], '[mas/yr] RA proper motion')
-		hdu.header['PMDEC'] = (hdr['PMDEC'], '[mas/yr] Dec proper motion')
+		hdu.header['PMRA'] = (fits.card.Undefined() if not self.target['pm_ra'] else self.target['pm_ra'], '[mas/yr] RA proper motion')
+		hdu.header['PMDEC'] = (fits.card.Undefined() if not self.target['pm_decl'] else self.target['pm_decl'], '[mas/yr] Dec proper motion')
 		hdu.header['PMTOTAL'] = (pmtotal, '[mas/yr] total proper motion')
 		hdu.header['TESSMAG'] = (self.target_tmag, '[mag] TESS magnitude')
-		hdu.header['TICVER'] = (7, 'TESS Input Catalog version')
+		hdu.header['TICVER'] = (self.ticver, 'TESS Input Catalog version')
 
 		# Cosmic ray headers:
 		hdu.header['CRMITEN'] = (hdr['CRMITEN'], 'spacecraft cosmic ray mitigation enabled')

@@ -113,17 +113,18 @@ def load_ffi_fits(path, return_header=False):
 
 	Returns:
 		numpy.ndarray: Full Frame Image.
-		list: If ``return_header`` is enabled, will return a list of the FITS headers.
+		list: If ``return_header`` is enabled, will return a dict of the FITS headers.
 	"""
 
 	with fits.open(path, memmap=True, mode='readonly') as hdu:
 		hdr = hdu[0].header
 		if hdr.get('TELESCOP') == 'TESS' and hdu[1].header.get('NAXIS1') == 2136 and hdu[1].header.get('NAXIS2') == 2078:
 			img = hdu[1].data[0:2048, 44:2092]
-			headers = hdu[1].header
+			headers = dict(hdu[0].header)
+			headers.update(dict(hdu[1].header))
 		else:
 			img = hdu[0].data
-			headers = hdu[0].header
+			headers = dict(hdu[0].header)
 
 	# Make sure its an numpy array with the correct data type:
 	img = np.asarray(img, dtype='float32')
