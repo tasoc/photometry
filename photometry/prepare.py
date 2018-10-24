@@ -115,6 +115,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 		with h5py.File(hdf_file, 'a', libver='latest') as hdf:
 
 			images = hdf.require_group('images')
+			images_err = hdf.require_group('images_err')
 			backgrounds = hdf.require_group('backgrounds')
 			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
@@ -210,7 +211,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 					dset_name ='%04d' % k
 
 					# Load the FITS file data and the header:
-					flux0, hdr = load_ffi_fits(fname, return_header=True)
+					flux0, hdr, flux0_err = load_ffi_fits(fname, return_header=True, return_uncert=True)
 
 					# Check if this is real TESS data:
 					# Could proberly be done more elegant, but if it works, it works...
@@ -244,6 +245,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 						# Save image subtracted the background in HDF5 file:
 						images.create_dataset(dset_name, data=flux0, chunks=imgchunks, **args)
+						images_err.create_dataset(dset_name, data=flux0_err, chunks=imgchunks, **args)
 					else:
 						flux0 = np.asarray(images[dset_name])
 

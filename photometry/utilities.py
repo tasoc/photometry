@@ -101,7 +101,7 @@ def find_tpf_files(rootdir, starid=None):
 	return matches
 
 #------------------------------------------------------------------------------
-def load_ffi_fits(path, return_header=False):
+def load_ffi_fits(path, return_header=False, return_uncert=False):
 	"""
 	Load FFI FITS file.
 
@@ -120,16 +120,24 @@ def load_ffi_fits(path, return_header=False):
 		hdr = hdu[0].header
 		if hdr.get('TELESCOP') == 'TESS' and hdu[1].header.get('NAXIS1') == 2136 and hdu[1].header.get('NAXIS2') == 2078:
 			img = hdu[1].data[0:2048, 44:2092]
+			if return_uncert:
+				imgerr = np.asarray(hdu[2].data[0:2048, 44:2092], dtype='float32')
 			headers = dict(hdu[0].header)
 			headers.update(dict(hdu[1].header))
 		else:
 			img = hdu[0].data
 			headers = dict(hdu[0].header)
+			if return_uncert:
+				imgerr = np.asarray(hdu[1].data, dtype='float32')
 
 	# Make sure its an numpy array with the correct data type:
 	img = np.asarray(img, dtype='float32')
 
-	if return_header:
+	if return_uncert and return_header:
+		return img, headers, imgerr
+	elif return_uncert:
+		return img, imgerr
+	elif return_header:
 		return img, headers
 	else:
 		return img

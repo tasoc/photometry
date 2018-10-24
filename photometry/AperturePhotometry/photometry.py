@@ -128,17 +128,19 @@ class AperturePhotometry(BasePhotometry):
 		members = np.column_stack((cols[mask_main], rows[mask_main]))
 
 		# Loop through the images and backgrounds together:
-		for k, (img, bck) in enumerate(zip(self.images, self.backgrounds)):
+		for k, (img, imgerr, bck) in enumerate(zip(self.images, self.images_err, self.backgrounds)):
 
 			flux_in_cluster = img[mask_main]
 
 			# Calculate flux in mask:
 			if allnan(flux_in_cluster) or np.all(flux_in_cluster == 0):
 				self.lightcurve['flux'][k] = np.NaN
+				self.lightcurve['flux_err'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k, :] = np.NaN
 				#self.lightcurve['quality']
 			else:
 				self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
+				self.lightcurve['flux_err'][k] = np.sqrt(np.sum(imgerr[mask_main]**2))
 
 				# Calculate flux centroid:
 				finite_vals = (flux_in_cluster > 0)
