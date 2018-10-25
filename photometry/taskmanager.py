@@ -69,6 +69,8 @@ class TaskManager(object):
 			elaptime REAL NOT NULL,
 			mean_flux DOUBLE PRECISION,
 			variance DOUBLE PRECISION,
+			rms_hour DOUBLE PRECISION,
+			ptp DOUBLE PRECISION,
 			mask_size INT,
 			pos_row REAL,
 			pos_column REAL,
@@ -206,7 +208,7 @@ class TaskManager(object):
 		if error_msg:
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, rms_hour, ptp, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
@@ -215,6 +217,8 @@ class TaskManager(object):
 			details.get('pos_centroid', (None, None))[1],
 			details.get('mean_flux', None),
 			details.get('variance', None),
+			details.get('rms_hour', None),
+			details.get('ptp', None),
 			details.get('mask_size', None),
 			details.get('contamination', None),
 			details.get('stamp_resizes', 0),

@@ -11,13 +11,18 @@ from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range
 import numpy as np
 from astropy.io import fits
-from bottleneck import move_median, nanmedian
+from bottleneck import move_median, nanmedian, nanmean
 import logging
 from scipy.special import erf
+from scipy.stats import binned_statistic
 import json
 import os.path
 import fnmatch
 
+# Constants:
+mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
+
+#------------------------------------------------------------------------------
 def load_settings(sector=None):
 
 	with open(os.path.join(os.path.dirname(__file__), 'data', 'settings.json'), 'r') as fid:
@@ -267,3 +272,29 @@ def sphere_distance(ra1, dec1, ra2, dec2):
 		np.sqrt( (np.cos(dec2)*np.sin(ra2-ra1))**2 + (np.cos(dec1)*np.sin(dec2) - np.sin(dec1)*np.cos(dec2)*np.cos(ra2-ra1))**2 ),
 		np.sin(dec1)*np.sin(dec2) + np.cos(dec1)*np.cos(dec2)*np.cos(ra2-ra1)
 	))
+
+#------------------------------------------------------------------------------
+def rms_timescale(time, flux, timescale=3600/86400):
+	"""
+	Compute robust RMS on specified timescale. Using MAD scaled to RMS.
+
+	Parameters:
+		time (ndarray): Timestamps in days.
+		flux (ndarray): Flux to calculate RMS for.
+		timescale (float, optional): Timescale to bin timeseries before calculating RMS. Default=1 hour.
+
+	Returns:
+		float: Robust RMS on specified timescale.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	# Construct the bin edges seperated by the timescale:
+	bins = np.arange(np.nanmin(time), np.nanmax(time), timescale)
+	bins = np.append(bins, np.nanmax(time))
+
+	# Bin the timeseries to one hour:
+	flux_bin, _, _ = binned_statistic(time, flux, nanmean, bins=bins)
+
+	# Compute robust RMS value (MAD scaled to RMS)
+	return mad_to_sigma * nanmedian(np.abs(flux_bin - nanmedian(flux_bin)))

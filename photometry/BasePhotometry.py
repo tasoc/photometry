@@ -31,7 +31,7 @@ import enum
 from bottleneck import replace, nanmedian, ss
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
-from .utilities import find_tpf_files
+from .utilities import find_tpf_files, rms_timescale
 from .plots import plot_image, plt, save_figure
 from .version import get_version
 
@@ -1087,6 +1087,8 @@ class BasePhotometry(object):
 		if self._status in (STATUS.OK, STATUS.WARNING):
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
 			self._details['variance'] = ss(self.lightcurve['flux'] - self._details['mean_flux']) / (len(self.lightcurve['flux'])-1)
+			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], self.lightcurve['flux'], timescale=3600/86400)
+			self._details['ptp'] = nanmedian(np.abs(np.diff(self.lightcurve['flux'])))
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
 			if self.final_mask is not None:
 				self._details['mask_size'] = int(np.sum(self.final_mask))
