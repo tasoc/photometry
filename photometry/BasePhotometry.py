@@ -353,6 +353,7 @@ class BasePhotometry(object):
 		self.lightcurve['flux_err'] = Column(length=self.Ntimes, description='Flux Error', dtype='float64')
 		self.lightcurve['flux_background'] = Column(length=self.Ntimes, description='Background flux', dtype='float64')
 		self.lightcurve['pos_centroid'] = Column(length=self.Ntimes, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
+		self.lightcurve['pos_corr'] = Column(length=self.Ntimes, shape=(2,), description='Position correction', unit='pixels', dtype='float64')
 
 		# Init arrays that will be filled with lightcurve stuff:
 		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
@@ -365,6 +366,13 @@ class BasePhotometry(object):
 			self.target_pos_row += self.pixel_offset_row
 		logger.info("Target column: %f", self.target_pos_column)
 		logger.info("Target row: %f", self.target_pos_row)
+
+		# Store the jitter at the target position:
+		# TODO: TPF and FFI may end up with slightly different zero-points.
+		if self.datasource.startswith('tpf'):
+			self.lightcurve['pos_corr'][:] = np.column_stack((self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']))
+		else:
+			self.lightcurve['pos_corr'][:] = self.MovementKernel.jitter(self.lightcurve['time'], self.target_pos_column, self.target_pos_row)
 
 		# Init the stamp:
 		self._stamp = None
@@ -967,17 +975,22 @@ class BasePhotometry(object):
 			elif self.datasource.startswith('tpf'):
 				# Create translation kernel from the positions provided in the
 				# target pixel file.
-				# Find the timestamp closest to the reference time:
-				refindx = np.searchsorted(self.lightcurve['time'], self._catalog_reference_time, side='left')
-				if refindx > 0 and (refindx == len(self.lightcurve['time']) or abs(self._catalog_reference_time - self.lightcurve['time'][refindx-1]) < abs(self._catalog_reference_time - self.lightcurve['time'][refindx])):
-					refindx -= 1
-				# Load kernels from FITS file, and rescale the reference point:
+				# Load kernels from FITS file:
 				kernels = np.column_stack((self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']))
+				indx = np.isfinite(self.lightcurve['time']) & np.all(np.isfinite(kernels), axis=1)
+				times = self.lightcurve['time'][indx]
+				kernels = kernels[indx]
+				# Find the timestamp closest to the reference time:
+				refindx = np.searchsorted(times, self._catalog_reference_time, side='left')
+				if refindx > 0 and (refindx == len(times) or abs(self._catalog_reference_time - times[refindx-1]) < abs(self._catalog_reference_time - times[refindx])):
+					refindx -= 1
+				# Rescale kernels to the reference point:
+				kernels = np.column_stack((self.tpf[1].data['POS_CORR1'][indx], self.tpf[1].data['POS_CORR2'][indx]))
 				kernels[:, 0] -= kernels[refindx, 0]
 				kernels[:, 1] -= kernels[refindx, 1]
-				# Create kernel:
+				# Create kernel object:
 				self._MovementKernel = ImageMovementKernel(warpmode='translation')
-				self._MovementKernel.load_series(self.lightcurve['time'], kernels)
+				self._MovementKernel.load_series(times, kernels)
 			else:
 				# If we reached this point, we dont have enough information to
 				# define the ImageMovementKernel, so we should just return the
@@ -1040,8 +1053,7 @@ class BasePhotometry(object):
 		"""
 		Run photometry algorithm.
 
-		This should fill the following
-		* self.lightcurve
+		This should fill the ``self.lightcurve`` table with all relevant parameters.
 
 		Returns:
 			The status of the photometry.
@@ -1189,10 +1201,10 @@ class BasePhotometry(object):
 		c9 = fits.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
 		c10 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
 		c11 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
-		#c12 = fits.Column(name='POS_CORR1', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 0]) # column
-		#c13 = fits.Column(name='POS_CORR2', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 1]) # row
+		c12 = fits.Column(name='POS_CORR1', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 0]) # column
+		c13 = fits.Column(name='POS_CORR2', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 1]) # row
 
-		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11], name='LIGHTCURVE')
+		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], name='LIGHTCURVE')
 
 		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
 		tbhdu.header['TFORM1'] = ('D', 'column format: 64-bit floating point')
@@ -1247,15 +1259,15 @@ class BasePhotometry(object):
 		tbhdu.header['TUNIT11'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP11'] = ('F10.5', 'column display format')
 
-		#tbhdu.header['TTYPE12'] = ('POS_CORR1', 'column title: column position correction')
-		#tbhdu.header['TFORM12'] = ('E', 'column format: 32-bit floating point')
-		#tbhdu.header['TUNIT12'] = ('pixel', 'column units: pixels')
-		#tbhdu.header['TDISP12'] = ('F14.7', 'column display format')
+		tbhdu.header['TTYPE12'] = ('POS_CORR1', 'column title: column position correction')
+		tbhdu.header['TFORM12'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT12'] = ('pixel', 'column units: pixels')
+		tbhdu.header['TDISP12'] = ('F14.7', 'column display format')
 
-		#tbhdu.header['TTYPE12'] = ('POS_CORR2', 'column title: row position correction')
-		#tbhdu.header['TFORM12'] = ('E', 'column format: 32-bit floating point')
-		#tbhdu.header['TUNIT12'] = ('pixel', 'column units: pixels')
-		#tbhdu.header['TDISP12'] = ('F14.7', 'column display format')
+		tbhdu.header['TTYPE13'] = ('POS_CORR2', 'column title: row position correction')
+		tbhdu.header['TFORM13'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT13'] = ('pixel', 'column units: pixels')
+		tbhdu.header['TDISP13'] = ('F14.7', 'column display format')
 
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 

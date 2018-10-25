@@ -28,6 +28,7 @@ from skimage.filters import scharr
 from scipy.interpolate import interp1d
 from astropy.io import fits
 from astropy.wcs import WCS
+import warnings
 
 class ImageMovementKernel(object):
 
@@ -261,10 +262,10 @@ class ImageMovementKernel(object):
 
 			# Only take the kernels that are well-defined:
 			# TODO: Should we raise a warning if there are many undefined?
-			indx = np.all(np.isfinite(kernels), axis=1)
+			indx = np.isfinite(times) & np.all(np.isfinite(kernels), axis=1)
 
 			# Create interpolator:
-			self._interpolator = interp1d(times[indx], kernels[indx, :], axis=0, assume_sorted=True)
+			self._interpolator = interp1d(times[indx], kernels[indx, :], axis=0, assume_sorted=True, bounds_error=False, fill_value=(kernels[0, :], kernels[-1, :]))
 
 	#==============================================================================
 	def interpolate(self, time, xy):
@@ -312,7 +313,9 @@ class ImageMovementKernel(object):
 				raise ValueError("Interpolator is not defined. ")
 
 			# Get the kernel parameters for the timestamp:
-			kernel = self._interpolator(time)
+			with warnings.catch_warnings():
+				warnings.filterwarnings('ignore', category=RuntimeWarning, module='scipy')
+				kernel = self._interpolator(time)
 
 			return self.apply_kernel(xy, kernel)
 
