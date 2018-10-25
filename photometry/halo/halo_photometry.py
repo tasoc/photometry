@@ -113,9 +113,8 @@ class HaloPhotometry(BasePhotometry):
 		flux[:,self.pixelflags==0] = np.nan
 
 		# Get the position of the main target
-		jitter = self.MovementKernel.jitter(self.lightcurve['time'], self.target_pos_column, self.target_pos_row)
-		col = self.target_pos_column + jitter[:, 0]
-		row = self.target_pos_column + jitter[:, 1]
+		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
+		row = self.target_pos_row + self.lightcurve['pos_corr'][:, 1]
 
 		# Put together timeseries table in the format that halophot likes:
 		ts = Table({
