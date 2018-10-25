@@ -22,14 +22,14 @@ source ~/python-virtualenv/tessphot/bin/activate
 
 # Set environment variables with paths for input and
 # output files for the photometry code:
-export TESSPHOT_INPUT="/scratch/astro/tess/input"
+export TESSPHOT_INPUT="/fscratch/astro/tess/input"
 export TESSPHOT_OUTPUT="/scratch/astro/tess/output"
 
 # Move the program to the scratch disk:
-rsync -a --delete ~/tasoc/photometry/ /scratch/astro/tess/program/
+rsync -a --delete ~/tasoc/photometry/ /fscratch/astro/tess/program/
 
 # Change directory to the local scratch-directory:
-cd /scratch/astro/tess/program
+cd /fscratch/astro/tess/program
 
 # Run the MPI job:
 echo "Running prepare..."
@@ -39,7 +39,7 @@ echo "Running make_todo..."
 python make_todo.py
 
 # Copy some of the output to the home directory:
-cp /scratch/astro/tess/input/todo.sqlite ~/tasoc/input/
+cp /fscratch/astro/tess/input/todo.sqlite ~/tasoc/input/
 
 echo "========= Job finished at `date` =========="
 #

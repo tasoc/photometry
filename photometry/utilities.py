@@ -11,13 +11,18 @@ from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range
 import numpy as np
 from astropy.io import fits
-from bottleneck import move_median, nanmedian
+from bottleneck import move_median, nanmedian, nanmean
 import logging
 from scipy.special import erf
+from scipy.stats import binned_statistic
 import json
 import os.path
 import fnmatch
 
+# Constants:
+mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
+
+#------------------------------------------------------------------------------
 def load_settings(sector=None):
 
 	with open(os.path.join(os.path.dirname(__file__), 'data', 'settings.json'), 'r') as fid:
@@ -79,15 +84,21 @@ def find_tpf_files(rootdir, starid=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
-	starid = '*' if starid is None else '{0:016d}'.format(starid)
-	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid)
+	starid_str = '*' if starid is None else '{0:016d}'.format(starid)
+	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid_str)
+
+	# Pattern used for TESS Alert data:
+	starid_str = '*' if starid is None else '{0:011d}'.format(starid)
+	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s??_tess_v?_tp.fits*'.format(starid=starid_str)
+
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
 	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
-		for filename in fnmatch.filter(filenames, filename_pattern):
-			matches.append(os.path.join(root, filename))
+		for filename in filenames:
+			if fnmatch.fnmatch(filename, filename_pattern) or fnmatch.fnmatch(filename, filename_pattern2):
+				matches.append(os.path.join(root, filename))
 
 	# Sort the list of files by thir filename:
 	matches.sort(key = lambda x: os.path.basename(x))
@@ -95,7 +106,7 @@ def find_tpf_files(rootdir, starid=None):
 	return matches
 
 #------------------------------------------------------------------------------
-def load_ffi_fits(path, return_header=False):
+def load_ffi_fits(path, return_header=False, return_uncert=False):
 	"""
 	Load FFI FITS file.
 
@@ -107,22 +118,31 @@ def load_ffi_fits(path, return_header=False):
 
 	Returns:
 		numpy.ndarray: Full Frame Image.
-		list: If ``return_header`` is enabled, will return a list of the FITS headers.
+		list: If ``return_header`` is enabled, will return a dict of the FITS headers.
 	"""
 
 	with fits.open(path, memmap=True, mode='readonly') as hdu:
 		hdr = hdu[0].header
 		if hdr.get('TELESCOP') == 'TESS' and hdu[1].header.get('NAXIS1') == 2136 and hdu[1].header.get('NAXIS2') == 2078:
 			img = hdu[1].data[0:2048, 44:2092]
-			headers = hdu[1].header
+			if return_uncert:
+				imgerr = np.asarray(hdu[2].data[0:2048, 44:2092], dtype='float32')
+			headers = dict(hdu[0].header)
+			headers.update(dict(hdu[1].header))
 		else:
 			img = hdu[0].data
-			headers = hdu[0].header
+			headers = dict(hdu[0].header)
+			if return_uncert:
+				imgerr = np.asarray(hdu[1].data, dtype='float32')
 
 	# Make sure its an numpy array with the correct data type:
 	img = np.asarray(img, dtype='float32')
 
-	if return_header:
+	if return_uncert and return_header:
+		return img, headers, imgerr
+	elif return_uncert:
+		return img, imgerr
+	elif return_header:
 		return img, headers
 	else:
 		return img
@@ -252,3 +272,29 @@ def sphere_distance(ra1, dec1, ra2, dec2):
 		np.sqrt( (np.cos(dec2)*np.sin(ra2-ra1))**2 + (np.cos(dec1)*np.sin(dec2) - np.sin(dec1)*np.cos(dec2)*np.cos(ra2-ra1))**2 ),
 		np.sin(dec1)*np.sin(dec2) + np.cos(dec1)*np.cos(dec2)*np.cos(ra2-ra1)
 	))
+
+#------------------------------------------------------------------------------
+def rms_timescale(time, flux, timescale=3600/86400):
+	"""
+	Compute robust RMS on specified timescale. Using MAD scaled to RMS.
+
+	Parameters:
+		time (ndarray): Timestamps in days.
+		flux (ndarray): Flux to calculate RMS for.
+		timescale (float, optional): Timescale to bin timeseries before calculating RMS. Default=1 hour.
+
+	Returns:
+		float: Robust RMS on specified timescale.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	# Construct the bin edges seperated by the timescale:
+	bins = np.arange(np.nanmin(time), np.nanmax(time), timescale)
+	bins = np.append(bins, np.nanmax(time))
+
+	# Bin the timeseries to one hour:
+	flux_bin, _, _ = binned_statistic(time, flux, nanmean, bins=bins)
+
+	# Compute robust RMS value (MAD scaled to RMS)
+	return mad_to_sigma * nanmedian(np.abs(flux_bin - nanmedian(flux_bin)))

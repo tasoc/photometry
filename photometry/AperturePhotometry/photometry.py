@@ -9,6 +9,7 @@ Simple Aperture Photometry using K2P2 to define masks.
 from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range, zip
 import numpy as np
+from bottleneck import allnan
 import logging
 from .. import BasePhotometry, STATUS
 from . import k2p2v2 as k2p2
@@ -44,7 +45,7 @@ class AperturePhotometry(BasePhotometry):
 
 		logger = logging.getLogger(__name__)
 		logger.info("Running aperture photometry...")
-		
+
 		k2p2_settings = {
 			'thresh': 1.0,
 			'min_no_pixels_in_mask': 4,
@@ -54,9 +55,9 @@ class AperturePhotometry(BasePhotometry):
 			'ws_blur': 0.5,
 			'ws_thres': 0.05, # K2: 0.05
 			'ws_footprint': 3,
-			'extend_overflow': True # Turn this off for Tmag>7 targets?
+			'extend_overflow': True
 		}
-		
+
 		for retries in range(5):
 
 			SumImage = self.sumimage
@@ -67,22 +68,25 @@ class AperturePhotometry(BasePhotometry):
 			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
-			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, None, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
+			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
 			masks = np.asarray(masks, dtype='bool')
 
+			using_minimum_mask = False
 			if len(masks.shape) == 0:
 				logger.warning("No masks found")
-				self.report_details(error='No masks found')
+				self.report_details(error='No masks found. Using minimum aperture.')
 				mask_main = self._minimum_aperture()
+				using_minimum_mask = True
 
 			else:
 				# Look at the central pixel where the target should be:
 				indx_main = masks[:, int(round(self.target_pos_row_stamp)), int(round(self.target_pos_column_stamp))].flatten()
 
 				if not np.any(indx_main):
-					logger.warning('No pixels')
-					self.report_details(error='No pixels')
+					logger.warning('No mask found for main target. Using minimum aperture.')
+					self.report_details(error='No mask found for main target. Using minimum aperture.')
 					mask_main = self._minimum_aperture()
+					using_minimum_mask = True
 
 				elif np.sum(indx_main) > 1:
 					logger.error('Too many masks')
@@ -124,20 +128,31 @@ class AperturePhotometry(BasePhotometry):
 		members = np.column_stack((cols[mask_main], rows[mask_main]))
 
 		# Loop through the images and backgrounds together:
-		for k, (img, bck) in enumerate(zip(self.images, self.backgrounds)):
+		for k, (img, imgerr, bck) in enumerate(zip(self.images, self.images_err, self.backgrounds)):
 
 			flux_in_cluster = img[mask_main]
 
 			# Calculate flux in mask:
-			self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
-			self.lightcurve['flux_background'][k] = np.sum(bck[mask_main])
-
-			# Calculate flux centroid:
-			finite_vals = (flux_in_cluster > 0)
-			if np.any(finite_vals):
-				self.lightcurve['pos_centroid'][k, :] = np.average(members[finite_vals], weights=flux_in_cluster[finite_vals], axis=0)
-			else:
+			if allnan(flux_in_cluster) or np.all(flux_in_cluster == 0):
+				self.lightcurve['flux'][k] = np.NaN
+				self.lightcurve['flux_err'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k, :] = np.NaN
+				#self.lightcurve['quality']
+			else:
+				self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
+				self.lightcurve['flux_err'][k] = np.sqrt(np.sum(imgerr[mask_main]**2))
+
+				# Calculate flux centroid:
+				finite_vals = (flux_in_cluster > 0)
+				if np.any(finite_vals):
+					self.lightcurve['pos_centroid'][k, :] = np.average(members[finite_vals], weights=flux_in_cluster[finite_vals], axis=0)
+				else:
+					self.lightcurve['pos_centroid'][k, :] = np.NaN
+
+			if allnan(bck[mask_main]):
+				self.lightcurve['flux_background'][k] = np.NaN
+			else:
+				self.lightcurve['flux_background'][k] = np.nansum(bck[mask_main])
 
 		# Save the mask to be stored in the outout file:
 		self.final_mask = mask_main
@@ -158,8 +173,16 @@ class AperturePhotometry(BasePhotometry):
 		# Targets that are in the mask:
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.round(t['row'])+1 in rows[mask_main] and np.round(t['column'])+1 in cols[mask_main]]
 
+		#
+		#if self.target_tmag > np.min(self.catalog[target_in_mask]['tmag']):
+		#	logger.warning("Not the brightest target in the mask.")
+		#	self.report_details(error='Not the brightest target in mask.')
+		#	return STATUS.SKIPPED
+
 		# Calculate contamination from the other targets in the mask:
-		if len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
+		if len(target_in_mask) == 0:
+			contamination = np.nan
+		elif len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
 			contamination = 0
 		else:
 			# Calculate contamination metric as defined in Lund & Handberg (2014):
@@ -169,11 +192,15 @@ class AperturePhotometry(BasePhotometry):
 			contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
 
 		logger.info("Contamination: %f", contamination)
-		self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
+		if not np.isnan(contamination):
+			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
 
 		# If contamination is high, return a warning:
 		if contamination > 0.1:
 			self.report_details(error='High contamination')
+			return STATUS.WARNING
+
+		if using_minimum_mask:
 			return STATUS.WARNING
 
 		#

@@ -1,6 +1,8 @@
 ===========================
 The TASOC Photometry module
 ===========================
+.. image:: https://zenodo.org/badge/103402174.svg
+    :target: https://zenodo.org/badge/latestdoi/103402174
 .. image:: https://travis-ci.org/tasoc/photometry.svg?branch=devel
     :target: https://travis-ci.org/tasoc/photometry
 .. image:: https://img.shields.io/github/license/tasoc/photometry.svg

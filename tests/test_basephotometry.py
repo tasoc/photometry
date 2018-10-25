@@ -28,7 +28,7 @@ def test_stamp():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
-			pho._stamp = (0, 10, 0, 20)
+			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
 
 			cols, rows = pho.get_pixel_grid()
@@ -41,12 +41,12 @@ def test_stamp():
 
 			assert(rows.shape == (10, 20))
 			assert(cols.shape == (10, 20))
-			assert(rows[0,0] == 1)
-			assert(cols[0,0] == 1)
-			assert(rows[-1,0] == 10)
-			assert(cols[-1,0] == 1)
-			assert(rows[-1,-1] == 10)
-			assert(cols[-1,-1] == 20)
+			assert(rows[0,0] == 51)
+			assert(cols[0,0] == 51)
+			assert(rows[-1,0] == 60)
+			assert(cols[-1,0] == 51)
+			assert(rows[-1,-1] == 60)
+			assert(cols[-1,-1] == 70)
 
 			pho.resize_stamp(up=12)
 			cols, rows = pho.get_pixel_grid()
@@ -64,7 +64,7 @@ def test_images():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
-			pho._stamp = (0, 10, 0, 20)
+			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
 
 			for img in pho.images:
@@ -75,7 +75,7 @@ def test_backgrounds():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
 
-			pho._stamp = (0, 10, 0, 20)
+			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
 
 			for img in pho.backgrounds:

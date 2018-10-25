@@ -115,6 +115,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 		with h5py.File(hdf_file, 'a', libver='latest') as hdf:
 
 			images = hdf.require_group('images')
+			images_err = hdf.require_group('images_err')
 			backgrounds = hdf.require_group('backgrounds')
 			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
@@ -198,12 +199,19 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				hdf.require_dataset('imagespaths', (numfiles,), data=filenames, dtype=h5py.special_dtype(vlen=bytes), **args)
 
 				is_tess = False
+				attributes = {
+					'DATA_REL': None,
+					'NUM_FRM': None,
+					'CRMITEN': None,
+					'CRBLKSZ': None,
+					'CRSPOC': None
+				}
 				for k, fname in enumerate(files):
 					logger.debug("Processing image: %.2f%% - %s", 100*k/numfiles, fname)
 					dset_name ='%04d' % k
 
 					# Load the FITS file data and the header:
-					flux0, hdr = load_ffi_fits(fname, return_header=True)
+					flux0, hdr, flux0_err = load_ffi_fits(fname, return_header=True, return_uncert=True)
 
 					# Check if this is real TESS data:
 					# Could proberly be done more elegant, but if it works, it works...
@@ -217,9 +225,13 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 					quality[k] = hdr.get('DQUALITY', 0)
 
 					if k == 0:
-						num_frm = hdr.get('NUM_FRM')
-					elif hdr.get('NUM_FRM') != num_frm:
-						logger.error("NUM_FRM is not constant!")
+						for key in attributes.keys():
+							attributes[key] = hdr.get(key)
+					else:
+						for key, value in attributes.items():
+							if hdr.get(key) != value:
+								logger.error("%s is not constant!", key)
+
 					#if hdr.get('SECTOR') != sector:
 					#	logger.error("Incorrect SECTOR: Catalog=%s, FITS=%s", sector, hdr.get('SECTOR'))
 					if hdr.get('CAMERA') != camera or hdr.get('CCD') != ccd:
@@ -233,6 +245,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 						# Save image subtracted the background in HDF5 file:
 						images.create_dataset(dset_name, data=flux0, chunks=imgchunks, **args)
+						images_err.create_dataset(dset_name, data=flux0_err, chunks=imgchunks, **args)
 					else:
 						flux0 = np.asarray(images[dset_name])
 
@@ -249,7 +262,9 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				SumImage /= numfiles
 
 				# Save attributes
-				images.attrs['NUM_FRM'] = num_frm
+				for key, value in attributes.items():
+					logger.debug("Saving attribute %s = %s", key, value)
+					images.attrs[key] = value
 
 				# Set pixel offsets:
 				if is_tess:
