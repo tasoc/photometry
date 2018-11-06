@@ -1095,7 +1095,7 @@ class BasePhotometry(object):
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
-	def save_lightcurve(self, output_folder=None, version=1):
+	def save_lightcurve(self, output_folder=None, version=2):
 		"""
 		Save generated lightcurve to file.
 
