@@ -52,7 +52,7 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	# Make sure at least one setting is given:
-	if args.starid is None and not args.random:
+	if not args.all and args.starid is None and not args.random:
 		parser.error("Please select either a specific STARID or RANDOM.")
 
 	# Set logging level:
