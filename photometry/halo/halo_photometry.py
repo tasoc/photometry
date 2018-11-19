@@ -110,7 +110,9 @@ class HaloPhotometry(BasePhotometry):
 		# initialize
 		logger.info('Formatting data for halo')
 		flux = self.images_cube.T
-		flux[:,self.pixelflags==0] = np.nan
+		logger.debug('Pixelflags array shape: (%d,%d)',self.pixelflags.shape[0],self.pixelflags.shape[1])
+		logger.debug('Flux array shape: (%d,%d,%d)',flux.shape[0],flux.shape[1],flux.shape[2])
+		flux[:,self.pixelflags.T==0] = np.nan
 
 		# Get the position of the main target
 		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
