@@ -1335,7 +1335,7 @@ class BasePhotometry(object):
 
 		# Write to file:
 		filepath = os.path.join(output_folder, filename)
-		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
+		with fits.HDUList(hdus) as hdulist:
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
 
 		# Store the output file in the details object for future reference:
