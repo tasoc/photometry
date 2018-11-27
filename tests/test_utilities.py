@@ -30,13 +30,13 @@ def test_move_median_central():
 def test_find_ffi_files():
 	
 	files = find_ffi_files(INPUT_DIR)
-	assert(len(files) == 4)
+	assert(len(files) == 8)
 
 	files = find_ffi_files(INPUT_DIR, camera=1)
-	assert(len(files) == 2)
+	assert(len(files) == 4)
 	
 	files = find_ffi_files(INPUT_DIR, camera=2)
-	assert(len(files) == 2)
+	assert(len(files) == 4)
 
 #----------------------------------------------------------------------
 def test_load_ffi_files():
