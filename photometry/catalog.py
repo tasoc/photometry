@@ -16,16 +16,18 @@ from .tasoc_db import TASOC_DB
 from .utilities import add_proper_motion, load_settings
 
 #------------------------------------------------------------------------------
-def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=False):
+def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.5, overwrite=False):
 	"""
 	Create catalogs of stars in a given TESS observing sector.
 
 	Parameters:
 		sector (integer): TESS observing sector.
-		cameras (iterable or None): TESS cameras (1-4) to create catalogs for. If ``None`` all cameras are created.
-		ccds (iterable or None): TESS ccds (1-4) to create catalogs for. If ``None`` all ccds are created.
-		coord_buffer (float): Buffer in degrees around each CCD to include in catalogs. Default=0.1.
-		overwrite (boolean): Overwrite existing catalogs. Default=``False``.
+		input_folder (string or None, optional):  Input folder to create catalog file in.
+			If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
+		cameras (iterable or None, optional): TESS cameras (1-4) to create catalogs for. If ``None`` all cameras are created.
+		ccds (iterable or None, optional): TESS ccds (1-4) to create catalogs for. If ``None`` all ccds are created.
+		coord_buffer (float, optional): Buffer in degrees around each CCD to include in catalogs. Default=0.1.
+		overwrite (boolean, optional): Overwrite existing catalogs. Default=``False``.
 
 	Note:
 		This function requires the user to be connected to the TASOC network
@@ -46,7 +48,8 @@ def make_catalog(sector, cameras=None, ccds=None, coord_buffer=0.1, overwrite=Fa
 	sector_reference_time = settings['reference_time']
 	epoch = (sector_reference_time - 2451544.5)/365.25
 
-	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
+	if input_folder is None:
+		input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
 	logger.info("Saving results to '%s'", input_folder)
 
 	# Open connection to the central TASOC database.

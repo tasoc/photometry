@@ -37,6 +37,7 @@ if __name__ == '__main__':
 	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
 	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
 	parser.add_argument('sector', type=int, help='TESS observing sector to generate catalogs for.')
+	parser.add_argument('input_folder', type=str, help='Directory to create catalog files in.', nargs='?', default=None)
 	args = parser.parse_args()
 
 	# Set logging level:
@@ -55,4 +56,4 @@ if __name__ == '__main__':
 	logger.addHandler(console)
 
 	# Run the program:
-	make_catalog(args.sector, cameras=args.camera, ccds=args.ccd, overwrite=args.overwrite)
+	make_catalog(args.sector, input_folder=args.input_folder, cameras=args.camera, ccds=args.ccd, overwrite=args.overwrite)
