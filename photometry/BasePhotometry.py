@@ -11,10 +11,12 @@ from __future__ import division, with_statement, print_function, absolute_import
 import six
 from six.moves import range
 import numpy as np
+from astropy._erfa.core import ErfaWarning
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
 warnings.filterwarnings('ignore', category=FutureWarning, module="scipy") # they are simply annoying!
 warnings.filterwarnings('ignore', category=FutureWarning, module="skimage") # they are simply annoying!
+warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
 from astropy.io import fits
 from astropy.table import Table, Column
 #from mpi4py import MPI
