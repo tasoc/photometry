@@ -89,7 +89,12 @@ if __name__ == '__main__':
 	# Run the program:
 	with TaskManager(input_folder) as tm:
 		while True:
-			if args.all:
+			if args.all and args.random:
+				task = tm.get_random_task()
+				if task is None: break
+				if args.method: task['method'] = args.method
+				if args.source: task['datasource'] = args.source
+			elif args.all:
 				task = tm.get_task()
 				if task is None: break
 				if args.method: task['method'] = args.method
