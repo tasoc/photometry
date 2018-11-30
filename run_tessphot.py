@@ -108,7 +108,7 @@ if __name__ == '__main__':
 				task = tm.get_random_task()
 
 			result = task.copy()
-			del task['priority']
+			del task['priority'], task['tmag']
 
 			t1 = default_timer()
 			pho = f(**task)

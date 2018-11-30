@@ -7,6 +7,7 @@ A TaskManager which keeps track of which targets to process.
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
+import numpy as np
 import os
 import sqlite3
 import logging
@@ -59,6 +60,7 @@ class TaskManager(object):
 		# TODO: This should obviously be removed once we start running for real
 		self.cursor.execute("UPDATE todolist SET status=NULL;")
 		self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
+		self.cursor.execute("DROP TABLE IF EXISTS photometry_skipped;")
 		self.conn.commit()
 
 		# Create table for diagnostics:
@@ -79,11 +81,16 @@ class TaskManager(object):
 			stamp_resizes INT,
 			errors TEXT
 		);""")
+		self.cursor.execute("""CREATE TABLE IF NOT EXISTS photometry_skipped (
+			priority INT NOT NULL,
+			skipped_by INT NOT NULL
+		);""") # PRIMARY KEY
 		self.conn.commit()
 
 		# Reset calculations with status STARTED or ABORT:
-		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (4,6));")
-		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (4,6);")
+		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value)
+		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
+		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
 		self.conn.commit()
 
 		# Prepare summary object:
@@ -156,7 +163,7 @@ class TaskManager(object):
 		else:
 			constraints = ''
 
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -168,7 +175,7 @@ class TaskManager(object):
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -184,25 +191,53 @@ class TaskManager(object):
 		# Extract details dictionary:
 		details = result.get('details', {})
 
-		# Update the status in the TODO list:
-		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
-			result['status'].value,
-			result['priority']
-		))
-		self.summary['tasks_run'] += 1
-		self.summary[result['status'].name] += 1
-		self.summary['STARTED'] -= 1
+		# The status of this target returned by the photometry:
+		my_status = result['status']
 
 		# Also set status of targets that were marked as "SKIPPED" by this target:
 		if 'skip_targets' in details and len(details['skip_targets']) > 0:
 			# Create unique list of starids to be masked as skipped:
 			skip_starids = [str(starid) for starid in set(details['skip_targets'])]
 			skip_starids = ','.join(skip_starids)
-			# Mark them as SKIPPED in the database:
-			self.cursor.execute("UPDATE todolist SET status=5 WHERE starid IN (" + skip_starids + ") AND datasource=? AND status IS NULL;", (
+
+			# Ask the todolist if there are any stars that are brighter than this
+			# one among the other targets in the mask:
+			self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource=?;", (
 				result['datasource'],
 			))
-			self.summary['SKIPPED'] += self.cursor.rowcount
+			skip_rows = self.cursor.fetchall()
+			if len(skip_rows) > 0:
+				skip_tmags = np.array([row['tmag'] for row in skip_rows])
+				if np.all(result['tmag'] < skip_tmags):
+					# This target was the brightest star in the mask,
+					# so let's keep it and simply mark all the other targets
+					# as SKIPPED:
+					for row in skip_rows:
+						self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
+							STATUS.SKIPPED.value,
+							row['priority']
+						))
+						self.summary['SKIPPED'] += self.cursor.rowcount
+						self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
+							row['priority'],
+							result['priority']
+						))
+				else:
+					# This target was not the brightest star in the mask,
+					# and a brighter target is going to be processed,
+					# so let's change this one to SKIPPED and let the other
+					# one run later on
+					self.logger.info("Changing status to SKIPPED for priority %s", result['priority'])
+					my_status = STATUS.SKIPPED
+
+		# Update the status in the TODO list:
+		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
+			my_status.value,
+			result['priority']
+		))
+		self.summary['tasks_run'] += 1
+		self.summary[my_status.name] += 1
+		self.summary['STARTED'] -= 1
 
 		# Save additional diagnostics:
 		error_msg = details.get('errors', None)
@@ -236,7 +271,7 @@ class TaskManager(object):
 		"""
 		Mark a task as STARTED in the TODO-list.
 		"""
-		self.cursor.execute("UPDATE todolist SET status=6 WHERE priority=?;", (taskid,))
+		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (STATUS.STARTED.value, taskid))
 		self.conn.commit()
 		self.summary['STARTED'] += 1
 
