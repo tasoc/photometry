@@ -157,7 +157,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 			row = cursor.fetchone()
 			if row is None:
 				logger.error("Starid %d was not found in catalog (camera=%d, ccd=%d).", starid, camera, ccd)
-				raise ValueError("Starid %d was not found in catalog (camera=%d, ccd=%d)." %(starid, camera, ccd))
+				return cat
 
 			# Calculate CBV area that target falls in:
 			cbv_area = calc_cbv_area(row, settings)
