@@ -19,7 +19,6 @@ warnings.filterwarnings('ignore', category=FutureWarning, module="skimage") # th
 warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
 from astropy.io import fits
 from astropy.table import Table, Column
-#from mpi4py import MPI
 import h5py
 import sqlite3
 import logging
@@ -30,7 +29,7 @@ from copy import deepcopy
 from astropy.time import Time
 from astropy.wcs import WCS
 import enum
-from bottleneck import replace, nanmedian, ss
+from bottleneck import replace, nanmedian, ss, nanstd
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
 from .utilities import find_tpf_files, rms_timescale
@@ -1085,13 +1084,31 @@ class BasePhotometry(object):
 		if self._status == STATUS.UNKNOWN:
 			raise Exception("STATUS was not set by do_photometry")
 
-		# TODO: Calculate performance metrics
+		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
 			self._details['variance'] = ss(self.lightcurve['flux'] - self._details['mean_flux']) / (len(self.lightcurve['flux'])-1)
 			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], self.lightcurve['flux'], timescale=3600/86400)
 			self._details['ptp'] = nanmedian(np.abs(np.diff(self.lightcurve['flux'])))
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
+
+			# Calculate variability used e.g. in CBV selection of stars:
+			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
+			indx = np.isfinite(flux)
+			# Do a more robust fitting with a third-order polynomial,
+			# where we are catching cases where the fitting goes bad.
+			# This happens in the test-data because there are so few points.
+			with warnings.catch_warnings():
+				warnings.filterwarnings('error', category=np.RankWarning)
+				try:
+					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/self.lightcurve['flux_err'][indx])
+				except np.RankWarning:
+					p = [0]
+
+			# Calculate the variability as the standard deviation of the
+			# polynomial-subtracted lightcurve devided by the median error:
+			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(self.lightcurve['flux_err'])
+
 			if self.final_mask is not None:
 				self._details['mask_size'] = int(np.sum(self.final_mask))
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
