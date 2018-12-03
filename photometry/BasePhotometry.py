@@ -1178,7 +1178,7 @@ class BasePhotometry(object):
 
 		# Versions:
 		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
-		hdu.header['FILEVER'] = ('1.1', 'File format version')
+		hdu.header['FILEVER'] = ('1.2', 'File format version')
 		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
@@ -1217,15 +1217,16 @@ class BasePhotometry(object):
 		c4 = fits.Column(name='FLUX_RAW', format='D', unit='e-/s', array=self.lightcurve['flux'])
 		c5 = fits.Column(name='FLUX_RAW_ERR', format='D', unit='e-/s', array=self.lightcurve['flux_err'])
 		c6 = fits.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
-		c7 = fits.Column(name='FLUX_CORR', format='D', unit='e-/s', array=np.full_like(self.lightcurve['time'], np.nan))
-		c8 = fits.Column(name='FLUX_CORR_ERR', format='D', unit='e-/s', array=np.full_like(self.lightcurve['time'], np.nan))
-		c9 = fits.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
-		c10 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
-		c11 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
-		c12 = fits.Column(name='POS_CORR1', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 0]) # column
-		c13 = fits.Column(name='POS_CORR2', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 1]) # row
+		c7 = fits.Column(name='FLUX_CORR', format='D', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
+		c8 = fits.Column(name='FLUX_CORR_ERR', format='D', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
+		c9 = fits.Column(name='QUALITY', format='J', array=np.zeros_like(self.lightcurve['time']))
+		c10 = fits.Column(name='PIXEL_QUALITY', format='J', array=self.lightcurve['quality'])
+		c11 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
+		c12 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
+		c13 = fits.Column(name='POS_CORR1', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 0]) # column
+		c14 = fits.Column(name='POS_CORR2', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 1]) # row
 
-		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], name='LIGHTCURVE')
+		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14], name='LIGHTCURVE')
 
 		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
 		tbhdu.header['TFORM1'] = ('D', 'column format: 64-bit floating point')
@@ -1266,29 +1267,33 @@ class BasePhotometry(object):
 		tbhdu.header['TUNIT8'] = ('ppm', 'column units: parts-per-million')
 		tbhdu.header['TDISP8'] = ('E26.17', 'column display format')
 
-		tbhdu.header['TTYPE9'] = ('QUALITY', 'column title: photometry quality flag')
+		tbhdu.header['TTYPE9'] = ('QUALITY', 'column title: photometry quality flags')
 		tbhdu.header['TFORM9'] = ('J', 'column format: signed 32-bit integer')
 		tbhdu.header['TDISP9'] = ('B16.16', 'column display format')
 
-		tbhdu.header['TTYPE10'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
-		tbhdu.header['TFORM10'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT10'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP10'] = ('F10.5', 'column display format')
+		tbhdu.header['TTYPE10'] = ('PIXEL_QUALITY', 'column title: pixel quality flags')
+		tbhdu.header['TFORM10'] = ('J', 'column format: signed 32-bit integer')
+		tbhdu.header['TDISP10'] = ('B16.16', 'column display format')
 
-		tbhdu.header['TTYPE11'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
+		tbhdu.header['TTYPE11'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
 		tbhdu.header['TFORM11'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT11'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP11'] = ('F10.5', 'column display format')
 
-		tbhdu.header['TTYPE12'] = ('POS_CORR1', 'column title: column position correction')
+		tbhdu.header['TTYPE12'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
 		tbhdu.header['TFORM12'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT12'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP12'] = ('F14.7', 'column display format')
+		tbhdu.header['TDISP12'] = ('F10.5', 'column display format')
 
-		tbhdu.header['TTYPE13'] = ('POS_CORR2', 'column title: row position correction')
+		tbhdu.header['TTYPE13'] = ('POS_CORR1', 'column title: column position correction')
 		tbhdu.header['TFORM13'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT13'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP13'] = ('F14.7', 'column display format')
+
+		tbhdu.header['TTYPE14'] = ('POS_CORR2', 'column title: row position correction')
+		tbhdu.header['TFORM14'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT14'] = ('pixel', 'column units: pixels')
+		tbhdu.header['TDISP14'] = ('F14.7', 'column display format')
 
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
