@@ -94,7 +94,8 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				decl_J2000 DOUBLE PRECISION NOT NULL,
 				pm_ra REAL,
 				pm_decl REAL,
-				tmag REAL NOT NULL
+				tmag REAL NOT NULL,
+				teff REAL
 			);""")
 
 			# Get the footprint on the sky of this sector:
@@ -144,7 +145,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 			# Query the TESS Input Catalog table for all stars in the footprint.
 			# This is a MASSIVE table, so this query may take a while.
-			tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s) AND disposition IS NULL;", (
+			tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s) AND disposition IS NULL;", (
 				footprint,
 			))
 
@@ -161,7 +162,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 					dec = row['decl']
 
 				# Save the coordinates in SQLite database:
-				cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag) VALUES (?,?,?,?,?,?,?,?);", (
+				cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff) VALUES (?,?,?,?,?,?,?,?,?);", (
 					int(row['starid']),
 					ra,
 					dec,
@@ -169,7 +170,8 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 					row['decl'],
 					row['pm_ra'],
 					row['pm_decl'],
-					row['Tmag']
+					row['Tmag'],
+					row['Teff']
 				))
 
 			cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
