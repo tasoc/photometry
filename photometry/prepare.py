@@ -227,9 +227,22 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 						is_tess = True
 
 					# Pick out the important bits from the header:
-					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP']) + hdr.get('BJDREFI', 0) + hdr.get('BJDREFF', 0)
+					# Keep time in BTJD. If we want BJD we could
+					# simply add BJDREFI + BJDREFF:
+					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP'])
 					timecorr[k] = hdr.get('BARYCORR', 0)
-					cadenceno[k] = k+1
+
+					# Cadence-number is currently not in the FFIs.
+					# The following numbers comes from unofficial communication
+					# with Doug Caldwell:
+					if hdr.get('SECTOR') == 1:
+						cadenceno[k] = k + 4697
+					elif hdr.get('SECTOR') == 2:
+						cadenceno[k] = k + 5979
+					else:
+						cadenceno[k] = k+1
+
+					# Data quality flags:
 					quality[k] = hdr.get('DQUALITY', 0)
 
 					if k == 0:
