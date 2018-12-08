@@ -48,7 +48,8 @@ if __name__ == '__main__':
 	parser.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
 	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
 	parser.add_argument('--all', help='Run all stars, one by one. Please consider using the MPI program instead.', action='store_true')
-	parser.add_argument('starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
+	parser.add_argument('--starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
+	parser.add_argument('input_folder', type=str, help='Directory to create catalog files in.', nargs='?', default=None)
 	args = parser.parse_args()
 
 	# Make sure at least one setting is given:
@@ -77,9 +78,13 @@ if __name__ == '__main__':
 	test_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tests', 'input'))
 	if args.test:
 		input_folder = test_folder
+	elif args.input_folder:
+		input_folder = args.input_folder
 	else:
 		input_folder = os.environ.get('TESSPHOT_INPUT', test_folder)
-	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
+
+	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(input_folder, 'lightcurves'))
+
 	logger.info("Loading input data from '%s'", input_folder)
 	logger.info("Putting output data in '%s'", output_folder)
 

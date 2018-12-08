@@ -579,8 +579,11 @@ class BasePhotometry(object):
 				# We dont have an in-memory version of the full cube, so let us
 				# create the cube by loading the cutouts of each image:
 				cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
-				for k in range(self.Ntimes):
-					cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+				if hdf_group in self.hdf:
+					for k in range(self.Ntimes):
+						cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+				else:
+					cube[:, :, :] = np.NaN
 			else:
 				# We have an in-memory version of the full cube.
 				# TODO: Will this create copy of data in memory?
@@ -1362,6 +1365,9 @@ class BasePhotometry(object):
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
 
 		# Store the output file in the details object for future reference:
-		self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base).replace('\\', '/')
+		if os.path.realpath(output_folder).startswith(os.path.realpath(self.input_folder)):
+			self._details['filepath_lightcurve'] = os.path.relpath(filepath, os.path.abspath(self.input_folder)).replace('\\', '/')
+		else:
+			self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base).replace('\\', '/')
 
 		return filepath

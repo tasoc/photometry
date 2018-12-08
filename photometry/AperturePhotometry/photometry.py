@@ -50,7 +50,7 @@ class AperturePhotometry(BasePhotometry):
 			'thresh': 1.0,
 			'min_no_pixels_in_mask': 4,
 			'min_for_cluster': 4,
-			'cluster_radius': np.sqrt(2),
+			'cluster_radius': np.sqrt(2) + np.finfo(np.float64).eps,
 			'segmentation': True,
 			'ws_blur': 0.5,
 			'ws_thres': 0.05, # K2: 0.05
