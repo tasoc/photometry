@@ -234,13 +234,14 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 					# Cadence-number is currently not in the FFIs.
 					# The following numbers comes from unofficial communication
-					# with Doug Caldwell:
-					if hdr.get('SECTOR') == 1:
-						cadenceno[k] = k + 4697
-					elif hdr.get('SECTOR') == 2:
-						cadenceno[k] = k + 5979
-					else:
-						cadenceno[k] = k+1
+					# with Doug Caldwell and Roland Vanderspek:
+					# The timestamp in TJD and the corresponding cadenceno:
+					first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474E-03
+					first_cadenceno = 4697
+					timedelt = 1800/86400
+					# Extracpolate the cadenceno as a simple linear relation:
+					offset = first_cadenceno - first_time/timedelt
+					cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
 
 					# Data quality flags:
 					quality[k] = hdr.get('DQUALITY', 0)
