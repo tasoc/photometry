@@ -294,7 +294,8 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	bins = np.append(bins, np.nanmax(time))
 
 	# Bin the timeseries to one hour:
-	flux_bin, _, _ = binned_statistic(time, flux, nanmean, bins=bins)
+	indx = np.isfinite(flux)
+	flux_bin, _, _ = binned_statistic(time[indx], flux[indx], nanmean, bins=bins)
 
 	# Compute robust RMS value (MAD scaled to RMS)
 	return mad_to_sigma * nanmedian(np.abs(flux_bin - nanmedian(flux_bin)))
