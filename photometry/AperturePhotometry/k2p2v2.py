@@ -165,7 +165,6 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 	for i in range(len(unique_labels_ini)):
 
-
 		lab = list(unique_labels_ini)[i]
 
 		if lab == -1 or lab == -2:
@@ -209,7 +208,12 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			for c in catalog:
 				d = np.sqrt( ((local_maxi_loc[:,1]+0.5) - c[0])**2 + ((local_maxi_loc[:,0]+0.5) - c[1])**2 )
 				indx = np.argmin(d)
-				if d[indx] < 2.0*np.sqrt(2):
+				if c[2] > saturation_limit:
+					dist_factor = 2.0
+				else:
+					dist_factor = 5.0
+
+				if d[indx] < dist_factor*np.sqrt(2):
 					local_maxi[local_maxi_loc[indx,0], local_maxi_loc[indx,1]] = True
 
 		else:
@@ -246,30 +250,36 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		# Assign markers/labels to the found maxima:
 		markers = ndimage.label(local_maxi)[0]
 
-		# Run the watershed segmentation algorithm on the negative
-		# of the basin image:
-		labels_ws = watershed(-distance0, markers, mask=Z)
+		# Check if no maxima has been selected at all:
+		if np.all(local_maxi == 0):
+			logger.error("No maxima were found as basins for watershed!")
+			labels_ws = Labels
 
-		# The number of masks after the segmentation:
-		no_labels = len(set(labels_ws.flatten()))
+		else:
+			# Run the watershed segmentation algorithm on the negative
+			# of the basin image:
+			labels_ws = watershed(-distance0, markers, mask=Z)
 
-		# Set all original cluster points to noise, in this way things that in the
-		# end is not associated with a "new" cluster will not be used any more
-		Labels[xy[:,1], xy[:,0]] = -1
+			# The number of masks after the segmentation:
+			no_labels = len(set(labels_ws.flatten()))
 
-		# Use the original label for a part of the new cluster -  if only
-		# one cluster is identified by the watershed algorithm this will then
-		# keep the original labeling
-		idx = (labels_ws == 1) & (Z != 0)
-		Labels[idx] = lab
+			# Set all original cluster points to noise, in this way things that in the
+			# end is not associated with a "new" cluster will not be used any more
+			Labels[xy[:,1], xy[:,0]] = -1
 
-		# If the cluster is segmented we will assign these new labels, starting from
-		# the highest original label + 1
-		for u in range(no_labels-2):
-			max_label += 1
+			# Use the original label for a part of the new cluster -  if only
+			# one cluster is identified by the watershed algorithm this will then
+			# keep the original labeling
+			idx = (labels_ws == 1) & (Z != 0)
+			Labels[idx] = lab
 
-			idx = (labels_ws==u+2) & (Z!=0)
-			Labels[idx] = max_label
+			# If the cluster is segmented we will assign these new labels, starting from
+			# the highest original label + 1
+			for u in range(no_labels-2):
+				max_label += 1
+
+				idx = (labels_ws==u+2) & (Z!=0)
+				Labels[idx] = max_label
 
 		labels_new = Labels[Y2, X2]
 		unique_labels = set(labels_new)
