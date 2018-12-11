@@ -30,10 +30,9 @@ class AperturePhotometry(BasePhotometry):
 		# of the run on each target.
 
 	def _minimum_aperture(self):
-		x = int(self.target_pos_row_stamp + 0.5)
-		y = int(self.target_pos_column_stamp - 0.5)
-		mask_main = np.zeros_like(self.sumimage, dtype='bool')
-		mask_main[y:y+2, x:x+2] = True
+		cols, rows = self.get_pixel_grid()
+		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
+					& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
 		return mask_main
 
 	def do_photometry(self):
@@ -47,13 +46,13 @@ class AperturePhotometry(BasePhotometry):
 		logger.info("Running aperture photometry...")
 
 		k2p2_settings = {
-			'thresh': 1.0,
+			'thresh': 0.8,
 			'min_no_pixels_in_mask': 4,
 			'min_for_cluster': 4,
 			'cluster_radius': np.sqrt(2) + np.finfo(np.float64).eps,
 			'segmentation': True,
 			'ws_blur': 0.5,
-			'ws_thres': 0.05, # K2: 0.05
+			'ws_thres': 0.05,
 			'ws_footprint': 3,
 			'extend_overflow': True
 		}
