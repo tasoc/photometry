@@ -52,7 +52,7 @@ class AperturePhotometry(BasePhotometry):
 			'cluster_radius': np.sqrt(2) + np.finfo(np.float64).eps,
 			'segmentation': True,
 			'ws_blur': 0.5,
-			'ws_thres': 0.05,
+			'ws_thres': 0,
 			'ws_footprint': 3,
 			'extend_overflow': True
 		}

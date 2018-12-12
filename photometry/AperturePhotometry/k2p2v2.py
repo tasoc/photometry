@@ -188,25 +188,16 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		logger.debug("Using '%s' watershed algorithm", ws_alg)
 
 		if not catalog is None:
-			distance = distance0
+			# Smooth the basin image with Gaussian filter:
+			distance = ndimage.gaussian_filter(distance0, ws_blur)
 
 			local_maxi = np.zeros_like(flux0, dtype='bool')
-			#for c in catalog:
-			#	local_maxi[int(np.floor(c[1])), int(np.floor(c[0]))] = True
-
-			#print("Finding blobs...")
-			#blobs = blob_dog(distance, min_sigma=1, max_sigma=20)
-			#for c in blobs:
-			#	local_maxi[int(np.floor(c[0])), int(np.floor(c[1]))] = True
-
-			# Smooth the basin image with Gaussian filter:
-			#distance = ndimage.gaussian_filter(distance0, ws_blur*0.5)
 
 			# Find maxima in the basin image to use for markers:
-			local_maxi_loc = peak_local_max(distance, indices=True, exclude_border=False, threshold_rel=0, footprint=np.ones((ws_footprint, ws_footprint)))
+			local_maxi_loc = peak_local_max(distance, indices=True, exclude_border=False, threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
 
 			for c in catalog:
-				d = np.sqrt( ((local_maxi_loc[:,1]+0.5) - c[0])**2 + ((local_maxi_loc[:,0]+0.5) - c[1])**2 )
+				d = np.sqrt( (local_maxi_loc[:,1] - c[0])**2 + (local_maxi_loc[:,0] - c[1])**2 )
 				indx = np.argmin(d)
 				if c[2] > saturation_limit:
 					dist_factor = 2.0
@@ -215,6 +206,28 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 				if d[indx] < dist_factor*np.sqrt(2):
 					local_maxi[local_maxi_loc[indx,0], local_maxi_loc[indx,1]] = True
+
+			"""
+			for m in local_maxi_loc:
+				d = np.sqrt( (m[1] - catalog[:,0])**2 + (m[0] - catalog[:,1])**2 )
+				indx = np.argmin(d)
+
+				if catalog[indx,2] > saturation_limit:
+					dist_factor = 2.0
+				else:
+					dist_factor = 5.0
+
+				if d[indx] < dist_factor*np.sqrt(2):
+					# The position of the catalog star rounded to nearest pixel:
+					col = int(np.round(catalog[indx,0]))
+					row = int(np.round(catalog[indx,1]))
+					# If the catalog position is outside the image,
+					# move the basin bottom to the edge of the image instead:
+					row = np.clip(row, 0, flux0.shape[0]-1)
+					col = np.clip(col, 0, flux0.shape[1]-1)
+					# Mark pixel as a basin bottom:
+					local_maxi[row, col] = True
+			"""
 
 		else:
 			# Smooth the basin image with Gaussian filter:
@@ -430,7 +443,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 
 	# Cut away the top 15% of the fluxes:
 	flux_cut = stats.trim1(np.sort(Flux), 0.15)
-	# Also doa cut on the absolute values of pixel - This helps in cases where
+	# Also do a cut on the absolute values of pixel - This helps in cases where
 	# the image is dominated by saturated pixels. The exact value is of course
 	# in principle dependent on the CCD, but we have found this value to be
 	# reasonable in TESS simulated data:
