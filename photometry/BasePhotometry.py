@@ -329,7 +329,7 @@ class BasePhotometry(object):
 		conn = sqlite3.connect(self.catalog_file)
 		conn.row_factory = sqlite3.Row
 		cursor = conn.cursor()
-		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag FROM catalog WHERE starid={0:d};".format(self.starid))
+		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
 		target = cursor.fetchone()
 		if target is None:
 			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
@@ -1200,6 +1200,7 @@ class BasePhotometry(object):
 		hdu.header['PMDEC'] = (fits.card.Undefined() if not self.target['pm_decl'] else self.target['pm_decl'], '[mas/yr] Dec proper motion')
 		hdu.header['PMTOTAL'] = (pmtotal, '[mas/yr] total proper motion')
 		hdu.header['TESSMAG'] = (self.target_tmag, '[mag] TESS magnitude')
+		hdu.header['TEFF'] = (fits.card.Undefined() if not self.target['teff'] else self.target['teff'], '[K] Effective temperature')
 		hdu.header['TICVER'] = (self.ticver, 'TESS Input Catalog version')
 
 		# Cosmic ray headers:
