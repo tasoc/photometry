@@ -151,7 +151,9 @@ def get_version(pep440=False, include_branch=True):
 		return read_release_version()
 
 	if include_branch:
-		git_version = call_git_getbranch() + '-' + git_version
+		git_branch = call_git_getbranch()
+		if not git_branch is None:
+			git_version = git_branch + '-' + git_version
 
 	return git_version
 

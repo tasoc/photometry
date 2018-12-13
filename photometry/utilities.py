@@ -235,13 +235,15 @@ def mag2flux(mag):
 	Convert from magnitude to flux using scaling relation from
 	aperture photometry. This is an estimate.
 
+	The scaling is based on fast-track TESS data from sectors 1 and 2.
+
 	Parameters:
 		mag (float): Magnitude in TESS band.
 
 	Returns:
 		float: Corresponding flux value
 	"""
-	return 10**(-0.4*(mag - 28.24))
+	return 10**(-0.4*(mag - 20.60654144))
 
 #------------------------------------------------------------------------------
 def sphere_distance(ra1, dec1, ra2, dec2):
@@ -294,7 +296,8 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	bins = np.append(bins, np.nanmax(time))
 
 	# Bin the timeseries to one hour:
-	flux_bin, _, _ = binned_statistic(time, flux, nanmean, bins=bins)
+	indx = np.isfinite(flux)
+	flux_bin, _, _ = binned_statistic(time[indx], flux[indx], nanmean, bins=bins)
 
 	# Compute robust RMS value (MAD scaled to RMS)
 	return mad_to_sigma * nanmedian(np.abs(flux_bin - nanmedian(flux_bin)))

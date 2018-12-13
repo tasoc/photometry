@@ -165,7 +165,6 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 	for i in range(len(unique_labels_ini)):
 
-
 		lab = list(unique_labels_ini)[i]
 
 		if lab == -1 or lab == -2:
@@ -189,28 +188,46 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		logger.debug("Using '%s' watershed algorithm", ws_alg)
 
 		if not catalog is None:
-			distance = distance0
+			# Smooth the basin image with Gaussian filter:
+			distance = ndimage.gaussian_filter(distance0, ws_blur)
 
 			local_maxi = np.zeros_like(flux0, dtype='bool')
-			#for c in catalog:
-			#	local_maxi[int(np.floor(c[1])), int(np.floor(c[0]))] = True
-
-			#print("Finding blobs...")
-			#blobs = blob_dog(distance, min_sigma=1, max_sigma=20)
-			#for c in blobs:
-			#	local_maxi[int(np.floor(c[0])), int(np.floor(c[1]))] = True
-
-			# Smooth the basin image with Gaussian filter:
-			#distance = ndimage.gaussian_filter(distance0, ws_blur*0.5)
 
 			# Find maxima in the basin image to use for markers:
-			local_maxi_loc = peak_local_max(distance, indices=True, exclude_border=False, threshold_rel=0, footprint=np.ones((ws_footprint, ws_footprint)))
+			local_maxi_loc = peak_local_max(distance, indices=True, exclude_border=False, threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
 
 			for c in catalog:
-				d = np.sqrt( ((local_maxi_loc[:,1]+0.5) - c[0])**2 + ((local_maxi_loc[:,0]+0.5) - c[1])**2 )
+				d = np.sqrt( (local_maxi_loc[:,1] - c[0])**2 + (local_maxi_loc[:,0] - c[1])**2 )
 				indx = np.argmin(d)
-				if d[indx] < 2.0*np.sqrt(2):
+				if c[2] > saturation_limit:
+					dist_factor = 2.0
+				else:
+					dist_factor = 5.0
+
+				if d[indx] < dist_factor*np.sqrt(2):
 					local_maxi[local_maxi_loc[indx,0], local_maxi_loc[indx,1]] = True
+
+			"""
+			for m in local_maxi_loc:
+				d = np.sqrt( (m[1] - catalog[:,0])**2 + (m[0] - catalog[:,1])**2 )
+				indx = np.argmin(d)
+
+				if catalog[indx,2] > saturation_limit:
+					dist_factor = 2.0
+				else:
+					dist_factor = 5.0
+
+				if d[indx] < dist_factor*np.sqrt(2):
+					# The position of the catalog star rounded to nearest pixel:
+					col = int(np.round(catalog[indx,0]))
+					row = int(np.round(catalog[indx,1]))
+					# If the catalog position is outside the image,
+					# move the basin bottom to the edge of the image instead:
+					row = np.clip(row, 0, flux0.shape[0]-1)
+					col = np.clip(col, 0, flux0.shape[1]-1)
+					# Mark pixel as a basin bottom:
+					local_maxi[row, col] = True
+			"""
 
 		else:
 			# Smooth the basin image with Gaussian filter:
@@ -246,30 +263,36 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		# Assign markers/labels to the found maxima:
 		markers = ndimage.label(local_maxi)[0]
 
-		# Run the watershed segmentation algorithm on the negative
-		# of the basin image:
-		labels_ws = watershed(-distance0, markers, mask=Z)
+		# Check if no maxima has been selected at all:
+		if np.all(local_maxi == 0):
+			logger.error("No maxima were found as basins for watershed!")
+			labels_ws = Labels
 
-		# The number of masks after the segmentation:
-		no_labels = len(set(labels_ws.flatten()))
+		else:
+			# Run the watershed segmentation algorithm on the negative
+			# of the basin image:
+			labels_ws = watershed(-distance0, markers, mask=Z)
 
-		# Set all original cluster points to noise, in this way things that in the
-		# end is not associated with a "new" cluster will not be used any more
-		Labels[xy[:,1], xy[:,0]] = -1
+			# The number of masks after the segmentation:
+			no_labels = len(set(labels_ws.flatten()))
 
-		# Use the original label for a part of the new cluster -  if only
-		# one cluster is identified by the watershed algorithm this will then
-		# keep the original labeling
-		idx = (labels_ws == 1) & (Z != 0)
-		Labels[idx] = lab
+			# Set all original cluster points to noise, in this way things that in the
+			# end is not associated with a "new" cluster will not be used any more
+			Labels[xy[:,1], xy[:,0]] = -1
 
-		# If the cluster is segmented we will assign these new labels, starting from
-		# the highest original label + 1
-		for u in range(no_labels-2):
-			max_label += 1
+			# Use the original label for a part of the new cluster -  if only
+			# one cluster is identified by the watershed algorithm this will then
+			# keep the original labeling
+			idx = (labels_ws == 1) & (Z != 0)
+			Labels[idx] = lab
 
-			idx = (labels_ws==u+2) & (Z!=0)
-			Labels[idx] = max_label
+			# If the cluster is segmented we will assign these new labels, starting from
+			# the highest original label + 1
+			for u in range(no_labels-2):
+				max_label += 1
+
+				idx = (labels_ws==u+2) & (Z!=0)
+				Labels[idx] = max_label
 
 		labels_new = Labels[Y2, X2]
 		unique_labels = set(labels_new)
@@ -420,7 +443,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 
 	# Cut away the top 15% of the fluxes:
 	flux_cut = stats.trim1(np.sort(Flux), 0.15)
-	# Also doa cut on the absolute values of pixel - This helps in cases where
+	# Also do a cut on the absolute values of pixel - This helps in cases where
 	# the image is dominated by saturated pixels. The exact value is of course
 	# in principle dependent on the CCD, but we have found this value to be
 	# reasonable in TESS simulated data:

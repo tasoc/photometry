@@ -132,7 +132,7 @@ def main():
 				if tag == tags.START:
 					# Do the work here
 					result = task.copy()
-					del task['priority']
+					del task['priority'], task['tmag']
 
 					t1 = default_timer()
 					pho = tessphot(input_folder=input_folder, output_folder=output_folder, plot=args.plot, **task)
