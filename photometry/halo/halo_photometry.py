@@ -96,7 +96,7 @@ class HaloPhotometry(BasePhotometry):
 		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
 
 		# Halophot settings:
-		splits=(None,None)
+		splits = (None, None)
 		sub = 1
 		order = 1
 		maxiter = 101
@@ -127,12 +127,13 @@ class HaloPhotometry(BasePhotometry):
 		row = self.target_pos_row + self.lightcurve['pos_corr'][:, 1]
 
 		# Put together timeseries table in the format that halophot likes:
+		indx = np.isfinite(self.lightcurve['time'])
 		ts = Table({
-			'time': self.lightcurve['time'],
-			'cadence': self.lightcurve['cadenceno'],
-			'x': col,
-			'y': row,
-			'quality': self.lightcurve['quality']
+			'time': self.lightcurve['time'][indx],
+			'cadence': self.lightcurve['cadenceno'][indx],
+			'x': col[indx],
+			'y': row[indx],
+			'quality': self.lightcurve['quality'][indx]
 		})
 
 		# Run the halo photometry core function
