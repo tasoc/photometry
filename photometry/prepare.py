@@ -126,7 +126,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				# Because HDF5 is stupid, and it cant figure out how to delete data from
 				# the file once it is in, we are creating another temp hdf5 file that
 				# will hold thing we dont need in the final HDF5 file.
-				tmp_hdf_file = hdf_file + '.tmp'
+				tmp_hdf_file = hdf_file.replace('.hdf5', '.tmp.hdf5')
 				with h5py.File(tmp_hdf_file, 'a', libver='latest') as hdftmp:
 					dset_bck_us = hdftmp.require_group('backgrounds_unsmoothed')
 
@@ -139,7 +139,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 						else:
 							m = map
 
-						last_bck_fit = -1 if len(masks) == 0 else int(list(masks.keys())[-1])
+						last_bck_fit = -1 if len(masks) == 0 else int(sorted(list(masks.keys()))[-1])
 						k = last_bck_fit+1
 						for bck, mask in m(fit_background, files[k:]):
 							dset_name = '%04d' % k
