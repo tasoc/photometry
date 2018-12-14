@@ -99,10 +99,14 @@ class HaloPhotometry(BasePhotometry):
 		sub=1
 		order=1
 		maxiter=101
+		if self.sector==1:
+			split_times=(1339.,1347.366,1349.315)
+		if self.sector==2:
+			split_times=(1368.)
 		w_init=None
 		random_init=False
-		thresh=0.9
-		minflux=0.0
+		thresh=-1
+		minflux=-100
 		consensus=False
 		analytic=True
 		sigclip=False
