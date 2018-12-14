@@ -138,6 +138,7 @@ class HaloPhotometry(BasePhotometry):
 				sub,
 				order,
 				maxiter=maxiter,
+				split_times=split_times,
 				w_init=w_init,
 				random_init=random_init,
 				thresh=thresh,
