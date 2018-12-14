@@ -13,6 +13,7 @@ import os.path
 import numpy as np
 from ..plots import plt, save_figure, plot_image
 from .. import BasePhotometry, STATUS
+from ..utilities import mag2flux
 import halophot
 from halophot.halo_tools import do_lc
 from astropy.table import Table
@@ -96,22 +97,27 @@ class HaloPhotometry(BasePhotometry):
 
 		# Halophot settings:
 		splits=(None,None)
-		sub=1
-		order=1
-		maxiter=101
-		if self.sector==1:
-			split_times=(1339.,1347.366,1349.315)
-		if self.sector==2:
-			split_times=(1368.)
-		w_init=None
-		random_init=False
-		thresh=-1
-		minflux=-100
-		consensus=False
-		analytic=True
-		sigclip=False
+		sub = 1
+		order = 1
+		maxiter = 101
+		w_init = None
+		random_init = False
+		thresh = -1
+		minflux = -100
+		consensus = False
+		analytic = True
+		sigclip = False
 
-		# initialize
+		# Find timestamps where the timeseries should be split:
+		if self.sector == 1:
+			split_times = (1339., 1347.366, 1349.315)
+		elif self.sector == 2:
+			split_times = (1368.)
+		else:
+			logger.warning("No split-timestamps have been defined for this sector")
+			split_times = None # TODO: Is this correct?
+
+		# Initialize
 		logger.info('Formatting data for halo')
 		flux = self.images_cube.T
 		flux[:,self.pixelflags.T==0] = np.nan
@@ -148,7 +154,14 @@ class HaloPhotometry(BasePhotometry):
 				sigclip=sigclip
 			)
 
-			self.lightcurve['flux'] = ts['corr_flux']/np.nanmedian(ts['corr_flux'])
+			# Rescale the extracted flux:
+			normfactor = mag2flux(self.target['tmag'])/np.nanmedian(ts['corr_flux'])
+			self.lightcurve['flux'] = ts['corr_flux'] * normfactor
+
+			# Calculate the flux error by uncertainty propergation:
+			for k, imgerr in enumerate(self.images_err):
+				self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( weightmap**2 * imgerr**2 ))
+
 			self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
 			self.lightcurve['pos_centroid'][:,1] = row
 

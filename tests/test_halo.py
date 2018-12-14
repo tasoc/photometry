@@ -21,7 +21,7 @@ def test_halo():
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 	OUTPUT_DIR = tempfile.mkdtemp(prefix='tessphot_tests_halo')
 
-	for datasource in ('tpf', 'ffi'):
+	for datasource in ('tpf', ):
 		with HaloPhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, camera=1, ccd=1) as pho:
 
 			plt.figure()
