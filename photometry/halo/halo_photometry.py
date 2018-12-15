@@ -160,10 +160,16 @@ class HaloPhotometry(BasePhotometry):
 			normfactor = mag2flux(self.target['tmag'])/np.nanmedian(ts['corr_flux'])
 			self.lightcurve['flux'][indx_goodtimes] = ts['corr_flux'] * normfactor
 
+			# Create mapping from each cadence to which weightmap was used:
+			wmindx = np.zeros_like(indx_goodtimes, dtype=int)
+			for k, (cad1, cad2) in enumerate(zip(weightmap['initial_cadence'], weightmap['final_cadence'])):
+				wmindx[(self.lightcurve['cadenceno'] >= cad1) & (self.lightcurve['cadenceno'] <= cad2)] = k
+
 			# Calculate the flux error by uncertainty propergation:
 			for k, imgerr in enumerate(self.images_err):
 				if not indx_goodtimes[k]: continue
-				self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( weightmap**2 * imgerr**2 ))
+				wm = weightmap['weightmap'][wmindx[k]] # Get the weightmap for this cadence
+				self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( wm**2 * imgerr**2 ))
 
 			self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
 			self.lightcurve['pos_centroid'][:,1] = row
@@ -182,17 +188,18 @@ class HaloPhotometry(BasePhotometry):
 			try:
 				logger.info('Plotting weight map')
 				cmap = plt.get_cmap('seismic')
-				norm = np.size(weightmap)
+				norm = np.size(weightmap['weightmap'][0])
 				cmap.set_bad('k', 1.)
-				im = np.log10(weightmap*norm)
-				fig = plt.figure()
-				ax = fig.add_subplot(111)
-				plt.imshow(im, cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im),
-					interpolation='None', origin='lower')
-				plt.colorbar()
-				ax.set_title('TV-min Weightmap')
-				#plot_image(im, scale='log', cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), make_cbar=True, title='TV-min Weightmap')
-				save_figure(os.path.join(self.plot_folder, '%s_weightmap' % self.starid))
+				for k, wm in enumerate(weightmap['weightmap']):
+					im = np.log10(wm*norm)
+					fig = plt.figure()
+					ax = fig.add_subplot(111)
+					plt.imshow(im, cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im),
+						interpolation='None', origin='lower')
+					plt.colorbar()
+					ax.set_title('TV-min Weightmap')
+					#plot_image(im, scale='log', cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), make_cbar=True, title='TV-min Weightmap')
+					save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)))
 			except:
 				logger.exception('Failed to plot')
 				self.report_details(error="Failed to plot")

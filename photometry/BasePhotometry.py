@@ -1353,7 +1353,38 @@ class BasePhotometry(object):
 
 		# For Halo photometry, also add the weightmap to the FITS file:
 		if hasattr(self, 'halo_weightmap'):
-			hdus.append(fits.ImageHDU(data=self.halo_weightmap, header=header, name="WEIGHTMAP"))
+			# Create binary table to hold the list of weightmaps for halo photometry:
+			c1 = fits.Column(name='CADENCENO1', format='J', array=self.halo_weightmap['initial_cadence'])
+			c2 = fits.Column(name='CADENCENO2', format='J', array=self.halo_weightmap['final_cadence'])
+			c3 = fits.Column(name='SAT_PIXELS', format='J', array=self.halo_weightmap['sat_pixels'])
+			c4 = fits.Column(
+				name='WEIGHTMAP',
+				format='%dE' % np.prod(SumImage.shape),
+				dim='(%d,%d)' % (SumImage.shape[1], SumImage.shape[0]),
+				array=self.halo_weightmap['weightmap']
+			)
+
+			wm = fits.BinTableHDU.from_columns([c1, c2, c3, c4], header=header, name='WEIGHTMAP')
+
+			wm.header['TTYPE1'] = ('CADENCENO1', 'column title: first cadence number')
+			wm.header['TFORM1'] = ('J', 'column format: signed 32-bit integer')
+			wm.header['TDISP1'] = ('I10', 'column display format')
+
+			wm.header['TTYPE2'] = ('CADENCENO2', 'column title: last cadence number')
+			wm.header['TFORM2'] = ('J', 'column format: signed 32-bit integer')
+			wm.header['TDISP2'] = ('I10', 'column display format')
+
+			wm.header['TTYPE3'] = ('SAT_PIXELS', 'column title: Saturated pixels')
+			wm.header['TFORM3'] = ('J', 'column format: signed 32-bit integer')
+			wm.header['TDISP3'] = ('I10', 'column display format')
+
+			wm.header['TTYPE4'] = ('WEIGHTMAP', 'column title: Weightmap')
+			wm.header.comments['TFORM4'] = 'column format: image of 32-bit floating point'
+			wm.header['TDISP4'] = ('E14.7', 'column display format')
+			wm.header.comments['TDIM4'] = 'column dimensions: pixel aperture array'
+
+			# Add the new table to the list of HDUs:
+			hdus.append(wm)
 
 		# File name to save the lightcurve under:
 		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits'.format(
