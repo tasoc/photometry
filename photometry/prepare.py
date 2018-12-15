@@ -315,13 +315,14 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				return
 
 			# Check that the sector reference time is within the timespan of the time vector:
-			if sector_reference_time < hdf['time'][0] or sector_reference_time > hdf['time'][-1]:
+			sector_reference_time_tjd = sector_reference_time - 2457000
+			if sector_reference_time_tjd < hdf['time'][0] or sector_reference_time_tjd > hdf['time'][-1]:
 				logger.error("Sector reference time outside timespan of data")
 				#return
 
 			# Find the reference image:
-			refindx = np.searchsorted(hdf['time'], sector_reference_time, side='left')
-			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time - hdf['time'][refindx-1]) < abs(sector_reference_time - hdf['time'][refindx])):
+			refindx = np.searchsorted(hdf['time'], sector_reference_time_tjd, side='left')
+			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time_tjd - hdf['time'][refindx-1]) < abs(sector_reference_time_tjd - hdf['time'][refindx])):
 				refindx -= 1
 			logger.info("WCS reference frame: %d", refindx)
 
