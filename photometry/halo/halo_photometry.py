@@ -119,15 +119,15 @@ class HaloPhotometry(BasePhotometry):
 
 		# Initialize
 		logger.info('Formatting data for halo')
-		flux = self.images_cube.T
-		flux[:,self.pixelflags.T==0] = np.nan
+		indx = np.isfinite(self.lightcurve['time'])
+		flux = self.images_cube.T[indx, :, :]
+		flux[:, self.pixelflags.T==0] = np.nan
 
 		# Get the position of the main target
 		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
 		row = self.target_pos_row + self.lightcurve['pos_corr'][:, 1]
 
 		# Put together timeseries table in the format that halophot likes:
-		indx = np.isfinite(self.lightcurve['time'])
 		ts = Table({
 			'time': self.lightcurve['time'][indx],
 			'cadence': self.lightcurve['cadenceno'][indx],
