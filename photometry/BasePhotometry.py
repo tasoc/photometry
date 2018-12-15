@@ -1138,6 +1138,9 @@ class BasePhotometry(object):
 		if not os.path.exists(output_folder):
 			os.makedirs(output_folder)
 
+		# Create sumimage before changing the self.lightcurve object:
+		SumImage = self.sumimage
+
 		# Remove timestamps that have no defined time:
 		# This is a problem in the Sector 1 alert data.
 		indx = np.isfinite(self.lightcurve['time'])
@@ -1343,7 +1346,7 @@ class BasePhotometry(object):
 		img_aperture = fits.ImageHDU(data=mask, header=header, name='APERTURE')
 
 		# Make sumimage image:
-		img_sumimage = fits.ImageHDU(data=self.sumimage, header=header, name="SUMIMAGE")
+		img_sumimage = fits.ImageHDU(data=SumImage, header=header, name="SUMIMAGE")
 
 		# List of the HDUs what will be put into the FITS file:
 		hdus = [hdu, tbhdu, img_sumimage, img_aperture]

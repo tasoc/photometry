@@ -9,6 +9,7 @@ Halo Photometry.
 
 from __future__ import division, with_statement, print_function, absolute_import
 import logging
+import sys
 import os.path
 import numpy as np
 from ..plots import plt, save_figure, plot_image
@@ -120,7 +121,7 @@ class HaloPhotometry(BasePhotometry):
 		# Initialize
 		logger.info('Formatting data for halo')
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
-		flux = self.images_cube.T[indx, :, :]
+		flux = self.images_cube.T[indx_goodtimes, :, :]
 		flux[:, self.pixelflags.T==0] = np.nan
 
 		# Get the position of the main target
@@ -186,12 +187,12 @@ class HaloPhotometry(BasePhotometry):
 				im = np.log10(weightmap*norm)
 				fig = plt.figure()
 				ax = fig.add_subplot(111)
-				plt.imshow(im,cmap=cmap, vmin=-2*np.nanmax(im),vmax=2*np.nanmax(im),
-					interpolation='None',origin='lower')
+				plt.imshow(im, cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im),
+					interpolation='None', origin='lower')
 				plt.colorbar()
 				ax.set_title('TV-min Weightmap')
 				#plot_image(im, scale='log', cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), make_cbar=True, title='TV-min Weightmap')
-				save_figure(os.path.join(self.plot_folder, '%sweightmap' % self.starid))
+				save_figure(os.path.join(self.plot_folder, '%s_weightmap' % self.starid))
 			except:
 				logger.exception('Failed to plot')
 				self.report_details(error="Failed to plot")
