@@ -1098,7 +1098,7 @@ class BasePhotometry(object):
 
 			# Calculate variability used e.g. in CBV selection of stars:
 			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
-			indx = np.isfinite(flux)
+			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux)
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
 			# This happens in the test-data because there are so few points.

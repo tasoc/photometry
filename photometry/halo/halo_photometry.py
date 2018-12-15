@@ -119,7 +119,7 @@ class HaloPhotometry(BasePhotometry):
 
 		# Initialize
 		logger.info('Formatting data for halo')
-		indx = np.isfinite(self.lightcurve['time'])
+		indx_goodtimes = np.isfinite(self.lightcurve['time'])
 		flux = self.images_cube.T[indx, :, :]
 		flux[:, self.pixelflags.T==0] = np.nan
 
@@ -129,11 +129,11 @@ class HaloPhotometry(BasePhotometry):
 
 		# Put together timeseries table in the format that halophot likes:
 		ts = Table({
-			'time': self.lightcurve['time'][indx],
-			'cadence': self.lightcurve['cadenceno'][indx],
-			'x': col[indx],
-			'y': row[indx],
-			'quality': self.lightcurve['quality'][indx]
+			'time': self.lightcurve['time'][indx_goodtimes],
+			'cadence': self.lightcurve['cadenceno'][indx_goodtimes],
+			'x': col[indx_goodtimes],
+			'y': row[indx_goodtimes],
+			'quality': self.lightcurve['quality'][indx_goodtimes]
 		})
 
 		# Run the halo photometry core function
@@ -157,10 +157,11 @@ class HaloPhotometry(BasePhotometry):
 
 			# Rescale the extracted flux:
 			normfactor = mag2flux(self.target['tmag'])/np.nanmedian(ts['corr_flux'])
-			self.lightcurve['flux'] = ts['corr_flux'] * normfactor
+			self.lightcurve['flux'][indx_goodtimes] = ts['corr_flux'] * normfactor
 
 			# Calculate the flux error by uncertainty propergation:
 			for k, imgerr in enumerate(self.images_err):
+				if not indx_goodtimes[k]: continue
 				self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( weightmap**2 * imgerr**2 ))
 
 			self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
