@@ -9,7 +9,6 @@ Halo Photometry.
 
 from __future__ import division, with_statement, print_function, absolute_import
 import logging
-import sys
 import os.path
 import numpy as np
 from ..plots import plt, save_figure, plot_image
@@ -139,7 +138,7 @@ class HaloPhotometry(BasePhotometry):
 
 		# Run the halo photometry core function
 		try:
-			pf, ts, weights, weightmap, pixels_sub = do_lc(
+			pf, ts, weights, weightmap_dict, pixels_sub = do_lc(
 				flux,
 				ts,
 				splits,
@@ -157,18 +156,18 @@ class HaloPhotometry(BasePhotometry):
 			)
 
 			# Rescale the extracted flux:
-			normfactor = mag2flux(self.target['tmag'])/np.nanmedian(ts['corr_flux'])
+			normfactor = mag2flux(self.target['tmag'])
 			self.lightcurve['flux'][indx_goodtimes] = ts['corr_flux'] * normfactor
 
 			# Create mapping from each cadence to which weightmap was used:
 			wmindx = np.zeros_like(indx_goodtimes, dtype=int)
-			for k, (cad1, cad2) in enumerate(zip(weightmap['initial_cadence'], weightmap['final_cadence'])):
+			for k, (cad1, cad2) in enumerate(zip(weightmap_dict['initial_cadence'], weightmap_dict['final_cadence'])):
 				wmindx[(self.lightcurve['cadenceno'] >= cad1) & (self.lightcurve['cadenceno'] <= cad2)] = k
 
 			# Calculate the flux error by uncertainty propergation:
 			for k, imgerr in enumerate(self.images_err):
 				if not indx_goodtimes[k]: continue
-				wm = weightmap['weightmap'][wmindx[k]] # Get the weightmap for this cadence
+				wm = weightmap_dict['weightmap'][wmindx[k]] # Get the weightmap for this cadence
 				self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( wm**2 * imgerr**2 ))
 
 			self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
@@ -176,7 +175,7 @@ class HaloPhotometry(BasePhotometry):
 
 			# Save the weightmap into special property which will make sure
 			# that it is saved into the final FITS output files:
-			self.halo_weightmap = weightmap
+			self.halo_weightmap = weightmap_dict
 
 		except:
 			logger.exception('Halo optimization failed')
@@ -188,9 +187,9 @@ class HaloPhotometry(BasePhotometry):
 			try:
 				logger.info('Plotting weight map')
 				cmap = plt.get_cmap('seismic')
-				norm = np.size(weightmap['weightmap'][0])
+				norm = np.size(weightmap_dict['weightmap'][0])
 				cmap.set_bad('k', 1.)
-				for k, wm in enumerate(weightmap['weightmap']):
+				for k, wm in enumerate(weightmap_dict['weightmap']):
 					im = np.log10(wm*norm)
 					fig = plt.figure()
 					ax = fig.add_subplot(111)
@@ -219,6 +218,7 @@ class HaloPhotometry(BasePhotometry):
 		self.additional_headers['HALO_THR'] = (thresh, 'Halophot saturated pixel threshold')
 		self.additional_headers['HALO_MXI'] = (maxiter, 'Halophot maximum optimisation iterations')
 		self.additional_headers['HALO_SCL'] = (sigclip, 'Halophot sigma clipping enabled')
+		self.additional_headers['HALO_MFL'] = (minflux, 'Halophot minimum flux')
 
 		# If some stars could be skipped:
 		#self.report_details(skip_targets=skip_targets)
