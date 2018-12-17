@@ -155,6 +155,11 @@ class HaloPhotometry(BasePhotometry):
 				sigclip=sigclip
 			)
 
+			# Fix for halophot sometimes not returning lists:
+			for key, value in weightmap_dict.items():
+				if not isinstance(value, list):
+					weightmap_dict[key] = [value]
+
 			# Rescale the extracted flux:
 			normfactor = mag2flux(self.target['tmag'])
 			self.lightcurve['flux'][indx_goodtimes] = ts['corr_flux'] * normfactor
