@@ -14,3 +14,4 @@ statsmodels == 0.8.0
 opencv-python
 psycopg2-binary
 backports.tempfile
+halophot >= 0.6.6.2
