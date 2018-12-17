@@ -11,13 +11,14 @@ from __future__ import division, with_statement, print_function, absolute_import
 import six
 from six.moves import range
 import numpy as np
+from astropy._erfa.core import ErfaWarning
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
 warnings.filterwarnings('ignore', category=FutureWarning, module="scipy") # they are simply annoying!
 warnings.filterwarnings('ignore', category=FutureWarning, module="skimage") # they are simply annoying!
+warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
 from astropy.io import fits
 from astropy.table import Table, Column
-#from mpi4py import MPI
 import h5py
 import sqlite3
 import logging
@@ -28,7 +29,7 @@ from copy import deepcopy
 from astropy.time import Time
 from astropy.wcs import WCS
 import enum
-from bottleneck import replace, nanmedian, ss
+from bottleneck import replace, nanmedian, ss, nanstd
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
 from .utilities import find_tpf_files, rms_timescale
@@ -83,6 +84,7 @@ class BasePhotometry(object):
 		wcs (``astropy.wcs.WCS`` object): World Coordinate system solution.
 
 		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
+		pixelflags (numpy.ndarray): Flags for each pixel, as defined by the TESS data product manual.
 		final_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
 		additional_headers (dict): Additional headers to be included in FITS files.
 
@@ -328,7 +330,7 @@ class BasePhotometry(object):
 		conn = sqlite3.connect(self.catalog_file)
 		conn.row_factory = sqlite3.Row
 		cursor = conn.cursor()
-		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag FROM catalog WHERE starid={0:d};".format(self.starid))
+		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
 		target = cursor.fetchone()
 		if target is None:
 			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
@@ -578,8 +580,11 @@ class BasePhotometry(object):
 				# We dont have an in-memory version of the full cube, so let us
 				# create the cube by loading the cutouts of each image:
 				cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
-				for k in range(self.Ntimes):
-					cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+				if hdf_group in self.hdf:
+					for k in range(self.Ntimes):
+						cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+				else:
+					cube[:, :, :] = np.NaN
 			else:
 				# We have an in-memory version of the full cube.
 				# TODO: Will this create copy of data in memory?
@@ -1083,13 +1088,31 @@ class BasePhotometry(object):
 		if self._status == STATUS.UNKNOWN:
 			raise Exception("STATUS was not set by do_photometry")
 
-		# TODO: Calculate performance metrics
+		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
 			self._details['variance'] = ss(self.lightcurve['flux'] - self._details['mean_flux']) / (len(self.lightcurve['flux'])-1)
 			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], self.lightcurve['flux'], timescale=3600/86400)
 			self._details['ptp'] = nanmedian(np.abs(np.diff(self.lightcurve['flux'])))
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
+
+			# Calculate variability used e.g. in CBV selection of stars:
+			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
+			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux)
+			# Do a more robust fitting with a third-order polynomial,
+			# where we are catching cases where the fitting goes bad.
+			# This happens in the test-data because there are so few points.
+			with warnings.catch_warnings():
+				warnings.filterwarnings('error', category=np.RankWarning)
+				try:
+					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/self.lightcurve['flux_err'][indx])
+				except np.RankWarning:
+					p = [0]
+
+			# Calculate the variability as the standard deviation of the
+			# polynomial-subtracted lightcurve devided by the median error:
+			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(self.lightcurve['flux_err'])
+
 			if self.final_mask is not None:
 				self._details['mask_size'] = int(np.sum(self.final_mask))
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
@@ -1114,6 +1137,9 @@ class BasePhotometry(object):
 		# Make sure that the directory exists:
 		if not os.path.exists(output_folder):
 			os.makedirs(output_folder)
+
+		# Create sumimage before changing the self.lightcurve object:
+		SumImage = self.sumimage
 
 		# Remove timestamps that have no defined time:
 		# This is a problem in the Sector 1 alert data.
@@ -1159,7 +1185,7 @@ class BasePhotometry(object):
 
 		# Versions:
 		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
-		hdu.header['FILEVER'] = ('1.1', 'File format version')
+		hdu.header['FILEVER'] = ('1.3', 'File format version')
 		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
@@ -1178,6 +1204,7 @@ class BasePhotometry(object):
 		hdu.header['PMDEC'] = (fits.card.Undefined() if not self.target['pm_decl'] else self.target['pm_decl'], '[mas/yr] Dec proper motion')
 		hdu.header['PMTOTAL'] = (pmtotal, '[mas/yr] total proper motion')
 		hdu.header['TESSMAG'] = (self.target_tmag, '[mag] TESS magnitude')
+		hdu.header['TEFF'] = (fits.card.Undefined() if not self.target['teff'] else self.target['teff'], '[K] Effective temperature')
 		hdu.header['TICVER'] = (self.ticver, 'TESS Input Catalog version')
 
 		# Cosmic ray headers:
@@ -1198,15 +1225,16 @@ class BasePhotometry(object):
 		c4 = fits.Column(name='FLUX_RAW', format='D', unit='e-/s', array=self.lightcurve['flux'])
 		c5 = fits.Column(name='FLUX_RAW_ERR', format='D', unit='e-/s', array=self.lightcurve['flux_err'])
 		c6 = fits.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
-		c7 = fits.Column(name='FLUX_CORR', format='D', unit='e-/s', array=np.full_like(self.lightcurve['time'], np.nan))
-		c8 = fits.Column(name='FLUX_CORR_ERR', format='D', unit='e-/s', array=np.full_like(self.lightcurve['time'], np.nan))
-		c9 = fits.Column(name='QUALITY', format='J', array=self.lightcurve['quality'])
-		c10 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
-		c11 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
-		c12 = fits.Column(name='POS_CORR1', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 0]) # column
-		c13 = fits.Column(name='POS_CORR2', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 1]) # row
+		c7 = fits.Column(name='FLUX_CORR', format='D', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
+		c8 = fits.Column(name='FLUX_CORR_ERR', format='D', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
+		c9 = fits.Column(name='QUALITY', format='J', array=np.zeros_like(self.lightcurve['time']))
+		c10 = fits.Column(name='PIXEL_QUALITY', format='J', array=self.lightcurve['quality'])
+		c11 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
+		c12 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
+		c13 = fits.Column(name='POS_CORR1', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 0]) # column
+		c14 = fits.Column(name='POS_CORR2', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 1]) # row
 
-		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13], name='LIGHTCURVE')
+		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14], name='LIGHTCURVE')
 
 		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
 		tbhdu.header['TFORM1'] = ('D', 'column format: 64-bit floating point')
@@ -1247,29 +1275,33 @@ class BasePhotometry(object):
 		tbhdu.header['TUNIT8'] = ('ppm', 'column units: parts-per-million')
 		tbhdu.header['TDISP8'] = ('E26.17', 'column display format')
 
-		tbhdu.header['TTYPE9'] = ('QUALITY', 'column title: photometry quality flag')
+		tbhdu.header['TTYPE9'] = ('QUALITY', 'column title: photometry quality flags')
 		tbhdu.header['TFORM9'] = ('J', 'column format: signed 32-bit integer')
 		tbhdu.header['TDISP9'] = ('B16.16', 'column display format')
 
-		tbhdu.header['TTYPE10'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
-		tbhdu.header['TFORM10'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT10'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP10'] = ('F10.5', 'column display format')
+		tbhdu.header['TTYPE10'] = ('PIXEL_QUALITY', 'column title: pixel quality flags')
+		tbhdu.header['TFORM10'] = ('J', 'column format: signed 32-bit integer')
+		tbhdu.header['TDISP10'] = ('B16.16', 'column display format')
 
-		tbhdu.header['TTYPE11'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
+		tbhdu.header['TTYPE11'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
 		tbhdu.header['TFORM11'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT11'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP11'] = ('F10.5', 'column display format')
 
-		tbhdu.header['TTYPE12'] = ('POS_CORR1', 'column title: column position correction')
+		tbhdu.header['TTYPE12'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
 		tbhdu.header['TFORM12'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT12'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP12'] = ('F14.7', 'column display format')
+		tbhdu.header['TDISP12'] = ('F10.5', 'column display format')
 
-		tbhdu.header['TTYPE13'] = ('POS_CORR2', 'column title: row position correction')
+		tbhdu.header['TTYPE13'] = ('POS_CORR1', 'column title: column position correction')
 		tbhdu.header['TFORM13'] = ('D', 'column format: 64-bit floating point')
 		tbhdu.header['TUNIT13'] = ('pixel', 'column units: pixels')
 		tbhdu.header['TDISP13'] = ('F14.7', 'column display format')
+
+		tbhdu.header['TTYPE14'] = ('POS_CORR2', 'column title: row position correction')
+		tbhdu.header['TFORM14'] = ('D', 'column format: 64-bit floating point')
+		tbhdu.header['TUNIT14'] = ('pixel', 'column units: pixels')
+		tbhdu.header['TDISP14'] = ('F14.7', 'column display format')
 
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
@@ -1314,7 +1346,45 @@ class BasePhotometry(object):
 		img_aperture = fits.ImageHDU(data=mask, header=header, name='APERTURE')
 
 		# Make sumimage image:
-		img_sumimage = fits.ImageHDU(data=self.sumimage, header=header, name="SUMIMAGE")
+		img_sumimage = fits.ImageHDU(data=SumImage, header=header, name="SUMIMAGE")
+
+		# List of the HDUs what will be put into the FITS file:
+		hdus = [hdu, tbhdu, img_sumimage, img_aperture]
+
+		# For Halo photometry, also add the weightmap to the FITS file:
+		if hasattr(self, 'halo_weightmap'):
+			# Create binary table to hold the list of weightmaps for halo photometry:
+			c1 = fits.Column(name='CADENCENO1', format='J', array=self.halo_weightmap['initial_cadence'])
+			c2 = fits.Column(name='CADENCENO2', format='J', array=self.halo_weightmap['final_cadence'])
+			c3 = fits.Column(name='SAT_PIXELS', format='J', array=self.halo_weightmap['sat_pixels'])
+			c4 = fits.Column(
+				name='WEIGHTMAP',
+				format='%dE' % np.prod(SumImage.shape),
+				dim='(%d,%d)' % (SumImage.shape[1], SumImage.shape[0]),
+				array=self.halo_weightmap['weightmap']
+			)
+
+			wm = fits.BinTableHDU.from_columns([c1, c2, c3, c4], header=header, name='WEIGHTMAP')
+
+			wm.header['TTYPE1'] = ('CADENCENO1', 'column title: first cadence number')
+			wm.header['TFORM1'] = ('J', 'column format: signed 32-bit integer')
+			wm.header['TDISP1'] = ('I10', 'column display format')
+
+			wm.header['TTYPE2'] = ('CADENCENO2', 'column title: last cadence number')
+			wm.header['TFORM2'] = ('J', 'column format: signed 32-bit integer')
+			wm.header['TDISP2'] = ('I10', 'column display format')
+
+			wm.header['TTYPE3'] = ('SAT_PIXELS', 'column title: Saturated pixels')
+			wm.header['TFORM3'] = ('J', 'column format: signed 32-bit integer')
+			wm.header['TDISP3'] = ('I10', 'column display format')
+
+			wm.header['TTYPE4'] = ('WEIGHTMAP', 'column title: Weightmap')
+			wm.header.comments['TFORM4'] = 'column format: image of 32-bit floating point'
+			wm.header['TDISP4'] = ('E14.7', 'column display format')
+			wm.header.comments['TDIM4'] = 'column dimensions: pixel aperture array'
+
+			# Add the new table to the list of HDUs:
+			hdus.append(wm)
 
 		# File name to save the lightcurve under:
 		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits'.format(
@@ -1327,10 +1397,13 @@ class BasePhotometry(object):
 
 		# Write to file:
 		filepath = os.path.join(output_folder, filename)
-		with fits.HDUList([hdu, tbhdu, img_sumimage, img_aperture]) as hdulist:
+		with fits.HDUList(hdus) as hdulist:
 			hdulist.writeto(filepath, checksum=True, overwrite=True)
 
 		# Store the output file in the details object for future reference:
-		self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base).replace('\\', '/')
+		if os.path.realpath(output_folder).startswith(os.path.realpath(self.input_folder)):
+			self._details['filepath_lightcurve'] = os.path.relpath(filepath, os.path.abspath(self.input_folder)).replace('\\', '/')
+		else:
+			self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base).replace('\\', '/')
 
 		return filepath

@@ -1,10 +1,9 @@
+numpy
 six
 pytest
-pytest-mpl
-numpy
 scipy >= 0.16
 matplotlib == 2.1.2
-astropy >= 2.0, < 3.0
+astropy
 photutils >= 0.4
 Bottleneck >= 1.2
 h5py
@@ -15,3 +14,4 @@ statsmodels == 0.8.0
 opencv-python
 psycopg2-binary
 backports.tempfile
+halophot >= 0.6.6.2

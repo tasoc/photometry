@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
-	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf', 'linpsf'))
+	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf', 'linpsf', 'halo'))
 	parser.add_argument('-s', '--source', help='Data-source to load.', default=None, choices=('ffi', 'tpf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
@@ -48,7 +48,8 @@ if __name__ == '__main__':
 	parser.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
 	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
 	parser.add_argument('--all', help='Run all stars, one by one. Please consider using the MPI program instead.', action='store_true')
-	parser.add_argument('starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
+	parser.add_argument('--starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
+	parser.add_argument('input_folder', type=str, help='Directory to create catalog files in.', nargs='?', default=None)
 	args = parser.parse_args()
 
 	# Make sure at least one setting is given:
@@ -77,9 +78,13 @@ if __name__ == '__main__':
 	test_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tests', 'input'))
 	if args.test:
 		input_folder = test_folder
+	elif args.input_folder:
+		input_folder = args.input_folder
 	else:
 		input_folder = os.environ.get('TESSPHOT_INPUT', test_folder)
-	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
+
+	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(input_folder, 'lightcurves'))
+
 	logger.info("Loading input data from '%s'", input_folder)
 	logger.info("Putting output data in '%s'", output_folder)
 
@@ -89,7 +94,12 @@ if __name__ == '__main__':
 	# Run the program:
 	with TaskManager(input_folder) as tm:
 		while True:
-			if args.all:
+			if args.all and args.random:
+				task = tm.get_random_task()
+				if task is None: break
+				if args.method: task['method'] = args.method
+				if args.source: task['datasource'] = args.source
+			elif args.all:
 				task = tm.get_task()
 				if task is None: break
 				if args.method: task['method'] = args.method
@@ -103,7 +113,7 @@ if __name__ == '__main__':
 				task = tm.get_random_task()
 
 			result = task.copy()
-			del task['priority']
+			del task['priority'], task['tmag']
 
 			t1 = default_timer()
 			pho = f(**task)

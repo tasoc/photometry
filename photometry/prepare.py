@@ -12,7 +12,7 @@ import sqlite3
 import logging
 import multiprocessing
 from astropy.wcs import WCS
-from bottleneck import replace, nanmean
+from bottleneck import replace, nanmean, ss
 from timeit import default_timer
 import itertools
 from .backgrounds import fit_background
@@ -117,74 +117,82 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 			images = hdf.require_group('images')
 			images_err = hdf.require_group('images_err')
 			backgrounds = hdf.require_group('backgrounds')
+			masks = hdf.require_group('backgrounds_masks')
 			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
 			time_smooth = backgrounds.attrs.get('time_smooth', 3)
 
-			if 'backgrounds_unsmoothed' in hdf or len(backgrounds) < numfiles:
+			if len(backgrounds) < numfiles:
+				# Because HDF5 is stupid, and it cant figure out how to delete data from
+				# the file once it is in, we are creating another temp hdf5 file that
+				# will hold thing we dont need in the final HDF5 file.
+				tmp_hdf_file = hdf_file.replace('.hdf5', '.tmp.hdf5')
+				with h5py.File(tmp_hdf_file, 'a', libver='latest') as hdftmp:
+					dset_bck_us = hdftmp.require_group('backgrounds_unsmoothed')
 
-				dset_bck_us = hdf.require_group('backgrounds_unsmoothed')
-				masks = hdf.require_group('backgrounds_masks')
+					if len(masks) < numfiles:
 
-				if len(masks) < numfiles:
+						tic = default_timer()
+						if threads > 1:
+							pool = multiprocessing.Pool(threads)
+							m = pool.imap
+						else:
+							m = map
 
+						last_bck_fit = -1 if len(masks) == 0 else int(sorted(list(masks.keys()))[-1])
+						k = last_bck_fit+1
+						for bck, mask in m(fit_background, files[k:]):
+							dset_name = '%04d' % k
+							logger.debug("Background %d complete", k)
+							logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k-last_bck_fit))
+
+							dset_bck_us.create_dataset(dset_name, data=bck)
+
+							indicies = np.asarray(np.nonzero(mask), dtype='uint16')
+							masks.create_dataset(dset_name, data=indicies, **args)
+
+							k += 1
+
+						if threads > 1:
+							pool.close()
+							pool.join()
+
+						hdf.flush()
+						hdftmp.flush()
+						toc = default_timer()
+						logger.info("Background estimation: %f sec/image", (toc-tic)/(numfiles-last_bck_fit))
+
+					# Smooth the backgrounds along the time axis:
+					backgrounds.attrs['time_smooth'] = time_smooth
+					w = time_smooth//2
 					tic = default_timer()
-					if threads > 1:
-						pool = multiprocessing.Pool(threads)
-						m = pool.imap
-					else:
-						m = map
-
-					last_bck_fit = -1 if len(masks) == 0 else int(list(masks.keys())[-1])
-					k = last_bck_fit+1
-					for bck, mask in m(fit_background, files[k:]):
+					for k in range(numfiles):
 						dset_name = '%04d' % k
-						logger.debug("Background %d complete", k)
-						logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k-last_bck_fit))
+						if dset_name in backgrounds: continue
 
-						dset_bck_us.create_dataset(dset_name, data=bck)
+						indx1 = max(k-w, 0)
+						indx2 = min(k+w+1, numfiles)
+						logger.debug("Smoothing background %d: %d -> %d", k, indx1, indx2)
 
-						indicies = np.asarray(np.nonzero(mask), dtype='uint16')
-						masks.create_dataset(dset_name, data=indicies, **args)
+						block = np.empty((img_shape[0], img_shape[1], indx2-indx1), dtype='float32')
+						logger.debug(block.shape)
+						for i, k in enumerate(range(indx1, indx2)):
+							block[:, :, i] = dset_bck_us['%04d' % k]
 
-						k += 1
+						bck = nanmean(block, axis=2)
+						#bck_err = np.sqrt(ss(block_err, axis=2)) / time_smooth
 
-					if threads > 1:
-						pool.close()
-						pool.join()
+						backgrounds.create_dataset(dset_name, data=bck, chunks=imgchunks, **args)
 
-					hdf.flush()
 					toc = default_timer()
-					logger.info("Background estimation: %f sec/image", (toc-tic)/(numfiles-last_bck_fit))
+					logger.info("Background smoothing: %f sec/image", (toc-tic)/numfiles)
 
-				# Smooth the backgrounds along the time axis:
-				backgrounds.attrs['time_smooth'] = time_smooth
-				w = time_smooth//2
-				tic = default_timer()
-				for k in range(numfiles):
-					dset_name = '%04d' % k
-					if dset_name in backgrounds: continue
-
-					indx1 = max(k-w, 0)
-					indx2 = min(k+w+1, numfiles)
-					logger.debug("Smoothing background %d: %d -> %d", k, indx1, indx2)
-
-					block = np.empty((img_shape[0], img_shape[1], indx2-indx1), dtype='float32')
-					logger.debug(block.shape)
-					for i, k in enumerate(range(indx1, indx2)):
-						block[:, :, i] = dset_bck_us['%04d' % k]
-
-					bck = nanmean(block, axis=2)
-
-					backgrounds.create_dataset(dset_name, data=bck, chunks=imgchunks, **args)
-
-				toc = default_timer()
-				logger.info("Background smoothing: %f sec/image", (toc-tic)/numfiles)
-
-				# FIXME: Because HDF5 is stupid, this might not actually delete the data
-				#        Maybe we need to run h5repack in the file at the end?
-				del hdf['backgrounds_unsmoothed']
+				# Flush changes to the permanent HDF5 file:
 				hdf.flush()
+
+				# Delete the temporary HDF5 file again:
+				if os.path.exists(tmp_hdf_file):
+					os.remove(tmp_hdf_file)
 
 
 			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf:
@@ -219,9 +227,23 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 						is_tess = True
 
 					# Pick out the important bits from the header:
-					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP']) + hdr.get('BJDREFI', 0) + hdr.get('BJDREFF', 0)
+					# Keep time in BTJD. If we want BJD we could
+					# simply add BJDREFI + BJDREFF:
+					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP'])
 					timecorr[k] = hdr.get('BARYCORR', 0)
-					cadenceno[k] = k+1
+
+					# Cadence-number is currently not in the FFIs.
+					# The following numbers comes from unofficial communication
+					# with Doug Caldwell and Roland Vanderspek:
+					# The timestamp in TJD and the corresponding cadenceno:
+					first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474E-03
+					first_cadenceno = 4697
+					timedelt = 1800/86400
+					# Extracpolate the cadenceno as a simple linear relation:
+					offset = first_cadenceno - first_time/timedelt
+					cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
+
+					# Data quality flags:
 					quality[k] = hdr.get('DQUALITY', 0)
 
 					if k == 0:
@@ -293,13 +315,14 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				return
 
 			# Check that the sector reference time is within the timespan of the time vector:
-			if sector_reference_time < hdf['time'][0] or sector_reference_time > hdf['time'][-1]:
+			sector_reference_time_tjd = sector_reference_time - 2457000
+			if sector_reference_time_tjd < hdf['time'][0] or sector_reference_time_tjd > hdf['time'][-1]:
 				logger.error("Sector reference time outside timespan of data")
 				#return
 
 			# Find the reference image:
-			refindx = np.searchsorted(hdf['time'], sector_reference_time, side='left')
-			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time - hdf['time'][refindx-1]) < abs(sector_reference_time - hdf['time'][refindx])):
+			refindx = np.searchsorted(hdf['time'], sector_reference_time_tjd, side='left')
+			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time_tjd - hdf['time'][refindx-1]) < abs(sector_reference_time_tjd - hdf['time'][refindx])):
 				refindx -= 1
 			logger.info("WCS reference frame: %d", refindx)
 
