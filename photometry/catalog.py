@@ -13,10 +13,10 @@ import sqlite3
 import logging
 import itertools
 from .tasoc_db import TASOC_DB
-from .utilities import add_proper_motion, load_settings
+from .utilities import add_proper_motion, load_settings, radec_to_cartesian, cartesian_to_radec
 
 #------------------------------------------------------------------------------
-def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.5, overwrite=False):
+def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.1, overwrite=False):
 	"""
 	Create catalogs of stars in a given TESS observing sector.
 
@@ -115,14 +115,25 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 			a = footprint[2:-2].split('),(')
 			a = np.array([b.split(',') for b in a], dtype='float64')
 
-			# Center of footprint:
-			origin = np.mean(a, axis=0)
+			# If we need to, we should add a buffer around the footprint,
+			# by extending all points out from the centre with a set amount:
+			# We are cheating a little bit here with the spherical geometry,
+			# but it shouldn't matter too much.
+			if coord_buffer > 0:
+				# Convert ra-dec to cartesian coordinates:
+				a_xyz = radec_to_cartesian(a)
 
-			# Add buffer zone, by expanding polygon away from origin:
-			for k in range(a.shape[0]):
-				vec = a[k,:] - origin
-				uvec = vec/np.linalg.norm(vec)
-				a[k,:] = origin + vec + uvec*coord_buffer
+				# Find center of footprint:
+				origin_xyz = np.mean(a_xyz, axis=0)
+
+				# Add buffer zone, by expanding polygon away from origin:
+				for k in range(a.shape[0]):
+					vec = a_xyz[k,:] - origin_xyz
+					uvec = vec/np.linalg.norm(vec)
+					a_xyz[k,:] += uvec*coord_buffer
+
+				# Convert back to ra-dec coordinates:
+				a = cartesian_to_radec(a_xyz)
 
 			# Make footprint into string that will be understood by database:
 			footprint = '{' + ",".join([str(s) for s in a.flatten()]) + '}'
