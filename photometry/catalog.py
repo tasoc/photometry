@@ -16,7 +16,7 @@ from .tasoc_db import TASOC_DB
 from .utilities import add_proper_motion, load_settings, radec_to_cartesian, cartesian_to_radec
 
 #------------------------------------------------------------------------------
-def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.1, overwrite=False):
+def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False):
 	"""
 	Create catalogs of stars in a given TESS observing sector.
 
@@ -125,12 +125,19 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 				# Find center of footprint:
 				origin_xyz = np.mean(a_xyz, axis=0)
+				origin_xyz /= np.linalg.norm(origin_xyz)
+
+				# Just for debugging:
+				origin = cartesian_to_radec(origin_xyz).flatten()
+				logger.debug("Centre of CCD: (%f, %f)", origin[0], origin[1])
 
 				# Add buffer zone, by expanding polygon away from origin:
 				for k in range(a.shape[0]):
 					vec = a_xyz[k,:] - origin_xyz
 					uvec = vec/np.linalg.norm(vec)
 					a_xyz[k,:] += uvec*coord_buffer
+					a_xyz[k,:] /= np.linalg.norm(a_xyz[k,:])
+				a_xyz = np.clip(a_xyz, -1, 1)
 
 				# Convert back to ra-dec coordinates:
 				a = cartesian_to_radec(a_xyz)
