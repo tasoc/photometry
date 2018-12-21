@@ -135,7 +135,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				for k in range(a.shape[0]):
 					vec = a_xyz[k,:] - origin_xyz
 					uvec = vec/np.linalg.norm(vec)
-					a_xyz[k,:] += uvec*coord_buffer
+					a_xyz[k,:] += uvec*np.radians(coord_buffer)
 					a_xyz[k,:] /= np.linalg.norm(a_xyz[k,:])
 				a_xyz = np.clip(a_xyz, -1, 1)
 
