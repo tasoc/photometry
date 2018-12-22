@@ -276,6 +276,51 @@ def sphere_distance(ra1, dec1, ra2, dec2):
 	))
 
 #------------------------------------------------------------------------------
+def radec_to_cartesian(radec):
+	"""
+	Convert spherical coordinates as (ra, dec) pairs to cartesian coordinates (x,y,z).
+
+	Parameters:
+		radec (ndarray): Array with ra-dec pairs in degrees.
+
+	Returns:
+		ndarray: (x,y,z) coordinates corresponding to input coordinates.
+	"""
+	radec = np.atleast_2d(radec)
+	xyz = np.empty((radec.shape[0], 3), dtype='float64')
+
+	phi = np.radians(radec[:,0])
+	theta = np.pi/2 - np.radians(radec[:,1])
+
+	xyz[:,0] = np.sin(theta) * np.cos(phi)
+	xyz[:,1] = np.sin(theta) * np.sin(phi)
+	xyz[:,2] = np.cos(theta)
+	return xyz
+
+#------------------------------------------------------------------------------
+def cartesian_to_radec(xyz):
+	"""
+	Convert cartesian coordinates (x,y,z) to spherical coordinates in ra-dec form.
+
+	Parameters:
+		radec (ndarray): Array with ra-dec pairs.
+
+	Returns:
+		ndarray: ra-dec coordinates in degrees corresponding to input coordinates.
+	"""
+	xyz = np.atleast_2d(xyz)
+	radec = np.empty((xyz.shape[0], 2), dtype='float64')
+	radec[:,1] = np.pi/2 - np.arccos(xyz[:,2])
+	radec[:,0] = np.arctan2(xyz[:,1], xyz[:,0])
+
+	indx = radec[:,0] < 0
+	radec[indx,0] = 2*np.pi - np.abs(radec[indx,0])
+	indx = radec[:,0] > 2*np.pi
+	radec[indx,0] -= 2*np.pi
+
+	return np.degrees(radec)
+
+#------------------------------------------------------------------------------
 def rms_timescale(time, flux, timescale=3600/86400):
 	"""
 	Compute robust RMS on specified timescale. Using MAD scaled to RMS.

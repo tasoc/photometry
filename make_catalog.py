@@ -52,7 +52,7 @@ if __name__ == '__main__':
 	console = logging.StreamHandler()
 	console.setFormatter(formatter)
 	logger = logging.getLogger('photometry')
-	logger.setLevel(logging.INFO)
+	logger.setLevel(logging_level)
 	logger.addHandler(console)
 
 	# Run the program:
