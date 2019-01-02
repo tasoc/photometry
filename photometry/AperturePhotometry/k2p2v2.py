@@ -486,7 +486,10 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 	#==========================================================================
 
 	# Cut out pixels of sum image with flux above the cut-off:
-	idx = (SumImage > CUT)
+	# The following two lines are identical to "idx = (SumImage > CUT)",
+	# but in this way we avoid an RuntimeWarning when SumImage contains NaNs.
+	idx = np.zeros_like(SumImage, dtype='bool')
+	np.greater(SumImage, CUT, out=idx, where=~np.isnan(SumImage))
 	X2 = X[idx]
 	Y2 = Y[idx]
 
@@ -719,9 +722,11 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 
 		# ---------------
 		# PLOT 2
+		idx = np.zeros_like(SumImage, dtype='bool')
+		np.greater(SumImage, CUT, out=idx, where=~np.isnan(SumImage))
 		Flux_mat2 = np.zeros_like(SumImage)
-		Flux_mat2[SumImage < CUT] = 1
-		Flux_mat2[SumImage > CUT] = 2
+		Flux_mat2[~idx] = 1
+		Flux_mat2[idx] = 2
 		Flux_mat2[ori_mask == 0] = 0
 
 		ax2 = fig0.add_subplot(152)
