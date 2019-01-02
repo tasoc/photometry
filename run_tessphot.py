@@ -44,6 +44,7 @@ if __name__ == '__main__':
 	parser.add_argument('-s', '--source', help='Data-source to load.', default=None, choices=('ffi', 'tpf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
 	parser.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
 	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
@@ -92,7 +93,7 @@ if __name__ == '__main__':
 	f = functools.partial(tessphot, input_folder=input_folder, output_folder=output_folder, plot=args.plot)
 
 	# Run the program:
-	with TaskManager(input_folder) as tm:
+	with TaskManager(input_folder, overwrite=args.overwrite) as tm:
 		while True:
 			if args.all and args.random:
 				task = tm.get_random_task()

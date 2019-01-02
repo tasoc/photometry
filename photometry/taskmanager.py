@@ -19,7 +19,7 @@ class TaskManager(object):
 	A TaskManager which keeps track of which targets to process.
 	"""
 
-	def __init__(self, todo_file, cleanup=False, summary=None, summary_interval=100):
+	def __init__(self, todo_file, cleanup=False, overwrite=False, summary=None, summary_interval=100):
 		"""
 		Initialize the TaskManager which keeps track of which targets to process.
 
@@ -27,6 +27,7 @@ class TaskManager(object):
 			todo_file (string): Path to the TODO-file.
 			cleanup (boolean): Perform cleanup/optimization of TODO-file before
 			                   during initialization. Default=False.
+			overwrite (boolean): Restart calculation from the beginning, discarding any previous results. Default=False.
 			summary (string): Path to file where to periodically write a progress summary. The output file will be in JSON format. Default=None.
 			summary_interval (int): Interval at which to write summary file. Setting this to 1 will mean writing the file after every tasks completes. Default=100.
 
@@ -57,11 +58,11 @@ class TaskManager(object):
 		self.cursor = self.conn.cursor()
 
 		# Reset the status of everything for a new run:
-		# TODO: This should obviously be removed once we start running for real
-		self.cursor.execute("UPDATE todolist SET status=NULL;")
-		self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
-		self.cursor.execute("DROP TABLE IF EXISTS photometry_skipped;")
-		self.conn.commit()
+		if overwrite:
+			self.cursor.execute("UPDATE todolist SET status=NULL;")
+			self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
+			self.cursor.execute("DROP TABLE IF EXISTS photometry_skipped;")
+			self.conn.commit()
 
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
