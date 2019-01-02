@@ -1171,7 +1171,7 @@ class BasePhotometry(object):
 
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
-		hdu.header['NEXTEND'] = (3, 'number of standard extensions')
+		hdu.header['NEXTEND'] = (3 + int(hasattr(self, 'halo_weightmap')), 'number of standard extensions')
 		hdu.header['EXTNAME'] = ('PRIMARY', 'name of extension')
 		hdu.header['ORIGIN'] = ('TASOC/Aarhus', 'institution responsible for creating this file')
 		hdu.header['DATE'] = (now.strftime("%Y-%m-%d"), 'date the file was created')
