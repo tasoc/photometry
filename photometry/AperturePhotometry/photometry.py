@@ -70,8 +70,12 @@ class AperturePhotometry(BasePhotometry):
 			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
-			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
-			masks = np.asarray(masks, dtype='bool')
+			try:
+				masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
+				masks = np.asarray(masks, dtype='bool')
+			except k2p2.K2P2NoStars:
+				self.report_details(error='No flux above threshold.')
+				masks = np.asarray(0, dtype='bool')
 
 			using_minimum_mask = False
 			if len(masks.shape) == 0:
