@@ -1387,7 +1387,7 @@ class BasePhotometry(object):
 			hdus.append(wm)
 
 		# File name to save the lightcurve under:
-		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits'.format(
+		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits.gz'.format(
 			starid=self.starid,
 			sector=self.sector,
 			cadence=cadence,
