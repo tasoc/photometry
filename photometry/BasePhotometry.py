@@ -24,6 +24,7 @@ import sqlite3
 import logging
 import datetime
 import os.path
+import glob
 from copy import deepcopy
 #from astropy import coordinates, units
 from astropy.time import Time
@@ -1037,6 +1038,19 @@ class BasePhotometry(object):
 		cat['row_stamp'] += jitter[:, 1]
 
 		return cat
+
+	def delete_plots(self):
+		"""
+		Delete all files in :py:func:`plot_folder`.
+
+		If plotting is not enabled, this method does nothing and will therefore
+		leave any existing files in the plot folder, should it already exists.
+		"""
+		logger = logging.getLogger(__name__)
+		if self.plot and self.plot_folder is not None:
+			for f in glob.iglob(os.path.join(self.plot_folder, '*')):
+				logger.debug("Deleting plot '%s'", f)
+				os.unlink(f)
 
 	def report_details(self, error=None, skip_targets=None):
 		"""

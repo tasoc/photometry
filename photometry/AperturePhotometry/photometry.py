@@ -58,7 +58,10 @@ class AperturePhotometry(BasePhotometry):
 		}
 
 		for retries in range(5):
+			# Delete any plots left over in the plots folder from an earlier iteration:
+			self.delete_plots()
 
+			# Create the sum-image:
 			SumImage = self.sumimage
 
 			logger.info(self.stamp)
