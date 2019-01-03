@@ -130,8 +130,3 @@ if __name__ == '__main__':
 
 			if not args.all:
 				break
-
-	# Write out the results?
-	if not args.quiet:
-		print("=======================")
-		print("STATUS: {0}".format(pho.status.name))

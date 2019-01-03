@@ -970,7 +970,7 @@ class BasePhotometry(object):
 		Instance of :py:class:`image_motion.ImageMovementKernel`.
 		"""
 		if self._MovementKernel is None:
-			default_movement_kernel = 'hdf5' # The default kernel to use - set to 'wcs' if we should use WCS instead
+			default_movement_kernel = 'wcs' # The default kernel to use - set to 'hdf5' if we should use the one from prepare instead
 			if self.datasource == 'ffi' and default_movement_kernel == 'wcs' and isinstance(self.hdf['wcs'], h5py.Group):
 				self._MovementKernel = ImageMovementKernel(warpmode='wcs', wcs_ref=self.wcs)
 				self._MovementKernel.load_series(self.lightcurve['time'], [self.hdf['wcs'][dset][0] for dset in self.hdf['wcs']])
