@@ -538,6 +538,9 @@ class BasePhotometry(object):
 		self.target_pos_row_stamp = self.target_pos_row - self._stamp[0]
 		self.target_pos_column_stamp = self.target_pos_column - self._stamp[2]
 
+		# Store the stamp in details:
+		self._details['stamp'] = self._stamp
+
 		# Force sum-image and catalog to be recalculated next time:
 		self._sumimage = None
 		self._catalog = None
@@ -863,67 +866,67 @@ class BasePhotometry(object):
 			# Convert the corners into (ra, dec) coordinates and find the max and min values:
 			pixel_scale = 21.0 # Size of single pixel in arcsecs
 			buffer_size = 3 # Buffer to add around stamp in pixels
+			buffer_deg = buffer_size*pixel_scale/3600.0
 			corners_radec = self.wcs.all_pix2world(corners, 0, ra_dec_order=True)
-			radec_min = np.min(corners_radec, axis=0) - buffer_size*pixel_scale/3600.0
-			radec_max = np.max(corners_radec, axis=0) + buffer_size*pixel_scale/3600.0
+			radec_min = np.min(corners_radec, axis=0)
+			radec_max = np.max(corners_radec, axis=0)
 
 			# Upper and lower bounds on ra and dec:
 			ra_min = radec_min[0]
 			ra_max = radec_max[0]
-			dec_min = radec_min[1]
-			dec_max = radec_max[1]
+			dec_min = radec_min[1] - buffer_deg
+			dec_max = radec_max[1] + buffer_deg
+
+			logger = logging.getLogger(__name__)
+			logger.debug('Catalog search - ra_min = %f', ra_min)
+			logger.debug('Catalog search - ra_max = %f', ra_max)
+			logger.debug('Catalog search - dec_min = %f', dec_min)
+			logger.debug('Catalog search - dec_max = %f', dec_max)
 
 			# Select only the stars within the current stamp:
-			conn = sqlite3.connect(self.catalog_file)
-			cursor = conn.cursor()
-			query = "SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;"
-			if dec_min < -90:
-				# We are very close to the southern pole
-				# Ignore everything about RA
-				cursor.execute(query, {
-					'ra_min': 0,
-					'ra_max': 360,
-					'dec_min': -90,
-					'dec_max': dec_max
-				})
-			elif dec_max > 90:
-				# We are very close to the northern pole
-				# Ignore everything about RA
-				cursor.execute(query, {
-					'ra_min': 0,
-					'ra_max': 360,
-					'dec_min': dec_min,
-					'dec_max': 90
-				})
-			elif ra_min < 0:
-				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra <= :ra_max AND decl BETWEEN :dec_min AND :dec_max
-				UNION
-				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND 360 AND decl BETWEEN :dec_min AND :dec_max;""", {
-					'ra_min': 360 - abs(ra_min),
-					'ra_max': ra_max,
-					'dec_min': dec_min,
-					'dec_max': dec_max
-				})
-			elif ra_max > 360:
-				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra >= :ra_min AND decl BETWEEN :dec_min AND :dec_max
-				UNION
-				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN 0 AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;""", {
-					'ra_min': ra_min,
-					'ra_max': ra_max - 360,
-					'dec_min': dec_min,
-					'dec_max': dec_max
-				})
-			else:
-				cursor.execute(query, {
-					'ra_min': ra_min,
-					'ra_max': ra_max,
-					'dec_min': dec_min,
-					'dec_max': dec_max
-				})
+			with sqlite3.connect(self.catalog_file) as conn:
+				cursor = conn.cursor()
+				query = "SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;"
+				if dec_min < -90:
+					# We are very close to the southern pole
+					# Ignore everything about RA
+					cursor.execute(query, {
+						'ra_min': 0,
+						'ra_max': 360,
+						'dec_min': -90,
+						'dec_max': dec_max
+					})
+				elif dec_max > 90:
+					# We are very close to the northern pole
+					# Ignore everything about RA
+					cursor.execute(query, {
+						'ra_min': 0,
+						'ra_max': 360,
+						'dec_min': dec_min,
+						'dec_max': 90
+					})
+				elif abs(ra_min - ra_max) > 90:
+					# The stamp is spanning across the ra=0 line
+					# and the difference is therefore large as WCS will always
+					# return coordinates between 0 and 360.
+					# We therefore have to change how we query on either side of
+					# the line and how the buffer is added/subtracted.
+					cursor.execute("SELECT starid,ra,decl,tmag FROM catalog WHERE (ra <= :ra_min OR ra >= :ra_max) AND decl BETWEEN :dec_min AND :dec_max;", {
+						'ra_min': ra_min + buffer_deg,
+						'ra_max': ra_max - buffer_deg,
+						'dec_min': dec_min,
+						'dec_max': dec_max
+					})
+				else:
+					cursor.execute(query, {
+						'ra_min': ra_min - buffer_deg,
+						'ra_max': ra_max + buffer_deg,
+						'dec_min': dec_min,
+						'dec_max': dec_max
+					})
 
-			cat = cursor.fetchall()
-			cursor.close()
-			conn.close()
+				cat = cursor.fetchall()
+				cursor.close()
 
 			if not cat:
 				# Nothing was found. Return an empty table with the correct format:

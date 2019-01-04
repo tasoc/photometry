@@ -266,8 +266,10 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		# Check if no maxima has been selected at all:
 		if np.all(local_maxi == 0):
 			logger.error("No maxima were found as basins for watershed!")
-			labels_ws = Labels
 
+			# Set all cluster points to noise, so the cluster is effectively rejected:
+			Labels[xy[:,1], xy[:,0]] = -1
+			labels_ws = Labels
 		else:
 			# Run the watershed segmentation algorithm on the negative
 			# of the basin image:
@@ -322,7 +324,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			# Overplot the final markers for the watershed:
 			ax1.scatter(X[local_maxi], Y[local_maxi], color='r', s=5, alpha=0.7)
 
-			plot_image(labels_ws, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects', xlabel=None, ylabel=None)
+			plot_image(labels_ws, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects', xlabel=None, ylabel=None)
 
 			for ax in axes:
 				ax.set_xticklabels([])
