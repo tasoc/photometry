@@ -278,7 +278,7 @@ class BasePhotometry(object):
 				starid_to_load = self.starid
 
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(input_folder, starid_to_load)
+			fname = find_tpf_files(input_folder, starid=starid_to_load)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:

@@ -34,12 +34,13 @@ def load_settings(sector=None):
 	return settings
 
 #------------------------------------------------------------------------------
-def find_ffi_files(rootdir, camera=None, ccd=None):
+def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search directory recursively for TESS FFI images in FITS format.
 
 	Parameters:
 		rootdir (string): Directory to search recursively for TESS FFI images.
+		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
 		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
 		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
 
@@ -51,9 +52,15 @@ def find_ffi_files(rootdir, camera=None, ccd=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
+	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
-	filename_pattern = 'tess*-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(camera=camera, ccd=ccd)
+	filename_pattern = 'tess*-s{sector:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(
+		sector=sector_str,
+		camera=camera,
+		ccd=ccd
+	)
+	print(filename_pattern)
 	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
@@ -68,13 +75,14 @@ def find_ffi_files(rootdir, camera=None, ccd=None):
 	return matches
 
 #------------------------------------------------------------------------------
-def find_tpf_files(rootdir, starid=None):
+def find_tpf_files(rootdir, starid=None, sector=None):
 	"""
 	Search directory recursively for TESS Target Pixel Files.
 
 	Parameters:
 		rootdir (string): Directory to search recursively for TESS TPF files.
-		starid (integer or None, optional): Only return files from the TIC number. If ``None``, files from all TIC numbers are returned.
+		starid (integer or None, optional): Only return files from the given TIC number. If ``None``, files from all TIC numbers are returned.
+		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
@@ -84,12 +92,20 @@ def find_tpf_files(rootdir, starid=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
+	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
 	starid_str = '*' if starid is None else '{0:016d}'.format(starid)
-	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid_str)
+	filename_pattern = 'tess*-s{sector:s}-{starid:s}-????-[xsab]_tp.fits*'.format(
+		sector=sector_str,
+		starid=starid_str
+	)
 
 	# Pattern used for TESS Alert data:
+	sector_str = '??' if sector is None else '{0:02d}'.format(sector)
 	starid_str = '*' if starid is None else '{0:011d}'.format(starid)
-	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s??_tess_v?_tp.fits*'.format(starid=starid_str)
+	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s{sector:s}_tess_v?_tp.fits*'.format(
+		sector=sector_str,
+		starid=starid_str
+	)
 
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
