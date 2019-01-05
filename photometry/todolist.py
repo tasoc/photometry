@@ -178,7 +178,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 				# the footprint of the stamp.
 				image_shape = hdu[2].shape
 				wcs = WCS(header=hdu[2].header)
-				footprint = wcs.calc_footprint()
+				footprint = wcs.calc_footprint(center=False)
 				radec_min = np.min(footprint, axis=0)
 				radec_max = np.max(footprint, axis=0)
 				# TODO: This can fail to find all targets e.g. if the footprint is across the ra=0 line
