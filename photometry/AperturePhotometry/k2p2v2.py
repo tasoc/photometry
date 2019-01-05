@@ -1,7 +1,7 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
 
-"""K2 Pixel Photometry (K2P\ :sup:`2`)
+r"""K2 Pixel Photometry (K2P\ :sup:`2`)
 
 Create pixel masks and extract light curves from Kepler and K2 pixel data
 using clustering algorithms.
