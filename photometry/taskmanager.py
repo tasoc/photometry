@@ -35,6 +35,7 @@ class TaskManager(object):
 			IOError: If TODO-file could not be found.
 		"""
 
+		self.overwrite = overwrite
 		self.summary_file = summary
 		self.summary_interval = summary_interval
 
@@ -75,10 +76,12 @@ class TaskManager(object):
 			variability DOUBLE PRECISION,
 			rms_hour DOUBLE PRECISION,
 			ptp DOUBLE PRECISION,
-			mask_size INT,
 			pos_row REAL,
 			pos_column REAL,
 			contamination REAL,
+			mask_size INT,
+			stamp_width INT,
+			stamp_height INT,
 			stamp_resizes INT,
 			errors TEXT
 		);""")
@@ -91,6 +94,7 @@ class TaskManager(object):
 		# Reset calculations with status STARTED or ABORT:
 		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value)
 		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
+		self.cursor.execute("DELETE FROM photometry_skipped WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
 		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
 		self.conn.commit()
 
@@ -245,7 +249,12 @@ class TaskManager(object):
 		if error_msg:
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+
+		stamp = details.get('stamp', None)
+		stamp_width = None if stamp is None else stamp[3] - stamp[2]
+		stamp_height = None if stamp is None else stamp[1] - stamp[0]
+
+		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
@@ -259,6 +268,8 @@ class TaskManager(object):
 			details.get('ptp', None),
 			details.get('mask_size', None),
 			details.get('contamination', None),
+			stamp_width,
+			stamp_height,
 			details.get('stamp_resizes', 0),
 			error_msg
 		))
