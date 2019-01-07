@@ -44,6 +44,7 @@ __docformat__ = 'restructuredtext'
 
 hdf5_cache = {}
 
+#------------------------------------------------------------------------------
 @enum.unique
 class STATUS(enum.Enum):
 	"""
@@ -57,6 +58,7 @@ class STATUS(enum.Enum):
 	ABORT = 4   #: The calculation was aborted.
 	SKIPPED = 5 #: The target was skipped because the algorithm found that to be the best solution.
 
+#------------------------------------------------------------------------------
 class BasePhotometry(object):
 	"""
 	The basic photometry class for the TASOC Photometry pipeline.
@@ -114,8 +116,7 @@ class BasePhotometry(object):
 			ValueError: If ``camera`` and ``ccd`` is not provided together with ``datasource='ffi'``.
 		"""
 
-		logger = logging.getLogger(__name__)
-
+		# Basic checks of input:
 		if datasource != 'ffi' and not datasource.startswith('tpf'):
 			raise ValueError("Invalid datasource: '%s'" % datasource)
 		if cache not in ('basic', 'none', 'full'):
@@ -128,8 +129,7 @@ class BasePhotometry(object):
 		self.plot = plot
 		self.datasource = datasource
 
-		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
-
+		# Define attributes to be filled out later:
 		self._status = STATUS.UNKNOWN
 		self._details = {}
 		self.tpf = None
@@ -139,6 +139,20 @@ class BasePhotometry(object):
 		self._images_err_cube_full = None
 		self._backgrounds_cube_full = None
 		self._sumimage_full = None
+
+		# Setup logging:
+		# Add an extra logging handler to logger, which will pass any error messages (or worse)
+		# to the report_details() function, which will pass the error to be stored in the database.
+		logger = logging.getLogger(__name__)
+		for hdlr in logger.handlers:
+			if hdlr.__class__.__name__ == 'PhotometryLoggingHandler':
+				logger.removeHandler(hdlr)
+		hdlr = PhotometryLoggingHandler(self)
+		hdlr.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+		hdlr.setLevel(logging.ERROR)
+		logger.addHandler(hdlr)
+
+		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
 
 		# Directory where output files will be saved:
 		self.output_folder = os.path.join(
@@ -1429,3 +1443,13 @@ class BasePhotometry(object):
 			self._details['filepath_lightcurve'] = os.path.relpath(filepath, self.output_folder_base).replace('\\', '/')
 
 		return filepath
+
+#------------------------------------------------------------------------------
+class PhotometryLoggingHandler(logging.Handler):
+	def __init__(self, pho):
+		logging.Handler.__init__(self)
+		self.pho = pho
+
+	def emit(self, record):
+		log_entry = self.format(record)
+		self.pho.report_details(error=log_entry)
