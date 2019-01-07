@@ -96,6 +96,7 @@ class AperturePhotometry(BasePhotometry):
 
 				elif np.sum(indx_main) > 1:
 					logger.error('Too many masks')
+					self.report_details(error='Too many masks')
 					return STATUS.ERROR
 
 				else:
@@ -125,7 +126,7 @@ class AperturePhotometry(BasePhotometry):
 
 		# If we reached the last retry but still needed a resize, give up:
 		if resize_args:
-			logger.error("Too many stamp resizes")
+			self.report_details(error='Too many stamp resizes')
 			return STATUS.ERROR
 
 		# XY of pixels in frame
@@ -177,6 +178,12 @@ class AperturePhotometry(BasePhotometry):
 
 		# Targets that are in the mask:
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.round(t['row'])+1 in rows[mask_main] and np.round(t['column'])+1 in cols[mask_main]]
+
+		#
+		#if self.target_tmag > np.min(self.catalog[target_in_mask]['tmag']):
+		#	logger.warning("Not the brightest target in the mask.")
+		#	self.report_details(error='Not the brightest target in mask.')
+		#	return STATUS.SKIPPED
 
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 0:
