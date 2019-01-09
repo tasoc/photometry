@@ -21,7 +21,7 @@ def test_taskmanager():
 		# Get the number of tasks:
 		numtasks = tm.get_number_tasks()
 		print(numtasks)
-		assert(numtasks == 185473)
+		assert(numtasks == 178741)
 
 		# Get the first task in the TODO file:
 		task1 = tm.get_task()
@@ -34,6 +34,7 @@ def test_taskmanager():
 		assert(task1['camera'] == 2)
 		assert(task1['ccd'] == 2)
 		assert(task1['datasource'] == 'ffi')
+		assert(task1['sector'] == 14)
 
 		# Start task with priority=1:
 		tm.start_task(1)
@@ -47,6 +48,7 @@ def test_taskmanager():
 		assert(task2['camera'] == 2)
 		assert(task2['ccd'] == 2)
 		assert(task2['datasource'] == 'ffi')
+		assert(task2['sector'] == 14)
 
 		# Check that the status did actually change in the todolist:
 		tm.cursor.execute("SELECT status FROM todolist WHERE priority=1;")
