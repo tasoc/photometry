@@ -12,8 +12,10 @@ import os
 import sqlite3
 import logging
 import itertools
+import contextlib
 from .tasoc_db import TASOC_DB
-from .utilities import add_proper_motion, load_settings, radec_to_cartesian, cartesian_to_radec
+from .utilities import (add_proper_motion, load_settings, find_catalog_files,
+						radec_to_cartesian, cartesian_to_radec)
 
 #------------------------------------------------------------------------------
 def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False):
@@ -61,152 +63,153 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 			logger.info("Running SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
 
 			# Create SQLite file:
-			catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
+			# TODO: Could we use "find_catalog_files" instead?
+			catalog_file = os.path.join(input_folder, 'catalog_sector{0:03d}_camera{1:d}_ccd{2:d}.sqlite'.format(sector, camera, ccd))
 			if os.path.exists(catalog_file):
 				if overwrite:
-					os.remove(catalog_file)
+					os.remove(catalog_file[0])
 				else:
 					logger.info("Already done")
 					continue
-			conn = sqlite3.connect(catalog_file)
-			conn.row_factory = sqlite3.Row
-			cursor = conn.cursor()
 
-			# Table which stores information used to generate catalog:
-			cursor.execute("""CREATE TABLE settings (
-				sector INT NOT NULL,
-				camera INT NOT NULL,
-				ccd INT NOT NULL,
-				ticver INT NOT NULL,
-				reference_time DOUBLE PRECISION NOT NULL,
-				epoch DOUBLE PRECISION NOT NULL,
-				coord_buffer DOUBLE PRECISION NOT NULL,
-				camera_centre_ra DOUBLE PRECISION NOT NULL,
-				camera_centre_dec DOUBLE PRECISION NOT NULL,
-				footprint TEXT NOT NULL
-			);""")
+			with contextlib.closing(sqlite3.connect(catalog_file)) as conn:
+				conn.row_factory = sqlite3.Row
+				cursor = conn.cursor()
 
-			cursor.execute("""CREATE TABLE catalog (
-				starid BIGINT PRIMARY KEY NOT NULL,
-				ra DOUBLE PRECISION NOT NULL,
-				decl DOUBLE PRECISION NOT NULL,
-				ra_J2000 DOUBLE PRECISION NOT NULL,
-				decl_J2000 DOUBLE PRECISION NOT NULL,
-				pm_ra REAL,
-				pm_decl REAL,
-				tmag REAL NOT NULL,
-				teff REAL
-			);""")
+				# Table which stores information used to generate catalog:
+				cursor.execute("""CREATE TABLE settings (
+					sector INT NOT NULL,
+					camera INT NOT NULL,
+					ccd INT NOT NULL,
+					ticver INT NOT NULL,
+					reference_time DOUBLE PRECISION NOT NULL,
+					epoch DOUBLE PRECISION NOT NULL,
+					coord_buffer DOUBLE PRECISION NOT NULL,
+					camera_centre_ra DOUBLE PRECISION NOT NULL,
+					camera_centre_dec DOUBLE PRECISION NOT NULL,
+					footprint TEXT NOT NULL
+				);""")
 
-			# Get the footprint on the sky of this sector:
-			tasocdb.cursor.execute("SELECT footprint,camera_centre_ra,camera_centre_dec FROM tasoc.pointings WHERE sector=%s AND camera=%s AND ccd=%s;", (
-				sector,
-				camera,
-				ccd
-			))
-			row = tasocdb.cursor.fetchone()
-			if row is None:
-				raise IOError("The given sector, camera, ccd combination was not found in TASOC database: (%s,%s,%s)", sector, camera, ccd)
-			footprint = row[0]
-			camera_centre_ra = row[1]
-			camera_centre_dec = row[2]
+				cursor.execute("""CREATE TABLE catalog (
+					starid BIGINT PRIMARY KEY NOT NULL,
+					ra DOUBLE PRECISION NOT NULL,
+					decl DOUBLE PRECISION NOT NULL,
+					ra_J2000 DOUBLE PRECISION NOT NULL,
+					decl_J2000 DOUBLE PRECISION NOT NULL,
+					pm_ra REAL,
+					pm_decl REAL,
+					tmag REAL NOT NULL,
+					teff REAL
+				);""")
 
-			# Transform footprint into numpy array:
-			a = footprint[2:-2].split('),(')
-			a = np.array([b.split(',') for b in a], dtype='float64')
+				# Get the footprint on the sky of this sector:
+				tasocdb.cursor.execute("SELECT footprint,camera_centre_ra,camera_centre_dec FROM tasoc.pointings WHERE sector=%s AND camera=%s AND ccd=%s;", (
+					sector,
+					camera,
+					ccd
+				))
+				row = tasocdb.cursor.fetchone()
+				if row is None:
+					raise IOError("The given sector, camera, ccd combination was not found in TASOC database: (%s,%s,%s)", sector, camera, ccd)
+				footprint = row[0]
+				camera_centre_ra = row[1]
+				camera_centre_dec = row[2]
 
-			# If we need to, we should add a buffer around the footprint,
-			# by extending all points out from the centre with a set amount:
-			# We are cheating a little bit here with the spherical geometry,
-			# but it shouldn't matter too much.
-			if coord_buffer > 0:
-				# Convert ra-dec to cartesian coordinates:
-				a_xyz = radec_to_cartesian(a)
+				# Transform footprint into numpy array:
+				a = footprint[2:-2].split('),(')
+				a = np.array([b.split(',') for b in a], dtype='float64')
 
-				# Find center of footprint:
-				origin_xyz = np.mean(a_xyz, axis=0)
-				origin_xyz /= np.linalg.norm(origin_xyz)
+				# If we need to, we should add a buffer around the footprint,
+				# by extending all points out from the centre with a set amount:
+				# We are cheating a little bit here with the spherical geometry,
+				# but it shouldn't matter too much.
+				if coord_buffer > 0:
+					# Convert ra-dec to cartesian coordinates:
+					a_xyz = radec_to_cartesian(a)
 
-				# Just for debugging:
-				origin = cartesian_to_radec(origin_xyz).flatten()
-				logger.debug("Centre of CCD: (%f, %f)", origin[0], origin[1])
+					# Find center of footprint:
+					origin_xyz = np.mean(a_xyz, axis=0)
+					origin_xyz /= np.linalg.norm(origin_xyz)
 
-				# Add buffer zone, by expanding polygon away from origin:
-				for k in range(a.shape[0]):
-					vec = a_xyz[k,:] - origin_xyz
-					uvec = vec/np.linalg.norm(vec)
-					a_xyz[k,:] += uvec*np.radians(coord_buffer)
-					a_xyz[k,:] /= np.linalg.norm(a_xyz[k,:])
-				a_xyz = np.clip(a_xyz, -1, 1)
+					# Just for debugging:
+					origin = cartesian_to_radec(origin_xyz).flatten()
+					logger.debug("Centre of CCD: (%f, %f)", origin[0], origin[1])
 
-				# Convert back to ra-dec coordinates:
-				a = cartesian_to_radec(a_xyz)
+					# Add buffer zone, by expanding polygon away from origin:
+					for k in range(a.shape[0]):
+						vec = a_xyz[k,:] - origin_xyz
+						uvec = vec/np.linalg.norm(vec)
+						a_xyz[k,:] += uvec*np.radians(coord_buffer)
+						a_xyz[k,:] /= np.linalg.norm(a_xyz[k,:])
+					a_xyz = np.clip(a_xyz, -1, 1)
 
-			# Make footprint into string that will be understood by database:
-			footprint = '{' + ",".join([str(s) for s in a.flatten()]) + '}'
-			logger.info(footprint)
+					# Convert back to ra-dec coordinates:
+					a = cartesian_to_radec(a_xyz)
 
-			# Save settings to SQLite:
-			cursor.execute("INSERT INTO settings (sector,camera,ccd,reference_time,epoch,coord_buffer,footprint,camera_centre_ra,camera_centre_dec,ticver) VALUES (?,?,?,?,?,?,?,?,?,?);", (
-				sector,
-				camera,
-				ccd,
-				sector_reference_time,
-				epoch + 2000.0,
-				coord_buffer,
-				footprint,
-				camera_centre_ra,
-				camera_centre_dec,
-				7 # TODO: TIC Version hard-coded to TIC-7. This should obviously be changed when TIC is updated
-			))
-			conn.commit()
+				# Make footprint into string that will be understood by database:
+				footprint = '{' + ",".join([str(s) for s in a.flatten()]) + '}'
+				logger.info(footprint)
 
-			# Query the TESS Input Catalog table for all stars in the footprint.
-			# This is a MASSIVE table, so this query may take a while.
-			tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s) AND disposition IS NULL;", (
-				footprint,
-			))
+				# Save settings to SQLite:
+				cursor.execute("INSERT INTO settings (sector,camera,ccd,reference_time,epoch,coord_buffer,footprint,camera_centre_ra,camera_centre_dec,ticver) VALUES (?,?,?,?,?,?,?,?,?,?);", (
+					sector,
+					camera,
+					ccd,
+					sector_reference_time,
+					epoch + 2000.0,
+					coord_buffer,
+					footprint,
+					camera_centre_ra,
+					camera_centre_dec,
+					7 # TODO: TIC Version hard-coded to TIC-7. This should obviously be changed when TIC is updated
+				))
+				conn.commit()
 
-			# We need a list of when the sectors are in time:
-			logger.info('Projecting catalog {0:.3f} years relative to 2000'.format(epoch))
-
-			for row in tasocdb.cursor.fetchall():
-				# Add the proper motion to each coordinate:
-				if row['pm_ra'] and row['pm_decl']:
-					ra, dec = add_proper_motion(row['ra'], row['decl'], row['pm_ra'], row['pm_decl'], sector_reference_time, epoch=2000.0)
-					logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
-				else:
-					ra = row['ra']
-					dec = row['decl']
-
-				# Save the coordinates in SQLite database:
-				cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff) VALUES (?,?,?,?,?,?,?,?,?);", (
-					int(row['starid']),
-					ra,
-					dec,
-					row['ra'],
-					row['decl'],
-					row['pm_ra'],
-					row['pm_decl'],
-					row['Tmag'],
-					row['Teff']
+				# Query the TESS Input Catalog table for all stars in the footprint.
+				# This is a MASSIVE table, so this query may take a while.
+				tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s) AND disposition IS NULL;", (
+					footprint,
 				))
 
-			cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
-			cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
-			conn.commit()
+				# We need a list of when the sectors are in time:
+				logger.info('Projecting catalog {0:.3f} years relative to 2000'.format(epoch))
 
-			# Change settings of SQLite file:
-			cursor.execute("PRAGMA page_size=4096;")
-			# Run a VACUUM of the table which will force a recreation of the
-			# underlying "pages" of the file.
-			# Please note that we are changing the "isolation_level" of the connection here,
-			# but since we closing the connnection just after, we are not changing it back
-			conn.isolation_level = None
-			cursor.execute("VACUUM;")
+				for row in tasocdb.cursor.fetchall():
+					# Add the proper motion to each coordinate:
+					if row['pm_ra'] and row['pm_decl']:
+						ra, dec = add_proper_motion(row['ra'], row['decl'], row['pm_ra'], row['pm_decl'], sector_reference_time, epoch=2000.0)
+						logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
+					else:
+						ra = row['ra']
+						dec = row['decl']
 
-			cursor.close()
-			conn.close()
+					# Save the coordinates in SQLite database:
+					cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff) VALUES (?,?,?,?,?,?,?,?,?);", (
+						int(row['starid']),
+						ra,
+						dec,
+						row['ra'],
+						row['decl'],
+						row['pm_ra'],
+						row['pm_decl'],
+						row['Tmag'],
+						row['Teff']
+					))
+
+				cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
+				cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
+				conn.commit()
+
+				# Change settings of SQLite file:
+				cursor.execute("PRAGMA page_size=4096;")
+				# Run a VACUUM of the table which will force a recreation of the
+				# underlying "pages" of the file.
+				# Please note that we are changing the "isolation_level" of the connection here,
+				# but since we closing the connnection just after, we are not changing it back
+				conn.isolation_level = None
+				cursor.execute("VACUUM;")
+
+				cursor.close()
 
 		logger.info("Catalog done.")
 

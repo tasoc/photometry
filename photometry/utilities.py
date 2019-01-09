@@ -18,6 +18,8 @@ from scipy.stats import binned_statistic
 import json
 import os.path
 import fnmatch
+import glob
+import itertools
 
 # Constants:
 mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
@@ -60,7 +62,6 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 		camera=camera,
 		ccd=ccd
 	)
-	print(filename_pattern)
 	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
@@ -86,7 +87,7 @@ def find_tpf_files(rootdir, starid=None, sector=None):
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
-		      be sorted accoridng to the filename of the files, e.g. primarily by time.
+		      be sorted accoriding to the filename of the files, e.g. primarily by time.
 	"""
 
 	logger = logging.getLogger(__name__)
@@ -120,6 +121,64 @@ def find_tpf_files(rootdir, starid=None, sector=None):
 	matches.sort(key = lambda x: os.path.basename(x))
 
 	return matches
+
+#------------------------------------------------------------------------------
+def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
+	"""
+	Search the input directory for HDF5 files matching constraints.
+
+	Parameters:
+		rootdir (string): Directory to search for HDF5 files.
+		sector (integer, list or None, optional): Only return files from the given sectors. If ``None``, files from all TIC numbers are returned.
+		camera (integer, list or None, optional): Only return files from the given camera. If ``None``, files from all cameras are returned.
+		ccd (integer, list or None, optional): Only return files from the given ccd. If ``None``, files from all ccds are returned.
+
+	Returns:
+		list: List of paths to HDF5 files matching constraints.
+	"""
+
+	if not isinstance(sector, (list, tuple)): sector = (sector,)
+	if not isinstance(camera, (list, tuple)): camera = (1,2,3,4) if camera is None else (camera,)
+	if not isinstance(ccd, (list, tuple)): ccd = (1,2,3,4) if ccd is None else (ccd,)
+
+	filelst = []
+	for sector, camera, ccd in itertools.product(sector, camera, ccd):
+		filelst += glob.glob(os.path.join(rootdir, 'sector{0:s}_camera{1:d}_ccd{2:d}.hdf5'.format(
+			'???' if sector is None else '%03d' % sector,
+			camera,
+			ccd
+		)))
+
+	return filelst
+
+#------------------------------------------------------------------------------
+def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
+	"""
+	Search the input directory for CATALOG (sqlite) files matching constraints.
+
+	Parameters:
+		rootdir (string): Directory to search for CATALOG files.
+		sector (integer, list or None, optional): Only return files from the given sectors. If ``None``, files from all TIC numbers are returned.
+		camera (integer, list or None, optional): Only return files from the given camera. If ``None``, files from all cameras are returned.
+		ccd (integer, list or None, optional): Only return files from the given ccd. If ``None``, files from all ccds are returned.
+
+	Returns:
+		list: List of paths to CATALOG files matching constraints.
+	"""
+
+	if not isinstance(sector, (list, tuple)): sector = (sector,)
+	if not isinstance(camera, (list, tuple)): camera = (1,2,3,4) if camera is None else (camera,)
+	if not isinstance(ccd, (list, tuple)): ccd = (1,2,3,4) if ccd is None else (ccd,)
+
+	filelst = []
+	for sector, camera, ccd in itertools.product(sector, camera, ccd):
+		filelst += glob.glob(os.path.join(rootdir, 'catalog_sector{0:s}_camera{1:d}_ccd{2:d}.sqlite'.format(
+			'???' if sector is None else '%03d' % sector,
+			camera,
+			ccd
+		)))
+
+	return filelst
 
 #------------------------------------------------------------------------------
 def load_ffi_fits(path, return_header=False, return_uncert=False):

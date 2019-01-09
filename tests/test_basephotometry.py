@@ -26,7 +26,7 @@ DUMMY_TARGET = 471012650
 #----------------------------------------------------------------------
 def test_stamp():
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', sector=14, camera=2, ccd=2) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -62,7 +62,7 @@ def test_stamp():
 #----------------------------------------------------------------------
 def test_images():
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', sector=14, camera=2, ccd=2) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -73,7 +73,7 @@ def test_images():
 #----------------------------------------------------------------------
 def test_backgrounds():
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', sector=14, camera=2, ccd=2) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -85,7 +85,7 @@ def test_backgrounds():
 def test_catalog():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, sector=14, camera=2, ccd=2) as pho:
 				print(pho.catalog)
 				assert(DUMMY_TARGET in pho.catalog['starid'])
 
@@ -107,7 +107,7 @@ def test_catalog():
 def test_catalog_attime():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, sector=14, camera=2, ccd=2) as pho:
 
 				time = pho.lightcurve['time']
 
@@ -120,7 +120,7 @@ def test_catalog_attime():
 def test_pixelflags():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, sector=14, camera=2, ccd=2) as pho:
 				print(pho.pixelflags)
 
 				assert(pho.sumimage.shape == pho.pixelflags.shape)
@@ -128,7 +128,7 @@ def test_pixelflags():
 #----------------------------------------------------------------------
 def test_wcs():
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', sector=14, camera=2, ccd=2) as pho:
 			cols, rows = pho.get_pixel_grid()
 			wcs_ffi = pho.wcs
 			filepath = pho.save_lightcurve()

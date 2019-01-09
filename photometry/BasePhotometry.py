@@ -34,7 +34,7 @@ import enum
 from bottleneck import replace, nanmedian, nanvar, nanstd
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
-from .utilities import find_tpf_files, rms_timescale
+from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale
 from .plots import plot_image, plt, save_figure
 from .version import get_version
 
@@ -94,7 +94,7 @@ class BasePhotometry(object):
 	"""
 
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		camera=None, ccd=None, plot=False, cache='basic'):
+		sector=None, camera=None, ccd=None, plot=False, cache='basic'):
 		"""
 		Initialize the photometry object.
 
@@ -160,17 +160,19 @@ class BasePhotometry(object):
 		if self.datasource == 'ffi':
 			# The camera and CCD should also come as input
 			# They will be needed to find the correct input files
-			if camera is None or ccd is None:
-				raise ValueError("CAMERA and CCD keywords must be provided for FFI targets.")
+			if sector is None or camera is None or ccd is None:
+				raise ValueError("SECTOR, CAMERA and CCD keywords must be provided for FFI targets.")
 
+			self.sector = sector # TESS observing sector.
 			self.camera = camera # TESS camera.
 			self.ccd = ccd # TESS CCD.
 
+			logger.debug('SECTOR = %s', self.sector)
 			logger.debug('CAMERA = %s', self.camera)
 			logger.debug('CCD = %s', self.ccd)
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
+			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)[0]
 			self.filepath_hdf5 = filepath_hdf5
 
 			logger.debug("CACHE = %s", cache)
@@ -278,7 +280,7 @@ class BasePhotometry(object):
 				starid_to_load = self.starid
 
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(input_folder, starid=starid_to_load)
+			fname = find_tpf_files(input_folder, sector=sector, starid=starid_to_load)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
@@ -324,32 +326,33 @@ class BasePhotometry(object):
 			self.n_readout = self.tpf[1].header.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
 
 		# The file to load the star catalog from:
-		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
+		self.catalog_file = find_catalog_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 		self._catalog = None
 		logger.debug('Catalog file: %s', self.catalog_file)
+		if len(self.catalog_file) != 1:
+			raise IOError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (self.sector, self.camera, self.ccd))
+		self.catalog_file = self.catalog_file[0]
 
 		# Load information about main target:
-		conn = sqlite3.connect(self.catalog_file)
-		conn.row_factory = sqlite3.Row
-		cursor = conn.cursor()
-		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
-		target = cursor.fetchone()
-		if target is None:
-			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
-		self.target = dict(target) # Dictionary of all main target properties.
-		self.target_tmag = target['tmag'] # TESS magnitude of the main target.
-		self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
-		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
-		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
-		self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
-		cursor.execute("SELECT sector,reference_time,ticver FROM settings LIMIT 1;")
-		target = cursor.fetchone()
-		if target is not None:
-			self._catalog_reference_time = target['reference_time']
-			self.sector = target['sector']
-			self.ticver = target['ticver']
-		cursor.close()
-		conn.close()
+		with contextlib.closing(sqlite3.connect(self.catalog_file)) as conn:
+			conn.row_factory = sqlite3.Row
+			cursor = conn.cursor()
+			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
+			target = cursor.fetchone()
+			if target is None:
+				raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
+			self.target = dict(target) # Dictionary of all main target properties.
+			self.target_tmag = target['tmag'] # TESS magnitude of the main target.
+			self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
+			self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
+			self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
+			self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
+			cursor.execute("SELECT sector,reference_time,ticver FROM settings LIMIT 1;")
+			target = cursor.fetchone()
+			if target is not None:
+				self._catalog_reference_time = target['reference_time']
+				self.ticver = target['ticver']
+			cursor.close()
 
 		# Define the columns that have to be filled by the do_photometry method:
 		self.Ntimes = len(self.lightcurve['time'])

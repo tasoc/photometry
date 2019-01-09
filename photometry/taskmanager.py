@@ -83,11 +83,14 @@ class TaskManager(object):
 			stamp_width INT,
 			stamp_height INT,
 			stamp_resizes INT,
-			errors TEXT
+			errors TEXT,
+			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE
 		);""")
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS photometry_skipped (
 			priority INT NOT NULL,
-			skipped_by INT NOT NULL
+			skipped_by INT NOT NULL,
+			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE,
+			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
 		);""") # PRIMARY KEY
 		self.conn.commit()
 
@@ -168,7 +171,7 @@ class TaskManager(object):
 		else:
 			constraints = ''
 
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -180,7 +183,7 @@ class TaskManager(object):
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -207,8 +210,9 @@ class TaskManager(object):
 
 			# Ask the todolist if there are any stars that are brighter than this
 			# one among the other targets in the mask:
-			self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource=?;", (
+			self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource=? AND sector=?;", (
 				result['datasource'],
+				result['sector']
 			))
 			skip_rows = self.cursor.fetchall()
 			if len(skip_rows) > 0:

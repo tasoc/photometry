@@ -9,8 +9,9 @@ import sys
 import os
 import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from photometry.utilities import (move_median_central, find_ffi_files, load_ffi_fits, sphere_distance,
-								  radec_to_cartesian, cartesian_to_radec)
+from photometry.utilities import (move_median_central, find_ffi_files, find_tpf_files,
+								  find_hdf5_files, find_catalog_files, load_ffi_fits,
+								  sphere_distance, radec_to_cartesian, cartesian_to_radec)
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
@@ -38,6 +39,43 @@ def test_find_ffi_files():
 
 	files = find_ffi_files(INPUT_DIR, camera=2)
 	assert(len(files) == 4)
+
+#----------------------------------------------------------------------
+def test_find_tpf_files():
+
+	files = find_tpf_files(INPUT_DIR)
+	assert(len(files) == 2)
+
+	files = find_tpf_files(INPUT_DIR, starid=471012650)
+	assert(len(files) == 1)
+
+#----------------------------------------------------------------------
+def test_find_hdf5_files():
+
+	files = find_hdf5_files(INPUT_DIR)
+	assert(len(files) == 2)
+
+	files = find_hdf5_files(INPUT_DIR, sector=14)
+	assert(len(files) == 2)
+
+	files = find_hdf5_files(INPUT_DIR, camera=1)
+	assert(len(files) == 1)
+
+#----------------------------------------------------------------------
+def test_find_catalog_files():
+
+	files = find_catalog_files(INPUT_DIR)
+	assert(len(files) == 2)
+
+	files = find_catalog_files(INPUT_DIR, sector=14)
+	assert(len(files) == 2)
+
+	files = find_catalog_files(INPUT_DIR, camera=1)
+	assert(len(files) == 1)
+
+	files = find_catalog_files(INPUT_DIR, sector=14, camera=2, ccd=2)
+	assert(len(files) == 1)
+
 
 #----------------------------------------------------------------------
 def test_load_ffi_files():
@@ -93,6 +131,9 @@ def test_coordtransforms():
 if __name__ == '__main__':
 	test_move_median_central()
 	test_find_ffi_files()
+	test_find_tpf_files()
+	test_find_hdf5_files()
+	test_find_catalog_files()
 	test_load_ffi_files()
 	test_sphere_distance()
 	test_coordtransforms()

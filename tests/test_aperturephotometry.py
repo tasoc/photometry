@@ -21,7 +21,7 @@ def test_aperturephotometry():
 	OUTPUT_DIR = tempfile.mkdtemp(prefix='tessphot_tests_aperture')
 
 	for datasource in ('tpf', 'ffi'):
-		with AperturePhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, camera=1, ccd=1) as pho:
+		with AperturePhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, sector=14, camera=1, ccd=1) as pho:
 
 			pho.photometry()
 			pho.save_lightcurve()
@@ -50,12 +50,12 @@ def test_aperturephotometry_plots():
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 	OUTPUT_DIR = tempfile.mkdtemp(prefix='tessphot_tests_aperture')
 
-	with AperturePhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=False, datasource='ffi', camera=1, ccd=1) as pho_noplot:
+	with AperturePhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=False, datasource='ffi', sector=14, camera=1, ccd=1) as pho_noplot:
 		pho_noplot.photometry()
 		assert(pho_noplot.plot == False)
 		print(pho_noplot.status)
 
-	with AperturePhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=True, datasource='ffi', camera=1, ccd=1) as pho_plot:
+	with AperturePhotometry(182092046, INPUT_DIR, OUTPUT_DIR, plot=True, datasource='ffi', sector=14, camera=1, ccd=1) as pho_plot:
 		pho_plot.photometry()
 		assert(pho_plot.plot == True)
 		print(pho_plot.status)
