@@ -435,11 +435,29 @@ class BasePhotometry(object):
 			:py:func:`resize_stamp`
 		"""
 		# Decide how many pixels to use based on lookup tables as a function of Tmag:
-		Ncolumns = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0]), np.array([19, 15, 11]))
-		Nrows = np.interp(self.target_tmag, np.array([1.0, 1.7, 3.5, 8.0, 9.0, 10.0]), np.array([300, 150, 45, 19, 15, 11]))
-		# Round off and make sure we have minimum 11 pixels:
-		Nrows = np.maximum(np.ceil(Nrows), 11)
-		Ncolumns = np.maximum(np.ceil(Ncolumns), 11)
+		tmag = np.array([0.0, 0.52631579, 1.05263158, 1.57894737, 2.10526316,
+			2.63157895, 3.15789474, 3.68421053, 4.21052632, 4.73684211,
+			5.26315789, 5.78947368, 6.31578947, 6.84210526, 7.36842105,
+			7.89473684, 8.42105263, 8.94736842, 9.47368421, 10.0, 13.0])
+
+		height = np.array([831.98319063, 533.58494422, 344.0840884, 223.73963332,
+			147.31365728, 98.77856016, 67.95585074, 48.38157414,
+			35.95072974, 28.05639497, 23.043017, 19.85922009,
+			17.83731732, 16.5532873, 15.73785092, 15.21999971,
+			14.89113301, 14.68228285, 14.54965042, 14.46542084, 14.0])
+
+		width = np.array([157.71602062, 125.1238281, 99.99440209, 80.61896267,
+			65.6799962, 54.16166547, 45.28073365, 38.4333048,
+			33.15375951, 29.08309311, 25.94450371, 23.52456986,
+			21.65873807, 20.22013336, 19.1109318, 18.25570862,
+			17.59630936, 17.08789543, 16.69589509, 16.39365266, 15.0])
+
+		Ncolumns = np.interp(self.target_tmag, tmag, width)
+		Nrows = np.interp(self.target_tmag, tmag, height)
+
+		# Round off and make sure we have minimum 15 pixels:
+		Nrows = np.maximum(np.ceil(Nrows), 15)
+		Ncolumns = np.maximum(np.ceil(Ncolumns), 15)
 		return Nrows, Ncolumns
 
 	def resize_stamp(self, down=None, up=None, left=None, right=None):
