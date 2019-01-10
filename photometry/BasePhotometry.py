@@ -469,11 +469,15 @@ class BasePhotometry(object):
 			self._stamp[3] += right
 		self._stamp = tuple(self._stamp)
 
+		# Set stamp and check if the stamp actually changed:
+		stamp_changed = self._set_stamp(old_stamp)
+
 		# Count the number of times that we are resizing the stamp:
-		self._details['stamp_resizes'] = self._details.get('stamp_resizes', 0) + 1
+		if stamp_changed:
+			self._details['stamp_resizes'] = self._details.get('stamp_resizes', 0) + 1
 
 		# Return if the stamp actually changed:
-		return self._set_stamp(old_stamp)
+		return stamp_changed
 
 	def _set_stamp(self, compare_stamp=None):
 		"""
@@ -534,6 +538,9 @@ class BasePhotometry(object):
 		if self._stamp[0] > self._stamp[1] or self._stamp[2] > self._stamp[3]:
 			raise ValueError("Invalid stamp selected")
 
+		# Store the stamp in details:
+		self._details['stamp'] = self._stamp
+
 		# Check if the stamp actually changed:
 		if self._stamp == compare_stamp:
 			return False
@@ -541,9 +548,6 @@ class BasePhotometry(object):
 		# Calculate main target position in stamp:
 		self.target_pos_row_stamp = self.target_pos_row - self._stamp[0]
 		self.target_pos_column_stamp = self.target_pos_column - self._stamp[2]
-
-		# Store the stamp in details:
-		self._details['stamp'] = self._stamp
 
 		# Force sum-image and catalog to be recalculated next time:
 		self._sumimage = None
