@@ -179,12 +179,6 @@ class AperturePhotometry(BasePhotometry):
 		# Targets that are in the mask:
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.round(t['row'])+1 in rows[mask_main] and np.round(t['column'])+1 in cols[mask_main]]
 
-		#
-		#if self.target_tmag > np.min(self.catalog[target_in_mask]['tmag']):
-		#	logger.warning("Not the brightest target in the mask.")
-		#	self.report_details(error='Not the brightest target in mask.')
-		#	return STATUS.SKIPPED
-
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 0:
 			contamination = np.nan
@@ -201,20 +195,18 @@ class AperturePhotometry(BasePhotometry):
 		if not np.isnan(contamination):
 			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
 
-		# If contamination is high, return a warning:
-		if contamination > 0.1:
-			self.report_details(error='High contamination')
-			return STATUS.WARNING
-
-		if using_minimum_mask:
-			return STATUS.WARNING
-
-		#
+		# Check if there are other targets in the mask that could then be skipped from
+		# processing, and report this back to the TaskManager. The TaskManager will decide
+		# if this means that this target or the other targets should be skipped in the end.
 		skip_targets = [t['starid'] for t in self.catalog[target_in_mask] if t['starid'] != self.starid]
 		if skip_targets:
-			logger.info("These stars could be skipped:")
-			logger.info(skip_targets)
+			logger.info("These stars could be skipped: %s", skip_targets)
 			self.report_details(skip_targets=skip_targets)
 
+		# Figure out which status to report back:
+		my_status = STATUS.OK
+		if using_minimum_mask:
+			my_status = STATUS.WARNING
+
 		# Return whether you think it went well:
-		return STATUS.OK
+		return my_status
