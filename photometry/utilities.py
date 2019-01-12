@@ -109,6 +109,7 @@ def find_tpf_files(rootdir, starid=None, sector=None):
 	)
 
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
+	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern2)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []

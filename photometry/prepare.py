@@ -228,7 +228,6 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 
 				is_tess = False
 				attributes = {
-					'SECTOR': None,
 					'CAMERA': None,
 					'CCD': None,
 					'DATA_REL': None,
@@ -302,6 +301,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 				SumImage /= numfiles
 
 				# Save attributes
+				images.attrs['SECTOR'] = sector
 				for key, value in attributes.items():
 					logger.debug("Saving attribute %s = %s", key, value)
 					images.attrs[key] = value

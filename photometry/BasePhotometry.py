@@ -216,7 +216,7 @@ class BasePhotometry(object):
 				else:
 					hdr_string = self.hdf['wcs'][0]
 				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-				self.wcs = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+				self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
 				attrs['wcs'] = self.wcs
 
 				# Get shape of sumimage from hdf5 file:
@@ -303,7 +303,7 @@ class BasePhotometry(object):
 			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
 
 			# World Coordinate System solution:
-			self.wcs = WCS(header=self.tpf[2].header)
+			self.wcs = WCS(header=self.tpf[2].header, relax=True)
 
 			# Get the positions of the stamp from the FITS header:
 			self._max_stamp = (
@@ -813,8 +813,8 @@ class BasePhotometry(object):
 			if self.plot:
 				fig = plt.figure()
 				ax = fig.add_subplot(111)
-				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2], self._stamp[0]))
-				ax.plot(self.target_pos_column, self.target_pos_row, 'r+')
+				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2]+1, self._stamp[0]+1))
+				ax.plot(self.target_pos_column + 1, self.target_pos_row + 1, 'r+')
 				save_figure(os.path.join(self.plot_folder, 'sumimage'), fig=fig)
 				plt.close(fig)
 
