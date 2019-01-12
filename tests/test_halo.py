@@ -16,20 +16,18 @@ except ImportError:
 	from backports.tempfile import TemporaryDirectory
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import HaloPhotometry, STATUS
-from photometry.plots import plot_image, plt
 import logging
+import pytest
 
+#------------------------------------------------------------------------------
+@pytest.mark.skip(reason='This is simply too slow. We need to do something about that.')
 def test_halo():
 
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
 	with TemporaryDirectory() as OUTPUT_DIR:
-		for datasource in ('tpf', ):
+		for datasource in ('tpf', 'ffi'):
 			with HaloPhotometry(267211065, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, sector=1, camera=3, ccd=2) as pho:
-
-				plt.figure()
-				plot_image(pho.sumimage, title=datasource)
-				plt.show()
 
 				pho.photometry()
 				pho.save_lightcurve()
@@ -51,7 +49,7 @@ def test_halo():
 
 				print("Passed Tests for %s" % datasource)
 
-
+#------------------------------------------------------------------------------
 if __name__ == '__main__':
 
 	# Setup logging:
