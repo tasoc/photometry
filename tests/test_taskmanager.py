@@ -21,7 +21,7 @@ def test_taskmanager():
 		# Get the number of tasks:
 		numtasks = tm.get_number_tasks()
 		print(numtasks)
-		assert(numtasks == 178741)
+		assert(numtasks == 168642)
 
 		# Get the first task in the TODO file:
 		task1 = tm.get_task()
@@ -30,11 +30,11 @@ def test_taskmanager():
 		# Check that it contains what we know it should:
 		# The first priority in the TODO file is the following:
 		assert(task1['priority'] == 1)
-		assert(task1['starid'] == 284853659)
-		assert(task1['camera'] == 2)
-		assert(task1['ccd'] == 2)
+		assert(task1['starid'] == 234512399)
+		assert(task1['camera'] == 3)
+		assert(task1['ccd'] == 1)
 		assert(task1['datasource'] == 'ffi')
-		assert(task1['sector'] == 14)
+		assert(task1['sector'] == 1)
 
 		# Start task with priority=1:
 		tm.start_task(1)
@@ -44,11 +44,11 @@ def test_taskmanager():
 		print(task2)
 
 		assert(task2['priority'] == 2)
-		assert(task2['starid'] == 459281482)
-		assert(task2['camera'] == 2)
-		assert(task2['ccd'] == 2)
+		assert(task2['starid'] == 425935521)
+		assert(task2['camera'] == 3)
+		assert(task2['ccd'] == 1)
 		assert(task2['datasource'] == 'ffi')
-		assert(task2['sector'] == 14)
+		assert(task2['sector'] == 1)
 
 		# Check that the status did actually change in the todolist:
 		tm.cursor.execute("SELECT status FROM todolist WHERE priority=1;")

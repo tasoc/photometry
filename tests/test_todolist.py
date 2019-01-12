@@ -7,6 +7,10 @@
 from __future__ import division, print_function, with_statement, absolute_import
 import os
 import numpy as np
+import sys
+import itertools
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from photometry import todolist
 
 #----------------------------------------------------------------------
 def test_methods_file():
@@ -38,6 +42,28 @@ def test_exclude_file():
 		assert d[2] in ('ffi', 'tpf')
 
 #----------------------------------------------------------------------
+#def test_calc_cbv_area():
+#
+#	for camera, ccd in itertools.product((1,2,3,4), (1,2,3,4)):
+#
+#		settings = {
+#			'camera': camera,
+#			'ccd': ccd,
+#			'camera_centre_ra': 0,
+#			'camera_centre_dec': 0
+#		}
+#
+#		catalog_row = {
+#			'ra': 0,
+#			'decl': 0
+#		}
+#
+#		cbv_area = todolist.calc_cbv_area(catalog_row, settings)
+#		print(cbv_area)
+#		assert(cbv_area == 131)
+
+#----------------------------------------------------------------------
 if __name__ == '__main__':
 	test_methods_file()
 	test_exclude_file()
+	#test_calc_cbv_area()

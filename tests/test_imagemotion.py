@@ -97,7 +97,7 @@ def test_imagemotion_wcs():
 	print(xy)
 
 	# Load the first image in the input directory:
-	INPUT_FILE = find_hdf5_files(os.path.join(os.path.dirname(__file__), 'input'), sector=14, camera=1, ccd=1)[0]
+	INPUT_FILE = find_hdf5_files(os.path.join(os.path.dirname(__file__), 'input'), sector=1, camera=1, ccd=1)[0]
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 

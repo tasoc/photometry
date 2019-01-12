@@ -37,7 +37,7 @@ def test_find_ffi_files():
 	files = find_ffi_files(INPUT_DIR, camera=1)
 	assert(len(files) == 4)
 
-	files = find_ffi_files(INPUT_DIR, camera=2)
+	files = find_ffi_files(INPUT_DIR, camera=3)
 	assert(len(files) == 4)
 
 #----------------------------------------------------------------------
@@ -46,7 +46,7 @@ def test_find_tpf_files():
 	files = find_tpf_files(INPUT_DIR)
 	assert(len(files) == 2)
 
-	files = find_tpf_files(INPUT_DIR, starid=471012650)
+	files = find_tpf_files(INPUT_DIR, starid=267211065)
 	assert(len(files) == 1)
 
 #----------------------------------------------------------------------
@@ -55,10 +55,13 @@ def test_find_hdf5_files():
 	files = find_hdf5_files(INPUT_DIR)
 	assert(len(files) == 2)
 
-	files = find_hdf5_files(INPUT_DIR, sector=14)
+	files = find_hdf5_files(INPUT_DIR, sector=1)
 	assert(len(files) == 2)
 
 	files = find_hdf5_files(INPUT_DIR, camera=1)
+	assert(len(files) == 1)
+
+	files = find_hdf5_files(INPUT_DIR, sector=1, camera=3)
 	assert(len(files) == 1)
 
 #----------------------------------------------------------------------
@@ -67,15 +70,14 @@ def test_find_catalog_files():
 	files = find_catalog_files(INPUT_DIR)
 	assert(len(files) == 2)
 
-	files = find_catalog_files(INPUT_DIR, sector=14)
+	files = find_catalog_files(INPUT_DIR, sector=1)
 	assert(len(files) == 2)
 
 	files = find_catalog_files(INPUT_DIR, camera=1)
 	assert(len(files) == 1)
 
-	files = find_catalog_files(INPUT_DIR, sector=14, camera=2, ccd=2)
+	files = find_catalog_files(INPUT_DIR, sector=1, camera=3, ccd=2)
 	assert(len(files) == 1)
-
 
 #----------------------------------------------------------------------
 def test_load_ffi_files():
