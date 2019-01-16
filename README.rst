@@ -40,7 +40,7 @@ Just trying it out
 ------------------
 For simply trying out the code straight after installation, you can simply run the photometry code directly. This will automatically load some test input data and run the photometry (see more details in the full documentation or below).
 
->>> python run_tessphot.py 182092046
+>>> python run_tessphot.py --starid=182092046
 
 The number refers to the TIC-number of the star, and the above one can replaced with any TIC-number that is available in the TODO-list (see below).
 
@@ -84,7 +84,7 @@ Running the photometry
 ----------------------
 The photometry program can by run on a single star by running the program::
 
-  >>> python run_tessphot.py 182092046
+  >>> python run_tessphot.py --starid=182092046
 
 Here, the number gives the TIC identifier of the star. The program accepts various other command-line parameters - Try running::
 
