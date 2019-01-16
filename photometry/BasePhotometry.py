@@ -680,7 +680,6 @@ class BasePhotometry(object):
 			self._images_err_cube = self._load_cube(tpf_field='FLUX_ERR', hdf_group='images_err', full_cube=self._images_err_cube_full)
 		return self._images_err_cube
 
-
 	@property
 	def backgrounds_cube(self):
 		"""
@@ -1137,14 +1136,22 @@ class BasePhotometry(object):
 
 		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
+			# Calculate the mean flux level:
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
-			self._details['variance'] = nanvar(self.lightcurve['flux'], ddof=1)
-			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], self.lightcurve['flux'], timescale=3600/86400)
-			self._details['ptp'] = nanmedian(np.abs(np.diff(self.lightcurve['flux'])))
+
+			# Convert to relative flux:
+			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
+			flux_err = np.abs(1/self._details['mean_flux']) * self.lightcurve['flux_err']
+
+			# Calculate noise metrics of the relative flux:
+			self._details['variance'] = nanvar(flux, ddof=1)
+			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], flux, timescale=3600/86400)
+			self._details['ptp'] = nanmedian(np.abs(np.diff(flux)))
+
+			# Calculate the median centroid position in pixel coordinates:
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
 
 			# Calculate variability used e.g. in CBV selection of stars:
-			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
 			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux)
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
@@ -1152,13 +1159,13 @@ class BasePhotometry(object):
 			with warnings.catch_warnings():
 				warnings.filterwarnings('error', category=np.RankWarning)
 				try:
-					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/self.lightcurve['flux_err'][indx])
+					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/flux_err[indx])
 				except np.RankWarning:
 					p = [0]
 
 			# Calculate the variability as the standard deviation of the
 			# polynomial-subtracted lightcurve devided by the median error:
-			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(self.lightcurve['flux_err'])
+			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
 
 			if self.final_mask is not None:
 				self._details['mask_size'] = int(np.sum(self.final_mask))
