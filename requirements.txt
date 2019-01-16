@@ -1,4 +1,4 @@
-numpy >= 1.14
+numpy == 1.15.4
 six
 pytest
 scipy >= 0.16
@@ -9,7 +9,7 @@ Bottleneck >= 1.2
 h5py
 enum-compat
 scikit-image == 0.14.1
-scikit-learn == 0.20.1
+scikit-learn == 0.20.2
 statsmodels == 0.9.0
 opencv-python
 psycopg2-binary
