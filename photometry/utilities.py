@@ -20,6 +20,10 @@ import os.path
 import fnmatch
 import glob
 import itertools
+import warnings
+
+# Filter out annoying warnings:
+warnings.filterwarnings('ignore', module='scipy', category=FutureWarning, message='Using a non-tuple sequence for multidimensional indexing is deprecated;', lineno=607)
 
 # Constants:
 mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
