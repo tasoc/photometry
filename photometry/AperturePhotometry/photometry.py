@@ -184,6 +184,8 @@ class AperturePhotometry(BasePhotometry):
 
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 0:
+			logger.error("No targets in mask")
+			self.report_details(error='No targets in mask')
 			contamination = np.nan
 			my_status = STATUS.ERROR
 		elif len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
