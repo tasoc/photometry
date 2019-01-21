@@ -179,9 +179,13 @@ class AperturePhotometry(BasePhotometry):
 		# Targets that are in the mask:
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.round(t['row'])+1 in rows[mask_main] and np.round(t['column'])+1 in cols[mask_main]]
 
+		# Figure out which status to report back:
+		my_status = STATUS.OK
+
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 0:
 			contamination = np.nan
+			my_status = STATUS.ERROR
 		elif len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
 			contamination = 0
 		else:
@@ -204,7 +208,6 @@ class AperturePhotometry(BasePhotometry):
 			self.report_details(skip_targets=skip_targets)
 
 		# Figure out which status to report back:
-		my_status = STATUS.OK
 		if using_minimum_mask:
 			my_status = STATUS.WARNING
 
