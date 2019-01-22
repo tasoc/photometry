@@ -897,11 +897,8 @@ class BasePhotometry(object):
 			radec_max = np.max(corners_radec, axis=0)
 
 			# Upper and lower bounds on ra and dec:
-			ra_min_tmp = np.mod(radec_min[0] - buffer_deg, 360)
-			ra_max_tmp = np.mod(radec_max[0] + buffer_deg, 360)
-			ra_min = min(ra_min_tmp, ra_max_tmp)
-			ra_max = max(ra_min_tmp, ra_max_tmp)
-
+			ra_min = radec_min[0]
+			ra_max = radec_max[0]
 			dec_min = radec_min[1] - buffer_deg
 			dec_max = radec_max[1] + buffer_deg
 
@@ -927,7 +924,7 @@ class BasePhotometry(object):
 						'dec_min': dec_min,
 						'dec_max': dec_max
 					})
-				elif abs(ra_min - ra_max) > 90:
+				elif ra_min <= buffer_deg or 360-ra_max <= buffer_deg:
 					# The stamp is spanning across the ra=0 line
 					# and the difference is therefore large as WCS will always
 					# return coordinates between 0 and 360.
@@ -948,8 +945,8 @@ class BasePhotometry(object):
 				else:
 					logger.debug("Catalog search - Normal")
 					cursor.execute(query, {
-						'ra_min': ra_min,
-						'ra_max': ra_max,
+						'ra_min': ra_min - buffer_deg,
+						'ra_max': ra_max + buffer_deg,
 						'dec_min': dec_min,
 						'dec_max': dec_max
 					})
