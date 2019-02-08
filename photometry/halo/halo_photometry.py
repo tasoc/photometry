@@ -112,7 +112,7 @@ class HaloPhotometry(BasePhotometry):
 		if self.sector == 1:
 			split_times = (1339., 1347.366, 1349.315)
 		elif self.sector == 2:
-			split_times = (1368.)
+			split_times = (1368.,)
 		else:
 			logger.warning("No split-timestamps have been defined for this sector")
 			split_times = None # TODO: Is this correct?

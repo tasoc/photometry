@@ -24,15 +24,17 @@ import sqlite3
 import logging
 import datetime
 import os.path
+import glob
+import contextlib
 from copy import deepcopy
 #from astropy import coordinates, units
 from astropy.time import Time
 from astropy.wcs import WCS
 import enum
-from bottleneck import replace, nanmedian, ss, nanstd
+from bottleneck import replace, nanmedian, nanvar, nanstd
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags
-from .utilities import find_tpf_files, rms_timescale
+from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale
 from .plots import plot_image, plt, save_figure
 from .version import get_version
 
@@ -92,7 +94,7 @@ class BasePhotometry(object):
 	"""
 
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		camera=None, ccd=None, plot=False, cache='basic'):
+		sector=None, camera=None, ccd=None, plot=False, cache='basic'):
 		"""
 		Initialize the photometry object.
 
@@ -158,17 +160,19 @@ class BasePhotometry(object):
 		if self.datasource == 'ffi':
 			# The camera and CCD should also come as input
 			# They will be needed to find the correct input files
-			if camera is None or ccd is None:
-				raise ValueError("CAMERA and CCD keywords must be provided for FFI targets.")
+			if sector is None or camera is None or ccd is None:
+				raise ValueError("SECTOR, CAMERA and CCD keywords must be provided for FFI targets.")
 
+			self.sector = sector # TESS observing sector.
 			self.camera = camera # TESS camera.
 			self.ccd = ccd # TESS CCD.
 
+			logger.debug('SECTOR = %s', self.sector)
 			logger.debug('CAMERA = %s', self.camera)
 			logger.debug('CCD = %s', self.ccd)
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(self.camera, self.ccd))
+			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)[0]
 			self.filepath_hdf5 = filepath_hdf5
 
 			logger.debug("CACHE = %s", cache)
@@ -212,7 +216,7 @@ class BasePhotometry(object):
 				else:
 					hdr_string = self.hdf['wcs'][0]
 				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-				self.wcs = WCS(header=fits.Header().fromstring(hdr_string)) # World Coordinate system solution.
+				self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
 				attrs['wcs'] = self.wcs
 
 				# Get shape of sumimage from hdf5 file:
@@ -276,7 +280,7 @@ class BasePhotometry(object):
 				starid_to_load = self.starid
 
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(input_folder, starid_to_load)
+			fname = find_tpf_files(input_folder, sector=sector, starid=starid_to_load)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
@@ -299,7 +303,7 @@ class BasePhotometry(object):
 			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
 
 			# World Coordinate System solution:
-			self.wcs = WCS(header=self.tpf[2].header)
+			self.wcs = WCS(header=self.tpf[2].header, relax=True)
 
 			# Get the positions of the stamp from the FITS header:
 			self._max_stamp = (
@@ -322,32 +326,33 @@ class BasePhotometry(object):
 			self.n_readout = self.tpf[1].header.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
 
 		# The file to load the star catalog from:
-		self.catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(self.camera, self.ccd))
+		self.catalog_file = find_catalog_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 		self._catalog = None
 		logger.debug('Catalog file: %s', self.catalog_file)
+		if len(self.catalog_file) != 1:
+			raise IOError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (self.sector, self.camera, self.ccd))
+		self.catalog_file = self.catalog_file[0]
 
 		# Load information about main target:
-		conn = sqlite3.connect(self.catalog_file)
-		conn.row_factory = sqlite3.Row
-		cursor = conn.cursor()
-		cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
-		target = cursor.fetchone()
-		if target is None:
-			raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
-		self.target = dict(target) # Dictionary of all main target properties.
-		self.target_tmag = target['tmag'] # TESS magnitude of the main target.
-		self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
-		self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
-		self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
-		self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
-		cursor.execute("SELECT sector,reference_time,ticver FROM settings LIMIT 1;")
-		target = cursor.fetchone()
-		if target is not None:
-			self._catalog_reference_time = target['reference_time']
-			self.sector = target['sector']
-			self.ticver = target['ticver']
-		cursor.close()
-		conn.close()
+		with contextlib.closing(sqlite3.connect(self.catalog_file)) as conn:
+			conn.row_factory = sqlite3.Row
+			cursor = conn.cursor()
+			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
+			target = cursor.fetchone()
+			if target is None:
+				raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
+			self.target = dict(target) # Dictionary of all main target properties.
+			self.target_tmag = target['tmag'] # TESS magnitude of the main target.
+			self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
+			self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
+			self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
+			self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
+			cursor.execute("SELECT sector,reference_time,ticver FROM settings LIMIT 1;")
+			target = cursor.fetchone()
+			if target is not None:
+				self._catalog_reference_time = target['reference_time']
+				self.ticver = target['ticver']
+			cursor.close()
 
 		# Define the columns that have to be filled by the do_photometry method:
 		self.Ntimes = len(self.lightcurve['time'])
@@ -430,11 +435,29 @@ class BasePhotometry(object):
 			:py:func:`resize_stamp`
 		"""
 		# Decide how many pixels to use based on lookup tables as a function of Tmag:
-		Ncolumns = np.interp(self.target_tmag, np.array([8.0, 9.0, 10.0]), np.array([19, 15, 11]))
-		Nrows = np.interp(self.target_tmag, np.array([1.0, 1.7, 3.5, 8.0, 9.0, 10.0]), np.array([300, 150, 45, 19, 15, 11]))
-		# Round off and make sure we have minimum 11 pixels:
-		Nrows = np.maximum(np.ceil(Nrows), 11)
-		Ncolumns = np.maximum(np.ceil(Ncolumns), 11)
+		tmag = np.array([0.0, 0.52631579, 1.05263158, 1.57894737, 2.10526316,
+			2.63157895, 3.15789474, 3.68421053, 4.21052632, 4.73684211,
+			5.26315789, 5.78947368, 6.31578947, 6.84210526, 7.36842105,
+			7.89473684, 8.42105263, 8.94736842, 9.47368421, 10.0, 13.0])
+
+		height = np.array([831.98319063, 533.58494422, 344.0840884, 223.73963332,
+			147.31365728, 98.77856016, 67.95585074, 48.38157414,
+			35.95072974, 28.05639497, 23.043017, 19.85922009,
+			17.83731732, 16.5532873, 15.73785092, 15.21999971,
+			14.89113301, 14.68228285, 14.54965042, 14.46542084, 14.0])
+
+		width = np.array([157.71602062, 125.1238281, 99.99440209, 80.61896267,
+			65.6799962, 54.16166547, 45.28073365, 38.4333048,
+			33.15375951, 28.05639497, 23.043017, 19.85922009,
+			17.83731732, 16.5532873, 15.73785092, 15.21999971,
+			14.89113301, 14.68228285, 14.54965042, 14.46542084, 14.0])
+
+		Ncolumns = np.interp(self.target_tmag, tmag, width)
+		Nrows = np.interp(self.target_tmag, tmag, height)
+
+		# Round off and make sure we have minimum 15 pixels:
+		Nrows = np.maximum(np.ceil(Nrows), 15)
+		Ncolumns = np.maximum(np.ceil(Ncolumns), 15)
 		return Nrows, Ncolumns
 
 	def resize_stamp(self, down=None, up=None, left=None, right=None):
@@ -464,11 +487,15 @@ class BasePhotometry(object):
 			self._stamp[3] += right
 		self._stamp = tuple(self._stamp)
 
+		# Set stamp and check if the stamp actually changed:
+		stamp_changed = self._set_stamp(old_stamp)
+
 		# Count the number of times that we are resizing the stamp:
-		self._details['stamp_resizes'] = self._details.get('stamp_resizes', 0) + 1
+		if stamp_changed:
+			self._details['stamp_resizes'] = self._details.get('stamp_resizes', 0) + 1
 
 		# Return if the stamp actually changed:
-		return self._set_stamp(old_stamp)
+		return stamp_changed
 
 	def _set_stamp(self, compare_stamp=None):
 		"""
@@ -528,6 +555,9 @@ class BasePhotometry(object):
 		# Sanity checks:
 		if self._stamp[0] > self._stamp[1] or self._stamp[2] > self._stamp[3]:
 			raise ValueError("Invalid stamp selected")
+
+		# Store the stamp in details:
+		self._details['stamp'] = self._stamp
 
 		# Check if the stamp actually changed:
 		if self._stamp == compare_stamp:
@@ -649,7 +679,6 @@ class BasePhotometry(object):
 		if self._images_err_cube is None:
 			self._images_err_cube = self._load_cube(tpf_field='FLUX_ERR', hdf_group='images_err', full_cube=self._images_err_cube_full)
 		return self._images_err_cube
-
 
 	@property
 	def backgrounds_cube(self):
@@ -783,8 +812,8 @@ class BasePhotometry(object):
 			if self.plot:
 				fig = plt.figure()
 				ax = fig.add_subplot(111)
-				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2], self._stamp[0]))
-				ax.plot(self.target_pos_column, self.target_pos_row, 'r+')
+				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2]+1, self._stamp[0]+1))
+				ax.plot(self.target_pos_column + 1, self.target_pos_row + 1, 'r+')
 				save_figure(os.path.join(self.plot_folder, 'sumimage'), fig=fig)
 				plt.close(fig)
 
@@ -861,68 +890,69 @@ class BasePhotometry(object):
 
 			# Convert the corners into (ra, dec) coordinates and find the max and min values:
 			pixel_scale = 21.0 # Size of single pixel in arcsecs
-			buffer_size = 3 # Buffer to add around stamp in pixels
+			buffer_size = 5 # Buffer to add around stamp in pixels
+			buffer_deg = buffer_size*pixel_scale/3600.0
 			corners_radec = self.wcs.all_pix2world(corners, 0, ra_dec_order=True)
-			radec_min = np.min(corners_radec, axis=0) - buffer_size*pixel_scale/3600.0
-			radec_max = np.max(corners_radec, axis=0) + buffer_size*pixel_scale/3600.0
+			radec_min = np.min(corners_radec, axis=0)
+			radec_max = np.max(corners_radec, axis=0)
 
 			# Upper and lower bounds on ra and dec:
 			ra_min = radec_min[0]
 			ra_max = radec_max[0]
-			dec_min = radec_min[1]
-			dec_max = radec_max[1]
+			dec_min = radec_min[1] - buffer_deg
+			dec_max = radec_max[1] + buffer_deg
+
+			logger = logging.getLogger(__name__)
+			logger.debug('Catalog search - ra_min = %.10f', ra_min)
+			logger.debug('Catalog search - ra_max = %.10f', ra_max)
+			logger.debug('Catalog search - dec_min = %.10f', dec_min)
+			logger.debug('Catalog search - dec_max = %.10f', dec_max)
 
 			# Select only the stars within the current stamp:
-			conn = sqlite3.connect(self.catalog_file)
-			cursor = conn.cursor()
-			query = "SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;"
-			if dec_min < -90:
-				# We are very close to the southern pole
-				# Ignore everything about RA
-				cursor.execute(query, {
-					'ra_min': 0,
-					'ra_max': 360,
-					'dec_min': -90,
-					'dec_max': dec_max
-				})
-			elif dec_max > 90:
-				# We are very close to the northern pole
-				# Ignore everything about RA
-				cursor.execute(query, {
-					'ra_min': 0,
-					'ra_max': 360,
-					'dec_min': dec_min,
-					'dec_max': 90
-				})
-			elif ra_min < 0:
-				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra <= :ra_max AND decl BETWEEN :dec_min AND :dec_max
-				UNION
-				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND 360 AND decl BETWEEN :dec_min AND :dec_max;""", {
-					'ra_min': 360 - abs(ra_min),
-					'ra_max': ra_max,
-					'dec_min': dec_min,
-					'dec_max': dec_max
-				})
-			elif ra_max > 360:
-				cursor.execute("""SELECT starid,ra,decl,tmag FROM catalog WHERE ra >= :ra_min AND decl BETWEEN :dec_min AND :dec_max
-				UNION
-				SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN 0 AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;""", {
-					'ra_min': ra_min,
-					'ra_max': ra_max - 360,
-					'dec_min': dec_min,
-					'dec_max': dec_max
-				})
-			else:
-				cursor.execute(query, {
-					'ra_min': ra_min,
-					'ra_max': ra_max,
-					'dec_min': dec_min,
-					'dec_max': dec_max
-				})
+			# TODO: Change to opening in read-only mode: sqlite3.connect("file:" + self.catalog_file + "?mode=ro", uri=True). Requires Python 3.4
+			with contextlib.closing(sqlite3.connect(self.catalog_file)) as conn:
+				cursor = conn.cursor()
+				query = "SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;"
+				if dec_min < -90 or dec_max > 90:
+					# We are very close to a pole
+					# Ignore everything about RA, but keep searches above abs(90),
+					# since no targets exists in database above 90 anyway
+					logger.debug("Catalog search - Near pole")
+					cursor.execute(query, {
+						'ra_min': 0,
+						'ra_max': 360,
+						'dec_min': dec_min,
+						'dec_max': dec_max
+					})
+				elif ra_min <= buffer_deg or 360-ra_max <= buffer_deg:
+					# The stamp is spanning across the ra=0 line
+					# and the difference is therefore large as WCS will always
+					# return coordinates between 0 and 360.
+					# We therefore have to change how we query on either side of the line.
 
-			cat = cursor.fetchall()
-			cursor.close()
-			conn.close()
+					corners_ra = np.mod(corners_radec[:,0] - buffer_deg, 360)
+					ra_max = np.min(corners_ra[corners_ra > 180])
+					corners_ra = np.mod(corners_radec[:,0] + buffer_deg, 360)
+					ra_min = np.max(corners_ra[corners_ra < 180])
+
+					logger.debug("Catalog search - RA=0")
+					cursor.execute("SELECT starid,ra,decl,tmag FROM catalog WHERE (ra <= :ra_min OR ra >= :ra_max) AND decl BETWEEN :dec_min AND :dec_max;", {
+						'ra_min': ra_min,
+						'ra_max': ra_max,
+						'dec_min': dec_min,
+						'dec_max': dec_max
+					})
+				else:
+					logger.debug("Catalog search - Normal")
+					cursor.execute(query, {
+						'ra_min': ra_min - buffer_deg,
+						'ra_max': ra_max + buffer_deg,
+						'dec_min': dec_min,
+						'dec_max': dec_max
+					})
+
+				cat = cursor.fetchall()
+				cursor.close()
 
 			if not cat:
 				# Nothing was found. Return an empty table with the correct format:
@@ -970,7 +1000,7 @@ class BasePhotometry(object):
 		Instance of :py:class:`image_motion.ImageMovementKernel`.
 		"""
 		if self._MovementKernel is None:
-			default_movement_kernel = 'hdf5' # The default kernel to use - set to 'wcs' if we should use WCS instead
+			default_movement_kernel = 'wcs' # The default kernel to use - set to 'hdf5' if we should use the one from prepare instead
 			if self.datasource == 'ffi' and default_movement_kernel == 'wcs' and isinstance(self.hdf['wcs'], h5py.Group):
 				self._MovementKernel = ImageMovementKernel(warpmode='wcs', wcs_ref=self.wcs)
 				self._MovementKernel.load_series(self.lightcurve['time'], [self.hdf['wcs'][dset][0] for dset in self.hdf['wcs']])
@@ -1038,6 +1068,19 @@ class BasePhotometry(object):
 
 		return cat
 
+	def delete_plots(self):
+		"""
+		Delete all files in :py:func:`plot_folder`.
+
+		If plotting is not enabled, this method does nothing and will therefore
+		leave any existing files in the plot folder, should it already exists.
+		"""
+		logger = logging.getLogger(__name__)
+		if self.plot and self.plot_folder is not None:
+			for f in glob.iglob(os.path.join(self.plot_folder, '*')):
+				logger.debug("Deleting plot '%s'", f)
+				os.unlink(f)
+
 	def report_details(self, error=None, skip_targets=None):
 		"""
 		Report details of the processing back to the overlying scheduler system.
@@ -1090,14 +1133,22 @@ class BasePhotometry(object):
 
 		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
+			# Calculate the mean flux level:
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
-			self._details['variance'] = ss(self.lightcurve['flux'] - self._details['mean_flux']) / (len(self.lightcurve['flux'])-1)
-			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], self.lightcurve['flux'], timescale=3600/86400)
-			self._details['ptp'] = nanmedian(np.abs(np.diff(self.lightcurve['flux'])))
+
+			# Convert to relative flux:
+			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
+			flux_err = np.abs(1/self._details['mean_flux']) * self.lightcurve['flux_err']
+
+			# Calculate noise metrics of the relative flux:
+			self._details['variance'] = nanvar(flux, ddof=1)
+			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], flux, timescale=3600/86400)
+			self._details['ptp'] = nanmedian(np.abs(np.diff(flux)))
+
+			# Calculate the median centroid position in pixel coordinates:
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
 
 			# Calculate variability used e.g. in CBV selection of stars:
-			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
 			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux)
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
@@ -1105,13 +1156,13 @@ class BasePhotometry(object):
 			with warnings.catch_warnings():
 				warnings.filterwarnings('error', category=np.RankWarning)
 				try:
-					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/self.lightcurve['flux_err'][indx])
+					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/flux_err[indx])
 				except np.RankWarning:
 					p = [0]
 
 			# Calculate the variability as the standard deviation of the
 			# polynomial-subtracted lightcurve devided by the median error:
-			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(self.lightcurve['flux_err'])
+			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
 
 			if self.final_mask is not None:
 				self._details['mask_size'] = int(np.sum(self.final_mask))
@@ -1171,7 +1222,7 @@ class BasePhotometry(object):
 
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
-		hdu.header['NEXTEND'] = (3, 'number of standard extensions')
+		hdu.header['NEXTEND'] = (3 + int(hasattr(self, 'halo_weightmap')), 'number of standard extensions')
 		hdu.header['EXTNAME'] = ('PRIMARY', 'name of extension')
 		hdu.header['ORIGIN'] = ('TASOC/Aarhus', 'institution responsible for creating this file')
 		hdu.header['DATE'] = (now.strftime("%Y-%m-%d"), 'date the file was created')
@@ -1387,7 +1438,7 @@ class BasePhotometry(object):
 			hdus.append(wm)
 
 		# File name to save the lightcurve under:
-		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits'.format(
+		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits.gz'.format(
 			starid=self.starid,
 			sector=self.sector,
 			cadence=cadence,

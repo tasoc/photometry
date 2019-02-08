@@ -58,7 +58,10 @@ class AperturePhotometry(BasePhotometry):
 		}
 
 		for retries in range(5):
+			# Delete any plots left over in the plots folder from an earlier iteration:
+			self.delete_plots()
 
+			# Create the sum-image:
 			SumImage = self.sumimage
 
 			logger.info(self.stamp)
@@ -67,8 +70,12 @@ class AperturePhotometry(BasePhotometry):
 			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
-			masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
-			masks = np.asarray(masks, dtype='bool')
+			try:
+				masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
+				masks = np.asarray(masks, dtype='bool')
+			except k2p2.K2P2NoStars:
+				self.report_details(error='No flux above threshold.')
+				masks = np.asarray(0, dtype='bool')
 
 			using_minimum_mask = False
 			if len(masks.shape) == 0:
@@ -172,15 +179,15 @@ class AperturePhotometry(BasePhotometry):
 		# Targets that are in the mask:
 		target_in_mask = [k for k,t in enumerate(self.catalog) if np.round(t['row'])+1 in rows[mask_main] and np.round(t['column'])+1 in cols[mask_main]]
 
-		#
-		#if self.target_tmag > np.min(self.catalog[target_in_mask]['tmag']):
-		#	logger.warning("Not the brightest target in the mask.")
-		#	self.report_details(error='Not the brightest target in mask.')
-		#	return STATUS.SKIPPED
+		# Figure out which status to report back:
+		my_status = STATUS.OK
 
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 0:
+			logger.error("No targets in mask")
+			self.report_details(error='No targets in mask')
 			contamination = np.nan
+			my_status = STATUS.ERROR
 		elif len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
 			contamination = 0
 		else:
@@ -194,20 +201,17 @@ class AperturePhotometry(BasePhotometry):
 		if not np.isnan(contamination):
 			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
 
-		# If contamination is high, return a warning:
-		if contamination > 0.1:
-			self.report_details(error='High contamination')
-			return STATUS.WARNING
-
-		if using_minimum_mask:
-			return STATUS.WARNING
-
-		#
+		# Check if there are other targets in the mask that could then be skipped from
+		# processing, and report this back to the TaskManager. The TaskManager will decide
+		# if this means that this target or the other targets should be skipped in the end.
 		skip_targets = [t['starid'] for t in self.catalog[target_in_mask] if t['starid'] != self.starid]
 		if skip_targets:
-			logger.info("These stars could be skipped:")
-			logger.info(skip_targets)
+			logger.info("These stars could be skipped: %s", skip_targets)
 			self.report_details(skip_targets=skip_targets)
 
+		# Figure out which status to report back:
+		if using_minimum_mask:
+			my_status = STATUS.WARNING
+
 		# Return whether you think it went well:
-		return STATUS.OK
+		return my_status

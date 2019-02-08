@@ -21,12 +21,13 @@ from photometry import BasePhotometry
 #import photometry.BasePhotometry.hdf5_cache as bf
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-DUMMY_TARGET = 471012650
+DUMMY_TARGET = 260795451
+DUMMY_KWARG = {'sector': 1, 'camera': 3, 'ccd': 2}
 
 #----------------------------------------------------------------------
 def test_stamp():
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -62,7 +63,7 @@ def test_stamp():
 #----------------------------------------------------------------------
 def test_images():
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -73,7 +74,7 @@ def test_images():
 #----------------------------------------------------------------------
 def test_backgrounds():
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -85,7 +86,7 @@ def test_backgrounds():
 def test_catalog():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 				print(pho.catalog)
 				assert(DUMMY_TARGET in pho.catalog['starid'])
 
@@ -107,7 +108,7 @@ def test_catalog():
 def test_catalog_attime():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 
 				time = pho.lightcurve['time']
 
@@ -120,7 +121,7 @@ def test_catalog_attime():
 def test_pixelflags():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, camera=2, ccd=2) as pho:
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 				print(pho.pixelflags)
 
 				assert(pho.sumimage.shape == pho.pixelflags.shape)
@@ -128,20 +129,58 @@ def test_pixelflags():
 #----------------------------------------------------------------------
 def test_wcs():
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='tpf', **DUMMY_KWARG) as pho:
+			cols_tpf, rows_tpf = pho.get_pixel_grid()
+			wcs_tpf = pho.wcs
+			filepath = pho.save_lightcurve()
+			print(pho.target['ra'])
+			print(pho.target['decl'])
+
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 			cols, rows = pho.get_pixel_grid()
 			wcs_ffi = pho.wcs
 			filepath = pho.save_lightcurve()
+			print(pho.target['ra'])
+			print(pho.target['decl'])
 
 		with fits.open(filepath, mode='readonly', memmap=True) as hdu:
-			wcs_fits = WCS(header=hdu['APERTURE'].header, relax=True)
+			wcs_fits_aperture = WCS(header=hdu['APERTURE'].header, relax=True)
+			wcs_fits_sumimage = WCS(header=hdu['SUMIMAGE'].header, relax=True)
 
+	target_col = 592
+	target_row = 155
+
+	print(wcs_tpf)
 	print(wcs_ffi)
-	print(wcs_fits)
+	print(wcs_fits_aperture)
+	print(wcs_fits_sumimage)
+	print("------------------------------------")
+
+	test_pixels_ffi = [[target_col, target_row]]
+	radec_ffi = wcs_ffi.all_pix2world(test_pixels_ffi, 1, ra_dec_order=True)
+	print('FFI: %s' % radec_ffi)
+
+	test_pixels_tpf = np.where((rows_tpf == target_row) & (cols_tpf == target_col))
+	test_pixels_tpf = [[test_pixels_tpf[1][0], test_pixels_tpf[0][0]]]
+	radec_tpf = wcs_tpf.all_pix2world(test_pixels_tpf, 1, ra_dec_order=True)
+	print("TPF: %s " % radec_tpf)
+
+	test_pixels = np.where((rows == target_row) & (cols == target_col))
+	test_pixels = [[test_pixels[1][0], test_pixels[0][0]]]
+	radec_fits_aperture = wcs_fits_aperture.all_pix2world(test_pixels, 0, ra_dec_order=True)
+	radec_fits_sumimage = wcs_fits_sumimage.all_pix2world(test_pixels, 0, ra_dec_order=True)
+
+	print("APERTURE: %s" % radec_fits_aperture)
+	print("SUMIMAGE: %s" % radec_fits_sumimage)
+
+	#np.testing.assert_allclose(radec_tpf, radec_ffi)
+	np.testing.assert_allclose(radec_fits_aperture, radec_ffi)
+	np.testing.assert_allclose(radec_fits_sumimage, radec_ffi)
 
 	# Test the pixels in the corners of the stamp:
 	Nr, Nc = cols.shape
-	test_pixels = np.array([[0, 0], [Nr-1, Nc-1], [0, Nc-1], [Nr-1, 0]])
+	test_pixels = np.array([[0, 0], [Nc-1, Nr-1], [0, Nr-1], [Nc-1, 0]])
+	print(test_pixels)
 
 	# Corresponding pixels in the FFI:
 	# Remember that cols and rows are 1-based.
@@ -150,11 +189,18 @@ def test_wcs():
 
 	# Calculate sky-coordinates using both WCS:
 	radec_ffi = wcs_ffi.all_pix2world(test_pixels_ffi, 0, ra_dec_order=True)
-	radec_fits = wcs_fits.all_pix2world(test_pixels, 0, ra_dec_order=True)
+	radec_fits_aperture = wcs_fits_aperture.all_pix2world(test_pixels, 0, ra_dec_order=True)
+	radec_fits_sumimage = wcs_fits_sumimage.all_pix2world(test_pixels, 0, ra_dec_order=True)
+
+	# Check that the two WCS from the FITS file is the same:
+	print(radec_fits_aperture - radec_fits_sumimage)
+	np.testing.assert_allclose(radec_fits_aperture, radec_fits_sumimage)
 
 	# Check that the sky-coordinates are the same:
-	print(radec_ffi - radec_fits)
-	np.testing.assert_allclose(radec_fits, radec_ffi)
+	print(radec_ffi - radec_fits_aperture)
+	np.testing.assert_allclose(radec_fits_aperture, radec_ffi)
+	print(radec_ffi - radec_fits_sumimage)
+	np.testing.assert_allclose(radec_fits_sumimage, radec_ffi)
 
 #----------------------------------------------------------------------
 """
@@ -187,9 +233,9 @@ def test_cache():
 
 #----------------------------------------------------------------------
 def test_tpf_with_other_target():
-	sub_target = 444068153
+	sub_target = 267091131
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(sub_target, INPUT_DIR, OUTPUT_DIR, datasource='tpf:471012650', camera=2, ccd=2) as pho:
+		with BasePhotometry(sub_target, INPUT_DIR, OUTPUT_DIR, datasource='tpf:267211065', sector=1, camera=3, ccd=2) as pho:
 			assert(pho.starid == sub_target)
 			assert(pho.datasource == 'tpf')
 

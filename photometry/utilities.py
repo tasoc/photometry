@@ -18,6 +18,12 @@ from scipy.stats import binned_statistic
 import json
 import os.path
 import fnmatch
+import glob
+import itertools
+import warnings
+
+# Filter out annoying warnings:
+warnings.filterwarnings('ignore', module='scipy', category=FutureWarning, message='Using a non-tuple sequence for multidimensional indexing is deprecated;', lineno=607)
 
 # Constants:
 mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
@@ -34,12 +40,13 @@ def load_settings(sector=None):
 	return settings
 
 #------------------------------------------------------------------------------
-def find_ffi_files(rootdir, camera=None, ccd=None):
+def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search directory recursively for TESS FFI images in FITS format.
 
 	Parameters:
 		rootdir (string): Directory to search recursively for TESS FFI images.
+		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
 		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
 		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
 
@@ -51,9 +58,14 @@ def find_ffi_files(rootdir, camera=None, ccd=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
+	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
-	filename_pattern = 'tess*-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(camera=camera, ccd=ccd)
+	filename_pattern = 'tess*-s{sector:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(
+		sector=sector_str,
+		camera=camera,
+		ccd=ccd
+	)
 	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
@@ -68,30 +80,40 @@ def find_ffi_files(rootdir, camera=None, ccd=None):
 	return matches
 
 #------------------------------------------------------------------------------
-def find_tpf_files(rootdir, starid=None):
+def find_tpf_files(rootdir, starid=None, sector=None):
 	"""
 	Search directory recursively for TESS Target Pixel Files.
 
 	Parameters:
 		rootdir (string): Directory to search recursively for TESS TPF files.
-		starid (integer or None, optional): Only return files from the TIC number. If ``None``, files from all TIC numbers are returned.
+		starid (integer or None, optional): Only return files from the given TIC number. If ``None``, files from all TIC numbers are returned.
+		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
-		      be sorted accoridng to the filename of the files, e.g. primarily by time.
+		      be sorted accoriding to the filename of the files, e.g. primarily by time.
 	"""
 
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
+	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
 	starid_str = '*' if starid is None else '{0:016d}'.format(starid)
-	filename_pattern = 'tess*-{starid:s}-????-[xsab]_tp.fits*'.format(starid=starid_str)
+	filename_pattern = 'tess*-s{sector:s}-{starid:s}-????-[xsab]_tp.fits*'.format(
+		sector=sector_str,
+		starid=starid_str
+	)
 
 	# Pattern used for TESS Alert data:
+	sector_str = '??' if sector is None else '{0:02d}'.format(sector)
 	starid_str = '*' if starid is None else '{0:011d}'.format(starid)
-	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s??_tess_v?_tp.fits*'.format(starid=starid_str)
+	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s{sector:s}_tess_v?_tp.fits*'.format(
+		sector=sector_str,
+		starid=starid_str
+	)
 
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
+	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern2)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
@@ -104,6 +126,64 @@ def find_tpf_files(rootdir, starid=None):
 	matches.sort(key = lambda x: os.path.basename(x))
 
 	return matches
+
+#------------------------------------------------------------------------------
+def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
+	"""
+	Search the input directory for HDF5 files matching constraints.
+
+	Parameters:
+		rootdir (string): Directory to search for HDF5 files.
+		sector (integer, list or None, optional): Only return files from the given sectors. If ``None``, files from all TIC numbers are returned.
+		camera (integer, list or None, optional): Only return files from the given camera. If ``None``, files from all cameras are returned.
+		ccd (integer, list or None, optional): Only return files from the given ccd. If ``None``, files from all ccds are returned.
+
+	Returns:
+		list: List of paths to HDF5 files matching constraints.
+	"""
+
+	if not isinstance(sector, (list, tuple)): sector = (sector,)
+	if not isinstance(camera, (list, tuple)): camera = (1,2,3,4) if camera is None else (camera,)
+	if not isinstance(ccd, (list, tuple)): ccd = (1,2,3,4) if ccd is None else (ccd,)
+
+	filelst = []
+	for sector, camera, ccd in itertools.product(sector, camera, ccd):
+		filelst += glob.glob(os.path.join(rootdir, 'sector{0:s}_camera{1:d}_ccd{2:d}.hdf5'.format(
+			'???' if sector is None else '%03d' % sector,
+			camera,
+			ccd
+		)))
+
+	return filelst
+
+#------------------------------------------------------------------------------
+def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
+	"""
+	Search the input directory for CATALOG (sqlite) files matching constraints.
+
+	Parameters:
+		rootdir (string): Directory to search for CATALOG files.
+		sector (integer, list or None, optional): Only return files from the given sectors. If ``None``, files from all TIC numbers are returned.
+		camera (integer, list or None, optional): Only return files from the given camera. If ``None``, files from all cameras are returned.
+		ccd (integer, list or None, optional): Only return files from the given ccd. If ``None``, files from all ccds are returned.
+
+	Returns:
+		list: List of paths to CATALOG files matching constraints.
+	"""
+
+	if not isinstance(sector, (list, tuple)): sector = (sector,)
+	if not isinstance(camera, (list, tuple)): camera = (1,2,3,4) if camera is None else (camera,)
+	if not isinstance(ccd, (list, tuple)): ccd = (1,2,3,4) if ccd is None else (ccd,)
+
+	filelst = []
+	for sector, camera, ccd in itertools.product(sector, camera, ccd):
+		filelst += glob.glob(os.path.join(rootdir, 'catalog_sector{0:s}_camera{1:d}_ccd{2:d}.sqlite'.format(
+			'???' if sector is None else '%03d' % sector,
+			camera,
+			ccd
+		)))
+
+	return filelst
 
 #------------------------------------------------------------------------------
 def load_ffi_fits(path, return_header=False, return_uncert=False):

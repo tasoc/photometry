@@ -11,6 +11,7 @@ import logging
 import os
 import warnings
 import numpy as np
+from bottleneck import allnan
 import matplotlib
 matplotlib.use('Agg', warn=False)
 from matplotlib.ticker import MaxNLocator
@@ -53,6 +54,11 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 			image += np.abs(img_min) + 1.0
 
 	#print(scale, np.all(np.isfinite(image)), np.all(image > 0), np.min(image), np.max(image))
+
+	if allnan(image):
+		logger = logging.getLogger(__name__)
+		logger.error("Image is all NaN")
+		return None
 
 	# Calcualte limits of color scaling:
 	vmin, vmax = PercentileInterval(percentile).get_limits(image)

@@ -1,7 +1,7 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
 
-"""K2 Pixel Photometry (K2P\ :sup:`2`)
+r"""K2 Pixel Photometry (K2P\ :sup:`2`)
 
 Create pixel masks and extract light curves from Kepler and K2 pixel data
 using clustering algorithms.
@@ -266,8 +266,10 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		# Check if no maxima has been selected at all:
 		if np.all(local_maxi == 0):
 			logger.error("No maxima were found as basins for watershed!")
-			labels_ws = Labels
 
+			# Set all cluster points to noise, so the cluster is effectively rejected:
+			Labels[xy[:,1], xy[:,0]] = -1
+			labels_ws = Labels
 		else:
 			# Run the watershed segmentation algorithm on the negative
 			# of the basin image:
@@ -322,7 +324,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			# Overplot the final markers for the watershed:
 			ax1.scatter(X[local_maxi], Y[local_maxi], color='r', s=5, alpha=0.7)
 
-			plot_image(labels_ws, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects', xlabel=None, ylabel=None)
+			plot_image(labels_ws, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects', xlabel=None, ylabel=None)
 
 			for ax in axes:
 				ax.set_xticklabels([])
@@ -486,7 +488,10 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 	#==========================================================================
 
 	# Cut out pixels of sum image with flux above the cut-off:
-	idx = (SumImage > CUT)
+	# The following two lines are identical to "idx = (SumImage > CUT)",
+	# but in this way we avoid an RuntimeWarning when SumImage contains NaNs.
+	idx = np.zeros_like(SumImage, dtype='bool')
+	np.greater(SumImage, CUT, out=idx, where=~np.isnan(SumImage))
 	X2 = X[idx]
 	Y2 = Y[idx]
 
@@ -719,9 +724,11 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 
 		# ---------------
 		# PLOT 2
+		idx = np.zeros_like(SumImage, dtype='bool')
+		np.greater(SumImage, CUT, out=idx, where=~np.isnan(SumImage))
 		Flux_mat2 = np.zeros_like(SumImage)
-		Flux_mat2[SumImage < CUT] = 1
-		Flux_mat2[SumImage > CUT] = 2
+		Flux_mat2[~idx] = 1
+		Flux_mat2[idx] = 2
 		Flux_mat2[ori_mask == 0] = 0
 
 		ax2 = fig0.add_subplot(152)

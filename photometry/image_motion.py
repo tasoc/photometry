@@ -132,7 +132,7 @@ class ImageMovementKernel(object):
 			# Set up warp matrix:
 			c = np.cos(theta)
 			s = np.sin(theta)
-			R = np.matrix([[c, -s, dx], [s, c, dy]])
+			R = np.array([[c, -s, dx], [s, c, dy]])
 
 			# Apply warp to all positions:
 			for i in range(xy.shape[0]):

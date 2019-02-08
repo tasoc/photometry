@@ -10,13 +10,15 @@ warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
 import sqlite3
 import logging
+import re
 import multiprocessing
 from astropy.wcs import WCS
-from bottleneck import replace, nanmean, ss
+from bottleneck import replace, nanmean
 from timeit import default_timer
 import itertools
+import contextlib
 from .backgrounds import fit_background
-from .utilities import load_ffi_fits, find_ffi_files
+from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files
 from photometry import TESSQualityFlags, ImageMovementKernel
 
 #------------------------------------------------------------------------------
@@ -25,7 +27,7 @@ def _iterate_hdf_group(dset):
 		yield np.asarray(dset[d])
 
 #------------------------------------------------------------------------------
-def create_hdf5(input_folder=None, cameras=None, ccds=None):
+def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 	"""
 	Restructure individual FFI images (in FITS format) into
 	a combined HDF5 file which is used in the photometry
@@ -71,40 +73,58 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
 	logger.info("Using %d processes.", threads)
 
+	# If no sectors are provided, find all the available FFI files and figure out
+	# which sectors they are all from:
+	if sectors is None:
+		# TODO: Could we change this so we don't have to parse the filenames?
+		files = find_ffi_files(input_folder)
+		sectors = []
+		for fname in files:
+			m = re.match(r'^tess.+-s(\d+)-.+\.fits', os.path.basename(fname))
+			if int(m.group(1)) not in sectors:
+				sectors.append(int(m.group(1)))
+		logger.debug("Sectors found: %s", sectors)
+	else:
+		sectors = (sectors,)
+
+	# Check if any sectors were found/provided:
+	if not sectors:
+		logger.error("No sectors were found")
+		return
+
 	# Loop over each combination of camera and CCD:
-	for camera, ccd in itertools.product(cameras, ccds):
-		logger.info("Running CAMERA=%s, CCD=%s", camera, ccd)
+	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
+		logger.info("Running SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
 		tic_total = default_timer()
 
 		# Find all the FFI files associated with this camera and CCD:
-		files = find_ffi_files(input_folder, camera, ccd)
+		files = find_ffi_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 		numfiles = len(files)
 		logger.info("Number of files: %d", numfiles)
 		if numfiles == 0:
 			continue
 
 		# Catalog file:
-		catalog_file = os.path.join(input_folder, 'catalog_camera{0:d}_ccd{1:d}.sqlite'.format(camera, ccd))
+		catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 		logger.debug("Catalog File: %s", catalog_file)
-		if not os.path.exists(catalog_file):
-			logger.error("Catalog file could not be found: '%s'", catalog_file)
+		if len(catalog_file) != 1:
+			logger.error("Catalog file could not be found: SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
 			continue
 
 		# Load catalog settings from the SQLite database:
-		conn = sqlite3.connect(catalog_file)
-		conn.row_factory = sqlite3.Row
-		cursor = conn.cursor()
-		cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
-		row = cursor.fetchone()
-		if row is None:
-			raise IOError("Settings could not be loaded from catalog")
-		#sector = row['sector']
-		sector_reference_time = row['reference_time']
-		cursor.close()
-		conn.close()
+		with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
+			conn.row_factory = sqlite3.Row
+			cursor = conn.cursor()
+			cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
+			row = cursor.fetchone()
+			if row is None:
+				raise IOError("Settings could not be loaded from catalog")
+			#sector = row['sector']
+			sector_reference_time = row['reference_time']
+			cursor.close()
 
 		# HDF5 file to be created/modified:
-		hdf_file = os.path.join(input_folder, 'camera{0:d}_ccd{1:d}.hdf5'.format(camera, ccd))
+		hdf_file = os.path.join(input_folder, 'sector{0:03d}_camera{1:d}_ccd{2:d}.hdf5'.format(sector, camera, ccd))
 		logger.debug("HDF5 File: %s", hdf_file)
 
 		# Get image shape from the first file:
@@ -180,7 +200,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 							block[:, :, i] = dset_bck_us['%04d' % k]
 
 						bck = nanmean(block, axis=2)
-						#bck_err = np.sqrt(ss(block_err, axis=2)) / time_smooth
+						#bck_err = np.sqrt(nansum(block_err**2, axis=2)) / time_smooth
 
 						backgrounds.create_dataset(dset_name, data=bck, chunks=imgchunks, **args)
 
@@ -208,6 +228,8 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 
 				is_tess = False
 				attributes = {
+					'CAMERA': None,
+					'CCD': None,
 					'DATA_REL': None,
 					'NUM_FRM': None,
 					'CRMITEN': None,
@@ -254,11 +276,6 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 							if hdr.get(key) != value:
 								logger.error("%s is not constant!", key)
 
-					#if hdr.get('SECTOR') != sector:
-					#	logger.error("Incorrect SECTOR: Catalog=%s, FITS=%s", sector, hdr.get('SECTOR'))
-					if hdr.get('CAMERA') != camera or hdr.get('CCD') != ccd:
-						logger.error("Incorrect CAMERA/CCD: FITS=(%s, %s)", hdr.get('CAMERA'), hdr.get('CCD'))
-
 					if dset_name not in images:
 						# Load background from HDF file and subtract background from image,
 						# if the background has not already been subtracted:
@@ -284,6 +301,7 @@ def create_hdf5(input_folder=None, cameras=None, ccds=None):
 				SumImage /= numfiles
 
 				# Save attributes
+				images.attrs['SECTOR'] = sector
 				for key, value in attributes.items():
 					logger.debug("Saving attribute %s = %s", key, value)
 					images.attrs[key] = value

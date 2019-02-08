@@ -36,6 +36,7 @@ def main():
 	parser = argparse.ArgumentParser(description='Run TESS Photometry in parallel using MPI.')
 	#parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	#parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
 	args = parser.parse_args()
 
@@ -58,7 +59,7 @@ def main():
 		from photometry import TaskManager
 
 		try:
-			with TaskManager(todo_file, cleanup=True, summary=os.path.join(output_folder, 'summary.json')) as tm:
+			with TaskManager(todo_file, cleanup=True, overwrite=args.overwrite, summary=os.path.join(output_folder, 'summary.json')) as tm:
 				# Get list of tasks:
 				numtasks = tm.get_number_tasks()
 				tm.logger.info("%d tasks to be run", numtasks)

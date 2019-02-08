@@ -10,7 +10,7 @@ import os.path
 import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.image_motion import ImageMovementKernel
-from photometry.utilities import find_ffi_files, load_ffi_fits
+from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
 #from photometry.plots import plt
 import h5py
 
@@ -97,7 +97,7 @@ def test_imagemotion_wcs():
 	print(xy)
 
 	# Load the first image in the input directory:
-	INPUT_FILE = os.path.join(os.path.dirname(__file__), 'input', 'camera1_ccd1.hdf5')
+	INPUT_FILE = find_hdf5_files(os.path.join(os.path.dirname(__file__), 'input'), sector=1, camera=1, ccd=1)[0]
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 

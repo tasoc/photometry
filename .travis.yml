@@ -19,7 +19,7 @@ jobs:
 matrix:
   fast_finish: true
   allow_failures:
-    - python: "3.7"  
+    - python: "2.7"
 
 install:
   - pip install -r requirements.txt
@@ -29,3 +29,14 @@ branches:
   only:
     - master
     - devel
+
+# Deploy to GitHub Releases, making a release of the
+# code whenever a new tag is added on the master branch
+deploy:
+  provider: releases
+  api_key: $GITHUB_TOKEN
+  skip_cleanup: true
+  draft: true
+  on:
+    branch: master
+    tags: true

@@ -19,7 +19,7 @@ class TaskManager(object):
 	A TaskManager which keeps track of which targets to process.
 	"""
 
-	def __init__(self, todo_file, cleanup=False, summary=None, summary_interval=100):
+	def __init__(self, todo_file, cleanup=False, overwrite=False, summary=None, summary_interval=100):
 		"""
 		Initialize the TaskManager which keeps track of which targets to process.
 
@@ -27,6 +27,7 @@ class TaskManager(object):
 			todo_file (string): Path to the TODO-file.
 			cleanup (boolean): Perform cleanup/optimization of TODO-file before
 			                   during initialization. Default=False.
+			overwrite (boolean): Restart calculation from the beginning, discarding any previous results. Default=False.
 			summary (string): Path to file where to periodically write a progress summary. The output file will be in JSON format. Default=None.
 			summary_interval (int): Interval at which to write summary file. Setting this to 1 will mean writing the file after every tasks completes. Default=100.
 
@@ -34,6 +35,7 @@ class TaskManager(object):
 			IOError: If TODO-file could not be found.
 		"""
 
+		self.overwrite = overwrite
 		self.summary_file = summary
 		self.summary_interval = summary_interval
 
@@ -57,11 +59,11 @@ class TaskManager(object):
 		self.cursor = self.conn.cursor()
 
 		# Reset the status of everything for a new run:
-		# TODO: This should obviously be removed once we start running for real
-		self.cursor.execute("UPDATE todolist SET status=NULL;")
-		self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
-		self.cursor.execute("DROP TABLE IF EXISTS photometry_skipped;")
-		self.conn.commit()
+		if overwrite:
+			self.cursor.execute("UPDATE todolist SET status=NULL;")
+			self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
+			self.cursor.execute("DROP TABLE IF EXISTS photometry_skipped;")
+			self.conn.commit()
 
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
@@ -74,22 +76,28 @@ class TaskManager(object):
 			variability DOUBLE PRECISION,
 			rms_hour DOUBLE PRECISION,
 			ptp DOUBLE PRECISION,
-			mask_size INT,
 			pos_row REAL,
 			pos_column REAL,
 			contamination REAL,
+			mask_size INT,
+			stamp_width INT,
+			stamp_height INT,
 			stamp_resizes INT,
-			errors TEXT
+			errors TEXT,
+			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE
 		);""")
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS photometry_skipped (
 			priority INT NOT NULL,
-			skipped_by INT NOT NULL
+			skipped_by INT NOT NULL,
+			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE,
+			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
 		);""") # PRIMARY KEY
 		self.conn.commit()
 
 		# Reset calculations with status STARTED or ABORT:
 		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value)
 		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
+		self.cursor.execute("DELETE FROM photometry_skipped WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
 		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
 		self.conn.commit()
 
@@ -163,7 +171,7 @@ class TaskManager(object):
 		else:
 			constraints = ''
 
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -175,7 +183,7 @@ class TaskManager(object):
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task: return dict(task)
 		return None
@@ -202,8 +210,9 @@ class TaskManager(object):
 
 			# Ask the todolist if there are any stars that are brighter than this
 			# one among the other targets in the mask:
-			self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource=?;", (
+			self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource=? AND sector=?;", (
 				result['datasource'],
+				result['sector']
 			))
 			skip_rows = self.cursor.fetchall()
 			if len(skip_rows) > 0:
@@ -244,7 +253,12 @@ class TaskManager(object):
 		if error_msg:
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+
+		stamp = details.get('stamp', None)
+		stamp_width = None if stamp is None else stamp[3] - stamp[2]
+		stamp_height = None if stamp is None else stamp[1] - stamp[0]
+
+		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
@@ -258,6 +272,8 @@ class TaskManager(object):
 			details.get('ptp', None),
 			details.get('mask_size', None),
 			details.get('contamination', None),
+			stamp_width,
+			stamp_height,
 			details.get('stamp_resizes', 0),
 			error_msg
 		))

@@ -11,14 +11,14 @@ Example:
 Example:
 	To run a specific star, you can provide the TIC-identifier:
 
-	>>> python run_tessphot.py 182092046
+	>>> python run_tessphot.py --starid=182092046
 
 Example:
 	You can be very specific in the photometry methods and input to use.
 	The following example runs PSF photometry on Target Pixel Files (tpf) of TIC 182092046,
 	and produces plots in the output directory as well.
 
-	>>> python run_tessphot.py --source=tpf --method=psf --plot 182092046
+	>>> python run_tessphot.py --source=tpf --method=psf --plot --starid=182092046
 
 Note:
 	run_tessphot is only meant for small tests and running single stars.
@@ -44,6 +44,7 @@ if __name__ == '__main__':
 	parser.add_argument('-s', '--source', help='Data-source to load.', default=None, choices=('ffi', 'tpf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
 	parser.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
 	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
@@ -92,7 +93,7 @@ if __name__ == '__main__':
 	f = functools.partial(tessphot, input_folder=input_folder, output_folder=output_folder, plot=args.plot)
 
 	# Run the program:
-	with TaskManager(input_folder) as tm:
+	with TaskManager(input_folder, overwrite=args.overwrite) as tm:
 		while True:
 			if args.all and args.random:
 				task = tm.get_random_task()
@@ -129,8 +130,3 @@ if __name__ == '__main__':
 
 			if not args.all:
 				break
-
-	# Write out the results?
-	if not args.quiet:
-		print("=======================")
-		print("STATUS: {0}".format(pho.status.name))
