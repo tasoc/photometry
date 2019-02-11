@@ -254,16 +254,21 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP'])
 					timecorr[k] = hdr.get('BARYCORR', 0)
 
-					# Cadence-number is currently not in the FFIs.
-					# The following numbers comes from unofficial communication
-					# with Doug Caldwell and Roland Vanderspek:
-					# The timestamp in TJD and the corresponding cadenceno:
-					first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474E-03
-					first_cadenceno = 4697
-					timedelt = 1800/86400
-					# Extracpolate the cadenceno as a simple linear relation:
-					offset = first_cadenceno - first_time/timedelt
-					cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
+					# Get cadence-numbers from headers, if they are available.
+					# This header is not added before sector 6, so in that case
+					# we are doing a simple scaling of the timestamps.
+					if 'FFIINDEX' in hdr:
+						cadenceno[k] = hdr['FFIINDEX']
+					else:
+						# The following numbers comes from unofficial communication
+						# with Doug Caldwell and Roland Vanderspek:
+						# The timestamp in TJD and the corresponding cadenceno:
+						first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474E-03
+						first_cadenceno = 4697
+						timedelt = 1800/86400
+						# Extracpolate the cadenceno as a simple linear relation:
+						offset = first_cadenceno - first_time/timedelt
+						cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
 
 					# Data quality flags:
 					quality[k] = hdr.get('DQUALITY', 0)
