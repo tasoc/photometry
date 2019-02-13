@@ -47,7 +47,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4):
 	mask |= (img > flux_cutoff)
 
 	# Estimate the background:
-	sigma_clip = SigmaClip(sigma=3.0, iters=5)
+	sigma_clip = SigmaClip(sigma=3.0, maxiters=5)
 	bkg_estimator = SExtractorBackground()
 	bkg = Background2D(img, (64, 64),
 		filter_size=(3, 3),

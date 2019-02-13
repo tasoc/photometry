@@ -56,4 +56,4 @@ if __name__ == '__main__':
 		parser.error("The given path does not exist or is not a directory")
 
 	# Run the program for the selected camera/ccd combinations:
-	create_hdf5(args.input_folder, args.camera, args.ccd)
+	create_hdf5(args.input_folder, cameras=args.camera, ccds=args.ccd)
