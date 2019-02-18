@@ -17,10 +17,44 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.stats import SigmaClip
 from scipy.stats import binned_statistic
-from scipy.interpolate import interp1d
-from photutils import Background2D, SExtractorBackground
+from scipy.interpolate import interp1d,  InterpolatedUnivariateSpline
+
+from photutils import Background2D, SExtractorBackground, BackgroundBase
 import warnings
+from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 warnings.filterwarnings('ignore', module='scipy', category=FutureWarning)
+
+
+def reduce_mode(x):
+	x = np.array(x, dtype=np.float64)
+	if len(x)==0:
+		return np.nan
+	kde = KDE(x)
+	kde.fit(gridsize=2000)
+	
+	pdf = kde.density
+	xx = kde.support
+	m = xx[np.argmax(pdf)]
+	return m
+
+def _mode(data):
+	modes = np.zeros([data.shape[0]])
+	for i in range(data.shape[0]):
+		kde = KDE(data[i,:])
+		kde.fit(gridsize=2000)
+		
+		pdf = kde.density
+		xx = kde.support
+		modes[i] = xx[np.argmax(pdf)]
+	return modes
+
+class ModeBackground(BackgroundBase):
+	def calc_background(self, data, axis=None):
+		if self.sigma_clip is not None:
+			data = self.sigma_clip(data, axis=axis)
+		bkg = np.atleast_1d(_mode(np.array(data, dtype=np.float64)))
+		return bkg
+
 
 
 if __name__ == '__main__':
@@ -31,16 +65,17 @@ if __name__ == '__main__':
 	flux_cutoff = 8e4 # Absolute flux cutoff
 	pixel_step = 15 # Radial size of bins to use in radial background
 	radial_cutoff = 2400 # Distance where the radial background kicks in
-	bkgiters = 1 # Number of background iterations
+	bkgiters = 6 # Number of background iterations
 
-	k = 500 # The timestamp to run
+	k = 100 # The timestamp to run
 
 	# Centre of sector 1, camera 1
 	# TODO: Get this from the catalog file
 	camera_center = np.array([[324.566998914166, -33.172999301379]])
 
 	# Just loading the FFI images from the HDF5 files:
-	with h5py.File(r'E:\tess_data\S01_DR01\sector001_camera1_ccd2.hdf5', 'r') as hdf:
+#	with h5py.File(r'/media/mikkelnl/Elements/TESS/S01_tests/sector001_camera1_ccd4.hdf5', 'r') as hdf:
+	with h5py.File(r'/media/mikkelnl/TOSHIBA EXT/tess_data/S01_DR01/sector001_camera1_ccd2.hdf5', 'r') as hdf:
 		img0 = np.asarray(hdf['images']['%04d' % k])
 		img0 += np.asarray(hdf['backgrounds']['%04d' % k])
 
@@ -61,7 +96,8 @@ if __name__ == '__main__':
 	# Setup background estimator:
 	sigma_clip = SigmaClip(sigma=3.0, iters=5)
 	bkg_estimator = SExtractorBackground(sigma_clip)
-	stat = lambda x: bkg_estimator.calc_background(x)
+#	stat = lambda x: bkg_estimator.calc_background(x)
+	stat = reduce_mode
 
 	# Create distance-image with distances (in pixels) from the camera centre:
 	xx, yy = np.meshgrid(
@@ -81,33 +117,53 @@ if __name__ == '__main__':
 	rs = np.arange(np.min(r), np.max(r) + pixel_step/5, pixel_step/5)
 
 	img = np.copy(img0)
+	
+	figitt, axitt = plt.subplots(1,bkgiters, figsize=(18,6))
+	figitt1, axitt1 = plt.subplots(1,bkgiters, figsize=(18,6))
+	
+	figittcomp = plt.figure()
+	axittcomp = figittcomp.add_subplot(111)
+	
 	for iters in range(bkgiters):
+		print('iteration', iters)
+		
+		mask = ~np.isfinite(img0)
+		mask |= (img0 > flux_cutoff)
+		mask |= (img0 < 0)
+		
 		# Evaluate the background estimator in radial rings:
-		s2, bin_edges, _ = binned_statistic(r[~mask].flatten(), img[~mask].flatten(),
+		s2, bin_edges, _ = binned_statistic(r[~mask].flatten(), np.log10(img[~mask].flatten()),
 			statistic=stat,
 			bins=np.arange(radial_cutoff, m, pixel_step)
 		)
 		bin_center = bin_edges[1:] - pixel_step/2
 
+		
 		# Optionally smooth the radial profile:
-		s2 = move_median_central(s2, 5)
+#		s2 = move_median_central(s2, 5)
 
 		# Interpolate the radial curve and reshape back onto the 2D image:
 		indx = ~np.isnan(s2)
-		intp = interp1d(bin_center[indx], s2[indx],
-			kind='linear',
-			bounds_error=False,
-			fill_value=(s2[indx][0], s2[indx][-1]),
-			assume_sorted=True
-		)
-		img_bkg_radial = intp(r)
+		
+		
+		intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], ext=3)
+	
+#		intp = interp1d(bin_center[indx], s2[indx],
+#			kind='linear',
+#			bounds_error=False,
+#			fill_value=(s2[indx][0], s2[indx][-1]),
+#			assume_sorted=True
+#		)
+		
+		
+		img_bkg_radial = 10**intp(r)
 
 		# Plot radial profile:
-		plt.figure()
-		#plt.scatter(r[~mask].flatten(), img[~mask].flatten(), alpha=0.3)
-		plt.scatter(bin_center, s2, c='r')
-		plt.plot(rs, intp(rs), 'r-')
-		plt.xlim(xmin=radial_cutoff - 100)
+#		plt.figure()
+#		plt.scatter(r[(~mask) & (r>2300)].flatten(), img[(~mask) & (r>2300)].flatten(), facecolors='None', edgecolors='k', alpha=0.1)
+#		plt.scatter(bin_center, 10**s2, c='r')
+#		plt.plot(rs, intp(rs), 'r-')
+#		plt.xlim(xmin=radial_cutoff - 100)
 
 		# Run 2D square tiles background estimation:
 		bkg = Background2D(img0 - img_bkg_radial, (64, 64),
@@ -117,6 +173,38 @@ if __name__ == '__main__':
 			mask=mask,
 			exclude_percentile=50)
 		img_bkg_square = bkg.background
+		
+		
+		
+#		plt.figure()
+#		plt.scatter(r[(~mask) & (r>2300)].flatten(), img_bkg_square[(~mask) & (r>2300)].flatten(), facecolors='None', edgecolors='k', alpha=0.1)
+#		
+#		s3, bin_edges, _ = binned_statistic(r[~mask].flatten(), np.log10(img_bkg_square[~mask].flatten()),
+#		statistic=stat,bins=np.arange(radial_cutoff, m, pixel_step)	)
+#		plt.scatter(bin_center, 10**s3)
+
+		if iters==0:
+			img_bkg000 = img_bkg_radial + img_bkg_square
+			
+			
+		if iters>=1:
+			diff = img_bkg - (img_bkg_radial + img_bkg_square)
+			plot_image(diff, ax = axitt[iters-1], scale='log',percentile=100)
+		
+			kde = KDE(diff[(~mask) & (r>2300)])
+			kde.fit(gridsize=2000)
+			
+			pdf = kde.density
+			xx = kde.support
+			axitt1[iters-1].plot(xx, pdf)
+			
+			
+			axittcomp.scatter(iters-1, np.nanpercentile(diff, 50), color='k', marker='o')
+			axittcomp.scatter(iters-1, np.nanpercentile(diff, 5), color='b', marker='o')
+			axittcomp.scatter(iters-1, np.nanpercentile(diff, 95), color='b', marker='o')
+			axittcomp.scatter(iters-1, np.nanmedian(np.abs(diff-np.nanmedian(diff))), color='r', marker='o')
+			
+		
 
 		# Total background image:
 		img_bkg = img_bkg_radial + img_bkg_square
@@ -124,7 +212,8 @@ if __name__ == '__main__':
 		pkw = {'xlabel': None, 'ylabel': None}
 		plt.figure()
 		plt.subplot(151)
-		h = plot_image(img, title='Original image', **pkw)
+		imglog = np.log10(img + np.abs(np.nanmin(img)) + 1)
+		h = plot_image(imglog, title='Original image', **pkw)
 		plt.subplot(152)
 		plot_image(img_bkg_radial, percentile=100, title='Radial background', **pkw)
 		plt.subplot(153)
@@ -136,6 +225,17 @@ if __name__ == '__main__':
 
 		# Remove the square component from image for next iteration:
 		img = img0 - img_bkg_square
+		
+
+	plot_image(img_bkg000 - img_bkg, ax = axitt[iters], percentile=100)
+	diff = img_bkg000 - img_bkg
+	kde = KDE(diff[(~mask) & (r>2300)])
+	kde.fit(gridsize=2000)
+	
+	pdf = kde.density
+	xx = kde.support
+	axitt1[iters].plot(xx, pdf)
+
 
 	# Plot final background:
 	plt.figure()
