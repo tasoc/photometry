@@ -27,7 +27,7 @@ def _iterate_hdf_group(dset):
 		yield np.asarray(dset[d])
 
 #------------------------------------------------------------------------------
-def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
+def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_movement_kernel=False):
 	"""
 	Restructure individual FFI images (in FITS format) into
 	a combined HDF5 file which is used in the photometry
@@ -40,6 +40,8 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 		input_folder (string): Input folder to create TODO list for. If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
 		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be processed.
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be processed.
+		calc_movement_kernel (boolean, optional): Should Image Movement Kernels be calculated for each image?
+			If it is not calculated, only the default WCS movement kernel will be available when doing the folllowing photometry. Default=False.
 
 	Raises:
 		IOError: If the specified ``input_folder`` is not an existing directory or if settings table could not be loaded from the catalog SQLite file.
@@ -352,7 +354,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 			# Save WCS to the file:
 			wcs.attrs['ref_frame'] = refindx
 
-			if 'movement_kernel' not in hdf:
+			if calc_movement_kernel and 'movement_kernel' not in hdf:
 				# Calculate image motion:
 				logger.info("Calculation Image Movement Kernels...")
 				imk = ImageMovementKernel(image_ref=images['%04d' % refindx], warpmode='translation')

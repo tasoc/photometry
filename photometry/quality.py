@@ -34,7 +34,7 @@ class TESSQualityFlags(object):
 	HARD_BITMASK = (DEFAULT_BITMASK | SensitivityDropout | CollateralCosmic)
 
 	# Using this bitmask only QUALITY == 0 cadences will remain
-	HARDEST_BITMASK = 2^32-1
+	HARDEST_BITMASK = 2**32-1
 
 	# Pretty string descriptions for each flag
 	STRINGS = {
