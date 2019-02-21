@@ -240,7 +240,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 				}
 				for k, fname in enumerate(files):
 					logger.debug("Processing image: %.2f%% - %s", 100*k/numfiles, fname)
-					dset_name ='%04d' % k
+					dset_name = '%04d' % k
 
 					# Load the FITS file data and the header:
 					flux0, hdr, flux0_err = load_ffi_fits(fname, return_header=True, return_uncert=True)
@@ -261,16 +261,18 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 					# we are doing a simple scaling of the timestamps.
 					if 'FFIINDEX' in hdr:
 						cadenceno[k] = hdr['FFIINDEX']
-					else:
+					elif is_tess:
 						# The following numbers comes from unofficial communication
 						# with Doug Caldwell and Roland Vanderspek:
 						# The timestamp in TJD and the corresponding cadenceno:
-						first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474E-03
+						first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474e-03
 						first_cadenceno = 4697
 						timedelt = 1800/86400
 						# Extracpolate the cadenceno as a simple linear relation:
 						offset = first_cadenceno - first_time/timedelt
 						cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
+					else:
+						cadenceno[k] = k+1
 
 					# Data quality flags:
 					quality[k] = hdr.get('DQUALITY', 0)
