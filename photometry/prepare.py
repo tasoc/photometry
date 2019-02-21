@@ -219,6 +219,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 
 			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf:
 				SumImage = np.zeros((img_shape[0], img_shape[1]), dtype='float64')
+				Nimg = np.zeros_like(SumImage, dtype='int32')
 				time = np.empty(numfiles, dtype='float64')
 				timecorr = np.empty(numfiles, dtype='float32')
 				cadenceno = np.empty(numfiles, dtype='int32')
@@ -304,10 +305,11 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 
 					# Add together images for sum-image:
 					if TESSQualityFlags.filter(quality[k]):
+						Nimg += np.isfinite(flux0)
 						replace(flux0, np.nan, 0)
 						SumImage += flux0
 
-				SumImage /= numfiles
+				SumImage /= Nimg
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
