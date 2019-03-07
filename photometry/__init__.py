@@ -10,7 +10,7 @@ from .halo import HaloPhotometry
 from .tessphot import tessphot
 from .taskmanager import TaskManager
 from .image_motion import ImageMovementKernel
-from .quality import TESSQualityFlags
+from .quality import TESSQualityFlags, PixelQualityFlags
 
 from .version import get_version
 __version__ = get_version(pep440=False)

@@ -16,10 +16,12 @@ from astropy.wcs import WCS
 from bottleneck import replace, nanmean
 from timeit import default_timer
 import itertools
+import functools
 import contextlib
 from .backgrounds import fit_background
 from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files
-from photometry import TESSQualityFlags, ImageMovementKernel
+from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
+from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
 
 #------------------------------------------------------------------------------
 def _iterate_hdf_group(dset):
@@ -117,12 +119,13 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 		with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.cursor()
-			cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
+			cursor.execute("SELECT sector,reference_time,camera_centre_ra,camera_centre_dec FROM settings LIMIT 1;")
 			row = cursor.fetchone()
 			if row is None:
 				raise IOError("Settings could not be loaded from catalog")
 			#sector = row['sector']
 			sector_reference_time = row['reference_time']
+			camera_centre = [row['camera_centre_ra'], row['camera_centre_dec']]
 			cursor.close()
 
 		# HDF5 file to be created/modified:
@@ -139,7 +142,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 			images = hdf.require_group('images')
 			images_err = hdf.require_group('images_err')
 			backgrounds = hdf.require_group('backgrounds')
-			masks = hdf.require_group('backgrounds_masks')
+			pixel_flags = hdf.require_group('pixel_flags')
 			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
 			time_smooth = backgrounds.attrs.get('time_smooth', 3)
@@ -152,7 +155,10 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 				with h5py.File(tmp_hdf_file, 'a', libver='latest') as hdftmp:
 					dset_bck_us = hdftmp.require_group('backgrounds_unsmoothed')
 
-					if len(masks) < numfiles:
+					if len(pixel_flags) < numfiles:
+						# Create wrapper function freezing some of the
+						# additional keyword inputs:
+						fit_background_wrapper = functools.partial(fit_background, camera_centre=camera_centre)
 
 						tic = default_timer()
 						if threads > 1:
@@ -161,17 +167,18 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 						else:
 							m = map
 
-						last_bck_fit = -1 if len(masks) == 0 else int(sorted(list(masks.keys()))[-1])
+						last_bck_fit = -1 if len(pixel_flags) == 0 else int(sorted(list(pixel_flags.keys()))[-1])
 						k = last_bck_fit+1
-						for bck, mask in m(fit_background, files[k:]):
+						for bck, mask in m(fit_background_wrapper, files[k:]):
 							dset_name = '%04d' % k
 							logger.debug("Background %d complete", k)
 							logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k-last_bck_fit))
 
 							dset_bck_us.create_dataset(dset_name, data=bck)
 
-							indicies = np.asarray(np.nonzero(mask), dtype='uint16')
-							masks.create_dataset(dset_name, data=indicies, **args)
+							# If we ever defined pixel flags above 256, we have to change this to uint16
+							mask = np.asarray(np.where(mask, PixelQualityFlags.NotUsedForBackground, 0), dtype='uint8')
+							pixel_flags.create_dataset(dset_name, data=mask, chunks=imgchunks, **args)
 
 							k += 1
 
@@ -286,6 +293,15 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 							if hdr.get(key) != value:
 								logger.error("%s is not constant!", key)
 
+					# Find pixels marked for manual exclude:
+					manexcl = pixel_manual_exclude(flux0, hdr)
+					flux0[manexcl] = np.nan
+					flux0_err[manexcl] = np.nan
+
+					# Add manual excludes to pixel flags:
+					if np.any(manexcl):
+						pixel_flags[dset_name][manexcl] |= PixelQualityFlags.ManualExclude
+
 					if dset_name not in images:
 						# Load background from HDF file and subtract background from image,
 						# if the background has not already been subtracted:
@@ -310,6 +326,13 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 						SumImage += flux0
 
 				SumImage /= Nimg
+
+				# Detections and flagging of Background Shenanigans:
+				#for k in range(numfiles):
+				#	dset_name = '%04d' % k
+				#	flux0 = np.asarray(images[dset_name])
+				#	bckshe = pixel_background_shenanigans(flux0, SumImage)
+				#	pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
