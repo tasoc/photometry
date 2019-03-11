@@ -146,6 +146,10 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
 			time_smooth = backgrounds.attrs.get('time_smooth', 3)
+			flux_cutoff = backgrounds.attrs.get('flux_cutoff', 8e4)
+			bkgiters = backgrounds.attrs.get('bkgiters', 3)
+			radial_cutoff = backgrounds.attrs.get('radial_cutoff', 2400)
+			radial_pixel_step = backgrounds.attrs.get('radial_pixel_step', 15)
 
 			if len(backgrounds) < numfiles:
 				# Because HDF5 is stupid, and it cant figure out how to delete data from
@@ -158,7 +162,13 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 					if len(pixel_flags) < numfiles:
 						# Create wrapper function freezing some of the
 						# additional keyword inputs:
-						fit_background_wrapper = functools.partial(fit_background, camera_centre=camera_centre)
+						fit_background_wrapper = functools.partial(fit_background,
+							 camera_centre=camera_centre,
+							 flux_cutoff=flux_cutoff,
+							 bkgiters=bkgiters,
+							 radial_cutoff=radial_cutoff,
+							 radial_pixel_step=radial_pixel_step
+						 )
 
 						tic = default_timer()
 						if threads > 1:
@@ -193,6 +203,10 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 
 					# Smooth the backgrounds along the time axis:
 					backgrounds.attrs['time_smooth'] = time_smooth
+					backgrounds.attrs['flux_cutoff'] = flux_cutoff
+					backgrounds.attrs['bkgiters'] = bkgiters
+					backgrounds.attrs['radial_cutoff'] = radial_cutoff
+					backgrounds.attrs['radial_pixel_step'] = radial_pixel_step
 					w = time_smooth//2
 					tic = default_timer()
 					for k in range(numfiles):
@@ -332,7 +346,9 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 				#	dset_name = '%04d' % k
 				#	flux0 = np.asarray(images[dset_name])
 				#	bckshe = pixel_background_shenanigans(flux0, SumImage)
-				#	pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
+				#
+				#	if np.any(bckshe):
+				#		pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
