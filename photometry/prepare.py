@@ -256,6 +256,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 					'CCD': None,
 					'DATA_REL': None,
 					'NUM_FRM': None,
+					'NREADOUT': None,
 					'CRMITEN': None,
 					'CRBLKSZ': None,
 					'CRSPOC': None

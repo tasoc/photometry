@@ -227,7 +227,8 @@ class BasePhotometry(object):
 				# Get info for psf fit Gaussian statistic:
 				attrs['readnoise'] = self.hdf['images'].attrs.get('READNOIS', 10)
 				attrs['gain'] = self.hdf['images'].attrs.get('GAIN', 100)
-				attrs['n_readout'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
+				attrs['num_frm'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
+				attrs['n_readout'] = self.hdf['images'].attrs.get('NREADOUT', int(attrs['num_frm']*(1-2/self.hdf['images'].attrs.get('CRBLKSZ', np.inf)))) # Number of frames co-added in each timestamp (Default=TESS).
 
 				# Load MovementKernel into memory:
 				attrs['_MovementKernel'] = self.MovementKernel
@@ -323,7 +324,8 @@ class BasePhotometry(object):
 			# Get info for psf fit Gaussian statistic:
 			self.readnoise = self.tpf[1].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
 			self.gain = self.tpf[1].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
-			self.n_readout = self.tpf[1].header.get('NUM_FRM', 900) # Number of frames co-added in each timestamp.
+			self.num_frm = self.tpf[1].header.get('NUM_FRM', 60) # Number of frames co-added in each timestamp.
+			self.n_readout = self.tpf[1].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
 
 		# The file to load the star catalog from:
 		self.catalog_file = find_catalog_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
@@ -1169,7 +1171,7 @@ class BasePhotometry(object):
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
-	def save_lightcurve(self, output_folder=None, version=3):
+	def save_lightcurve(self, output_folder=None, version=4):
 		"""
 		Save generated lightcurve to file.
 
@@ -1228,6 +1230,7 @@ class BasePhotometry(object):
 		hdu.header['DATE'] = (now.strftime("%Y-%m-%d"), 'date the file was created')
 		hdu.header['TELESCOP'] = ('TESS', 'telescope')
 		hdu.header['INSTRUME'] = ('TESS Photometer', 'detector type')
+		hdu.header['FILTER'] = ('TESS', 'Photometric bandpass filter')
 		hdu.header['OBJECT'] = ("TIC {0:d}".format(self.starid), 'string version of TICID')
 		hdu.header['TICID'] = (self.starid, 'unique TESS target identifier')
 		hdu.header['CAMERA'] = (self.camera, 'Camera number')
@@ -1236,7 +1239,7 @@ class BasePhotometry(object):
 
 		# Versions:
 		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
-		hdu.header['FILEVER'] = ('1.3', 'File format version')
+		hdu.header['FILEVER'] = ('1.4', 'File format version')
 		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
@@ -1270,89 +1273,90 @@ class BasePhotometry(object):
 
 		# Make binary table:
 		# Define table columns:
-		c1 = fits.Column(name='TIME', format='D', array=self.lightcurve['time'])
-		c2 = fits.Column(name='TIMECORR', format='E', array=self.lightcurve['timecorr'])
-		c3 = fits.Column(name='CADENCENO', format='J', array=self.lightcurve['cadenceno'])
-		c4 = fits.Column(name='FLUX_RAW', format='D', unit='e-/s', array=self.lightcurve['flux'])
-		c5 = fits.Column(name='FLUX_RAW_ERR', format='D', unit='e-/s', array=self.lightcurve['flux_err'])
-		c6 = fits.Column(name='FLUX_BKG', format='D', unit='e-/s', array=self.lightcurve['flux_background'])
-		c7 = fits.Column(name='FLUX_CORR', format='D', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
-		c8 = fits.Column(name='FLUX_CORR_ERR', format='D', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
-		c9 = fits.Column(name='QUALITY', format='J', array=np.zeros_like(self.lightcurve['time']))
-		c10 = fits.Column(name='PIXEL_QUALITY', format='J', array=self.lightcurve['quality'])
-		c11 = fits.Column(name='MOM_CENTR1', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
-		c12 = fits.Column(name='MOM_CENTR2', format='D', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
-		c13 = fits.Column(name='POS_CORR1', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 0]) # column
-		c14 = fits.Column(name='POS_CORR2', format='D', unit='pixels', array=self.lightcurve['pos_corr'][:, 1]) # row
+		c1 = fits.Column(name='TIME', format='D', disp='D14.7', unit='BJD - 2457000, days', array=self.lightcurve['time'])
+		c2 = fits.Column(name='TIMECORR', format='E', disp='E13.6', unit='d', array=self.lightcurve['timecorr'])
+		c3 = fits.Column(name='CADENCENO', format='J', disp='I10', array=self.lightcurve['cadenceno'])
+		c4 = fits.Column(name='FLUX_RAW', format='D', disp='E26.17', unit='e-/s', array=self.lightcurve['flux'])
+		c5 = fits.Column(name='FLUX_RAW_ERR', format='D', disp='E26.17', unit='e-/s', array=self.lightcurve['flux_err'])
+		c6 = fits.Column(name='FLUX_BKG', format='D', disp='E26.17', unit='e-/s', array=self.lightcurve['flux_background'])
+		c7 = fits.Column(name='FLUX_CORR', format='D', disp='E26.17', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
+		c8 = fits.Column(name='FLUX_CORR_ERR', format='D', disp='E26.17', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
+		c9 = fits.Column(name='QUALITY', format='J', disp='B16.16', array=np.zeros_like(self.lightcurve['time']))
+		c10 = fits.Column(name='PIXEL_QUALITY', format='J', disp='B16.16', array=self.lightcurve['quality'])
+		c11 = fits.Column(name='MOM_CENTR1', format='D', disp='F10.5', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
+		c12 = fits.Column(name='MOM_CENTR2', format='D', disp='F10.5', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
+		c13 = fits.Column(name='POS_CORR1', format='D', disp='F14.7', unit='pixels', array=self.lightcurve['pos_corr'][:, 0]) # column
+		c14 = fits.Column(name='POS_CORR2', format='D', disp='F14.7', unit='pixels', array=self.lightcurve['pos_corr'][:, 1]) # row
 
 		tbhdu = fits.BinTableHDU.from_columns([c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14], name='LIGHTCURVE')
 
-		tbhdu.header['TTYPE1'] = ('TIME', 'column title: data time stamps')
-		tbhdu.header['TFORM1'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT1'] = ('BJD - 2457000, days', 'column units: Barycenter corrected TESS Julian')
-		tbhdu.header['TDISP1'] = ('D14.7', 'column display format')
+		# Add proper comments on all the table headers:
+		tbhdu.header.comments['TTYPE1'] = 'column title: data time stamps'
+		tbhdu.header.comments['TFORM1'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT1'] = 'column units: Barycenter corrected TESS Julian'
+		tbhdu.header.comments['TDISP1'] = 'column display format'
 
-		tbhdu.header['TTYPE2'] = ('TIMECORR', 'column title: barycenter - timeslice correction')
-		tbhdu.header['TFORM2'] = ('E', 'column format: 32-bit floating point')
-		tbhdu.header['TUNIT2'] = ('d', 'column units: day')
-		tbhdu.header['TDISP2'] = ('E13.6', 'column display format')
+		tbhdu.header.comments['TTYPE2'] = 'column title: barycenter - timeslice correction'
+		tbhdu.header.comments['TFORM2'] = 'column format: 32-bit floating point'
+		tbhdu.header.comments['TUNIT2'] = 'column units: day'
+		tbhdu.header.comments['TDISP2'] = 'column display format'
 
-		tbhdu.header['TTYPE3'] = ('CADENCENO', 'column title: unique cadence number')
-		tbhdu.header['TFORM3'] = ('J', 'column format: signed 32-bit integer')
-		tbhdu.header['TDISP3'] = ('I10', 'column display format')
+		tbhdu.header.comments['TTYPE3'] = 'column title: unique cadence number'
+		tbhdu.header.comments['TFORM3'] = 'column format: signed 32-bit integer'
+		tbhdu.header.comments['TDISP3'] = 'column display format'
 
-		tbhdu.header['TTYPE4'] = ('FLUX_RAW', 'column title: photometric flux')
-		tbhdu.header['TFORM4'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT4'] = ('e-/s', 'column units: electrons per second')
-		tbhdu.header['TDISP4'] = ('E26.17', 'column display format')
+		tbhdu.header.comments['TTYPE4'] = 'column title: photometric flux'
+		tbhdu.header.comments['TFORM4'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT4'] = 'column units: electrons per second'
+		tbhdu.header.comments['TDISP4'] = 'column display format'
 
-		tbhdu.header['TTYPE5'] = ('FLUX_RAW_ERR', 'column title: photometric flux error')
-		tbhdu.header['TFORM5'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT5'] = ('e-/s', 'column units: electrons per second')
-		tbhdu.header['TDISP5'] = ('E26.17', 'column display format')
+		tbhdu.header.comments['TTYPE5'] = 'column title: photometric flux error'
+		tbhdu.header.comments['TFORM5'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT5'] = 'column units: electrons per second'
+		tbhdu.header.comments['TDISP5'] = 'column display format'
 
-		tbhdu.header['TTYPE6'] = ('FLUX_BKG', 'column title: photometric background flux')
-		tbhdu.header['TFORM6'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT6'] = ('e-/s', 'column units: electrons per second')
-		tbhdu.header['TDISP6'] = ('E26.17', 'column display format')
+		tbhdu.header.comments['TTYPE6'] = 'column title: photometric background flux'
+		tbhdu.header.comments['TFORM6'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT6'] = 'column units: electrons per second'
+		tbhdu.header.comments['TDISP6'] = 'column display format'
 
-		tbhdu.header['TTYPE7'] = ('FLUX_CORR', 'column title: corrected photometric flux')
-		tbhdu.header['TFORM7'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT7'] = ('ppm', 'column units: rel. flux in parts-per-million')
-		tbhdu.header['TDISP7'] = ('E26.17', 'column display format')
+		tbhdu.header.comments['TTYPE7'] = 'column title: corrected photometric flux'
+		tbhdu.header.comments['TFORM7'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT7'] = 'column units: rel. flux in parts-per-million'
+		tbhdu.header.comments['TDISP7'] = 'column display format'
 
-		tbhdu.header['TTYPE8'] = ('FLUX_CORR_ERR', 'column title: corrected photometric flux error')
-		tbhdu.header['TFORM8'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT8'] = ('ppm', 'column units: parts-per-million')
-		tbhdu.header['TDISP8'] = ('E26.17', 'column display format')
+		tbhdu.header.comments['TTYPE8'] = 'column title: corrected photometric flux error'
+		tbhdu.header.comments['TFORM8'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT8'] = 'column units: parts-per-million'
+		tbhdu.header.comments['TDISP8'] = 'column display format'
 
-		tbhdu.header['TTYPE9'] = ('QUALITY', 'column title: photometry quality flags')
-		tbhdu.header['TFORM9'] = ('J', 'column format: signed 32-bit integer')
-		tbhdu.header['TDISP9'] = ('B16.16', 'column display format')
+		tbhdu.header.comments['TTYPE9'] = 'column title: photometry quality flags'
+		tbhdu.header.comments['TFORM9'] = 'column format: signed 32-bit integer'
+		tbhdu.header.comments['TDISP9'] = 'column display format'
 
-		tbhdu.header['TTYPE10'] = ('PIXEL_QUALITY', 'column title: pixel quality flags')
-		tbhdu.header['TFORM10'] = ('J', 'column format: signed 32-bit integer')
-		tbhdu.header['TDISP10'] = ('B16.16', 'column display format')
+		tbhdu.header.comments['TTYPE10'] = 'column title: pixel quality flags'
+		tbhdu.header.comments['TFORM10'] = 'column format: signed 32-bit integer'
+		tbhdu.header.comments['TDISP10'] = 'column display format'
 
-		tbhdu.header['TTYPE11'] = ('MOM_CENTR1', 'column title: moment-derived column centroid')
-		tbhdu.header['TFORM11'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT11'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP11'] = ('F10.5', 'column display format')
+		tbhdu.header.comments['TTYPE11'] = 'column title: moment-derived column centroid'
+		tbhdu.header.comments['TFORM11'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT11'] = 'column units: pixels'
+		tbhdu.header.comments['TDISP11'] = 'column display format'
 
-		tbhdu.header['TTYPE12'] = ('MOM_CENTR2', 'column title: moment-derived row centroid')
-		tbhdu.header['TFORM12'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT12'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP12'] = ('F10.5', 'column display format')
+		tbhdu.header.comments['TTYPE12'] = 'column title: moment-derived row centroid'
+		tbhdu.header.comments['TFORM12'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT12'] = 'column units: pixels'
+		tbhdu.header.comments['TDISP12'] = 'column display format'
 
-		tbhdu.header['TTYPE13'] = ('POS_CORR1', 'column title: column position correction')
-		tbhdu.header['TFORM13'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT13'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP13'] = ('F14.7', 'column display format')
+		tbhdu.header.comments['TTYPE13'] = 'column title: column position correction'
+		tbhdu.header.comments['TFORM13'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT13'] = 'column units: pixels'
+		tbhdu.header.comments['TDISP13'] = 'column display format'
 
-		tbhdu.header['TTYPE14'] = ('POS_CORR2', 'column title: row position correction')
-		tbhdu.header['TFORM14'] = ('D', 'column format: 64-bit floating point')
-		tbhdu.header['TUNIT14'] = ('pixel', 'column units: pixels')
-		tbhdu.header['TDISP14'] = ('F14.7', 'column display format')
+		tbhdu.header.comments['TTYPE14'] = 'column title: row position correction'
+		tbhdu.header.comments['TFORM14'] = 'column format: 64-bit floating point'
+		tbhdu.header.comments['TUNIT14'] = 'column units: pixels'
+		tbhdu.header.comments['TDISP14'] = 'column display format'
 
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
@@ -1361,6 +1365,17 @@ class BasePhotometry(object):
 		tdel = cadence/86400
 		tstart = self.lightcurve['time'][0] - tdel/2
 		tstop = self.lightcurve['time'][-1] + tdel/2
+		tstart_tm = Time(tstart, 2457000, format='jd', scale='tdb')
+		tstop_tm = Time(tstop, 2457000, format='jd', scale='tdb')
+		telapse = tstop - tstart
+
+		frametime = 2.0
+		int_time = 1.98
+		readtime = 0.02
+		if hdr['CRMITEN']:
+			deadc = (int_time * 2/hdr['CRBLKSZ']) / frametime
+		else:
+			deadc = int_time / frametime
 
 		# Headers related to time to be added to LIGHTCURVE extension:
 		tbhdu.header['TIMEREF'] = ('SOLARSYSTEM', 'barycentric correction applied to times')
@@ -1370,17 +1385,22 @@ class BasePhotometry(object):
 		tbhdu.header['TIMEUNIT'] = ('d', 'time unit for TIME, TSTART and TSTOP')
 		tbhdu.header['TSTART'] = (tstart, 'observation start time in BTJD')
 		tbhdu.header['TSTOP'] = (tstop, 'observation stop time in BTJD')
-		tbhdu.header['DATE-OBS'] = (Time(tstart + 2457000, format='jd', scale='tdb').utc.isot + 'Z', 'TSTART as UTC calendar date')
-		tbhdu.header['DATE-END'] = (Time(tstop + 2457000, format='jd', scale='tdb').utc.isot + 'Z', 'TSTOP as UTC calendar date')
-		tbhdu.header['TELAPSE'] = (tbhdu.header['TSTOP'] - tbhdu.header['TSTART'], '[d] TSTOP - TSTART')
-		#tbhdu.header['DEADC'] = (0.7920000000000000, 'deadtime correction')
-		#tbhdu.header['EXPOSURE'] = (22.083701445106, '[d] time on source')
+		tbhdu.header['DATE-OBS'] = (tstart_tm.utc.isot, 'TSTART as UTC calendar date')
+		tbhdu.header['DATE-END'] = (tstop_tm.utc.isot, 'TSTOP as UTC calendar date')
+		tbhdu.header['MJD-BEG'] = (tstart_tm.mjd, 'observation start time in MJD')
+		tbhdu.header['MJD-END'] = (tstop_tm.mjd, 'observation start time in MJD')
+		tbhdu.header['TELAPSE'] = (telapse, '[d] TSTOP - TSTART')
+		tbhdu.header['LIVETIME'] = (telapse*deadc, '[d] TELAPSE multiplied by DEADC')
+		tbhdu.header['DEADC'] = (deadc, 'deadtime correction')
+		tbhdu.header['EXPOSURE'] = (telapse*deadc, '[d] time on source')
+		tbhdu.header['XPOSURE'] = (frametime*deadc*self.num_frm, '[s] Duration of exposure')
 		tbhdu.header['TIMEPIXR'] = (0.5, 'bin time beginning=0 middle=0.5 end=1')
 		tbhdu.header['TIMEDEL'] = (tdel, '[d] time resolution of data')
-		tbhdu.header['INT_TIME'] = (1.98, '[s] photon accumulation time per frame')
-		tbhdu.header['READTIME'] = (0.02, '[s] readout time per frame')
-		tbhdu.header['FRAMETIM'] = (2.00, '[s] frame time (INT_TIME + READTIME)')
-		tbhdu.header['NUM_FRM'] = (self.n_readout, 'number of frames per time stamp')
+		tbhdu.header['INT_TIME'] = (int_time, '[s] photon accumulation time per frame')
+		tbhdu.header['READTIME'] = (readtime, '[s] readout time per frame')
+		tbhdu.header['FRAMETIM'] = (frametime, '[s] frame time (INT_TIME + READTIME)')
+		tbhdu.header['NUM_FRM'] = (self.num_frm, 'number of frames per time stamp')
+		tbhdu.header['NREADOUT'] = (self.n_readout, 'number of read per cadence')
 
 		# Make aperture image:
 		# TODO: Pixels used in background calculation (value=4)
