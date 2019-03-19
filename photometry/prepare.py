@@ -18,8 +18,9 @@ from timeit import default_timer
 import itertools
 import functools
 import contextlib
+from tqdm import tqdm
 from .backgrounds import fit_background
-from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files
+from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
 from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
 
@@ -238,13 +239,14 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 					os.remove(tmp_hdf_file)
 
 
-			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf:
+			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf or 'backgrounds_pixels_used' not in hdf:
 				SumImage = np.zeros((img_shape[0], img_shape[1]), dtype='float64')
 				Nimg = np.zeros_like(SumImage, dtype='int32')
 				time = np.empty(numfiles, dtype='float64')
 				timecorr = np.empty(numfiles, dtype='float32')
 				cadenceno = np.empty(numfiles, dtype='int32')
 				quality = np.empty(numfiles, dtype='int32')
+				UsedInBackgrounds = np.zeros_like(SumImage, dtype='int32')
 
 				# Save list of file paths to the HDF5 file:
 				filenames = [os.path.basename(fname).rstrip('.gz').encode('ascii', 'strict') for fname in files]
@@ -261,8 +263,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 					'CRBLKSZ': None,
 					'CRSPOC': None
 				}
-				for k, fname in enumerate(files):
-					logger.debug("Processing image: %.2f%% - %s", 100*k/numfiles, fname)
+				for k, fname in enumerate(tqdm(files, disable=not logger.isEnabledFor(logging.DEBUG))):
 					dset_name = '%04d' % k
 
 					# Load the FITS file data and the header:
@@ -310,14 +311,16 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 
 					# Find pixels marked for manual exclude:
 					manexcl = pixel_manual_exclude(flux0, hdr)
-					flux0[manexcl] = np.nan
-					flux0_err[manexcl] = np.nan
 
 					# Add manual excludes to pixel flags:
 					if np.any(manexcl):
 						pixel_flags[dset_name][manexcl] |= PixelQualityFlags.ManualExclude
 
 					if dset_name not in images:
+						# Mask out manually excluded data before saving:
+						flux0[manexcl] = np.nan
+						flux0_err[manexcl] = np.nan
+
 						# Load background from HDF file and subtract background from image,
 						# if the background has not already been subtracted:
 						if not hdr.get('BACKAPP', False):
@@ -328,6 +331,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 						images_err.create_dataset(dset_name, data=flux0_err, chunks=imgchunks, **args)
 					else:
 						flux0 = np.asarray(images[dset_name])
+						flux0[manexcl] = np.nan
 
 					# Save the World Coordinate System of each image:
 					if dset_name not in wcs:
@@ -340,9 +344,20 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 						replace(flux0, np.nan, 0)
 						SumImage += flux0
 
+					# Add together the number of times each pixel was used in the background estimation:
+					UsedInBackgrounds += (np.asarray(pixel_flags[dset_name]) & PixelQualityFlags.NotUsedForBackground == 0)
+
 				SumImage /= Nimg
 
 				# Detections and flagging of Background Shenanigans:
+				#pixel_background_shenanigans_wrapper = functools.partial(pixel_background_shenanigans, SumImage=SumImage)
+				#k = -1
+				#for bckshe in pool.imap(pixel_background_shenanigans_wrapper, images):
+				#	k += 1
+				#	if np.any(bckshe):
+				#		dset_name = '%04d' % k
+				#		pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
+
 				#for k in range(numfiles):
 				#	dset_name = '%04d' % k
 				#	flux0 = np.asarray(images[dset_name])
@@ -350,6 +365,14 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 				#
 				#	if np.any(bckshe):
 				#		pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
+
+
+				# Single boolean image indicating if the pixel was (on average) used in the background estimation:
+				UsedInBackgrounds = (UsedInBackgrounds/numfiles > 0.5)
+				dset_uibkg = hdf.create_dataset('backgrounds_pixels_used', data=UsedInBackgrounds, dtype='bool', chunks=imgchunks, **args)
+				dset_uibkg.attrs['threshold'] = 0.5
+
+				print(np.sum(UsedInBackgrounds))
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
@@ -390,9 +413,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None, calc_m
 				#return
 
 			# Find the reference image:
-			refindx = np.searchsorted(hdf['time'], sector_reference_time_tjd, side='left')
-			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time_tjd - hdf['time'][refindx-1]) < abs(sector_reference_time_tjd - hdf['time'][refindx])):
-				refindx -= 1
+			refindx = find_nearest(hdf['time'], sector_reference_time_tjd)
 			logger.info("WCS reference frame: %d", refindx)
 
 			# Save WCS to the file:

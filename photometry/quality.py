@@ -83,6 +83,7 @@ class CorrectorQualityFlags(QualityFlagsBase):
 	JumpMultiplicativeConstant = 32
 	JumpMultiplicativeLinear = 64
 	Interpolated = 128
+	BackgroundShenanigans = 256
 
 	# Default bitmask
 	DEFAULT_BITMASK = (FlaggedBadData | ManualExclude)
@@ -96,7 +97,8 @@ class CorrectorQualityFlags(QualityFlagsBase):
 		JumpAdditiveLinear: "Jump corrected using additive linear trend",
 		JumpMultiplicativeConstant: "Jumb corrected using multiplicative constant",
 		JumpMultiplicativeLinear: "Jump corrected using multiplicative linear trend",
-		Interpolated: "Point is interpolated"
+		Interpolated: "Point is interpolated",
+		BackgroundShenanigans: "Background Shenanigans detected in stamp",
 	}
 
 #------------------------------------------------------------------------------

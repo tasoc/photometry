@@ -118,13 +118,13 @@ def test_catalog_attime():
 				# TODO: Add more tests here, once we change the test input data
 
 #----------------------------------------------------------------------
-def test_pixelflags():
+def test_aperture():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
 			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
-				print(pho.pixelflags)
+				print(pho.aperture)
 
-				assert(pho.sumimage.shape == pho.pixelflags.shape)
+				assert(pho.sumimage.shape == pho.aperture.shape)
 
 #----------------------------------------------------------------------
 def test_wcs():
@@ -246,7 +246,7 @@ if __name__ == '__main__':
 	test_backgrounds()
 	test_catalog()
 	test_catalog_attime()
-	test_pixelflags()
+	test_aperture()
 	test_wcs()
 	#test_cache()
 	test_tpf_with_other_target()

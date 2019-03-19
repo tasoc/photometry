@@ -9,6 +9,7 @@
 from __future__ import division, with_statement, print_function, unicode_literals
 import numpy as np
 import logging
+from scipy.ndimage.filters import median_filter
 
 #------------------------------------------------------------------------------
 def pixel_manual_exclude(img, hdr):
@@ -45,14 +46,17 @@ def pixel_manual_exclude(img, hdr):
 	return mask
 
 #------------------------------------------------------------------------------
-def pixel_background_shenanigans(img, SumImage):
+def pixel_background_shenanigans(img, SumImage, limit=40):
 	"""
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 	# Create manual exclude mask array:
-	mask = np.zeros_like(img, dtype='bool')
 
 	flux0 = img - SumImage
+
+	flux0 = median_filter(flux0, size=15)
+
+	mask = (np.abs(flux0) > limit)
 
 	return mask
