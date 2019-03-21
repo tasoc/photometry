@@ -17,7 +17,7 @@ except ImportError:
 from astropy.io import fits
 from astropy.wcs import WCS
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from photometry import BasePhotometry
+from photometry import BasePhotometry, PixelQualityFlags, CorrectorQualityFlags
 #import photometry.BasePhotometry.hdf5_cache as bf
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
@@ -122,9 +122,82 @@ def test_aperture():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for datasource in ('ffi', 'tpf'):
 			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+
+				print("------------------------------------")
 				print(pho.aperture)
 
+				print(pho.sumimage.shape)
+				print(pho.aperture.shape)
 				assert(pho.sumimage.shape == pho.aperture.shape)
+
+				# For this target, all the pixels should be available:
+				assert np.all(pho.aperture & 1 != 0)
+
+				# This target should fall on CCD output B:
+				assert np.all(pho.aperture & 64 != 0)
+
+				if datasource == 'ffi':
+					# For the FFI's all pixels for this target was used for the backgrounds
+					# (the target is not bright enough to be masked out)
+					assert np.all(pho.aperture & 4 != 0)
+
+				# Make the stamp one pixel smaller:
+				# The sumimage and aperture should still match in size!
+				pho.resize_stamp(right=-1)
+				print(pho.sumimage.shape)
+				print(pho.aperture.shape)
+
+				assert pho.sumimage.shape == pho.aperture.shape
+
+		# Try this very bright star, where the centre is saturated.
+		# The aperture for this star should have pixels near the centre that
+		# were not used in the background calculation for FFIs:
+		with BasePhotometry(267211065, INPUT_DIR, '.', datasource='ffi', plot=True, **DUMMY_KWARG) as pho:
+			central_pixel = pho.aperture[int(np.round(pho.target_pos_row_stamp)), int(np.round(pho.target_pos_column_stamp))]
+			assert central_pixel & 4 == 0, "Central pixel of this bright star should not be used in background"
+
+#----------------------------------------------------------------------
+def test_pixelflags():
+	with TemporaryDirectory() as OUTPUT_DIR:
+		for datasource in ('ffi', 'tpf'):
+			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+				# Check the size of the pixelflags cube:
+				print(pho.pixelflags_cube.shape)
+				expected_size = (pho.stamp[1]-pho.stamp[0], pho.stamp[3]-pho.stamp[2], len(pho.hdf['time']))
+				print(expected_size)
+				assert pho.pixelflags_cube.shape == expected_size, "pixelflags_cube does not have the correct size"
+
+				# Insert a fake pixel flag:
+				pho._pixelflags_cube[:, :, :] = 0
+				pho._pixelflags_cube[0, 0, 2] |= PixelQualityFlags.BackgroundShenanigans
+
+				# Try to loop through the pixelflags:
+				tpfs_with_flag = []
+				for k, pf in enumerate(pho.pixelflags):
+					if datasource == 'ffi' and k == 2:
+						print(pf)
+						assert pf[0,0] & PixelQualityFlags.BackgroundShenanigans != 0
+					else:
+						if pf[0, 0] & PixelQualityFlags.BackgroundShenanigans != 0:
+							tpfs_with_flag.append(k)
+
+				# The pixelflags iterator should have Ntimes points:
+				assert k+1 == pho.Ntimes, "The pixelflags iterator does not have the correct number of elements"
+
+				# Save the final lightcurve and load the resulting QUALITY flags:
+				tmpfile = pho.save_lightcurve()
+				with fits.open(tmpfile) as hdu:
+					quality = hdu['LIGHTCURVE'].data['QUALITY']
+
+				# Check that the quality flag is being peopergated through to the QUALITY column:
+				if datasource == 'ffi':
+					assert quality[2] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
+				else:
+					# Since we have only set the flag for a single FFI, there should be 15 TPFs affected:
+					assert len(tpfs_with_flag) == 15, "Not the correct number of TPFs with flag set"
+
+					for i in tpfs_with_flag:
+						assert quality[i] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
 
 #----------------------------------------------------------------------
 def test_wcs():
@@ -247,6 +320,7 @@ if __name__ == '__main__':
 	test_catalog()
 	test_catalog_attime()
 	test_aperture()
+	test_pixelflags()
 	test_wcs()
 	#test_cache()
 	test_tpf_with_other_target()
