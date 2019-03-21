@@ -936,13 +936,13 @@ class BasePhotometry(object):
 
 				# Add information about which pixels were used for background calculation:
 				if 'backgrounds_pixels_used' in self.hdf:
+					# Coordinates in the FFI of image:
 					ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 					ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 					ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
 					ic2 = self._stamp[3] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
-
+					# Extract the subimage of which pixels were used in background:
 					bpu = self.hdf['backgrounds_pixels_used'][ir1:ir2, ic1:ic2]
-					print(bpu)
 					self._aperture[bpu] |= 4
 			else:
 				# FIXME: Use actual stamp!
