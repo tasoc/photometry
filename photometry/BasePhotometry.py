@@ -244,17 +244,16 @@ class BasePhotometry(object):
 					hdf5_cache[filepath_hdf5]['_images_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='float32')
 					hdf5_cache[filepath_hdf5]['_images_err_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='float32')
 					hdf5_cache[filepath_hdf5]['_backgrounds_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='float32')
+					hdf5_cache[filepath_hdf5]['_pixelflags_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='uint8')
 					for k in range(N):
 						hdf5_cache[filepath_hdf5]['_images_cube_full'][:, :, k] = self.hdf['images/%04d' % k]
 						hdf5_cache[filepath_hdf5]['_images_err_cube_full'][:, :, k] = self.hdf['images_err/%04d' % k]
 						hdf5_cache[filepath_hdf5]['_backgrounds_cube_full'][:, :, k] = self.hdf['backgrounds/%04d' % k]
+						hdf5_cache[filepath_hdf5]['_pixelflags_cube_full'][:, :, k] = self.hdf['pixelflags/%04d' % k]
 
 					# We dont need the file anymore!
 					self.hdf.close()
 					self.hdf = None
-				else:
-					attrs['_images_cube_full'] = None
-					attrs['_backgrounds_cube_full'] = None
 			else:
 				logger.debug('Loaded data from cache!')
 
@@ -742,21 +741,26 @@ class BasePhotometry(object):
 		if self._pixelflags_cube is None:
 			# We can't used the _loac_cube function here, since we always have
 			# to load from the HDF5 file, even though we are running an TPF.
-			hdf_group = 'pixel_flags'
+			if self._pixelflags_cube_full is None:
+				hdf_group = 'pixel_flags'
 
-			ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-			ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-			ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
-			ic2 = self._stamp[3] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
+				ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+				ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+				ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
+				ic2 = self._stamp[3] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
 
-			# We dont have an in-memory version of the full cube, so let us
-			# create the cube by loading the cutouts of each image:
-			cube = np.empty((ir2-ir1, ic2-ic1, len(self.hdf['time'])), dtype='uint8')
-			if hdf_group in self.hdf:
-				for k in range(len(self.hdf['time'])):
-					cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+				# We dont have an in-memory version of the full cube, so let us
+				# create the cube by loading the cutouts of each image:
+				cube = np.empty((ir2-ir1, ic2-ic1, len(self.hdf['time'])), dtype='uint8')
+				if hdf_group in self.hdf:
+					for k in range(len(self.hdf['time'])):
+						cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+				else:
+					cube[:, :, :] = 0
 			else:
-				cube[:, :, :] = 0
+				# We have an in-memory version of the full cube.
+				# TODO: Will this create copy of data in memory?
+				cube = self._pixelflags_cube_full[ir1:ir2, ic1:ic2, :]
 
 			self._pixelflags_cube = cube
 
