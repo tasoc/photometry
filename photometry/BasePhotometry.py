@@ -33,8 +33,8 @@ from astropy.wcs import WCS
 import enum
 from bottleneck import replace, nanmedian, nanvar, nanstd
 from .image_motion import ImageMovementKernel
-from .quality import TESSQualityFlags
-from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale
+from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
+from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale, find_nearest
 from .plots import plot_image, plt, save_figure
 from .version import get_version
 
@@ -138,6 +138,7 @@ class BasePhotometry(object):
 		self._images_cube_full = None
 		self._images_err_cube_full = None
 		self._backgrounds_cube_full = None
+		self._pixelflags_cube_full = None
 		self._sumimage_full = None
 
 		# Directory where output files will be saved:
@@ -243,17 +244,16 @@ class BasePhotometry(object):
 					hdf5_cache[filepath_hdf5]['_images_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='float32')
 					hdf5_cache[filepath_hdf5]['_images_err_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='float32')
 					hdf5_cache[filepath_hdf5]['_backgrounds_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='float32')
+					hdf5_cache[filepath_hdf5]['_pixelflags_cube_full'] = np.empty((attrs['_max_stamp'][1], attrs['_max_stamp'][3], N), dtype='uint8')
 					for k in range(N):
 						hdf5_cache[filepath_hdf5]['_images_cube_full'][:, :, k] = self.hdf['images/%04d' % k]
 						hdf5_cache[filepath_hdf5]['_images_err_cube_full'][:, :, k] = self.hdf['images_err/%04d' % k]
 						hdf5_cache[filepath_hdf5]['_backgrounds_cube_full'][:, :, k] = self.hdf['backgrounds/%04d' % k]
+						hdf5_cache[filepath_hdf5]['_pixelflags_cube_full'][:, :, k] = self.hdf['pixelflags/%04d' % k]
 
 					# We dont need the file anymore!
 					self.hdf.close()
 					self.hdf = None
-				else:
-					attrs['_images_cube_full'] = None
-					attrs['_backgrounds_cube_full'] = None
 			else:
 				logger.debug('Loaded data from cache!')
 
@@ -327,6 +327,14 @@ class BasePhotometry(object):
 			self.num_frm = self.tpf[1].header.get('NUM_FRM', 60) # Number of frames co-added in each timestamp.
 			self.n_readout = self.tpf[1].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
 
+			# Load stuff from the common HDF5 file:
+			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)[0]
+			self.filepath_hdf5 = filepath_hdf5
+			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
+
+		else:
+			raise ValueError("Invalid datasource: '%s'" % self.datasource)
+
 		# The file to load the star catalog from:
 		self.catalog_file = find_catalog_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 		self._catalog = None
@@ -392,7 +400,8 @@ class BasePhotometry(object):
 		self._images_cube = None
 		self._images_err_cube = None
 		self._backgrounds_cube = None
-		self._pixelflags = None
+		self._pixelflags_cube = None
+		self._aperture = None
 
 	def __enter__(self):
 		return self
@@ -574,7 +583,8 @@ class BasePhotometry(object):
 		self._catalog = None
 		self._images_cube = None
 		self._backgrounds_cube = None
-		self._pixelflags = None
+		self._pixelflags_cube = None
+		self._aperture = None
 		return True
 
 	def get_pixel_grid(self):
@@ -706,6 +716,93 @@ class BasePhotometry(object):
 		return self._backgrounds_cube
 
 	@property
+	def pixelflags_cube(self):
+		"""
+		Cube containing all the pixel flag images as a function of time.
+
+		Returns:
+			ndarray: Three dimentional array with shape ``(rows, cols, ffi_times)``, where
+			        ``rows`` is the number of rows in the image, ``cols`` is the number
+					   of columns and ``ffi_times`` is the number of timestamps in the FFIs.
+
+		Note:
+			This function will only return flags on the timestamps of the FFIs, even though
+			an TPF is being processed.
+
+		Example:
+
+			>>> pho = BasePhotometry(starid)
+			>>> print(pho.backgrounds_cube.shape):
+			>>>   (10, 10, 1399)
+
+		See Also:
+			:py:func:`backgrounds`, :py:func:`images_cube`, :py:func:`images`
+		"""
+		if self._pixelflags_cube is None:
+			# We can't used the _loac_cube function here, since we always have
+			# to load from the HDF5 file, even though we are running an TPF.
+			if self._pixelflags_cube_full is None:
+				hdf_group = 'pixel_flags'
+
+				ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+				ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+				ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
+				ic2 = self._stamp[3] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
+
+				# We dont have an in-memory version of the full cube, so let us
+				# create the cube by loading the cutouts of each image:
+				cube = np.empty((ir2-ir1, ic2-ic1, len(self.hdf['time'])), dtype='uint8')
+				if hdf_group in self.hdf:
+					for k in range(len(self.hdf['time'])):
+						cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+				else:
+					cube[:, :, :] = 0
+			else:
+				# We have an in-memory version of the full cube.
+				# TODO: Will this create copy of data in memory?
+				cube = self._pixelflags_cube_full[ir1:ir2, ic1:ic2, :]
+
+			self._pixelflags_cube = cube
+
+		return self._pixelflags_cube
+
+	@property
+	def pixelflags(self):
+		"""
+		Iterator that will loop through the image stamps.
+
+		Returns:
+			iterator: Iterator which can be used to loop through the image stamps.
+
+		Note:
+			The images has had the large-scale background subtracted. If needed
+			the backgrounds can be added again from :py:func:`backgrounds`.
+
+		Note:
+			For each image, this function will actually load the necessary
+			data from disk, so don't loop through it more than you absolutely
+			have to to save I/O.
+
+		Example:
+
+			>>> pho = BasePhotometry(starid)
+			>>> for img in pho.images:
+			>>> 	print(img)
+
+		See Also:
+			:py:func:`images_cube`, :py:func:`images_err`, :py:func:`backgrounds`
+		"""
+		# Yield slices from the data-cube as an iterator:
+		if self.datasource == 'ffi':
+			for k in range(self.Ntimes):
+				yield self.pixelflags_cube[:, :, k]
+		else:
+			hdf_times = np.asarray(self.hdf['time']) - np.asarray(self.hdf['timecorr'])
+			for k in range(self.Ntimes):
+				indx = find_nearest(hdf_times, self.lightcurve['time'][k] - self.lightcurve['timecorr'][k])
+				yield self.pixelflags_cube[:, :, indx]
+
+	@property
 	def images(self):
 		"""
 		Iterator that will loop through the image stamps.
@@ -822,31 +919,48 @@ class BasePhotometry(object):
 		return self._sumimage
 
 	@property
-	def pixelflags(self):
+	def aperture(self):
 		"""
 		Flags for each pixel, as defined by the TESS data product manual.
 
 		Returns:
 			numpy.array: 2D array of flags for each pixel.
 		"""
-		if self._pixelflags is None:
+		if self._aperture is None:
 			if self.datasource == 'ffi':
 				# Make aperture image:
-				# TODO: Pixels used in background calculation (value=4)
 				cols, rows = self.get_pixel_grid()
-				self._pixelflags = np.asarray(np.isfinite(self.sumimage), dtype='int32')
-				# Add mapping onto TESS output channels:
-				self._pixelflags[(45 <= cols) & (cols <= 556)] += 32 # CCD output A
-				self._pixelflags[(557 <= cols) & (cols <= 1068)] += 64 # CCD output B
-				self._pixelflags[(1069 <= cols) & (cols <= 1580)] += 128 # CCD output C
-				self._pixelflags[(1581 <= cols) & (cols <= 2092)] += 256 # CCD output D
-			else:
-				# FIXME: Use actual stamp!
-				self._pixelflags = np.asarray(self.tpf['APERTURE'].data, dtype='int32')
-				self._pixelflags[(self._pixelflags & 2) != 0] -= 2
-				self._pixelflags[(self._pixelflags & 8) != 0] -= 8
+				self._aperture = np.asarray(np.isfinite(self.sumimage), dtype='int32')
 
-		return self._pixelflags
+				# Add mapping onto TESS output channels:
+				self._aperture[(45 <= cols) & (cols <= 556)] += 32 # CCD output A
+				self._aperture[(557 <= cols) & (cols <= 1068)] += 64 # CCD output B
+				self._aperture[(1069 <= cols) & (cols <= 1580)] += 128 # CCD output C
+				self._aperture[(1581 <= cols) & (cols <= 2092)] += 256 # CCD output D
+
+				# Add information about which pixels were used for background calculation:
+				if 'backgrounds_pixels_used' in self.hdf:
+					# Coordinates in the FFI of image:
+					ir1 = self._stamp[0] - self.pixel_offset_row
+					ir2 = self._stamp[1] - self.pixel_offset_row
+					ic1 = self._stamp[2] - self.pixel_offset_col
+					ic2 = self._stamp[3] - self.pixel_offset_col
+					# Extract the subimage of which pixels were used in background:
+					bpu = self.hdf['backgrounds_pixels_used'][ir1:ir2, ic1:ic2]
+					self._aperture[bpu] |= 4
+			else:
+				# Load the aperture from the TPF:
+				ir1 = self._stamp[0] - self._max_stamp[0]
+				ir2 = self._stamp[1] - self._max_stamp[0]
+				ic1 = self._stamp[2] - self._max_stamp[2]
+				ic2 = self._stamp[3] - self._max_stamp[2]
+				self._aperture = np.asarray(self.tpf['APERTURE'].data[ir1:ir2, ic1:ic2], dtype='int32')
+
+				# Remove the flags for SPOC mask and centroids:
+				self._aperture[(self._aperture & 2) != 0] -= 2
+				self._aperture[(self._aperture & 8) != 0] -= 8
+
+		return self._aperture
 
 	@property
 	def catalog(self):
@@ -1018,9 +1132,7 @@ class BasePhotometry(object):
 				times = self.lightcurve['time'][indx]
 				kernels = kernels[indx]
 				# Find the timestamp closest to the reference time:
-				refindx = np.searchsorted(times, self._catalog_reference_time, side='left')
-				if refindx > 0 and (refindx == len(times) or abs(self._catalog_reference_time - times[refindx-1]) < abs(self._catalog_reference_time - times[refindx])):
-					refindx -= 1
+				refindx = find_nearest(times, self._catalog_reference_time)
 				# Rescale kernels to the reference point:
 				kernels = np.column_stack((self.tpf[1].data['POS_CORR1'][indx], self.tpf[1].data['POS_CORR2'][indx]))
 				kernels[:, 0] -= kernels[refindx, 0]
@@ -1194,6 +1306,13 @@ class BasePhotometry(object):
 		# Create sumimage before changing the self.lightcurve object:
 		SumImage = self.sumimage
 
+		# Propergate the Background Shenanigans flags into the quality flags if
+		# one was detected somewhere in the final stamp in the given timestamp:
+		quality = np.zeros_like(self.lightcurve['time'], dtype='int32')
+		for k, flg in enumerate(self.pixelflags):
+			if np.any(flg & PixelQualityFlags.BackgroundShenanigans != 0):
+				quality[k] |= CorrectorQualityFlags.BackgroundShenanigans
+
 		# Remove timestamps that have no defined time:
 		# This is a problem in the Sector 1 alert data.
 		indx = np.isfinite(self.lightcurve['time'])
@@ -1281,7 +1400,7 @@ class BasePhotometry(object):
 		c6 = fits.Column(name='FLUX_BKG', format='D', disp='E26.17', unit='e-/s', array=self.lightcurve['flux_background'])
 		c7 = fits.Column(name='FLUX_CORR', format='D', disp='E26.17', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
 		c8 = fits.Column(name='FLUX_CORR_ERR', format='D', disp='E26.17', unit='ppm', array=np.full_like(self.lightcurve['time'], np.nan))
-		c9 = fits.Column(name='QUALITY', format='J', disp='B16.16', array=np.zeros_like(self.lightcurve['time']))
+		c9 = fits.Column(name='QUALITY', format='J', disp='B16.16', array=quality)
 		c10 = fits.Column(name='PIXEL_QUALITY', format='J', disp='B16.16', array=self.lightcurve['quality'])
 		c11 = fits.Column(name='MOM_CENTR1', format='D', disp='F10.5', unit='pixels', array=self.lightcurve['pos_centroid'][:, 0]) # column
 		c12 = fits.Column(name='MOM_CENTR2', format='D', disp='F10.5', unit='pixels', array=self.lightcurve['pos_centroid'][:, 1]) # row
@@ -1404,7 +1523,7 @@ class BasePhotometry(object):
 
 		# Make aperture image:
 		# TODO: Pixels used in background calculation (value=4)
-		mask = self.pixelflags
+		mask = self.aperture
 		if self.final_mask is not None:
 			mask[self.final_mask] += 10 # 2 + 8
 
