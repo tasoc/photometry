@@ -7,11 +7,13 @@
 """
 
 from __future__ import division, with_statement, print_function, unicode_literals
+from six.moves import map
 import argparse
 import logging
 import numpy as np
 import h5py
 import os.path
+import multiprocessing
 from photometry.plots import plt, plot_image
 from matplotlib import animation
 from tqdm import trange
@@ -69,9 +71,11 @@ def make_movie(hdf_file):
 
 	plt.tight_layout()
 
+	output_file = os.path.splitext(hdf_file)[0] + '.mp4'
 	ani = animation.FuncAnimation(fig, _animate, trange(numfiles), fargs=(imgs, ax, hdf_file), repeat=False, blit=True)
-	ani.save(os.path.splitext(hdf_file)[0] + '.mp4', fps=10)
+	ani.save(output_file, fps=10)
 	plt.close(fig)
+	return output_file
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -100,5 +104,22 @@ if __name__ == '__main__':
 	if not logger.hasHandlers(): logger.addHandler(console)
 	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
 
-	for fname in args.files:
-		make_movie(fname)
+	# Get the number of processes we can spawn in case it is needed for calculations:
+	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
+	threads = min(threads, len(args.files))
+	logger.info("Using %d processes.", threads)
+
+	# Start pool of workers:
+	if threads > 1:
+		pool = multiprocessing.Pool(threads)
+		m = pool.imap
+	else:
+		m = map
+
+	for fname in m(make_movie, args.files):
+		logger.info("Created movie: %s", fname)
+
+	# Close workers again:
+	if threads > 1:
+		pool.close()
+		pool.join()
