@@ -173,7 +173,10 @@ class BasePhotometry(object):
 			logger.debug('CCD = %s', self.ccd)
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)[0]
+			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+			if len(filepath_hdf5) != 1:
+				raise IOError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+			filepath_hdf5 = filepath_hdf5[0]
 			self.filepath_hdf5 = filepath_hdf5
 
 			logger.debug("CACHE = %s", cache)
@@ -328,8 +331,10 @@ class BasePhotometry(object):
 			self.n_readout = self.tpf[1].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)[0]
-			self.filepath_hdf5 = filepath_hdf5
+			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+			if len(filepath_hdf5) != 1:
+				raise IOError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+			filepath_hdf5 = filepath_hdf5[0]
 			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
 
 		else:
