@@ -177,7 +177,7 @@ class AperturePhotometry(BasePhotometry):
 		self.additional_headers['KP_EX'] = (bool(k2p2_settings['extend_overflow']), 'K2P2 extend overflow')
 
 		# Targets that are in the mask:
-		target_in_mask = [k for k,t in enumerate(self.catalog) if np.round(t['row'])+1 in rows[mask_main] and np.round(t['column'])+1 in cols[mask_main]]
+		target_in_mask = [k for k,t in enumerate(self.catalog) if np.any(mask_main & (rows == np.round(t['row'])+1) & (cols == np.round(t['column'])+1))]
 
 		# Figure out which status to report back:
 		my_status = STATUS.OK
