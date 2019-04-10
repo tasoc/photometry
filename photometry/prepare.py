@@ -408,13 +408,13 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 				)
 
 				# Run the background shenanigans extractor in parallel:
-				k = last_bkgshe
+				k = last_bkgshe + 1
 				for bckshe in tqdm(m(pixel_background_shenanigans_wrapper, _iterate_hdf_group(images, start=k)), initial=k, total=numfiles, **tqdm_settings):
-					k += 1
 					if np.any(bckshe):
 						dset_name = '%04d' % k
 						pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
 					pixel_flags.attrs['bkgshe_done'] = k
+					k += 1
 					hdf.flush()
 
 				logger.info("Background Shenanigans: %f sec/image", (default_timer()-tic)/(numfiles-last_bkgshe))
