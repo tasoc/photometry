@@ -394,8 +394,8 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 				SumImage = np.asarray(hdf['sumimage'])
 
 			# Detections and flagging of Background Shenanigans:
-			last_bkgshe = pixel_flags.attrs.get('bkgshe_done', 0)
-			if last_bkgshe < numfiles:
+			last_bkgshe = pixel_flags.attrs.get('bkgshe_done', -1)
+			if last_bkgshe < numfiles-1:
 				logger.info("Detecting background shenanigans...")
 				tic = default_timer()
 
@@ -450,7 +450,6 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 					kernel[k, :] = knl
 					logger.debug("Kernel: %s", knl)
 					logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
-
 
 				toc = default_timer()
 				logger.info("Movement Kernel: %f sec/image", (toc-tic)/numfiles)
