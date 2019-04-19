@@ -131,13 +131,12 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 		with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.cursor()
-			cursor.execute("SELECT sector,reference_time,camera_centre_ra,camera_centre_dec FROM settings LIMIT 1;")
+			cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
 			row = cursor.fetchone()
 			if row is None:
 				raise IOError("Settings could not be loaded from catalog")
 			#sector = row['sector']
 			sector_reference_time = row['reference_time']
-			camera_centre = [row['camera_centre_ra'], row['camera_centre_dec']]
 			cursor.close()
 
 		# HDF5 file to be created/modified:
@@ -162,6 +161,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 			bkgiters = backgrounds.attrs.get('bkgiters', 3)
 			radial_cutoff = backgrounds.attrs.get('radial_cutoff', 2400)
 			radial_pixel_step = backgrounds.attrs.get('radial_pixel_step', 15)
+			radial_smooth = backgrounds.attrs.get('radial_smooth', 3)
 
 			if len(backgrounds) < numfiles:
 				# Because HDF5 is stupid, and it cant figure out how to delete data from
@@ -177,11 +177,11 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 						# Create wrapper function freezing some of the
 						# additional keyword inputs:
 						fit_background_wrapper = functools.partial(fit_background,
-							 camera_centre=camera_centre,
 							 flux_cutoff=flux_cutoff,
 							 bkgiters=bkgiters,
 							 radial_cutoff=radial_cutoff,
-							 radial_pixel_step=radial_pixel_step
+							 radial_pixel_step=radial_pixel_step,
+							 radial_smooth=radial_smooth
 						 )
 
 						tic = default_timer()
@@ -213,6 +213,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 					backgrounds.attrs['bkgiters'] = bkgiters
 					backgrounds.attrs['radial_cutoff'] = radial_cutoff
 					backgrounds.attrs['radial_pixel_step'] = radial_pixel_step
+					backgrounds.attrs['radial_smooth'] = radial_smooth
 					w = time_smooth//2
 					tic = default_timer()
 					for k in trange(numfiles, **tqdm_settings):

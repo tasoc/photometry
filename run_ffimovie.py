@@ -1,7 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
+Create movie of FFIs and extracted backgrounds.
 
+This program will create a MP4 movie file with an animation of the extracted
+backgrounds and flags from an HDF5 file created by the photometry pipeline.
+
+Example:
+	To create a MP4 movie for a specific file, run the program with the HDF5 file as input:
+
+	>>> python run_ffimovie.py path/to/file/sector01_camera1_ccd1.hdf5
+
+Example:
+	Multiple files can be processed at a time. They will be processed in parallel.
+
+	>>> python run_ffimovie.py file1.hdf5 file2.hdf5
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -39,6 +52,17 @@ def _animate(k, imgs, ax, hdf_file):
 
 #------------------------------------------------------------------------------
 def make_movie(hdf_file):
+	"""
+	Create animation of the contents of a HDF5 files produced by the photometry pipeline.
+
+	The function will create a MP4 movie file with the same name as the input file,
+	placed in the same directory, containing the animation.
+
+	Parameters:
+		hdf_file (string): Path to the HDF5 file to produce movie from.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
 
 	logger = logging.getLogger(__name__)
 	logger.info("Processing '%s'", hdf_file)
@@ -49,20 +73,29 @@ def make_movie(hdf_file):
 		dummy_img = np.asarray(hdf['images/0000'])
 		dummy_bkg = np.asarray(hdf['backgrounds/0000'])
 
-		vmax = -np.inf
-		vmin = np.inf
+		vmax = np.empty(numfiles)
+		vmin = np.empty(numfiles)
+		vmax2 = np.empty(numfiles)
+		vmin2 = np.empty(numfiles)
 		for k in trange(numfiles):
-			vmin1, vmax1 = np.nanpercentile(hdf['backgrounds/%04d' % k], [0, 100])
-			vmin = min(vmin, vmin1)
-			vmax = max(vmax, vmax1)
+			vmin[k], vmax[k] = np.nanpercentile(hdf['backgrounds/%04d' % k], [1.0, 99.0])
+			vmin2[k], vmax2[k] = np.nanpercentile(hdf['images/%04d' % k], [1.0, 99.0])
+
+
+		vmin = np.nanpercentile(vmin, 25.0)
+		vmax = np.nanpercentile(vmax, 75.0)
+
+		vmin2 = np.nanpercentile(vmin2, 25.0)
+		vmax2 = np.nanpercentile(vmax2, 75.0)
+
 
 	logger.info("Creating movie...")
 	fig, ax = plt.subplots(1, 4, figsize=(20, 6))
 
 	imgs = [0,0,0,0]
 	imgs[0] = plot_image(dummy_bkg, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image - 0000', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
-	imgs[1] = plot_image(dummy_bkg, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', xlabel=None, ylabel=None, cmap=plt.cm.Blues, make_cbar=True)
-	imgs[2] = plot_image(dummy_img, ax=ax[2], scale='sqrt', vmin=0, title='Background subtracted', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
+	imgs[1] = plot_image(dummy_bkg, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
+	imgs[2] = plot_image(dummy_img, ax=ax[2], scale='sqrt', vmin=vmin2, vmax=vmax2, title='Background subtracted', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
 	imgs[3] = plot_image(dummy_img, ax=ax[3], scale='linear', vmin=0, vmax=1, title='Background Shenanigans', xlabel=None, ylabel=None, cmap=plt.cm.Reds, make_cbar=True, clabel='Flags')
 
 	for a in ax:
@@ -73,7 +106,7 @@ def make_movie(hdf_file):
 
 	output_file = os.path.splitext(hdf_file)[0] + '.mp4'
 	ani = animation.FuncAnimation(fig, _animate, trange(numfiles), fargs=(imgs, ax, hdf_file), repeat=False, blit=True)
-	ani.save(output_file, fps=10)
+	ani.save(output_file, fps=15)
 	plt.close(fig)
 	return output_file
 

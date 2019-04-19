@@ -12,13 +12,12 @@ import warnings
 import numpy as np
 from astropy.utils.exceptions import AstropyDeprecationWarning
 warnings.filterwarnings('ignore', category=AstropyDeprecationWarning)
-from astropy.wcs import WCS
 from astropy.stats import SigmaClip
 from scipy.stats import binned_statistic
 from scipy.interpolate import InterpolatedUnivariateSpline
 from photutils import Background2D, SExtractorBackground, BackgroundBase
 from statsmodels.nonparametric.kde import KDEUnivariate as KDE
-from .utilities import load_ffi_fits
+from .utilities import load_ffi_fits, move_median_central
 from .pixel_flags import pixel_manual_exclude
 
 #------------------------------------------------------------------------------
@@ -48,8 +47,8 @@ class ModeBackground(BackgroundBase):
 		return bkg
 
 #------------------------------------------------------------------------------
-def fit_background(image, camera_centre=None, catalog=None, flux_cutoff=8e4,
-		bkgiters=3, radial_cutoff=2400, radial_pixel_step=15):
+def fit_background(image, catalog=None, flux_cutoff=8e4,
+		bkgiters=3, radial_cutoff=2400, radial_pixel_step=15, radial_smooth=3):
 	"""
 	Estimate background in Full Frame Image.
 
@@ -59,12 +58,12 @@ def fit_background(image, camera_centre=None, catalog=None, flux_cutoff=8e4,
 
 	Parameters:
 		image (ndarray or string): Either the image as 2D ndarray or a path to FITS or NPY file where to load image from.
-		camera_centre (array-like): RA and DEC of camera centre from which to calculate the radial background component.
 		catalog (`astropy.table.Table` object): Catalog of stars in the image. Is not yet being used for anything.
 		flux_cutoff (float): Flux value at which any pixel above will be masked out of the background estimation.
 		bkgiters (integer): Number of times to iterate the background components. Default=3.
 		radial_cutoff (float): Radial distance in pixels from camera centre to start using radial component. Default=2400.
 		radial_pixel_step (integer): Step sizes to use in radial component. Default=15.
+		radial_smooth (integer): Width of median smoothing on radial profile. Default=3.
 
 	Returns:
 		ndarray: Estimated background with the same size as the input image.
@@ -84,8 +83,9 @@ def fit_background(image, camera_centre=None, catalog=None, flux_cutoff=8e4,
 	else:
 		raise ValueError("Input image must be either 2D ndarray or path to file.")
 
-	# World Coordinate System solution:
-	wcs = WCS(header=hdr, relax=True)
+	# Check if this is real TESS data:
+	# Could proberly be done more elegant, but if it works, it works...
+	is_tess = (hdr.get('TELESCOP') == 'TESS' and hdr.get('NAXIS1') == 2136 and hdr.get('NAXIS2') == 2078)
 
 	# Create mask
 	# TODO: Use the known locations of bright stars
@@ -101,33 +101,61 @@ def fit_background(image, camera_centre=None, catalog=None, flux_cutoff=8e4,
 	bkg_estimator = SExtractorBackground(sigma_clip)
 
 	# Create distance-image with distances (in pixels) from the camera centre:
-	if camera_centre is not None:
+	use_radial_component = True
+	if is_tess:
 		# Background estimator function to be evaluated in radial coordinates:
 		#stat = lambda x: bkg_estimator.calc_background(x)
 		stat = _reduce_mode
 
+		# Lookup table for the pixel coordinates of the camera centre with respect
+		# to each CCD in TESS.
+		# This table is created using the average from the WCS in Sector 1 FFIs.
+		# TODO: Isn't it possible to get this in a better/more accurate way?
+		camera = hdr.get('CAMERA')
+		ccd = hdr.get('CCD')
+		xycen = {
+			(1, 1): [2158.222313, 2099.523364],
+			(1, 2): [-5.653058, 2098.018608],
+		 	(1, 3): [2141.511437, 2099.868226],
+			(1, 4): [-22.406442, 2100.116443],
+			(2, 1): [2148.588316, 2094.033024],
+			(2, 2): [-16.806140, 2095.810070],
+			(2, 3): [2151.351646, 2105.747100],
+			(2, 4): [-13.118570, 2105.982211],
+			(3, 1): [2152.175481, 2092.337442],
+			(3, 2): [-10.494413, 2093.108135],
+			(3, 3): [2145.029218, 2107.883573],
+			(3, 4): [-17.374782, 2105.296746],
+			(4, 1): [2149.259760, 2091.433315],
+			(4, 2): [-12.906931, 2093.350054],
+			(4, 3): [2148.906766, 2110.730620],
+			(4, 4): [-14.629676, 2111.341670],
+		}.get((camera, ccd))
+		if xycen is None:
+			raise ValueError("Invalid CAMERA or CCD in header: CAMERA=%s, CCD=%s" % (camera, ccd))
+
 		# Create radial coordinates:
+		# Note that these are in "real" coordinates like the ones in the WCS,
+		# but zero-based.
 		xx, yy = np.meshgrid(
-			np.arange(0, img0.shape[1], 1),
+			np.arange(44, img0.shape[1]+44, 1),
 			np.arange(0, img0.shape[0], 1)
 		)
-		xycen = wcs.all_world2pix(np.atleast_2d(camera_centre), 0, ra_dec_order=True)
-		xcen = xycen[0,0]
-		ycen = xycen[0,1]
-		r = np.sqrt((xx - xcen)**2 + (yy - ycen)**2)
+		r = np.sqrt((xx - xycen[0])**2 + (yy - xycen[1])**2)
 
 		# Create the bins in which to evaluate the background estimator:
 		radial_max = np.max(r) + radial_pixel_step
 		bins = np.arange(radial_cutoff, radial_max, radial_pixel_step)
 		bin_center = bins[1:] - radial_pixel_step/2
 	else:
+		use_radial_component = False
 		bkgiters = 1
 
 	# Iterate the radial and square background components:
 	img_bkg_radial = 0
 	img_bkg_square = 0
 	for iters in range(bkgiters):
-		if camera_centre is not None:
+		if use_radial_component:
 			# Remove the square component from image for next iteration:
 			img = img0 - img_bkg_square
 
@@ -140,7 +168,8 @@ def fit_background(image, camera_centre=None, catalog=None, flux_cutoff=8e4,
 			)
 
 			# Optionally smooth the radial profile:
-			#s2 = move_median_central(s2, 5)
+			if radial_smooth:
+				s2 = move_median_central(s2, radial_smooth)
 
 			# Interpolate the radial curve and reshape back onto the 2D image:
 			indx = ~np.isnan(s2)
