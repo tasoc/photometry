@@ -12,6 +12,12 @@ Example:
 	>>> python run_ffimovie.py path/to/file/sector01_camera1_ccd1.hdf5
 
 Example:
+	If you wish to change the the frame-rate or the size of the generated movie,
+	you can use the ``fps`` and ``dpi`` settings:
+
+	>>> python run_ffimovie.py --fps=15 --dpi=100 file.hdf5
+
+Example:
 	Multiple files can be processed at a time. They will be processed in parallel.
 
 	>>> python run_ffimovie.py file1.hdf5 file2.hdf5
@@ -20,44 +26,21 @@ Example:
 """
 
 from __future__ import division, with_statement, print_function, unicode_literals
-from six.moves import map
+from six.moves import map, range
 import argparse
 import logging
 import numpy as np
 import h5py
 import os.path
-#import tempfile
 import functools
 import multiprocessing
 from photometry.plots import plt, plot_image
 from matplotlib import animation
-from tqdm import trange
+from tqdm import tqdm
 from photometry.quality import PixelQualityFlags
 
-"""
 #------------------------------------------------------------------------------
-def _animate(k, imgs, ax, hdf):
-
-	dset_name = '%04d' % k
-	flux0 = np.asarray(hdf['images/' + dset_name])
-	bkg = np.asarray(hdf['backgrounds/' + dset_name])
-
-	# Plot original image, background and new image:
-	imgs[0].set_data(flux0 + bkg)
-	ax[0].set_title('Original Image - ' + dset_name)
-	imgs[1].set_data(bkg)
-	imgs[2].set_data(flux0)
-
-	# Background Shenanigans flags, if available:
-	if 'pixel_flags/' + dset_name in hdf:
-		img = np.asarray(hdf['pixel_flags/' + dset_name])
-		imgs[3].set_data(img & PixelQualityFlags.BackgroundShenanigans != 0)
-
-	return imgs
-"""
-
-#------------------------------------------------------------------------------
-def make_movie(hdf_file, fps=15, dpi=60, overwrite=True):
+def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	"""
 	Create animation of the contents of a HDF5 files produced by the photometry pipeline.
 
@@ -67,7 +50,8 @@ def make_movie(hdf_file, fps=15, dpi=60, overwrite=True):
 	Parameters:
 		hdf_file (string): Path to the HDF5 file to produce movie from.
 		fps (integer): Frames per second of generated movie. Default=15.
-		dpi (integer): DPI of the movie. Default=60.
+		dpi (integer): DPI of the movie. Default=100.
+		overwrite (boolean): Overwrite existing MP4 files? Default=False.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -97,7 +81,7 @@ def make_movie(hdf_file, fps=15, dpi=60, overwrite=True):
 		vmin = np.empty(numfiles)
 		vmax2 = np.empty(numfiles)
 		vmin2 = np.empty(numfiles)
-		for k in trange(numfiles):
+		for k in range(numfiles):
 			vmin[k], vmax[k] = np.nanpercentile(hdf['backgrounds/%04d' % k], [1.0, 99.0])
 			vmin2[k], vmax2[k] = np.nanpercentile(hdf['images/%04d' % k], [1.0, 99.0])
 
@@ -124,7 +108,7 @@ def make_movie(hdf_file, fps=15, dpi=60, overwrite=True):
 
 			writer = animation.FFMpegWriter(fps=fps)
 			with writer.saving(fig, output_file, dpi):
-				for k in trange(numfiles):
+				for k in range(numfiles):
 
 					dset_name = '%04d' % k
 					flux0 = np.asarray(hdf['images/' + dset_name])
@@ -158,7 +142,7 @@ if __name__ == '__main__':
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
 	parser.add_argument('-j', '--jobs', help='Maximal number of jobs to run in parallel.', type=int, default=None, nargs='?')
 	parser.add_argument('--fps', help='Frames per second of generated movie.', type=int, default=15, nargs='?')
-	parser.add_argument('--dpi', help='DPI of generated movie.', type=int, default=60, nargs='?')
+	parser.add_argument('--dpi', help='DPI of generated movie.', type=int, default=100, nargs='?')
 	parser.add_argument('files', help='HDF5 file to create movie from.', nargs='+')
 	args = parser.parse_args()
 
@@ -179,6 +163,11 @@ if __name__ == '__main__':
 	if not logger.hasHandlers(): logger.addHandler(console)
 	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
 
+	tqdm_settings = {
+		'disable': not logger.isEnabledFor(logging.INFO),
+		'total': len(args.files)
+	}
+
 	# Get the number of processes we can spawn in case it is needed for calculations:
 	threads = args.jobs
 	if threads is None:
@@ -196,10 +185,12 @@ if __name__ == '__main__':
 	# Make wrapper function with all settings:
 	make_movie_wrapper = functools.partial(make_movie,
 		fps=args.fps,
-		dpi=args.dpi
-	) # , overwrite=args.overwrite
+		dpi=args.dpi,
+		overwrite=args.overwrite
+	)
 
-	for fname in m(make_movie_wrapper, args.files):
+	# Process the files on at a time, in parallel if needed:
+	for fname in tqdm(m(make_movie_wrapper, args.files), **tqdm_settings):
 		logger.info("Created movie: %s", fname)
 
 	# Close workers again:
