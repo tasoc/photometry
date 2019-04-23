@@ -26,6 +26,8 @@ import logging
 import numpy as np
 import h5py
 import os.path
+import tempfile
+import functools
 import multiprocessing
 from photometry.plots import plt, plot_image
 from matplotlib import animation
@@ -116,8 +118,15 @@ def make_movie(hdf_file, fps=15, overwrite=True):
 
 		fig.set_tight_layout('tight')
 
-		ani = animation.FuncAnimation(fig, _animate, trange(numfiles), fargs=(imgs, ax, hdf), repeat=False, blit=True)
-		ani.save(output_file, fps=fps) # writer='ffmpeg'
+		with tempfile.TemporaryDirectory() as tmpdir:
+			print(tmpdir)
+			#writer='ffmpeg'
+			writer = animation.FFMpegFileWriter()
+			writer.setup(frame_prefix=os.path.join(tmpdir, '_tmp'))
+			
+			ani = animation.FuncAnimation(fig, _animate, trange(numfiles), fargs=(imgs, ax, hdf), repeat=False, blit=True)
+			ani.save(output_file, fps=fps, writer=writer)
+
 		plt.close(fig)
 
 	return output_file
@@ -130,7 +139,9 @@ if __name__ == '__main__':
 	parser = argparse.ArgumentParser(description='Create movie of TESS camera.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
 	parser.add_argument('-j', '--jobs', help='Maximal number of jobs to run in parallel.', type=int, default=None, nargs='?')
+	parser.add_argument('--fps', help='Frames per second of generated movie.', type=int, default=15, nargs='?')
 	parser.add_argument('files', help='HDF5 file to create movie from.', nargs='+')
 	args = parser.parse_args()
 
@@ -165,7 +176,11 @@ if __name__ == '__main__':
 	else:
 		m = map
 
-	for fname in m(make_movie, args.files):
+	make_movie_wrapper = functools.partial(make_movie,
+		fps=args.fps
+	) # , overwrite=args.overwrite
+
+	for fname in m(make_movie_wrapper, args.files):
 		logger.info("Created movie: %s", fname)
 
 	# Close workers again:
