@@ -26,7 +26,7 @@ import logging
 import numpy as np
 import h5py
 import os.path
-import tempfile
+#import tempfile
 import functools
 import multiprocessing
 from photometry.plots import plt, plot_image
@@ -34,6 +34,7 @@ from matplotlib import animation
 from tqdm import trange
 from photometry.quality import PixelQualityFlags
 
+"""
 #------------------------------------------------------------------------------
 def _animate(k, imgs, ax, hdf):
 
@@ -53,9 +54,10 @@ def _animate(k, imgs, ax, hdf):
 		imgs[3].set_data(img & PixelQualityFlags.BackgroundShenanigans != 0)
 
 	return imgs
+"""
 
 #------------------------------------------------------------------------------
-def make_movie(hdf_file, fps=15, overwrite=True):
+def make_movie(hdf_file, fps=15, dpi=60, overwrite=True):
 	"""
 	Create animation of the contents of a HDF5 files produced by the photometry pipeline.
 
@@ -65,6 +67,7 @@ def make_movie(hdf_file, fps=15, overwrite=True):
 	Parameters:
 		hdf_file (string): Path to the HDF5 file to produce movie from.
 		fps (integer): Frames per second of generated movie. Default=15.
+		dpi (integer): DPI of the movie. Default=60.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -104,30 +107,43 @@ def make_movie(hdf_file, fps=15, overwrite=True):
 		vmax2 = np.nanpercentile(vmax2, 75.0)
 
 		logger.info("Creating movie...")
-		fig, ax = plt.subplots(1, 4, figsize=(20, 6))
+		with plt.style.context('dark_background'):
+			fig, ax = plt.subplots(1, 4, figsize=(20, 6))
 
-		imgs = [0,0,0,0]
-		imgs[0] = plot_image(dummy_bkg, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image - 0000', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
-		imgs[1] = plot_image(dummy_bkg, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
-		imgs[2] = plot_image(dummy_img, ax=ax[2], scale='sqrt', vmin=vmin2, vmax=vmax2, title='Background subtracted', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
-		imgs[3] = plot_image(dummy_img, ax=ax[3], scale='linear', vmin=0, vmax=1, title='Background Shenanigans', xlabel=None, ylabel=None, cmap=plt.cm.Reds, make_cbar=True, clabel='Flags')
+			imgs = [0,0,0,0]
+			imgs[0] = plot_image(dummy_bkg, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image - 0000', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
+			imgs[1] = plot_image(dummy_bkg, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
+			imgs[2] = plot_image(dummy_img, ax=ax[2], scale='sqrt', vmin=vmin2, vmax=vmax2, title='Background subtracted', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
+			imgs[3] = plot_image(dummy_img, ax=ax[3], scale='linear', vmin=0, vmax=1, title='Background Shenanigans', xlabel=None, ylabel=None, cmap=plt.cm.Reds, make_cbar=True, clabel='Flags')
 
-		for a in ax:
-			a.set_xticks([])
-			a.set_yticks([])
+			for a in ax:
+				a.set_xticks([])
+				a.set_yticks([])
 
-		fig.set_tight_layout('tight')
+			fig.set_tight_layout('tight')
 
-		with tempfile.TemporaryDirectory() as tmpdir:
-			print(tmpdir)
-			#writer='ffmpeg'
-			writer = animation.FFMpegFileWriter()
-			writer.setup(frame_prefix=os.path.join(tmpdir, '_tmp'))
-			
-			ani = animation.FuncAnimation(fig, _animate, trange(numfiles), fargs=(imgs, ax, hdf), repeat=False, blit=True)
-			ani.save(output_file, fps=fps, writer=writer)
+			writer = animation.FFMpegWriter(fps=fps)
+			with writer.saving(fig, output_file, dpi):
+				for k in trange(numfiles):
 
-		plt.close(fig)
+					dset_name = '%04d' % k
+					flux0 = np.asarray(hdf['images/' + dset_name])
+					bkg = np.asarray(hdf['backgrounds/' + dset_name])
+
+					# Plot original image, background and new image:
+					imgs[0].set_data(flux0 + bkg)
+					ax[0].set_title('Original Image - ' + dset_name)
+					imgs[1].set_data(bkg)
+					imgs[2].set_data(flux0)
+
+					# Background Shenanigans flags, if available:
+					if 'pixel_flags/' + dset_name in hdf:
+						img = np.asarray(hdf['pixel_flags/' + dset_name])
+						imgs[3].set_data(img & PixelQualityFlags.BackgroundShenanigans != 0)
+
+					writer.grab_frame()
+
+			plt.close(fig)
 
 	return output_file
 
@@ -142,6 +158,7 @@ if __name__ == '__main__':
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
 	parser.add_argument('-j', '--jobs', help='Maximal number of jobs to run in parallel.', type=int, default=None, nargs='?')
 	parser.add_argument('--fps', help='Frames per second of generated movie.', type=int, default=15, nargs='?')
+	parser.add_argument('--dpi', help='DPI of generated movie.', type=int, default=60, nargs='?')
 	parser.add_argument('files', help='HDF5 file to create movie from.', nargs='+')
 	args = parser.parse_args()
 
@@ -176,8 +193,10 @@ if __name__ == '__main__':
 	else:
 		m = map
 
+	# Make wrapper function with all settings:
 	make_movie_wrapper = functools.partial(make_movie,
-		fps=args.fps
+		fps=args.fps,
+		dpi=args.dpi
 	) # , overwrite=args.overwrite
 
 	for fname in m(make_movie_wrapper, args.files):
