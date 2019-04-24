@@ -35,6 +35,7 @@ from bottleneck import replace, nanmedian, nanvar, nanstd
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale, find_nearest
+from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
 from .version import get_version
 
@@ -1009,70 +1010,13 @@ class BasePhotometry(object):
 				corners[:, 0] -= self.pixel_offset_col
 				corners[:, 1] -= self.pixel_offset_row
 
-			# Convert the corners into (ra, dec) coordinates and find the max and min values:
-			pixel_scale = 21.0 # Size of single pixel in arcsecs
-			buffer_size = 5 # Buffer to add around stamp in pixels
-			buffer_deg = buffer_size*pixel_scale/3600.0
 			corners_radec = self.wcs.all_pix2world(corners, 0, ra_dec_order=True)
-			radec_min = np.min(corners_radec, axis=0)
-			radec_max = np.max(corners_radec, axis=0)
-
-			# Upper and lower bounds on ra and dec:
-			ra_min = radec_min[0]
-			ra_max = radec_max[0]
-			dec_min = radec_min[1] - buffer_deg
-			dec_max = radec_max[1] + buffer_deg
-
-			logger = logging.getLogger(__name__)
-			logger.debug('Catalog search - ra_min = %.10f', ra_min)
-			logger.debug('Catalog search - ra_max = %.10f', ra_max)
-			logger.debug('Catalog search - dec_min = %.10f', dec_min)
-			logger.debug('Catalog search - dec_max = %.10f', dec_max)
 
 			# Select only the stars within the current stamp:
 			# TODO: Change to opening in read-only mode: sqlite3.connect("file:" + self.catalog_file + "?mode=ro", uri=True). Requires Python 3.4
 			with contextlib.closing(sqlite3.connect(self.catalog_file)) as conn:
 				cursor = conn.cursor()
-				query = "SELECT starid,ra,decl,tmag FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max;"
-				if dec_min < -90 or dec_max > 90:
-					# We are very close to a pole
-					# Ignore everything about RA, but keep searches above abs(90),
-					# since no targets exists in database above 90 anyway
-					logger.debug("Catalog search - Near pole")
-					cursor.execute(query, {
-						'ra_min': 0,
-						'ra_max': 360,
-						'dec_min': dec_min,
-						'dec_max': dec_max
-					})
-				elif ra_min <= buffer_deg or 360-ra_max <= buffer_deg:
-					# The stamp is spanning across the ra=0 line
-					# and the difference is therefore large as WCS will always
-					# return coordinates between 0 and 360.
-					# We therefore have to change how we query on either side of the line.
-
-					corners_ra = np.mod(corners_radec[:,0] - buffer_deg, 360)
-					ra_max = np.min(corners_ra[corners_ra > 180])
-					corners_ra = np.mod(corners_radec[:,0] + buffer_deg, 360)
-					ra_min = np.max(corners_ra[corners_ra < 180])
-
-					logger.debug("Catalog search - RA=0")
-					cursor.execute("SELECT starid,ra,decl,tmag FROM catalog WHERE (ra <= :ra_min OR ra >= :ra_max) AND decl BETWEEN :dec_min AND :dec_max;", {
-						'ra_min': ra_min,
-						'ra_max': ra_max,
-						'dec_min': dec_min,
-						'dec_max': dec_max
-					})
-				else:
-					logger.debug("Catalog search - Normal")
-					cursor.execute(query, {
-						'ra_min': ra_min - buffer_deg,
-						'ra_max': ra_max + buffer_deg,
-						'dec_min': dec_min,
-						'dec_max': dec_max
-					})
-
-				cat = cursor.fetchall()
+				cat = catalog_sqlite_search_footprint(cursor, corners_radec, columns='starid,ra,decl,tmag', buffer_size=5)
 				cursor.close()
 
 			if not cat:
