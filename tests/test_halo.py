@@ -20,7 +20,8 @@ import logging
 import pytest
 
 #------------------------------------------------------------------------------
-@pytest.mark.skip(reason='This is simply too slow. We need to do something about that.')
+@pytest.mark.skipif(os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true',
+					reason="This is simply too slow to run on Travis. We need to do something about that.'")
 def test_halo():
 
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')

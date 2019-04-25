@@ -204,40 +204,52 @@ class TaskManager(object):
 
 		# Also set status of targets that were marked as "SKIPPED" by this target:
 		if 'skip_targets' in details and len(details['skip_targets']) > 0:
-			# Create unique list of starids to be masked as skipped:
-			skip_starids = [str(starid) for starid in set(details['skip_targets'])]
-			skip_starids = ','.join(skip_starids)
+			skip_targets = set(details['skip_targets'])
+			if result['datasource'].startswith('tpf:') and int(result['datasource'][4:]) in skip_targets:
+				# This secondary target is in the mask of the primary target.
+				# We never want to return a lightcurve for a secondary target over
+				# a primary target, so we are going to mark this one as SKIPPED.
+				self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target", result['priority'])
+				my_status = STATUS.SKIPPED
+			else:
+				# Create unique list of starids to be masked as skipped:
+				skip_starids = [str(starid) for starid in skip_targets]
+				skip_starids = ','.join(skip_starids)
 
-			# Ask the todolist if there are any stars that are brighter than this
-			# one among the other targets in the mask:
-			self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource=? AND sector=?;", (
-				result['datasource'],
-				result['sector']
-			))
-			skip_rows = self.cursor.fetchall()
-			if len(skip_rows) > 0:
-				skip_tmags = np.array([row['tmag'] for row in skip_rows])
-				if np.all(result['tmag'] < skip_tmags):
-					# This target was the brightest star in the mask,
-					# so let's keep it and simply mark all the other targets
-					# as SKIPPED:
-					for row in skip_rows:
-						self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
-							STATUS.SKIPPED.value,
-							row['priority']
-						))
-						self.summary['SKIPPED'] += self.cursor.rowcount
-						self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
-							row['priority'],
-							result['priority']
-						))
+				# Ask the todolist if there are any stars that are brighter than this
+				# one among the other targets in the mask:
+				if result['datasource'] == 'tpf':
+					skip_datasources = 'tpf,tpf:%d' % result['starid']
 				else:
-					# This target was not the brightest star in the mask,
-					# and a brighter target is going to be processed,
-					# so let's change this one to SKIPPED and let the other
-					# one run later on
-					self.logger.info("Changing status to SKIPPED for priority %s", result['priority'])
-					my_status = STATUS.SKIPPED
+					skip_datasources = result['datatype']
+
+				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=?;", (
+					result['sector']
+				))
+				skip_rows = self.cursor.fetchall()
+				if len(skip_rows) > 0:
+					skip_tmags = np.array([row['tmag'] for row in skip_rows])
+					if np.all(result['tmag'] < skip_tmags):
+						# This target was the brightest star in the mask,
+						# so let's keep it and simply mark all the other targets
+						# as SKIPPED:
+						for row in skip_rows:
+							self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
+								STATUS.SKIPPED.value,
+								row['priority']
+							))
+							self.summary['SKIPPED'] += self.cursor.rowcount
+							self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
+								row['priority'],
+								result['priority']
+							))
+					else:
+						# This target was not the brightest star in the mask,
+						# and a brighter target is going to be processed,
+						# so let's change this one to SKIPPED and let the other
+						# one run later on
+						self.logger.info("Changing status to SKIPPED for priority %s", result['priority'])
+						my_status = STATUS.SKIPPED
 
 		# Update the status in the TODO list:
 		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (

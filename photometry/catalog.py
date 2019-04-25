@@ -18,6 +18,92 @@ from .utilities import (add_proper_motion, load_settings, find_catalog_files,
 						radec_to_cartesian, cartesian_to_radec)
 
 #------------------------------------------------------------------------------
+def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None, buffer_size=5, pixel_scale=21.0):
+	"""
+	Query the SQLite catalog files for a specific footprint on sky.
+
+	This function ensures that edge-cases near the poles and around the RA=0 line
+	are handled correctly.
+
+	Parameters:
+		cursor (``sqlite3.Cursor`` object): Cursor to catalog SQLite file.
+		footprint (ndarray): 2D ndarray of RA and DEC coordinates of the corners of footprint.
+		columns (string): Default is to return all columns.
+		constraints (string): Additional constraints on the query in addition to the footprint.
+		buffer_size (float): Buffer to add around stamp in pixels. Default=5.
+		pixel_scale (float): Size of single pixel in arcsecs. Default=21.0 (TESS).
+
+	Returns:
+		list: List of rows matching the query.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	logger = logging.getLogger(__name__)
+
+	if constraints:
+		constraints = ' AND ' + constraints
+	else:
+		constraints = ''
+
+	# Convert the corners into (ra, dec) coordinates and find the max and min values:
+	buffer_deg = buffer_size*pixel_scale/3600.0
+	radec_min = np.min(footprint, axis=0)
+	radec_max = np.max(footprint, axis=0)
+
+	# Upper and lower bounds on ra and dec:
+	ra_min = radec_min[0]
+	ra_max = radec_max[0]
+	dec_min = radec_min[1] - buffer_deg
+	dec_max = radec_max[1] + buffer_deg
+
+	logger.debug('Catalog search - ra_min = %.10f', ra_min)
+	logger.debug('Catalog search - ra_max = %.10f', ra_max)
+	logger.debug('Catalog search - dec_min = %.10f', dec_min)
+	logger.debug('Catalog search - dec_max = %.10f', dec_max)
+
+	query = "SELECT " + columns + " FROM catalog WHERE ra BETWEEN :ra_min AND :ra_max AND decl BETWEEN :dec_min AND :dec_max" + constraints + ";"
+	if dec_min < -90 or dec_max > 90:
+		# We are very close to a pole
+		# Ignore everything about RA, but keep searches above abs(90),
+		# since no targets exists in database above 90 anyway
+		logger.debug("Catalog search - Near pole")
+		cursor.execute(query, {
+			'ra_min': 0,
+			'ra_max': 360,
+			'dec_min': dec_min,
+			'dec_max': dec_max
+		})
+	elif ra_min <= buffer_deg or 360-ra_max <= buffer_deg:
+		# The stamp is spanning across the ra=0 line
+		# and the difference is therefore large as WCS will always
+		# return coordinates between 0 and 360.
+		# We therefore have to change how we query on either side of the line.
+
+		corners_ra = np.mod(footprint[:,0] - buffer_deg, 360)
+		ra_max = np.min(corners_ra[corners_ra > 180])
+		corners_ra = np.mod(footprint[:,0] + buffer_deg, 360)
+		ra_min = np.max(corners_ra[corners_ra < 180])
+
+		logger.debug("Catalog search - RA=0")
+		cursor.execute("SELECT " + columns + " FROM catalog WHERE (ra <= :ra_min OR ra >= :ra_max) AND decl BETWEEN :dec_min AND :dec_max" + constraints + ";", {
+			'ra_min': ra_min,
+			'ra_max': ra_max,
+			'dec_min': dec_min,
+			'dec_max': dec_max
+		})
+	else:
+		logger.debug("Catalog search - Normal")
+		cursor.execute(query, {
+			'ra_min': ra_min - buffer_deg,
+			'ra_max': ra_max + buffer_deg,
+			'dec_min': dec_min,
+			'dec_max': dec_max
+		})
+
+	return cursor.fetchall()
+
+#------------------------------------------------------------------------------
 def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False):
 	"""
 	Create catalogs of stars in a given TESS observing sector.

@@ -26,7 +26,7 @@ import warnings
 warnings.filterwarnings('ignore', module='scipy', category=FutureWarning, message='Using a non-tuple sequence for multidimensional indexing is deprecated;', lineno=607)
 
 # Constants:
-mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
+mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)
 
 #------------------------------------------------------------------------------
 def load_settings(sector=None):
@@ -426,3 +426,23 @@ def rms_timescale(time, flux, timescale=3600/86400):
 
 	# Compute robust RMS value (MAD scaled to RMS)
 	return mad_to_sigma * nanmedian(np.abs(flux_bin - nanmedian(flux_bin)))
+
+#------------------------------------------------------------------------------
+def find_nearest(array, value):
+	"""
+	Search array for value and return the index where the value is closest.
+
+	Parameters:
+		array (ndarray): Array to search.
+		value: Value to search array for.
+
+	Returns:
+		int: Index of ``array`` closest to ``value``.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+	idx = np.searchsorted(array, value, side='left')
+	if idx > 0 and (idx == len(array) or abs(value - array[idx-1]) < abs(value - array[idx])):
+		return idx-1
+	else:
+		return idx
