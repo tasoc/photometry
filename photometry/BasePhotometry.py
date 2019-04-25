@@ -628,9 +628,10 @@ class BasePhotometry(object):
 			if full_cube is None:
 				# We dont have an in-memory version of the full cube, so let us
 				# create the cube by loading the cutouts of each image:
-				cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
+				Ntimes = len(self.hdf['images'])
+				cube = np.empty((ir2-ir1, ic2-ic1, Ntimes), dtype='float32')
 				if hdf_group in self.hdf:
-					for k in range(self.Ntimes):
+					for k in range(Ntimes):
 						cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
 				else:
 					cube[:, :, :] = np.NaN
@@ -728,12 +729,14 @@ class BasePhotometry(object):
 
 			if self.datasource.startswith('tpf'):
 				# Load FFI backgrounds cube:
+				ds = np.copy(self.datasource) # FIXME: Big hack!!!
 				self.datasource = 'ffi' # FIXME: Big hack!!!
 				ffi_bkg_cube = self._load_cube(hdf_group='backgrounds') # wont work
-				self.datasource = 'tpf'
+				self.datasource = ds
 
 				# Interpolate FFI backgrounds onto the faster cadence:
-				ffi_bkg_int = interp1d(self.hdf['time'] - self.hdf['timecorr'], ffi_bkg_cube, axis=2, kind='linear', bounds_error=False, fill_value='extrapolate', assume_sorted=True)
+				ffi_time = np.asarray(self.hdf['time']) - np.asarray(self.hdf['timecorr'])
+				ffi_bkg_int = interp1d(ffi_time, ffi_bkg_cube, axis=2, kind='linear', bounds_error=False, fill_value='extrapolate', assume_sorted=True)
 				bkg_cube = ffi_bkg_int(self.lightcurve['time'] - self.lightcurve['timecorr'])
 
 				# Load the original flux cube as we need them to :
