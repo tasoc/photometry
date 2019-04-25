@@ -31,6 +31,7 @@ from copy import deepcopy
 from astropy.time import Time
 from astropy.wcs import WCS
 import enum
+from scipy.interpolate import interp1d
 from bottleneck import replace, nanmedian, nanvar, nanstd
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
@@ -673,6 +674,11 @@ class BasePhotometry(object):
 		"""
 		if self._images_cube is None:
 			self._images_cube = self._load_cube(tpf_field='FLUX', hdf_group='images', full_cube=self._images_cube_full)
+
+			if self.datasource.startswith('tpf'):
+				self._images_cube += self._load_cube(tpf_field='FLUX_BKG')
+				self._images_cube -= self.backgrounds_cube
+
 		return self._images_cube
 
 	@property
@@ -719,6 +725,30 @@ class BasePhotometry(object):
 		"""
 		if self._backgrounds_cube is None:
 			self._backgrounds_cube = self._load_cube(tpf_field='FLUX_BKG', hdf_group='backgrounds', full_cube=self._backgrounds_cube_full)
+
+			if self.datasource.startswith('tpf'):
+				# Load FFI backgrounds cube:
+				ffi_bkg_cube = self._load_cube(hdf_group='backgrounds') # wont work
+
+				# Interpolate FFI backgrounds onto the faster cadence:
+				ffi_bkg_int = interp1d(self.hdf['time'] - self.hdf['timecorr'], ffi_bkg_cube, axis=2, kind='linear', assume_sorted=True)
+				bkg_cube = ffi_bkg_int(self.lightcurve['time'] - self.lightcurve['timecorr'])
+
+				# Load the original flux cube as we need them to :
+				flux_cube = self._load_cube(tpf_field='FLUX', full_cube=self._images_cube_full)
+
+				# Add original backgrounds back in the
+				flux_cube += self._backgrounds_cube
+				flux_cube -= bkg_cube # Subtract FFI backgrounds
+
+				# Mask of pixels used for background estimation within stamp:
+				bkg_mask = (self.tpf[2].data & 4 != 0)
+
+				for k in range(self.Ntimes):
+					bkg_cube[:, :, k] += nanmedian(flux_cube[:, :, k][bkg_mask])
+
+				self._backgrounds_cube = bkg_cube
+
 		return self._backgrounds_cube
 
 	@property
