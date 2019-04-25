@@ -219,13 +219,11 @@ class TaskManager(object):
 				# Ask the todolist if there are any stars that are brighter than this
 				# one among the other targets in the mask:
 				if result['datasource'] == 'tpf':
-					skip_datasources = 'tpf,tpf:%d' % result['starid']
+					skip_datasources = "'tpf','tpf:%d'" % result['starid']
 				else:
-					skip_datasources = result['datatype']
+					skip_datasources = "'" + result['datatype'] + "'"
 
-				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=?;", (
-					result['sector'],
-				))
+				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=?;", (result['sector'],))
 				skip_rows = self.cursor.fetchall()
 				if len(skip_rows) > 0:
 					skip_tmags = np.array([row['tmag'] for row in skip_rows])
