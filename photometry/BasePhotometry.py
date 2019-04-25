@@ -1212,7 +1212,7 @@ class BasePhotometry(object):
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
 
 			# Calculate variability used e.g. in CBV selection of stars:
-			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux)
+			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux) & np.isfinite(flux_err)
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
 			# This happens in the test-data because there are so few points.
