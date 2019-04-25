@@ -729,7 +729,7 @@ class BasePhotometry(object):
 
 			if self.datasource.startswith('tpf'):
 				# Load FFI backgrounds cube:
-				ds = np.copy(self.datasource) # FIXME: Big hack!!!
+				ds = deepcopy(self.datasource) # FIXME: Big hack!!!
 				self.datasource = 'ffi' # FIXME: Big hack!!!
 				ffi_bkg_cube = self._load_cube(hdf_group='backgrounds') # wont work
 				self.datasource = ds
