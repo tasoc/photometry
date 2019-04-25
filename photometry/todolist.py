@@ -232,6 +232,9 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 
 				# Close the connection to the catalog SQLite database:
 				cursor.close()
+		else:
+			logger.debug("Target not on requested CAMERA and CCD")
+			return empty_table
 
 	# TODO: Could we avoid fixed-size strings in datasource column?
 	return Table(
