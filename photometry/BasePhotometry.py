@@ -728,10 +728,12 @@ class BasePhotometry(object):
 
 			if self.datasource.startswith('tpf'):
 				# Load FFI backgrounds cube:
+				self.datasource = 'ffi' # FIXME: Big hack!!!
 				ffi_bkg_cube = self._load_cube(hdf_group='backgrounds') # wont work
+				self.datasource = 'tpf'
 
 				# Interpolate FFI backgrounds onto the faster cadence:
-				ffi_bkg_int = interp1d(self.hdf['time'] - self.hdf['timecorr'], ffi_bkg_cube, axis=2, kind='linear', assume_sorted=True)
+				ffi_bkg_int = interp1d(self.hdf['time'] - self.hdf['timecorr'], ffi_bkg_cube, axis=2, kind='linear', bounds_error=False, fill_value='extrapolate', assume_sorted=True)
 				bkg_cube = ffi_bkg_int(self.lightcurve['time'] - self.lightcurve['timecorr'])
 
 				# Load the original flux cube as we need them to :
@@ -742,7 +744,7 @@ class BasePhotometry(object):
 				flux_cube -= bkg_cube # Subtract FFI backgrounds
 
 				# Mask of pixels used for background estimation within stamp:
-				bkg_mask = (self.tpf[2].data & 4 != 0)
+				bkg_mask = (self.aperture & 4 != 0)
 
 				for k in range(self.Ntimes):
 					bkg_cube[:, :, k] += nanmedian(flux_cube[:, :, k][bkg_mask])
