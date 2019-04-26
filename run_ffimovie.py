@@ -6,6 +6,8 @@ Create movie of FFIs and extracted backgrounds.
 This program will create a MP4 movie file with an animation of the extracted
 backgrounds and flags from an HDF5 file created by the photometry pipeline.
 
+This program requires the program `FFmpeg <https://ffmpeg.org/>`_ to be installed.
+
 Example:
 	To create a MP4 movie for a specific file, run the program with the HDF5 file as input:
 
@@ -18,9 +20,14 @@ Example:
 	>>> python run_ffimovie.py --fps=15 --dpi=100 file.hdf5
 
 Example:
-	Multiple files can be processed at a time. They will be processed in parallel.
+	Multiple files can be processed at a time. Default behavior is to process
+	them one at a time, but can also be processed in parallel by specifying
+	the number of processes to run vis the ``--jobs`` option:
 
-	>>> python run_ffimovie.py file1.hdf5 file2.hdf5
+	>>> python run_ffimovie.py --jobs=2 file1.hdf5 file2.hdf5
+
+	If number of processes is set to zero (``--jobs=0``), the number of processes
+	will be set to the number of available CPUs.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -72,8 +79,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	# Open HDF5 file for reading:
 	with h5py.File(hdf_file, 'r', libver='latest') as hdf:
 		numfiles = len(hdf['images'])
-		dummy_img = np.asarray(hdf['images/0000'])
-		dummy_bkg = np.asarray(hdf['backgrounds/0000'])
+		dummy_img = np.zeros_like(hdf['images/0000'])
 
 		# Calculate scales to use for plotting the images:
 		logger.info("Calculating image scales...")
@@ -95,8 +101,8 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			fig, ax = plt.subplots(1, 4, figsize=(20, 6))
 
 			imgs = [0,0,0,0]
-			imgs[0] = plot_image(dummy_bkg, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image - 0000', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
-			imgs[1] = plot_image(dummy_bkg, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
+			imgs[0] = plot_image(dummy_img, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image - 0000', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
+			imgs[1] = plot_image(dummy_img, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
 			imgs[2] = plot_image(dummy_img, ax=ax[2], scale='sqrt', vmin=vmin2, vmax=vmax2, title='Background subtracted', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
 			imgs[3] = plot_image(dummy_img, ax=ax[3], scale='linear', vmin=0, vmax=1, title='Background Shenanigans', xlabel=None, ylabel=None, cmap=plt.cm.Reds, make_cbar=True, clabel='Flags')
 
@@ -140,7 +146,7 @@ if __name__ == '__main__':
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
-	parser.add_argument('-j', '--jobs', help='Maximal number of jobs to run in parallel.', type=int, default=None, nargs='?')
+	parser.add_argument('-j', '--jobs', help='Maximal number of jobs to run in parallel.', type=int, default=1, nargs='?')
 	parser.add_argument('--fps', help='Frames per second of generated movie.', type=int, default=15, nargs='?')
 	parser.add_argument('--dpi', help='DPI of generated movie.', type=int, default=100, nargs='?')
 	parser.add_argument('files', help='HDF5 file to create movie from.', nargs='+')
@@ -170,7 +176,7 @@ if __name__ == '__main__':
 
 	# Get the number of processes we can spawn in case it is needed for calculations:
 	threads = args.jobs
-	if threads is None:
+	if threads <= 0:
 		threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
 	threads = min(threads, len(args.files))
 	logger.info("Using %d processes.", threads)
