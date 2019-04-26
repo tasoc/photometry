@@ -621,10 +621,11 @@ class BasePhotometry(object):
 		Load data cube into memory from TPF and HDF5 files depending on datasource.
 		"""
 		if self.datasource == 'ffi':
-			ir1 = self._stamp[0] - self.pixel_offset_row
-			ir2 = self._stamp[1] - self.pixel_offset_row
-			ic1 = self._stamp[2] - self.pixel_offset_col
-			ic2 = self._stamp[3] - self.pixel_offset_col
+			# FIXME: BIG hack!!!!
+			ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0) # self.pixel_offset_row
+			ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0) # self.pixel_offset_row
+			ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # self.pixel_offset_col
+			ic2 = self._stamp[3] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # self.pixel_offset_col
 			if full_cube is None:
 				# We dont have an in-memory version of the full cube, so let us
 				# create the cube by loading the cutouts of each image:
@@ -731,7 +732,7 @@ class BasePhotometry(object):
 				# Load FFI backgrounds cube:
 				ds = deepcopy(self.datasource) # FIXME: Big hack!!!
 				self.datasource = 'ffi' # FIXME: Big hack!!!
-				ffi_bkg_cube = self._load_cube(hdf_group='backgrounds') # wont work
+				ffi_bkg_cube = self._load_cube(hdf_group='backgrounds')
 				self.datasource = ds
 
 				# Interpolate FFI backgrounds onto the faster cadence:
@@ -740,7 +741,7 @@ class BasePhotometry(object):
 				bkg_cube = ffi_bkg_int(self.lightcurve['time'] - self.lightcurve['timecorr'])
 
 				# Load the original flux cube as we need them to :
-				flux_cube = self._load_cube(tpf_field='FLUX', full_cube=self._images_cube_full)
+				flux_cube = self._load_cube(tpf_field='FLUX')
 
 				# Add original backgrounds back in the
 				flux_cube += self._backgrounds_cube
