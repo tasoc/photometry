@@ -221,7 +221,7 @@ class TaskManager(object):
 				if result['datasource'] == 'tpf':
 					skip_datasources = "'tpf','tpf:%d'" % result['starid']
 				else:
-					skip_datasources = "'" + result['datatype'] + "'"
+					skip_datasources = "'" + result['datasource'] + "'"
 
 				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=?;", (result['sector'],))
 				skip_rows = self.cursor.fetchall()

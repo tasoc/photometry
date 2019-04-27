@@ -27,7 +27,8 @@ import os.path
 import glob
 import contextlib
 from copy import deepcopy
-#from astropy import coordinates, units
+from astropy import units
+import astropy.coordinates as coord
 from astropy.time import Time
 from astropy.wcs import WCS
 import enum
@@ -267,14 +268,6 @@ class BasePhotometry(object):
 			for key, value in attrs.items():
 				setattr(self, key, value)
 
-			# Correct timestamps for light-travel time:
-			# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
-			#star_coord = coordinates.SkyCoord(self.target_pos_ra_J2000, self.target_pos_dec_J2000, unit=units.deg, frame='icrs')
-			#tess = coordinates.EarthLocation.from_geocentric(x, y, z)
-			#times = time.Time(self.lightcurve['time'], format='mjd', scale='utc', location=tess)
-			#self.lightcurve['timecorr'] = times.light_travel_time(star_coord, ephemeris='jpl')
-			#self.lightcurve['time'] = times.tdb + self.lightcurve['timecorr']
-
 		elif self.datasource.startswith('tpf'):
 			# If the datasource was specified as 'tpf:starid' it means
 			# that we should load from the specified starid instead of
@@ -379,6 +372,26 @@ class BasePhotometry(object):
 		self.lightcurve['pos_centroid'] = Column(length=self.Ntimes, shape=(2,), description='Centroid position', unit='pixels', dtype='float64')
 		self.lightcurve['pos_corr'] = Column(length=self.Ntimes, shape=(2,), description='Position correction', unit='pixels', dtype='float64')
 
+		# Correct timestamps for light-travel time in FFIs:
+		# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
+		if self.datasource == 'ffi':
+			# TODO: Why is location=greenwich needed here!?
+			star_coord = coord.SkyCoord(self.target_pos_ra_J2000, self.target_pos_dec_J2000, unit=units.deg, frame='icrs')
+
+			# Ephemeris to use in light travel time calculation.
+			# Default is to use the same as is being used by SPOC (de430).
+			#ephemeris = 'de430'
+			ephemeris = 'https://archive.stsci.edu/missions/tess/models/tess2018338154429-41241_de430.bsp'
+
+			# Change the timestamps bach to JD:
+			greenwich = coord.EarthLocation.of_site('greenwich')
+			time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
+			times = Time(time_nocorr, 2457000, format='jd', scale='utc', location=greenwich)
+
+			# Calculate the light time travel correction for the stars coordinates:
+			self.lightcurve['timecorr'] = times.light_travel_time(star_coord, kind='barycentric', ephemeris=ephemeris).value
+			self.lightcurve['time'] = time_nocorr + self.lightcurve['timecorr']
+
 		# Init arrays that will be filled with lightcurve stuff:
 		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
 		self.additional_headers = {} # Additional headers to be included in FITS files.
@@ -396,7 +409,7 @@ class BasePhotometry(object):
 		if self.datasource.startswith('tpf'):
 			self.lightcurve['pos_corr'][:] = np.column_stack((self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']))
 		else:
-			self.lightcurve['pos_corr'][:] = self.MovementKernel.jitter(self.lightcurve['time'], self.target_pos_column, self.target_pos_row)
+			self.lightcurve['pos_corr'][:] = self.MovementKernel.jitter(self.lightcurve['time'] - self.lightcurve['timecorr'], self.target_pos_column, self.target_pos_row)
 
 		# Init the stamp:
 		self._stamp = None
@@ -1104,17 +1117,17 @@ class BasePhotometry(object):
 			default_movement_kernel = 'wcs' # The default kernel to use - set to 'hdf5' if we should use the one from prepare instead
 			if self.datasource == 'ffi' and default_movement_kernel == 'wcs' and isinstance(self.hdf['wcs'], h5py.Group):
 				self._MovementKernel = ImageMovementKernel(warpmode='wcs', wcs_ref=self.wcs)
-				self._MovementKernel.load_series(self.lightcurve['time'], [self.hdf['wcs'][dset][0] for dset in self.hdf['wcs']])
+				self._MovementKernel.load_series(self.lightcurve['time'] - self.lightcurve['timecorr'], [self.hdf['wcs'][dset][0] for dset in self.hdf['wcs']])
 			elif self.datasource == 'ffi' and 'movement_kernel' in self.hdf:
 				self._MovementKernel = ImageMovementKernel(warpmode=self.hdf['movement_kernel'].attrs.get('warpmode'))
-				self._MovementKernel.load_series(self.lightcurve['time'], self.hdf['movement_kernel'])
+				self._MovementKernel.load_series(self.lightcurve['time'] - self.lightcurve['timecorr'], self.hdf['movement_kernel'])
 			elif self.datasource.startswith('tpf'):
 				# Create translation kernel from the positions provided in the
 				# target pixel file.
 				# Load kernels from FITS file:
 				kernels = np.column_stack((self.tpf[1].data['POS_CORR1'], self.tpf[1].data['POS_CORR2']))
 				indx = np.isfinite(self.lightcurve['time']) & np.all(np.isfinite(kernels), axis=1)
-				times = self.lightcurve['time'][indx]
+				times = self.lightcurve['time'][indx] - self.lightcurve['timecorr'][indx]
 				kernels = kernels[indx]
 				# Find the timestamp closest to the reference time:
 				refindx = find_nearest(times, self._catalog_reference_time)
@@ -1248,7 +1261,7 @@ class BasePhotometry(object):
 			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
 
 			# Calculate variability used e.g. in CBV selection of stars:
-			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux)
+			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux) & np.isfinite(flux_err)
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
 			# This happens in the test-data because there are so few points.
