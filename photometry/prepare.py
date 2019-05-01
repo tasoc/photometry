@@ -8,6 +8,7 @@ import numpy as np
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
+from astropy.io import fits
 import sqlite3
 import logging
 import re
@@ -20,9 +21,31 @@ import functools
 import contextlib
 from tqdm import tqdm, trange
 from .backgrounds import fit_background
-from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest
+from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
 from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
+
+#------------------------------------------------------------------------------
+def quality_from_tpf(tpffile, time_start, time_end):
+
+	with fits.open(tpffile, mode='readonly', memmap=True) as hdu:
+		time_tpf = hdu[1].data['TIME'] - hdu[1].data['TIMECORR']
+		quality_tpf = hdu[1].data['QUALITY']
+
+	numfiles = len(time_start)
+	quality = np.zeros(numfiles, dtype='int32')
+	for k in range(numfiles):
+		# Timestamps from TPF that correspond to the FFI:
+		# TODO: Rewrite to using np.searchsorted
+		indx = (time_tpf > time_start[k]) & (time_tpf < time_end[k])
+		# Combine all TPF qualities, so if a flag is set in any
+		# of the TPF timestamps it is set:
+		quality[k] = np.bitwise_or.reduce(quality_tpf[indx])
+
+	# Only transfer quality flags that are relevant for FFIs:
+	quality = np.bitwise_and(quality, TESSQualityFlags.FFI_RELEVANT_BITMASK)
+
+	return quality
 
 #------------------------------------------------------------------------------
 def _iterate_hdf_group(dset, start=0, stop=None):
@@ -244,11 +267,13 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 				if os.path.exists(tmp_hdf_file):
 					os.remove(tmp_hdf_file)
 
-			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf or 'backgrounds_pixels_used' not in hdf:
+			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf or 'backgrounds_pixels_used' not in hdf or 'time_start' not in hdf:
 				SumImage = np.zeros((img_shape[0], img_shape[1]), dtype='float64')
 				Nimg = np.zeros_like(SumImage, dtype='int32')
 				time = np.empty(numfiles, dtype='float64')
 				timecorr = np.empty(numfiles, dtype='float32')
+				time_start = np.empty(numfiles, dtype='float64')
+				time_stop = np.empty(numfiles, dtype='float64')
 				cadenceno = np.empty(numfiles, dtype='int32')
 				quality = np.empty(numfiles, dtype='int32')
 				UsedInBackgrounds = np.zeros_like(SumImage, dtype='int32')
@@ -284,6 +309,8 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 					# Pick out the important bits from the header:
 					# Keep time in BTJD. If we want BJD we could
 					# simply add BJDREFI + BJDREFF:
+					time_start[k] = hdr['TSTART']
+					time_stop[k] = hdr['TSTOP']
 					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP'])
 					timecorr[k] = hdr.get('BARYCORR', 0)
 
@@ -380,19 +407,28 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 				# Add other arrays to HDF5 file:
 				if 'time' in hdf: del hdf['time']
 				if 'timecorr' in hdf: del hdf['timecorr']
+				if 'time_start' in hdf: del hdf['time_start']
+				if 'time_stop' in hdf: del hdf['time_stop']
 				if 'sumimage' in hdf: del hdf['sumimage']
 				if 'cadenceno' in hdf: del hdf['cadenceno']
 				if 'quality' in hdf: del hdf['quality']
 				hdf.create_dataset('sumimage', data=SumImage, **args)
 				hdf.create_dataset('time', data=time, **args)
 				hdf.create_dataset('timecorr', data=timecorr, **args)
+				hdf.create_dataset('time_start', data=time_start, **args)
+				hdf.create_dataset('time_stop', data=time_stop, **args)
 				hdf.create_dataset('cadenceno', data=cadenceno, **args)
 				hdf.create_dataset('quality', data=quality, **args)
 				hdf.flush()
 
 				logger.info("Individual image processing: %f sec/image", (default_timer()-tic)/numfiles)
 			else:
+				# Extract things that are needed further down:
 				SumImage = np.asarray(hdf['sumimage'])
+				timecorr = np.asarray(hdf['timecorr'])
+				time_start = np.asarray(hdf['time_start'])
+				time_stop = np.asarray(hdf['time_stop'])
+				quality = np.asarray(hdf['quality'])
 
 			# Detections and flagging of Background Shenanigans:
 			last_bkgshe = pixel_flags.attrs.get('bkgshe_done', -1)
@@ -459,6 +495,33 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 				dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
 				dset.attrs['warpmode'] = imk.warpmode
 				dset.attrs['ref_frame'] = refindx
+
+			# Transfer quality flags from TPF files from the same CAMERA and CCD to the FFIs:
+			if hdf['quality'].attrs.get('TRANSFER_FROM_TPF') != True:
+				logger.info("Transfering QUALITY flags from TPFs to FFIs...")
+
+				# Select (max) five random TPF targets from the given sector, camera and ccd:
+				tpffiles = find_tpf_files(input_folder, sector=sector, camera=camera, ccd=ccd, findmax=5)
+				if len(tpffiles) == 0:
+					logger.warning("No TPF files found for SECTOR=%d, CAMERA=%d, CCD=%d and quality flags could therefore not be propergated.", sector, camera, ccd)
+				else:
+					# Run through each of the found TPF files and build the quality column from them,
+					# by simply setting the flag if it is found in any of the files:
+					quality_tpf = np.zeros(numfiles, dtype='int32')
+					for tpffile in tpffiles:
+						quality_tpf |= quality_from_tpf(tpffile, time_start-timecorr, time_stop-timecorr)
+
+					# Inspect the differences with the the qualities set in
+					indx_diff = (quality | quality_tpf != quality)
+					logger.info("%d qualities will be updated (%.1f%%).", np.sum(indx_diff), 100*np.sum(indx_diff)/numfiles)
+
+					# New quality:
+					quality |= quality_tpf
+
+					# Update the quality column in the HDF5 file:
+					hdf['quality'][:] = quality
+					hdf['quality'].attrs['TRANSFER_FROM_TPF'] = True
+					hdf.flush()
 
 		logger.info("Done.")
 		logger.info("Total: %f sec/image", (default_timer()-tic_total)/numfiles)

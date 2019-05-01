@@ -80,7 +80,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	return matches
 
 #------------------------------------------------------------------------------
-def find_tpf_files(rootdir, starid=None, sector=None):
+def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, findmax=None):
 	"""
 	Search directory recursively for TESS Target Pixel Files.
 
@@ -88,6 +88,14 @@ def find_tpf_files(rootdir, starid=None, sector=None):
 		rootdir (string): Directory to search recursively for TESS TPF files.
 		starid (integer or None, optional): Only return files from the given TIC number. If ``None``, files from all TIC numbers are returned.
 		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
+		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
+		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
+		findmax (integer or None, optional): Maximum number of files to return. If ``None``, return all files.
+
+	Note:
+		Filtering on camera and/or ccd will cause the program to read the headers
+		of the files in order to determine the camera and ccd from which they came.
+		This can significantly slow down the query.
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
@@ -116,11 +124,23 @@ def find_tpf_files(rootdir, starid=None, sector=None):
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern2)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
+	breakout = False
 	matches = []
 	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
 		for filename in filenames:
 			if fnmatch.fnmatch(filename, filename_pattern) or fnmatch.fnmatch(filename, filename_pattern2):
-				matches.append(os.path.join(root, filename))
+				fpath = os.path.join(root, filename)
+				if camera is not None and fits.getval(fpath, 'CAMERA', ext=0) != camera:
+					continue
+
+				if ccd is not None and fits.getval(fpath, 'CCD', ext=0) != ccd:
+					continue
+
+				matches.append(fpath)
+				if findmax is not None and len(matches) >= findmax:
+					breakout=True
+					break
+		if breakout: break
 
 	# Sort the list of files by thir filename:
 	matches.sort(key = lambda x: os.path.basename(x))
