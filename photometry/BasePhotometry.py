@@ -374,15 +374,24 @@ class BasePhotometry(object):
 		# Correct timestamps for light-travel time in FFIs:
 		# http://docs.astropy.org/en/stable/time/#barycentric-and-heliocentric-light-travel-time-corrections
 		if self.datasource == 'ffi':
-			# TODO: Why is location=greenwich needed here!?
-			star_coord = coord.SkyCoord(self.target_pos_ra_J2000, self.target_pos_dec_J2000, unit=units.deg, frame='icrs')
+			# Coordinates of the target as astropy SkyCoord object:
+			star_coord = coord.SkyCoord(
+				ra=self.target_pos_ra_J2000,
+				dec=self.target_pos_dec_J2000,
+				unit=units.deg,
+				frame='icrs',
+				obstime=Time('J2000'),
+				pm_ra_cosdec=None if self.target['pm_ra'] is None else self.target['pm_ra']*units.mas/units.yr,
+				pm_dec=None if self.target['pm_decl'] is None else self.target['pm_decl']*units.mas/units.yr
+			)
 
-			# Ephemeris to use in light travel time calculation.
+			# Planetary ephemeris to use in light travel time calculation.
 			# Default is to use the same as is being used by SPOC (de430).
 			#ephemeris = 'de430'
 			ephemeris = 'https://archive.stsci.edu/missions/tess/models/tess2018338154429-41241_de430.bsp'
 
 			# Change the timestamps bach to JD:
+			# TODO: location=greenwich is a hack - should really be the (time-dependent) position of TESS.
 			greenwich = coord.EarthLocation.of_site('greenwich')
 			time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
 			times = Time(time_nocorr, 2457000, format='jd', scale='utc', location=greenwich)
