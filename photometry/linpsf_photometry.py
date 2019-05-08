@@ -45,7 +45,7 @@ class LinPSFPhotometry(BasePhotometry):
 		# NOTE: If we run resize_stamp at any point in the code,
 		#       we should also update self.PSF.
 		# TODO: Maybe we should move this into BasePhotometry?
-		self.psf = PSF(self.camera, self.ccd, self.stamp)
+		self.psf = PSF(self.sector, self.camera, self.ccd, self.stamp)
 
 	def do_photometry(self):
 		"""Linear PSF Photometry
