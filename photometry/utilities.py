@@ -13,6 +13,7 @@ import numpy as np
 from astropy.io import fits
 from bottleneck import move_median, nanmedian, nanmean
 import logging
+from tqdm import tqdm
 from scipy.special import erf
 from scipy.stats import binned_statistic
 import json
@@ -21,6 +22,7 @@ import fnmatch
 import glob
 import itertools
 import warnings
+import requests
 
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', module='scipy', category=FutureWarning, message='Using a non-tuple sequence for multidimensional indexing is deprecated;', lineno=607)
@@ -466,3 +468,38 @@ def find_nearest(array, value):
 		return idx-1
 	else:
 		return idx
+		
+#------------------------------------------------------------------------------
+def download_file(url, destination):
+	"""
+	Download file from URL and place into specified destination.
+
+	Parameters:
+		url (string): URL to file to be downloaded.
+		destination (string): Path where to save file.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	print("Downloading %s" % url)
+	try:
+		response = requests.get(url, stream=True, allow_redirects=True)
+
+		# Throw an error for bad status codes
+		response.raise_for_status()
+
+		total_size = int(response.headers.get('content-length', 0))
+		block_size = 1024
+		with open(destination, 'wb') as handle:
+			with tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
+				for block in response.iter_content(block_size):
+					handle.write(block)
+					pbar.update(len(block))
+					
+		if os.path.getsize(destination) != total_size:
+			raise Exception("File not downloaded correctly")
+
+	except:
+		if os.path.exists(destination):
+			os.remove(destination)
+		raise

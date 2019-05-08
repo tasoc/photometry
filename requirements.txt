@@ -16,3 +16,4 @@ psycopg2-binary
 backports.tempfile
 halophot >= 0.6.6.2
 jplephem
+spiceypy

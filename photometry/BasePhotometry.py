@@ -38,6 +38,7 @@ from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale, find_nearest
 from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
+from .spice import TESS_SPICE
 from .version import get_version
 
 __version__ = get_version()
@@ -385,20 +386,20 @@ class BasePhotometry(object):
 				pm_dec=None if self.target['pm_decl'] is None else self.target['pm_decl']*units.mas/units.yr
 			)
 
-			# Planetary ephemeris to use in light travel time calculation.
-			# Default is to use the same as is being used by SPOC (de430).
-			#ephemeris = 'de430'
-			ephemeris = 'https://archive.stsci.edu/missions/tess/models/tess2018338154429-41241_de430.bsp'
+			# Use the SPICE kernels to get accurate positions of TESS, to be used in calculating
+			# the light-travel-time corrections:
+			with TESS_SPICE() as knl:
+				# Change the timestamps back to JD:
+				time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
+				
+				# Use SPICE kernels to get location of TESS at the given timestamps (in JD),
+				# and create new Time object linked to the changing position of TESS:
+				tess_position = knl.EarthLocation(time_nocorr + 2457000)
+				times = Time(time_nocorr, 2457000, format='jd', scale='utc', location=tess_position)
 
-			# Change the timestamps bach to JD:
-			# TODO: location=greenwich is a hack - should really be the (time-dependent) position of TESS.
-			greenwich = coord.EarthLocation.of_site('greenwich')
-			time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
-			times = Time(time_nocorr, 2457000, format='jd', scale='utc', location=greenwich)
-
-			# Calculate the light time travel correction for the stars coordinates:
-			self.lightcurve['timecorr'] = times.light_travel_time(star_coord, kind='barycentric', ephemeris=ephemeris).value
-			self.lightcurve['time'] = time_nocorr + self.lightcurve['timecorr']
+				# Calculate the light time travel correction for the stars coordinates:
+				self.lightcurve['timecorr'] = times.light_travel_time(star_coord, kind='barycentric', ephemeris=knl.planetary_ephemeris).value
+				self.lightcurve['time'] = time_nocorr + self.lightcurve['timecorr']
 
 		# Init arrays that will be filled with lightcurve stuff:
 		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
