@@ -244,7 +244,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 	)
 
 #------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_secondary_targets=False):
+def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_secondary_targets=True):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
@@ -257,7 +257,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be included.
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
 		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
-		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=False.
+		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
 
 	Raises:
 		IOError: If the specified ``input_folder`` is not an existing directory.
