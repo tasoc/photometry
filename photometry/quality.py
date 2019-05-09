@@ -127,6 +127,15 @@ class TESSQualityFlags(QualityFlagsBase):
 	# Use it wisely.
 	HARD_BITMASK = (DEFAULT_BITMASK | SensitivityDropout | CollateralCosmic)
 
+	# Bitmask of all of the flags that are relevant to FFIs:
+	# We are on purpose not including ManualExclude here, as it would
+	# result in many (~20%) of FFI data to be marked with ManualExclude
+	# and therefore be rejected in the following processing.
+	# There is also no reason for why a single timestamp in a TPF marked
+	# as ManualExclude should necessarily cause the FFI timestamp to be invalid.
+	FFI_RELEVANT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint |
+					   Desat | EarthMoonPlanetInFOV)
+
 	# Pretty string descriptions for each flag
 	STRINGS = {
 		AttitudeTweak: "Attitude tweak",

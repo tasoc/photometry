@@ -32,11 +32,12 @@ class PSF(object):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	def __init__(self, camera, ccd, stamp):
+	def __init__(self, sector, camera, ccd, stamp):
 		"""
 		Point Spread Function (PSF).
 
 		Parameters:
+			sector (integer): TESS Observation sector.
 			camera (integer): TESS camera number (1-4).
 			ccd (integer): TESS CCD number (1-4).
 			stamp (4-tuple): Sub-stamp on CCD to load PSF for.
@@ -45,10 +46,12 @@ class PSF(object):
 		"""
 
 		# Simple input checks:
+		assert sector >= 1, "Sector number must be greater than zero"
 		assert camera in (1,2,3,4), "Camera must be 1, 2, 3 or 4."
 		assert ccd in (1,2,3,4), "CCD must be 1, 2, 3 or 4."
 
 		# Store information given in call:
+		self.sector = sector
 		self.camera = camera
 		self.ccd = ccd
 		self.stamp = stamp
@@ -58,7 +61,8 @@ class PSF(object):
 
 		# Get path to corresponding TESS PRF file:
 		PSFdir = os.path.join(os.path.dirname(__file__), 'data', 'psf')
-		PSFglob = os.path.join(PSFdir, 'tess*-{camera:d}-{ccd:d}-characterized-prf.mat'.format(camera=camera, ccd=ccd))
+		SectorDir = 'start_s0004' if sector >= 4 else 'start_s0001'
+		PSFglob = os.path.join(PSFdir, SectorDir, 'tess*-{camera:d}-{ccd:d}-characterized-prf.mat'.format(camera=camera, ccd=ccd))
 		self.PSFfile = glob.glob(PSFglob)[0]
 
 		# Set minimum PRF weight to avoid dividing by almost 0 somewhere:

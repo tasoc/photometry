@@ -101,7 +101,7 @@ def test_imagemotion_wcs():
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 
-		times = h5['time']
+		times = np.asarray(h5['time']) - np.asarray(h5['timecorr'])
 		kernels = [h5['wcs'][dset][0] for dset in h5['wcs']]
 
 		# Create ImageMovementKernel instance:
@@ -157,5 +157,5 @@ def test_imagemotion_wcs():
 	print("Done")
 
 if __name__ == '__main__':
-	#test_imagemotion()
+	test_imagemotion()
 	test_imagemotion_wcs()
