@@ -43,12 +43,20 @@ class TESS_SPICE(object):
 
 		# Create list of kernels that should be loaded:
 		files = (
+			# Planetary ephemeris and TESS clock kernels:
 			'tess2018338154046-41240_naif0012.tls',
 			'tess2018338154429-41241_de430.bsp',
+			'tess2019113195500-41374_sclk.tsc',
+
+			# Predictive kernels of TESS's expected position:
 			#'TESS_EPH_PRE_2YEAR_2018171_01.bsp',
-			#'TESS_EPH_DEF_2018004_01.bsp',
+			'TESS_EPH_PRE_LONG_2018109_02.bsp',
+			'TESS_EPH_PRE_LONG_2019045_01.bsp',
+
+			# Definite kernels of TESS's actual position:
+			#'TESS_EPH_DEF_2018004_01.bsp', # Does not contain any information
 			'TESS_EPH_DEF_2018080_01.bsp',
-			#'TESS_EPH_DEF_2018108_01.bsp',
+			#'TESS_EPH_DEF_2018108_01.bsp', # Surpassed by never version below
 			'TESS_EPH_DEF_2018108_02.bsp',
 			'TESS_EPH_DEF_2018115_01.bsp',
 			'TESS_EPH_DEF_2018124_01.bsp',
@@ -94,6 +102,55 @@ class TESS_SPICE(object):
 			'TESS_EPH_DEF_2018312_01.bsp',
 			'TESS_EPH_DEF_2018316_01.bsp',
 			'TESS_EPH_DEF_2018319_01.bsp',
+			'TESS_EPH_DEF_2018323_01.bsp',
+			'TESS_EPH_DEF_2018327_01.bsp',
+			'TESS_EPH_DEF_2018330_01.bsp',
+			'TESS_EPH_DEF_2018333_01.bsp',
+			'TESS_EPH_DEF_2018337_01.bsp',
+			'TESS_EPH_DEF_2018340_01.bsp',
+			'TESS_EPH_DEF_2018344_01.bsp',
+			'TESS_EPH_DEF_2018347_01.bsp',
+			'TESS_EPH_DEF_2018351_01.bsp',
+			'TESS_EPH_DEF_2018354_01.bsp',
+			'TESS_EPH_DEF_2018358_01.bsp',
+			'TESS_EPH_DEF_2018361_01.bsp',
+			'TESS_EPH_DEF_2018365_01.bsp',
+			'TESS_EPH_DEF_2019003_01.bsp',
+			'TESS_EPH_DEF_2019007_01.bsp',
+			'TESS_EPH_DEF_2019010_01.bsp',
+			'TESS_EPH_DEF_2019014_01.bsp',
+			'TESS_EPH_DEF_2019017_01.bsp',
+			'TESS_EPH_DEF_2019021_01.bsp',
+			'TESS_EPH_DEF_2019024_01.bsp',
+			'TESS_EPH_DEF_2019028_01.bsp',
+			'TESS_EPH_DEF_2019031_01.bsp',
+			'TESS_EPH_DEF_2019035_01.bsp',
+			'TESS_EPH_DEF_2019038_01.bsp',
+			'TESS_EPH_DEF_2019042_01.bsp',
+			'TESS_EPH_DEF_2019045_01.bsp',
+			'TESS_EPH_DEF_2019049_01.bsp',
+			'TESS_EPH_DEF_2019052_01.bsp',
+			'TESS_EPH_DEF_2019056_01.bsp',
+			'TESS_EPH_DEF_2019059_01.bsp',
+			'TESS_EPH_DEF_2019063_01.bsp',
+			'TESS_EPH_DEF_2019066_01.bsp',
+			'TESS_EPH_DEF_2019070_01.bsp',
+			'TESS_EPH_DEF_2019073_01.bsp',
+			'TESS_EPH_DEF_2019077_01.bsp',
+			'TESS_EPH_DEF_2019080_01.bsp',
+			'TESS_EPH_DEF_2019084_01.bsp',
+			'TESS_EPH_DEF_2019087_01.bsp',
+			'TESS_EPH_DEF_2019091_01.bsp',
+			'TESS_EPH_DEF_2019094_01.bsp',
+			'TESS_EPH_DEF_2019098_01.bsp',
+			'TESS_EPH_DEF_2019102_01.bsp',
+			'TESS_EPH_DEF_2019105_01.bsp',
+			'TESS_EPH_DEF_2019108_01.bsp',
+			'TESS_EPH_DEF_2019112_01.bsp',
+			'TESS_EPH_DEF_2019115_01.bsp',
+			'TESS_EPH_DEF_2019119_01.bsp',
+			'TESS_EPH_DEF_2019122_01.bsp',
+			'TESS_EPH_DEF_2019126_01.bsp'
 		)
 
 		# Make sure the kernel directory exists:
@@ -101,7 +158,8 @@ class TESS_SPICE(object):
 			os.makedirs(kernels_folder)
 
 		# Automatically download kernels from MAST, if they don't already exist?
-		urlbase = 'https://archive.stsci.edu/missions/tess/models/'
+		#urlbase = 'https://archive.stsci.edu/missions/tess/models/'
+		urlbase = 'https://tasoc.dk/pipeline/spice/'
 		for fname in files:
 			fpath = os.path.join(kernels_folder, fname)
 			if not os.path.exists(fpath):
@@ -133,7 +191,7 @@ class TESS_SPICE(object):
 		# TODO: Would be nice to also use the local one
 		#self.planetary_ephemeris = 'de430'
 		#self.planetary_ephemeris = 'file://' + os.path.join(kernels_folder, 'tess2018338154429-41241_de430.bsp').replace('\\', '/')
-		self.planetary_ephemeris = 'https://archive.stsci.edu/missions/tess/models/tess2018338154429-41241_de430.bsp'
+		self.planetary_ephemeris = 'https://tasoc.dk/pipeline/spice/tess2018338154429-41241_de430.bsp'
 		self._old_solar_system_ephemeris = coord.solar_system_ephemeris.get()
 		coord.solar_system_ephemeris.set(self.planetary_ephemeris)
 
@@ -148,7 +206,7 @@ class TESS_SPICE(object):
 	def __exit__(self, *args, **kwargs):
 		self.close()
 
-	def position(self, jd, relative_to='EARTH'):
+	def position(self, jd, of='TESS', relative_to='EARTH'):
 		"""
 		Returns position of TESS for the given timestamps as geocentric XYZ-coordinates in kilometers.
 
@@ -168,7 +226,7 @@ class TESS_SPICE(object):
 
 		# Get positions as a 2D array of (x,y,z) coordinates in km:
 		try:
-			positions, lt = spiceypy.spkpos('TESS', times, 'J2000', 'NONE', relative_to)
+			positions, lt = spiceypy.spkpos(of, times, 'J2000', 'NONE', relative_to)
 			positions = np.atleast_2d(positions)
 		except SpiceyError as e:
 			if 'SPICE(SPKINSUFFDATA)' in e.value:
@@ -204,7 +262,7 @@ class TESS_SPICE(object):
 		# Create EarthLocation object
 		return coord.EarthLocation.from_geocentric(*itrs.cartesian.xyz, unit=u.km)
 
-	def position_velocity(self, jd, relative_to='EARTH'):
+	def position_velocity(self, jd, of='TESS', relative_to='EARTH'):
 		"""
 		Returns position and velocity of TESS for the given timestamps as geocentric XYZ-coordinates in kilometers.
 
@@ -224,8 +282,8 @@ class TESS_SPICE(object):
 
 		# Get state of spacecraft (position and velocity):
 		try:
-			pos_vel, lt = spiceypy.spkezr('TESS', times, 'J2000', 'NONE', relative_to)
-			pos_vel = np.asarray(pos_vel).T
+			pos_vel, lt = spiceypy.spkezr(of, times, 'J2000', 'NONE', relative_to)
+			pos_vel = np.asarray(pos_vel)
 		except SpiceyError as e:
 			if 'SPICE(SPKINSUFFDATA)' in e.value:
 				raise InadequateSpiceException("Inadequate SPICE kernels available")
@@ -233,3 +291,6 @@ class TESS_SPICE(object):
 				raise
 
 		return pos_vel
+
+	def velocity(self, jd, of='TESS', relative_to='EARTH'):
+		return self.position_velocity(jd, of=of, relative_to=relative_to)[:, 3:]
