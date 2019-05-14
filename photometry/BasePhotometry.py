@@ -377,13 +377,10 @@ class BasePhotometry(object):
 		if self.datasource == 'ffi':
 			# Coordinates of the target as astropy SkyCoord object:
 			star_coord = coord.SkyCoord(
-				ra=self.target_pos_ra_J2000,
-				dec=self.target_pos_dec_J2000,
+				ra=self.target_pos_ra,
+				dec=self.target_pos_dec,
 				unit=units.deg,
-				frame='icrs',
-				obstime=Time('J2000'),
-				pm_ra_cosdec=None if self.target['pm_ra'] is None else self.target['pm_ra']*units.mas/units.yr,
-				pm_dec=None if self.target['pm_decl'] is None else self.target['pm_decl']*units.mas/units.yr
+				frame='icrs'
 			)
 
 			# Use the SPICE kernels to get accurate positions of TESS, to be used in calculating
@@ -391,7 +388,7 @@ class BasePhotometry(object):
 			with TESS_SPICE() as knl:
 				# Change the timestamps back to JD:
 				time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
-				
+
 				# Use SPICE kernels to get location of TESS at the given timestamps (in JD),
 				# and create new Time object linked to the changing position of TESS:
 				tess_position = knl.EarthLocation(time_nocorr + 2457000)
