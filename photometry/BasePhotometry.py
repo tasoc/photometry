@@ -296,7 +296,7 @@ class BasePhotometry(object):
 			self.ccd = self.tpf[0].header['CCD']
 
 			# Extract the relevant information from the FITS file:
-			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64')
+			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='BJD')
 			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
@@ -386,17 +386,13 @@ class BasePhotometry(object):
 			# Use the SPICE kernels to get accurate positions of TESS, to be used in calculating
 			# the light-travel-time corrections:
 			with TESS_SPICE() as knl:
-				# Change the timestamps back to JD:
+				# Change the timestamps back to uncorrected JD (TDB) in the TESS frame:
 				time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
 
-				# Use SPICE kernels to get location of TESS at the given timestamps (in JD),
-				# and create new Time object linked to the changing position of TESS:
-				tess_position = knl.EarthLocation(time_nocorr + 2457000)
-				times = Time(time_nocorr, 2457000, format='jd', scale='utc', location=tess_position)
-
-				# Calculate the light time travel correction for the stars coordinates:
-				self.lightcurve['timecorr'] = times.light_travel_time(star_coord, kind='barycentric', ephemeris=knl.planetary_ephemeris).value
-				self.lightcurve['time'] = time_nocorr + self.lightcurve['timecorr']
+				# Use SPICE kernels to get new barycentric time correction for the stars coordinates:
+				tm, tc = knl.barycorr(time_nocorr + 2457000, star_coord)
+				self.lightcurve['time'] = tm - 2457000
+				self.lightcurve['timecorr'] = tc
 
 		# Init arrays that will be filled with lightcurve stuff:
 		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.

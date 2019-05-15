@@ -7,6 +7,7 @@ Tests of SPICE kernels with TESS to find barycentric time correction for FFIs.
 """
 
 from __future__ import division, with_statement, print_function, absolute_import
+import astropy.constants as const
 import astropy.coordinates as coord
 from astropy.time import Time
 import astropy.units as u
@@ -206,12 +207,14 @@ class TESS_SPICE(object):
 	def __exit__(self, *args, **kwargs):
 		self.close()
 
+	#--------------------------------------------------------------------------
 	def position(self, jd, of='TESS', relative_to='EARTH'):
 		"""
 		Returns position of TESS for the given timestamps as geocentric XYZ-coordinates in kilometers.
 
 		Parameters:
 			jd (ndarray): Time in Julian Days where position of TESS should be calculated.
+			of (string, optional): Object for which to calculate position for. Default='TESS'.
 			relative_to (string, optional): Object for which to calculate position relative to. Default='EARTH'.
 
 		Returns:
@@ -222,7 +225,8 @@ class TESS_SPICE(object):
 
 		# Convert JD to Ephemeris Time:
 		jd = np.atleast_1d(jd)
-		times = spiceypy.str2et(['JD %.16f' % j for j in jd])
+		#times = spiceypy.str2et(['JD %.16f' % j for j in jd])
+		times = [spiceypy.unitim(j, 'JDTDB', 'ET') for j in jd]
 
 		# Get positions as a 2D array of (x,y,z) coordinates in km:
 		try:
@@ -236,6 +240,7 @@ class TESS_SPICE(object):
 
 		return positions
 
+	#--------------------------------------------------------------------------
 	def EarthLocation(self, jd):
 		"""
 		Returns positions as an EarthLocation object, which can be feed
@@ -262,12 +267,14 @@ class TESS_SPICE(object):
 		# Create EarthLocation object
 		return coord.EarthLocation.from_geocentric(*itrs.cartesian.xyz, unit=u.km)
 
+	#--------------------------------------------------------------------------
 	def position_velocity(self, jd, of='TESS', relative_to='EARTH'):
 		"""
 		Returns position and velocity of TESS for the given timestamps as geocentric XYZ-coordinates in kilometers.
 
 		Parameters:
 			jd (ndarray): Time in Julian Days where position of TESS should be calculated.
+			of (string, optional): Object for which to calculate position for. Default='TESS'.
 			relative_to (string, optional): Object for which to calculate position relative to. Default='EARTH'.
 
 		Returns:
@@ -278,7 +285,8 @@ class TESS_SPICE(object):
 
 		# Convert JD to Ephemeris Time:
 		jd = np.atleast_1d(jd)
-		times = spiceypy.str2et(['JD %.16f' % j for j in jd])
+		#times = spiceypy.str2et(['JD %.16f' % j for j in jd])
+		times = [spiceypy.unitim(j, 'JDTDB', 'ET') for j in jd]
 
 		# Get state of spacecraft (position and velocity):
 		try:
@@ -292,5 +300,120 @@ class TESS_SPICE(object):
 
 		return pos_vel
 
-	def velocity(self, jd, of='TESS', relative_to='EARTH'):
-		return self.position_velocity(jd, of=of, relative_to=relative_to)[:, 3:]
+	#--------------------------------------------------------------------------
+	def velocity(self, *args, **kwargs):
+		"""
+		Parameters:
+			jd (ndarray): Time in Julian Days where position of TESS should be calculated.
+			of (string, optional): Object for which to calculate position for. Default='TESS'.
+			relative_to (string, optional): Object for which to calculate position relative to. Default='EARTH'.
+
+		Returns:
+			ndarray: Velocity of TESS as geocentric XYZ-coordinates in kilometers per seconds.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+		"""
+		return self.position_velocity(*args, **kwargs)[:, 3:]
+
+	#--------------------------------------------------------------------------
+	def sclk2jd(self, sclk):
+		"""
+		Convert spacecraft time to TDB Julian Dates (JD).
+
+		Parameters:
+			sclk (ndarray): Timestamps in TESS Spacecraft Time.
+
+		Returns:
+			ndarray: Timestamps in TDB Julian Dates (TDB).
+		"""
+
+		sclk = np.atleast_1d(sclk)
+		N = len(sclk)
+		jd = np.empty(N, dtype='float64')
+		for k in range(N):
+			et = spiceypy.scs2e(-95, sclk[k])
+			jd[k] = spiceypy.unitim(et, 'ET', 'JDTDB')
+
+		return jd
+
+	#--------------------------------------------------------------------------
+	def barycorr(self, tm, star_coord):
+		"""
+		Barycentric time correction.
+
+		Using Astropys way of doing it.
+
+		Parameters:
+			tm (ndarray): Timestamps in TDB Julian Date (JD).
+			star_coord (SkyCoord object): Coordinates of star.
+
+		Returns:
+			ndarray: Corrected timestamps in TBJD = BJD - 2457000.
+			ndarray: Time corrections used to convert time into barycentric time in days.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+		"""
+
+		tess_position = self.EarthLocation(tm)
+		times = Time(tm, format='jd', scale='tdb', location=tess_position)
+
+		# TODO: Auto-advance the coordinates of the star to the given obstime, if possible
+		#try:
+		#	star_coord = star_coord.apply_space_motion(new_obstime=times)
+		#except ValueError:
+		#	pass
+		#print(star_coord)
+
+		# Calculate the light time travel correction for the stars coordinates:
+		timecorr = times.light_travel_time(star_coord, kind='barycentric', ephemeris=self.planetary_ephemeris)
+
+		# Calculate the corrected timestamps:
+		time = times.tdb + timecorr
+
+		return time.jd, timecorr.value
+
+	#--------------------------------------------------------------------------
+	def barycorr2(self, times, star_coord):
+		"""
+		Barycentric time correction (experimental).
+
+		Made from scratch and includes both Rømer, Einstein and Shapiro delays.
+
+		Parameters:
+			tm (ndarray): Timestamps in UTC Julian Date (JD).
+			star_coord (SkyCoord object): Coordinates of star.
+		"""
+
+		# Constants in appropiate units:
+		c = const.c.to('km/s').value
+		GM_sun = const.GM_sun.to('km3/s2').value
+
+		# Create unit-vector pointing to the star:
+		star_coord = star_coord.transform_to('icrs')
+		ra = star_coord.ra
+		dec = star_coord.dec
+		star_vector = np.array([np.cos(dec)*np.cos(ra), np.cos(dec)*np.sin(ra), np.sin(dec)])
+
+		# Position of TESS spacecraft relative to solar system barycenter:
+		tess_position = self.position(times, of='TESS', relative_to='0')
+
+		# Assuming tess_position is in kilometers, this gives the correction in days
+		delay_roemer = np.dot(tess_position, star_vector) / c
+
+		# Shapiro delay:
+		sun_pos = self.position(times, of='SUN', relative_to='TESS')
+		sun_pos /= np.linalg.norm(sun_pos)
+		costheta = np.array([np.dot(star_vector, sun_pos[k,:]) for k in range(len(times))])
+		delay_shapiro = (2*GM_sun/c**3) * np.log(1 - costheta)
+		#print(delay_shapiro)
+
+		# Einstein delay:
+		tess_position_geocenter = self.position(times, of='TESS', relative_to='EARTH')
+		geocenter_velocity = self.velocity(times, of='EARTH', relative_to='0')
+		delay_einstein = np.array([np.dot(tess_position_geocenter[k,:], geocenter_velocity[k,:]) for k in range(len(times))])
+		delay_einstein /= c**2
+
+		timecorr = ( delay_roemer + delay_shapiro + delay_einstein ) / 86400.0
+		#print(timecorr)
+
+		return timecorr

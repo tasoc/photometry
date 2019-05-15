@@ -290,7 +290,10 @@ class ImageMovementKernel(object):
 			# Methods where the kernel is complex (non-numeric)
 			# Find the point in the series where the timestamp falls:
 			k = np.searchsorted(self.series_times, time, side='right')
-			if k <= 0 or time > self.series_times[-1]: raise ValueError("Timestamp outside timeseries interval")
+			if k <= 0 or time > self.series_times[-1]:
+				k = np.clip(k, 0, len(self.series_times)-1)
+				return self.apply_kernel(xy, self.series_kernels[k])
+
 			t1 = self.series_times[k-1]
 			# Find the jitter in that kernel:
 			jitter_1 = self.apply_kernel(xy, self.series_kernels[k-1])
