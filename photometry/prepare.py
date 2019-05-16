@@ -2,12 +2,13 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import range
+from six.moves import range, map
 import os
 import numpy as np
 import warnings
 warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
+from astropy.io import fits
 import sqlite3
 import logging
 import re
@@ -16,18 +17,44 @@ from astropy.wcs import WCS
 from bottleneck import replace, nanmean
 from timeit import default_timer
 import itertools
+import functools
 import contextlib
+from tqdm import tqdm, trange
 from .backgrounds import fit_background
-from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files
-from photometry import TESSQualityFlags, ImageMovementKernel
+from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
+from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
+from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
 
 #------------------------------------------------------------------------------
-def _iterate_hdf_group(dset):
-	for d in dset:
-		yield np.asarray(dset[d])
+def quality_from_tpf(tpffile, time_start, time_end):
+
+	with fits.open(tpffile, mode='readonly', memmap=True) as hdu:
+		time_tpf = hdu[1].data['TIME'] - hdu[1].data['TIMECORR']
+		quality_tpf = hdu[1].data['QUALITY']
+
+	numfiles = len(time_start)
+	quality = np.zeros(numfiles, dtype='int32')
+	for k in range(numfiles):
+		# Timestamps from TPF that correspond to the FFI:
+		# TODO: Rewrite to using np.searchsorted
+		indx = (time_tpf > time_start[k]) & (time_tpf < time_end[k])
+		# Combine all TPF qualities, so if a flag is set in any
+		# of the TPF timestamps it is set:
+		quality[k] = np.bitwise_or.reduce(quality_tpf[indx])
+
+	# Only transfer quality flags that are relevant for FFIs:
+	quality = np.bitwise_and(quality, TESSQualityFlags.FFI_RELEVANT_BITMASK)
+
+	return quality
 
 #------------------------------------------------------------------------------
-def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
+def _iterate_hdf_group(dset, start=0, stop=None):
+	for d in range(start, stop if stop is not None else len(dset)):
+		yield np.asarray(dset['%04d' % d])
+
+#------------------------------------------------------------------------------
+def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
+		calc_movement_kernel=False, backgrounds_pixels_threshold=0.5):
 	"""
 	Restructure individual FFI images (in FITS format) into
 	a combined HDF5 file which is used in the photometry
@@ -40,6 +67,10 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 		input_folder (string): Input folder to create TODO list for. If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
 		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be processed.
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be processed.
+		calc_movement_kernel (boolean, optional): Should Image Movement Kernels be calculated for each image?
+			If it is not calculated, only the default WCS movement kernel will be available when doing the folllowing photometry. Default=False.
+		backgrounds_pixels_threshold (float): Percentage of times a pixel has to use used in background calculation in order to be included in the
+			final list of contributing pixels. Default=0.5.
 
 	Raises:
 		IOError: If the specified ``input_folder`` is not an existing directory or if settings table could not be loaded from the catalog SQLite file.
@@ -48,6 +79,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 	"""
 
 	logger = logging.getLogger(__name__)
+	tqdm_settings = {'disable': not logger.isEnabledFor(logging.INFO)}
 
 	# Check the input folder, and load the default if not provided:
 	if input_folder is None:
@@ -69,10 +101,6 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 	}
 	imgchunks = (64, 64)
 
-	# Get the number of processes we can spawn in case it is needed for calculations:
-	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
-	logger.info("Using %d processes.", threads)
-
 	# If no sectors are provided, find all the available FFI files and figure out
 	# which sectors they are all from:
 	if sectors is None:
@@ -91,6 +119,17 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 	if not sectors:
 		logger.error("No sectors were found")
 		return
+
+	# Get the number of processes we can spawn in case it is needed for calculations:
+	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
+	logger.info("Using %d processes.", threads)
+
+	# Start pool of workers:
+	if threads > 1:
+		pool = multiprocessing.Pool(threads)
+		m = pool.imap
+	else:
+		m = map
 
 	# Loop over each combination of camera and CCD:
 	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
@@ -137,10 +176,15 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 			images = hdf.require_group('images')
 			images_err = hdf.require_group('images_err')
 			backgrounds = hdf.require_group('backgrounds')
-			masks = hdf.require_group('backgrounds_masks')
+			pixel_flags = hdf.require_group('pixel_flags')
 			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
 			time_smooth = backgrounds.attrs.get('time_smooth', 3)
+			flux_cutoff = backgrounds.attrs.get('flux_cutoff', 8e4)
+			bkgiters = backgrounds.attrs.get('bkgiters', 3)
+			radial_cutoff = backgrounds.attrs.get('radial_cutoff', 2400)
+			radial_pixel_step = backgrounds.attrs.get('radial_pixel_step', 15)
+			radial_smooth = backgrounds.attrs.get('radial_smooth', 3)
 
 			if len(backgrounds) < numfiles:
 				# Because HDF5 is stupid, and it cant figure out how to delete data from
@@ -150,32 +194,35 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 				with h5py.File(tmp_hdf_file, 'a', libver='latest') as hdftmp:
 					dset_bck_us = hdftmp.require_group('backgrounds_unsmoothed')
 
-					if len(masks) < numfiles:
+					if len(pixel_flags) < numfiles:
+						logger.info('Calculating backgrounds...')
+
+						# Create wrapper function freezing some of the
+						# additional keyword inputs:
+						fit_background_wrapper = functools.partial(fit_background,
+							 flux_cutoff=flux_cutoff,
+							 bkgiters=bkgiters,
+							 radial_cutoff=radial_cutoff,
+							 radial_pixel_step=radial_pixel_step,
+							 radial_smooth=radial_smooth
+						 )
 
 						tic = default_timer()
-						if threads > 1:
-							pool = multiprocessing.Pool(threads)
-							m = pool.imap
-						else:
-							m = map
 
-						last_bck_fit = -1 if len(masks) == 0 else int(sorted(list(masks.keys()))[-1])
+						last_bck_fit = -1 if len(pixel_flags) == 0 else int(sorted(list(pixel_flags.keys()))[-1])
 						k = last_bck_fit+1
-						for bck, mask in m(fit_background, files[k:]):
+						for bck, mask in tqdm(m(fit_background_wrapper, files[k:]), initial=k, total=numfiles, **tqdm_settings):
 							dset_name = '%04d' % k
 							logger.debug("Background %d complete", k)
 							logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k-last_bck_fit))
 
 							dset_bck_us.create_dataset(dset_name, data=bck)
 
-							indicies = np.asarray(np.nonzero(mask), dtype='uint16')
-							masks.create_dataset(dset_name, data=indicies, **args)
+							# If we ever defined pixel flags above 256, we have to change this to uint16
+							mask = np.asarray(np.where(mask, PixelQualityFlags.NotUsedForBackground, 0), dtype='uint8')
+							pixel_flags.create_dataset(dset_name, data=mask, chunks=imgchunks, **args)
 
 							k += 1
-
-						if threads > 1:
-							pool.close()
-							pool.join()
 
 						hdf.flush()
 						hdftmp.flush()
@@ -183,10 +230,16 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 						logger.info("Background estimation: %f sec/image", (toc-tic)/(numfiles-last_bck_fit))
 
 					# Smooth the backgrounds along the time axis:
+					logger.info('Smoothing backgrounds in time...')
 					backgrounds.attrs['time_smooth'] = time_smooth
+					backgrounds.attrs['flux_cutoff'] = flux_cutoff
+					backgrounds.attrs['bkgiters'] = bkgiters
+					backgrounds.attrs['radial_cutoff'] = radial_cutoff
+					backgrounds.attrs['radial_pixel_step'] = radial_pixel_step
+					backgrounds.attrs['radial_smooth'] = radial_smooth
 					w = time_smooth//2
 					tic = default_timer()
-					for k in range(numfiles):
+					for k in trange(numfiles, **tqdm_settings):
 						dset_name = '%04d' % k
 						if dset_name in backgrounds: continue
 
@@ -214,13 +267,16 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 				if os.path.exists(tmp_hdf_file):
 					os.remove(tmp_hdf_file)
 
-
-			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf:
+			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf or 'backgrounds_pixels_used' not in hdf or 'time_start' not in hdf:
 				SumImage = np.zeros((img_shape[0], img_shape[1]), dtype='float64')
+				Nimg = np.zeros_like(SumImage, dtype='int32')
 				time = np.empty(numfiles, dtype='float64')
 				timecorr = np.empty(numfiles, dtype='float32')
+				time_start = np.empty(numfiles, dtype='float64')
+				time_stop = np.empty(numfiles, dtype='float64')
 				cadenceno = np.empty(numfiles, dtype='int32')
 				quality = np.empty(numfiles, dtype='int32')
+				UsedInBackgrounds = np.zeros_like(SumImage, dtype='int32')
 
 				# Save list of file paths to the HDF5 file:
 				filenames = [os.path.basename(fname).rstrip('.gz').encode('ascii', 'strict') for fname in files]
@@ -232,13 +288,15 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 					'CCD': None,
 					'DATA_REL': None,
 					'NUM_FRM': None,
+					'NREADOUT': None,
 					'CRMITEN': None,
 					'CRBLKSZ': None,
 					'CRSPOC': None
 				}
-				for k, fname in enumerate(files):
-					logger.debug("Processing image: %.2f%% - %s", 100*k/numfiles, fname)
-					dset_name ='%04d' % k
+				logger.info('Final processing of individual images...')
+				tic = default_timer()
+				for k, fname in enumerate(tqdm(files, **tqdm_settings)):
+					dset_name = '%04d' % k
 
 					# Load the FITS file data and the header:
 					flux0, hdr, flux0_err = load_ffi_fits(fname, return_header=True, return_uncert=True)
@@ -251,19 +309,28 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 					# Pick out the important bits from the header:
 					# Keep time in BTJD. If we want BJD we could
 					# simply add BJDREFI + BJDREFF:
+					time_start[k] = hdr['TSTART']
+					time_stop[k] = hdr['TSTOP']
 					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP'])
 					timecorr[k] = hdr.get('BARYCORR', 0)
 
-					# Cadence-number is currently not in the FFIs.
-					# The following numbers comes from unofficial communication
-					# with Doug Caldwell and Roland Vanderspek:
-					# The timestamp in TJD and the corresponding cadenceno:
-					first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474E-03
-					first_cadenceno = 4697
-					timedelt = 1800/86400
-					# Extracpolate the cadenceno as a simple linear relation:
-					offset = first_cadenceno - first_time/timedelt
-					cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
+					# Get cadence-numbers from headers, if they are available.
+					# This header is not added before sector 6, so in that case
+					# we are doing a simple scaling of the timestamps.
+					if 'FFIINDEX' in hdr:
+						cadenceno[k] = hdr['FFIINDEX']
+					elif is_tess:
+						# The following numbers comes from unofficial communication
+						# with Doug Caldwell and Roland Vanderspek:
+						# The timestamp in TJD and the corresponding cadenceno:
+						first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474e-03
+						first_cadenceno = 4697
+						timedelt = 1800/86400
+						# Extracpolate the cadenceno as a simple linear relation:
+						offset = first_cadenceno - first_time/timedelt
+						cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
+					else:
+						cadenceno[k] = k+1
 
 					# Data quality flags:
 					quality[k] = hdr.get('DQUALITY', 0)
@@ -276,7 +343,18 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 							if hdr.get(key) != value:
 								logger.error("%s is not constant!", key)
 
+					# Find pixels marked for manual exclude:
+					manexcl = pixel_manual_exclude(flux0, hdr)
+
+					# Add manual excludes to pixel flags:
+					if np.any(manexcl):
+						pixel_flags[dset_name][manexcl] |= PixelQualityFlags.ManualExclude
+
 					if dset_name not in images:
+						# Mask out manually excluded data before saving:
+						flux0[manexcl] = np.nan
+						flux0_err[manexcl] = np.nan
+
 						# Load background from HDF file and subtract background from image,
 						# if the background has not already been subtracted:
 						if not hdr.get('BACKAPP', False):
@@ -287,6 +365,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 						images_err.create_dataset(dset_name, data=flux0_err, chunks=imgchunks, **args)
 					else:
 						flux0 = np.asarray(images[dset_name])
+						flux0[manexcl] = np.nan
 
 					# Save the World Coordinate System of each image:
 					if dset_name not in wcs:
@@ -295,10 +374,21 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 
 					# Add together images for sum-image:
 					if TESSQualityFlags.filter(quality[k]):
+						Nimg += np.isfinite(flux0)
 						replace(flux0, np.nan, 0)
 						SumImage += flux0
 
-				SumImage /= numfiles
+					# Add together the number of times each pixel was used in the background estimation:
+					UsedInBackgrounds += (np.asarray(pixel_flags[dset_name]) & PixelQualityFlags.NotUsedForBackground == 0)
+
+				# Normalize sumimage
+				SumImage /= Nimg
+
+				# Single boolean image indicating if the pixel was (on average) used in the background estimation:
+				if 'backgrounds_pixels_used' not in hdf:
+					UsedInBackgrounds = (UsedInBackgrounds/numfiles > backgrounds_pixels_threshold)
+					dset_uibkg = hdf.create_dataset('backgrounds_pixels_used', data=UsedInBackgrounds, dtype='bool', chunks=imgchunks, **args)
+					dset_uibkg.attrs['threshold'] = backgrounds_pixels_threshold
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
@@ -317,15 +407,54 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 				# Add other arrays to HDF5 file:
 				if 'time' in hdf: del hdf['time']
 				if 'timecorr' in hdf: del hdf['timecorr']
+				if 'time_start' in hdf: del hdf['time_start']
+				if 'time_stop' in hdf: del hdf['time_stop']
 				if 'sumimage' in hdf: del hdf['sumimage']
 				if 'cadenceno' in hdf: del hdf['cadenceno']
 				if 'quality' in hdf: del hdf['quality']
 				hdf.create_dataset('sumimage', data=SumImage, **args)
 				hdf.create_dataset('time', data=time, **args)
 				hdf.create_dataset('timecorr', data=timecorr, **args)
+				hdf.create_dataset('time_start', data=time_start, **args)
+				hdf.create_dataset('time_stop', data=time_stop, **args)
 				hdf.create_dataset('cadenceno', data=cadenceno, **args)
 				hdf.create_dataset('quality', data=quality, **args)
 				hdf.flush()
+
+				logger.info("Individual image processing: %f sec/image", (default_timer()-tic)/numfiles)
+			else:
+				# Extract things that are needed further down:
+				SumImage = np.asarray(hdf['sumimage'])
+				timecorr = np.asarray(hdf['timecorr'])
+				time_start = np.asarray(hdf['time_start'])
+				time_stop = np.asarray(hdf['time_stop'])
+				quality = np.asarray(hdf['quality'])
+
+			# Detections and flagging of Background Shenanigans:
+			last_bkgshe = pixel_flags.attrs.get('bkgshe_done', -1)
+			if last_bkgshe < numfiles-1:
+				logger.info("Detecting background shenanigans...")
+				tic = default_timer()
+
+				# Load settings and create wrapper function with keywords set:
+				bkgshe_threshold = pixel_flags.attrs.get('bkgshe_threshold', 40)
+				pixel_flags.attrs['bkgshe_threshold'] = bkgshe_threshold
+				pixel_background_shenanigans_wrapper = functools.partial(pixel_background_shenanigans,
+					SumImage=SumImage,
+					limit=bkgshe_threshold
+				)
+
+				# Run the background shenanigans extractor in parallel:
+				k = last_bkgshe + 1
+				for bckshe in tqdm(m(pixel_background_shenanigans_wrapper, _iterate_hdf_group(images, start=k)), initial=k, total=numfiles, **tqdm_settings):
+					if np.any(bckshe):
+						dset_name = '%04d' % k
+						pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
+					pixel_flags.attrs['bkgshe_done'] = k
+					k += 1
+					hdf.flush()
+
+				logger.info("Background Shenanigans: %f sec/image", (default_timer()-tic)/(numfiles-last_bkgshe))
 
 			# Check that the time vector is sorted:
 			if not np.all(hdf['time'][:-1] < hdf['time'][1:]):
@@ -339,37 +468,25 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 				#return
 
 			# Find the reference image:
-			refindx = np.searchsorted(hdf['time'], sector_reference_time_tjd, side='left')
-			if refindx > 0 and (refindx == len(hdf['time']) or abs(sector_reference_time_tjd - hdf['time'][refindx-1]) < abs(sector_reference_time_tjd - hdf['time'][refindx])):
-				refindx -= 1
+			refindx = find_nearest(hdf['time'], sector_reference_time_tjd)
 			logger.info("WCS reference frame: %d", refindx)
 
 			# Save WCS to the file:
 			wcs.attrs['ref_frame'] = refindx
 
-			if 'movement_kernel' not in hdf:
+			if calc_movement_kernel and 'movement_kernel' not in hdf:
 				# Calculate image motion:
 				logger.info("Calculation Image Movement Kernels...")
 				imk = ImageMovementKernel(image_ref=images['%04d' % refindx], warpmode='translation')
 				kernel = np.empty((numfiles, imk.n_params), dtype='float64')
 
 				tic = default_timer()
-				if threads > 1:
-					pool = multiprocessing.Pool(threads)
 
-					datasets = _iterate_hdf_group(images)
-					for k, knl in enumerate(pool.imap(imk.calc_kernel, datasets)):
-						kernel[k, :] = knl
-						logger.debug("Kernel: %s", knl)
-						logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
-
-					pool.close()
-					pool.join()
-				else:
-					for k, dset in enumerate(images):
-						kernel[k, :] = imk.calc_kernel(images[dset])
-						logger.info("Kernel: %s", kernel[k, :])
-						logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
+				datasets = _iterate_hdf_group(images)
+				for k, knl in enumerate(tqdm(m(imk.calc_kernel, datasets), **tqdm_settings)):
+					kernel[k, :] = knl
+					logger.debug("Kernel: %s", knl)
+					logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
 
 				toc = default_timer()
 				logger.info("Movement Kernel: %f sec/image", (toc-tic)/numfiles)
@@ -379,5 +496,37 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None):
 				dset.attrs['warpmode'] = imk.warpmode
 				dset.attrs['ref_frame'] = refindx
 
+			# Transfer quality flags from TPF files from the same CAMERA and CCD to the FFIs:
+			if hdf['quality'].attrs.get('TRANSFER_FROM_TPF') != True:
+				logger.info("Transfering QUALITY flags from TPFs to FFIs...")
+
+				# Select (max) five random TPF targets from the given sector, camera and ccd:
+				tpffiles = find_tpf_files(input_folder, sector=sector, camera=camera, ccd=ccd, findmax=5)
+				if len(tpffiles) == 0:
+					logger.warning("No TPF files found for SECTOR=%d, CAMERA=%d, CCD=%d and quality flags could therefore not be propergated.", sector, camera, ccd)
+				else:
+					# Run through each of the found TPF files and build the quality column from them,
+					# by simply setting the flag if it is found in any of the files:
+					quality_tpf = np.zeros(numfiles, dtype='int32')
+					for tpffile in tpffiles:
+						quality_tpf |= quality_from_tpf(tpffile, time_start-timecorr, time_stop-timecorr)
+
+					# Inspect the differences with the the qualities set in
+					indx_diff = (quality | quality_tpf != quality)
+					logger.info("%d qualities will be updated (%.1f%%).", np.sum(indx_diff), 100*np.sum(indx_diff)/numfiles)
+
+					# New quality:
+					quality |= quality_tpf
+
+					# Update the quality column in the HDF5 file:
+					hdf['quality'][:] = quality
+					hdf['quality'].attrs['TRANSFER_FROM_TPF'] = True
+					hdf.flush()
+
 		logger.info("Done.")
 		logger.info("Total: %f sec/image", (default_timer()-tic_total)/numfiles)
+
+	# Close workers again:
+	if threads > 1:
+		pool.close()
+		pool.join()

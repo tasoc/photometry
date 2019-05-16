@@ -18,11 +18,12 @@ import h5py
 import re
 import functools
 import contextlib
-from astropy.table import Table, vstack
+from astropy.table import Table, vstack, Column
 from astropy.io import fits
 from astropy.wcs import WCS
 from timeit import default_timer
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
+from .catalog import catalog_sqlite_search_footprint
 import multiprocessing
 
 def calc_cbv_area(catalog_row, settings):
@@ -104,6 +105,9 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 			if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
 				continue
 
+			# Calculate distance from target to edge of image:
+			EdgeDist = min(x+0.5, y+0.5, image_shape[1]-(x+0.5), image_shape[0]-(y+0.5))
+
 			# Calculate the Cotrending Basis Vector area the star falls in:
 			cbv_area = calc_cbv_area(row, settings)
 
@@ -115,7 +119,8 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 				'ccd': ccd,
 				'datasource': 'ffi',
 				'tmag': row['tmag'],
-				'cbv_area': cbv_area
+				'cbv_area': cbv_area,
+				'edge_dist': EdgeDist
 			})
 
 		cursor.close()
@@ -123,8 +128,8 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 	# Create the TODO list as a table which we will fill with targets:
 	return Table(
 		rows=cat_tmp,
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32')
+		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 #------------------------------------------------------------------------------
@@ -135,8 +140,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 	# Create the TODO list as a table which we will fill with targets:
 	cat_tmp = []
 	empty_table = Table(
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32')
+		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 	logger.debug("Processing TPF file: '%s'", fname)
@@ -184,7 +189,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 					'ccd': ccd,
 					'datasource': 'tpf',
 					'tmag': row['tmag'],
-					'cbv_area': cbv_area
+					'cbv_area': cbv_area,
+					'edge_dist': np.NaN
 				})
 
 				if find_secondary_targets:
@@ -194,11 +200,9 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 					image_shape = hdu[2].shape
 					wcs = WCS(header=hdu[2].header)
 					footprint = wcs.calc_footprint(center=False)
-					radec_min = np.min(footprint, axis=0)
-					radec_max = np.max(footprint, axis=0)
-					# TODO: This can fail to find all targets e.g. if the footprint is across the ra=0 line
-					cursor.execute("SELECT * FROM catalog WHERE ra BETWEEN ? AND ? AND decl BETWEEN ? AND ? AND starid != ? AND tmag < 15;", (radec_min[0], radec_max[0], radec_min[1], radec_max[1], starid))
-					for row in cursor.fetchall():
+
+					secondary_targets = catalog_sqlite_search_footprint(cursor, footprint, constraints='starid != %d AND tmag < 15' % starid, buffer_size=2)
+					for row in secondary_targets:
 						# Calculate the position of this star on the CCD using the WCS:
 						ra_dec = np.atleast_2d([row['ra'], row['decl']])
 						x, y = wcs.all_world2pix(ra_dec, 0)[0]
@@ -207,6 +211,9 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 						# The reason for the strange 0.5's is that pixel centers are at integers.
 						if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
 							continue
+
+						# Calculate distance from target to edge of image:
+						EdgeDist = min(x+0.5, y+0.5, image_shape[1]-(x+0.5), image_shape[0]-(y+0.5))
 
 						# Add this secondary target to the list:
 						# Note that we are storing the starid of the target
@@ -219,21 +226,25 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 							'ccd': ccd,
 							'datasource': 'tpf:' + str(starid),
 							'tmag': row['tmag'],
-							'cbv_area': cbv_area
+							'cbv_area': cbv_area,
+							'edge_dist': EdgeDist
 						})
 
 				# Close the connection to the catalog SQLite database:
 				cursor.close()
+		else:
+			logger.debug("Target not on requested CAMERA and CCD")
+			return empty_table
 
 	# TODO: Could we avoid fixed-size strings in datasource column?
 	return Table(
 		rows=cat_tmp,
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32')
+		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 #------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
+def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_secondary_targets=True):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
@@ -246,6 +257,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be included.
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
 		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
+		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
 
 	Raises:
 		IOError: If the specified ``input_folder`` is not an existing directory.
@@ -286,8 +298,8 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32')
+		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 	# Load list of all Target Pixel files in the directory:
@@ -308,7 +320,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 
 		# Run the TPF files in parallel:
 		tic = default_timer()
-		_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds, find_secondary_targets=False, exclude=exclude)
+		_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds, find_secondary_targets=find_secondary_targets, exclude=exclude)
 		for cat2 in m(_tpf_todo_wrapper, tpf_files):
 			cat = vstack([cat, cat2], join_type='exact')
 
@@ -379,7 +391,35 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False):
 	_, idx = np.unique(cat[('starid', 'sector', 'camera', 'ccd', 'datasource')], return_index=True, axis=0)
 	cat = cat[np.sort(idx)]
 
-	# Exclude targets from FFIs:
+	# If the target is present in more than one TPF file, pick the one
+	# where the target is the furthest from the edge of the image
+	# and discard the target in all the other TPFs:
+	if find_secondary_targets:
+		# Add an index column to the table for later use:
+		cat.add_column(Column(name='priority', data=np.arange(len(cat))))
+
+		# Create index that will only find secondary targets:
+		indx = [row['datasource'].strip().startswith('tpf:') for row in cat]
+
+		# Group the table on the starids and find groups with more than 1 target:
+		# Equivalent to the SQL code "GROUP BY starid HAVING COUNT(*) > 1"
+		remove_indx = []
+		for g in cat[indx].group_by('starid').groups:
+			if len(g) > 1:
+				# Find the target farthest from the edge and mark the rest
+				# for removal:
+				logger.debug(g)
+				im = np.argmax(g['edge_dist'])
+				ir = np.ones(len(g), dtype='bool')
+				ir[im] = False
+				remove_indx += list(g[ir]['priority'])
+
+		# Remove the list of duplicate secondary targets:
+		logger.info("Removing %d secondary targets as duplicates.", len(remove_indx))
+		logger.debug(remove_indx)
+		cat.remove_rows(remove_indx)
+
+	# Exclude targets from exclude list:
 	# Add an index and use that to search for starid, and then further check sector and datasource:
 	cat.add_index('starid')
 	remove_indx = []

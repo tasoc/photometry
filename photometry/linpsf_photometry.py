@@ -22,19 +22,19 @@ class LinPSFPhotometry(BasePhotometry):
 	def __init__(self, *args, **kwargs):
 		"""
 		Linear PSF photometry.
-		
-		Do point spread function photometry with fixed centroids. The flux of 
-		all stars in the image are fitted simultaneously using a linear least 
+
+		Do point spread function photometry with fixed centroids. The flux of
+		all stars in the image are fitted simultaneously using a linear least
 		squares method.
-		
-		
+
+
 		Note:
-			Inspired by the :py:class:`psf_photometry` class set up by 
-			Rasmus Handberg <rasmush@phys.au.dk>. The code in this 
+			Inspired by the :py:class:`psf_photometry` class set up by
+			Rasmus Handberg <rasmush@phys.au.dk>. The code in this
 			:py:func:`__init__` function as well as the logging, catalog call,
-			time domain loop structure, catalog star limits and lightcurve 
+			time domain loop structure, catalog star limits and lightcurve
 			output is copied from that class.
-		
+
 		.. code author:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
 		# Call the parent initializing:
@@ -45,7 +45,7 @@ class LinPSFPhotometry(BasePhotometry):
 		# NOTE: If we run resize_stamp at any point in the code,
 		#       we should also update self.PSF.
 		# TODO: Maybe we should move this into BasePhotometry?
-		self.psf = PSF(self.camera, self.ccd, self.stamp)
+		self.psf = PSF(self.sector, self.camera, self.ccd, self.stamp)
 
 	def do_photometry(self):
 		"""Linear PSF Photometry
@@ -66,7 +66,7 @@ class LinPSFPhotometry(BasePhotometry):
 						(cat['column_stamp'][staridx] - cat['column_stamp'])**2)
 
 		# Find indices of stars in catalog to fit:
-		# (only include stars that are close to the main target and that are 
+		# (only include stars that are close to the main target and that are
 		# not much fainter)
 		indx = (cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -5)
 		nstars = np.sum(indx)
@@ -81,7 +81,7 @@ class LinPSFPhotometry(BasePhotometry):
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
 			# Get catalog at current time in MJD:
-			cat = self.catalog_attime(self.lightcurve['time'][k])
+			cat = self.catalog_attime(self.lightcurve['time'][k] - self.lightcurve['timecorr'][k])
 
 			# Reduce catalog to only include stars that should be fitted:
 			cat = cat[indx]
@@ -101,7 +101,7 @@ class LinPSFPhotometry(BasePhotometry):
 						).reshape(1, 3)
 
 				# Fill out column of A with reshaped PRF array from one star:
-				A[:,col] = np.reshape(self.psf.integrate_to_image(params0, 
+				A[:,col] = np.reshape(self.psf.integrate_to_image(params0,
 										cutoff_radius=20), npx)
 
 			# Crate b, the solution array by reshaping the image to a 1D array:
@@ -141,7 +141,7 @@ class LinPSFPhotometry(BasePhotometry):
 					fig = plt.figure()
 					result4plot = []
 					for star, target in enumerate(cat):
-						result4plot.append(np.array([target['row_stamp'], 
+						result4plot.append(np.array([target['row_stamp'],
 													target['column_stamp'],
 													fluxes[star]]))
 
@@ -171,7 +171,7 @@ class LinPSFPhotometry(BasePhotometry):
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
 				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
 
-		
+
 		if np.sum(np.isnan(self.lightcurve['flux'])) == len(self.lightcurve['flux']):
 			# Set contamination to NaN if all flux values are NaN:
 			self.report_details(error='All target flux values are NaN.')
@@ -180,7 +180,7 @@ class LinPSFPhotometry(BasePhotometry):
 			# Divide by number of added fluxes to get the mean flux:
 			fluxes_mean =  fluxes_sum / np.sum(~np.isnan(self.lightcurve['flux']))
 			logger.debug('Mean fluxes are: '+np.str(fluxes_mean))
-			
+
 			# Calculate contamination from other stars in target PSF using latest A:
 			not_target_star = np.arange(len(fluxes_mean))!=staridx
 			contamination = \

@@ -13,6 +13,7 @@ import numpy as np
 from astropy.io import fits
 from bottleneck import move_median, nanmedian, nanmean
 import logging
+from tqdm import tqdm
 from scipy.special import erf
 from scipy.stats import binned_statistic
 import json
@@ -21,12 +22,13 @@ import fnmatch
 import glob
 import itertools
 import warnings
+import requests
 
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', module='scipy', category=FutureWarning, message='Using a non-tuple sequence for multidimensional indexing is deprecated;', lineno=607)
 
 # Constants:
-mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
+mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)
 
 #------------------------------------------------------------------------------
 def load_settings(sector=None):
@@ -80,7 +82,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	return matches
 
 #------------------------------------------------------------------------------
-def find_tpf_files(rootdir, starid=None, sector=None):
+def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, findmax=None):
 	"""
 	Search directory recursively for TESS Target Pixel Files.
 
@@ -88,6 +90,14 @@ def find_tpf_files(rootdir, starid=None, sector=None):
 		rootdir (string): Directory to search recursively for TESS TPF files.
 		starid (integer or None, optional): Only return files from the given TIC number. If ``None``, files from all TIC numbers are returned.
 		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
+		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
+		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
+		findmax (integer or None, optional): Maximum number of files to return. If ``None``, return all files.
+
+	Note:
+		Filtering on camera and/or ccd will cause the program to read the headers
+		of the files in order to determine the camera and ccd from which they came.
+		This can significantly slow down the query.
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
@@ -116,11 +126,23 @@ def find_tpf_files(rootdir, starid=None, sector=None):
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern2)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
+	breakout = False
 	matches = []
 	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
 		for filename in filenames:
 			if fnmatch.fnmatch(filename, filename_pattern) or fnmatch.fnmatch(filename, filename_pattern2):
-				matches.append(os.path.join(root, filename))
+				fpath = os.path.join(root, filename)
+				if camera is not None and fits.getval(fpath, 'CAMERA', ext=0) != camera:
+					continue
+
+				if ccd is not None and fits.getval(fpath, 'CCD', ext=0) != ccd:
+					continue
+
+				matches.append(fpath)
+				if findmax is not None and len(matches) >= findmax:
+					breakout=True
+					break
+		if breakout: break
 
 	# Sort the list of files by thir filename:
 	matches.sort(key = lambda x: os.path.basename(x))
@@ -426,3 +448,58 @@ def rms_timescale(time, flux, timescale=3600/86400):
 
 	# Compute robust RMS value (MAD scaled to RMS)
 	return mad_to_sigma * nanmedian(np.abs(flux_bin - nanmedian(flux_bin)))
+
+#------------------------------------------------------------------------------
+def find_nearest(array, value):
+	"""
+	Search array for value and return the index where the value is closest.
+
+	Parameters:
+		array (ndarray): Array to search.
+		value: Value to search array for.
+
+	Returns:
+		int: Index of ``array`` closest to ``value``.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+	idx = np.searchsorted(array, value, side='left')
+	if idx > 0 and (idx == len(array) or abs(value - array[idx-1]) < abs(value - array[idx])):
+		return idx-1
+	else:
+		return idx
+		
+#------------------------------------------------------------------------------
+def download_file(url, destination):
+	"""
+	Download file from URL and place into specified destination.
+
+	Parameters:
+		url (string): URL to file to be downloaded.
+		destination (string): Path where to save file.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	print("Downloading %s" % url)
+	try:
+		response = requests.get(url, stream=True, allow_redirects=True)
+
+		# Throw an error for bad status codes
+		response.raise_for_status()
+
+		total_size = int(response.headers.get('content-length', 0))
+		block_size = 1024
+		with open(destination, 'wb') as handle:
+			with tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
+				for block in response.iter_content(block_size):
+					handle.write(block)
+					pbar.update(len(block))
+					
+		if os.path.getsize(destination) != total_size:
+			raise Exception("File not downloaded correctly")
+
+	except:
+		if os.path.exists(destination):
+			os.remove(destination)
+		raise

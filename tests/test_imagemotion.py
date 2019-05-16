@@ -101,7 +101,7 @@ def test_imagemotion_wcs():
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 
-		times = h5['time']
+		times = np.asarray(h5['time']) - np.asarray(h5['timecorr'])
 		kernels = [h5['wcs'][dset][0] for dset in h5['wcs']]
 
 		# Create ImageMovementKernel instance:
@@ -125,6 +125,14 @@ def test_imagemotion_wcs():
 
 		# Last timestamp should also work:
 		jitter = imk.interpolate(times[-1], xy)
+		assert(jitter.shape == xy.shape)
+
+		# Just before first timestamp should also work (roundoff check):
+		jitter = imk.interpolate(times[0] - np.finfo('float64').eps, xy)
+		assert(jitter.shape == xy.shape)
+
+		# Just after last timestamp should also work (roundoff check):
+		jitter = imk.interpolate(times[-1] + np.finfo('float64').eps, xy)
 		assert(jitter.shape == xy.shape)
 
 		#plt.close('all')
@@ -157,5 +165,5 @@ def test_imagemotion_wcs():
 	print("Done")
 
 if __name__ == '__main__':
-	#test_imagemotion()
+	test_imagemotion()
 	test_imagemotion_wcs()

@@ -57,7 +57,7 @@ def tessphot(method=None, *args, **kwargs):
 	and if nessacery try another algorithm.
 
 	Parameters:
-		method (string or None): Type of photometry to run. Can be ``'aperture'``, ``'psf'``, ``'linpsf'`` or ``None``.
+		method (string or None): Type of photometry to run. Can be ``'aperture'``, ``'halo'``, ``'psf'``, ``'linpsf'`` or ``None``.
 		*args: Arguments passed on to the photometry class init-function.
 		**kwargs: Keyword-arguments passed on to the photometry class init-function.
 

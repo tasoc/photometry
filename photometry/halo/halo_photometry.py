@@ -121,7 +121,7 @@ class HaloPhotometry(BasePhotometry):
 		logger.info('Formatting data for halo')
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
 		flux = self.images_cube.T[indx_goodtimes, :, :]
-		flux[:, self.pixelflags.T==0] = np.nan
+		flux[:, self.aperture.T==0] = np.nan
 
 		# Get the position of the main target
 		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
