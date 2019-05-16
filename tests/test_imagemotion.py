@@ -127,6 +127,14 @@ def test_imagemotion_wcs():
 		jitter = imk.interpolate(times[-1], xy)
 		assert(jitter.shape == xy.shape)
 
+		# Just before first timestamp should also work (roundoff check):
+		jitter = imk.interpolate(times[0] - np.finfo('float64').eps, xy)
+		assert(jitter.shape == xy.shape)
+
+		# Just after last timestamp should also work (roundoff check):
+		jitter = imk.interpolate(times[-1] + np.finfo('float64').eps, xy)
+		assert(jitter.shape == xy.shape)
+
 		#plt.close('all')
 		#plt.figure()
 		#for x, y in xy:

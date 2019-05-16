@@ -23,6 +23,7 @@ from photometry import AperturePhotometry
 from photometry.spice import TESS_SPICE
 from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_motion
 from photometry.plots import plt
+from mpl_toolkits.mplot3d import Axes3D
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
