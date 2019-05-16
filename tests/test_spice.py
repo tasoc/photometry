@@ -100,6 +100,8 @@ def test_position_velocity():
 #------------------------------------------------------------------------------
 def test_sclk2jd():
 
+	print("="*72)
+
 	star_coord = coord.SkyCoord(
 		ra='04:52:6.92',
 		dec='-70:43:52.4',
@@ -124,12 +126,15 @@ def test_sclk2jd():
 
 		#np.testing.assert_allclose(diff, 0, atol=0.1)
 
-		#time, timecorr = knl.barycorr(jdtdb, star_coord)
-		#time -= 2457000
-		#print(timecorr)
-		#print( time )
-		#print( (time - 1468.416666534158)*86400 )
+		time, timecorr = knl.barycorr(jdtdb, star_coord)
+		time -= 2457000
+		diff = (time - desired)*86400
 
+		print("Barycorr:       %.6f" % (timecorr*86400))
+		print("Converted time: %.16f" % time)
+		print("Difference:     %.6f s" % diff )
+
+	print("="*72)
 
 #------------------------------------------------------------------------------
 def test_spice():

@@ -225,7 +225,6 @@ class TESS_SPICE(object):
 
 		# Convert JD to Ephemeris Time:
 		jd = np.atleast_1d(jd)
-		#times = spiceypy.str2et(['JD %.16f' % j for j in jd])
 		times = [spiceypy.unitim(j, 'JDTDB', 'ET') for j in jd]
 
 		# Get positions as a 2D array of (x,y,z) coordinates in km:
@@ -259,7 +258,7 @@ class TESS_SPICE(object):
 		positions = self.position(jd, relative_to='EARTH')
 
 		# Transform into appropiate Geocentric frame:
-		obstimes = Time(jd, format='jd', scale='utc')
+		obstimes = Time(jd, format='jd', scale='tdb')
 		cartrep = coord.CartesianRepresentation(positions, xyz_axis=1, unit=u.km)
 		gcrs = coord.GCRS(cartrep, obstime=obstimes)
 		itrs = gcrs.transform_to(coord.ITRS(obstime=obstimes))
@@ -285,7 +284,6 @@ class TESS_SPICE(object):
 
 		# Convert JD to Ephemeris Time:
 		jd = np.atleast_1d(jd)
-		#times = spiceypy.str2et(['JD %.16f' % j for j in jd])
 		times = [spiceypy.unitim(j, 'JDTDB', 'ET') for j in jd]
 
 		# Get state of spacecraft (position and velocity):
@@ -358,6 +356,7 @@ class TESS_SPICE(object):
 		times = Time(tm, format='jd', scale='tdb', location=tess_position)
 
 		# TODO: Auto-advance the coordinates of the star to the given obstime, if possible
+		# This is currently done in prepare/BasePhotometry to the reference-time for the sector
 		#try:
 		#	star_coord = star_coord.apply_space_motion(new_obstime=times)
 		#except ValueError:
