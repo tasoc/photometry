@@ -13,6 +13,7 @@ from astropy.time import Time
 import astropy.units as u
 import os
 import numpy as np
+import logging
 import spiceypy
 from spiceypy.utils.support_types import SpiceyError
 import hashlib
@@ -37,6 +38,8 @@ class TESS_SPICE(object):
 				variable ``TESSPHOT_SPICE_KERNELS`` is used, and if that is not set, the
 				``data/spice`` directory is used.
 		"""
+
+		logger = logging.getLogger(__name__)
 
 		# If no kernel folder is given, used the one stored in env.var. or the default location:
 		if kernels_folder is None:
@@ -168,7 +171,7 @@ class TESS_SPICE(object):
 
 		# Path where meta-kernel will be saved:
 		fileshash = hashlib.md5(','.join(files).encode()).hexdigest()
-		self.METAKERNEL = os.path.join(kernels_folder, 'metakernel-' + fileshash + '.txt')
+		self.METAKERNEL = os.path.abspath(os.path.join(kernels_folder, 'metakernel-' + fileshash + '.txt'))
 
 		# Write meta-kernel to file:
 		if not os.path.exists(self.METAKERNEL):
@@ -183,9 +186,22 @@ class TESS_SPICE(object):
 				fid.write(r"\begintext" + "\n")
 				fid.write("End of MK file.\n")
 
+		# Because SpiceyPy loads kernels into a global memory scope (BAAAAADDDD SpiceyPy!!!),
+		# we first check if we have already loaded this into the global scope:
+		# This is to attempt to avoid loading in the same kernels again and again when
+		# running things in parallel.
+		already_loaded = False
+		for k in range(spiceypy.ktotal('META')):
+			if os.path.abspath(spiceypy.kdata(k, 'META')[0]) == self.METAKERNEL:
+				logger.debug("SPICE Meta-kernel already loaded.")
+				already_loaded = True
+				break
+
 		# Define TESS and load kernels:
 		spiceypy.boddef('TESS', -95)
-		spiceypy.furnsh(self.METAKERNEL)
+		if not already_loaded:
+			logger.debug("Loading SPICE Meta-kernel: %s", self.METAKERNEL)
+			spiceypy.furnsh(self.METAKERNEL)
 
 		# Let's make sure astropy is using the de430 kernels as well:
 		# Default is to use the same as is being used by SPOC (de430).
@@ -196,9 +212,13 @@ class TESS_SPICE(object):
 		self._old_solar_system_ephemeris = coord.solar_system_ephemeris.get()
 		coord.solar_system_ephemeris.set(self.planetary_ephemeris)
 
+	def unload(self):
+		"""Unload TESS SPICE kernels from memory."""
+		spiceypy.unload(self.METAKERNEL)
+
 	def close(self):
 		"""Close SPICE object."""
-		spiceypy.unload(self.METAKERNEL)
+		#self.unload() # Uhh, we are being naugthy here!
 		coord.solar_system_ephemeris.set(self._old_solar_system_ephemeris)
 
 	def __enter__(self):

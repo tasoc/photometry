@@ -60,6 +60,11 @@ def test_timestamps():
 def test_position_velocity():
 
 	with TESS_SPICE() as knl:
+
+		# We should be able to load and close without affecting the results of the following:
+		with TESS_SPICE() as knl2:
+			pass
+
 		time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
 
 		# Get the location of TESS as a function of time relative to Earth in kilometers:
