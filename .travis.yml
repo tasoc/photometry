@@ -39,5 +39,7 @@ deploy:
   skip_cleanup: true
   draft: true
   on:
-    branch: master
+    branch:
+      - master
+      - /^v\d+\.\d+.+$/
     tags: true
