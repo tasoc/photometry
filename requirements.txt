@@ -7,13 +7,11 @@ astropy >= 3.1
 photutils >= 0.4
 Bottleneck == 1.2.1
 h5py
-enum-compat
 scikit-image == 0.14.1
 scikit-learn == 0.20.2
 statsmodels == 0.9.0
 opencv-python-headless == 4.0.1.24
 psycopg2-binary
-backports.tempfile
 halophot >= 0.6.6.2
 jplephem
 spiceypy
