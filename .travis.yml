@@ -21,6 +21,7 @@ jobs:
 #    - python: "2.7"
 
 install:
+  - pip uninstall numpy Bottleneck -y
   - pip install -r requirements.txt
   - python -c "from photometry.spice import TESS_SPICE; print(TESS_SPICE())"
 script:
