@@ -21,7 +21,8 @@ jobs:
 #    - python: "2.7"
 
 install:
-  - pip install -r requirements.txt
+  - pip uninstall numpy Bottleneck -y
+  - pip install -r requirements.txt --no-cache-dir
   - python -c "from photometry.spice import TESS_SPICE; print(TESS_SPICE())"
 script:
   - pytest
@@ -38,5 +39,7 @@ deploy:
   skip_cleanup: true
   draft: true
   on:
-    branch: master
+    branch:
+      - master
+      - /^v\d+\.\d+.+$/
     tags: true

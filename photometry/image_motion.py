@@ -154,7 +154,8 @@ class ImageMovementKernel(object):
 			# Calculate RA and DEC of target in the reference image:
 			radec = self.wcs_ref.all_pix2world(xy, 0, ra_dec_order=True)
 			# Use RA and DEC to find the position in the kernel image:
-			delta_pos = kernel.all_world2pix(radec, 0, ra_dec_order=True)
+			# TODO: Better handling of NoConvergence exception, which is currently silenced
+			delta_pos = kernel.all_world2pix(radec, 0, ra_dec_order=True, maxiter=50, quiet=True)
 			# Calculate the difference in pixel-position:
 			delta_pos -= xy
 

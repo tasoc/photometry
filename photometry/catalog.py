@@ -123,6 +123,9 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 		list of all stars in the TESS Input Catalog (TIC), which is a very large
 		table.
 
+	Raises:
+		OSError: If settings could not be loaded from TASOC databases.
+
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
@@ -196,7 +199,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				))
 				row = tasocdb.cursor.fetchone()
 				if row is None:
-					raise IOError("The given sector, camera, ccd combination was not found in TASOC database: (%s,%s,%s)", sector, camera, ccd)
+					raise OSError("The given sector, camera, ccd combination was not found in TASOC database: (%s,%s,%s)", sector, camera, ccd)
 				footprint = row[0]
 				camera_centre_ra = row[1]
 				camera_centre_dec = row[2]

@@ -59,7 +59,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 	# We just check if an HDF5 file exist.
 	hdf5_file = find_hdf5_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 	if len(hdf5_file) != 1:
-		raise IOError("Could not find HDF5 file")
+		raise FileNotFoundError("Could not find HDF5 file")
 
 	# Load the relevant information from the HDF5 file for this camera and ccd:
 	with h5py.File(hdf5_file[0], 'r') as hdf:
@@ -77,7 +77,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 	# Load the corresponding catalog:
 	catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 	if len(catalog_file) != 1:
-		raise IOError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
+		raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
 
 	with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 		conn.row_factory = sqlite3.Row
@@ -159,7 +159,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 			# Load the corresponding catalog:
 			catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 			if len(catalog_file) != 1:
-				raise IOError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
+				raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
 
 			with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 				conn.row_factory = sqlite3.Row
@@ -260,7 +260,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
 
 	Raises:
-		IOError: If the specified ``input_folder`` is not an existing directory.
+		NotADirectoryError: If the specified ``input_folder`` is not an existing directory.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -273,7 +273,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 
 	# Check that the given input directory is indeed a directory:
 	if not os.path.isdir(input_folder):
-		raise IOError("The given path does not exist or is not a directory")
+		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
 	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
