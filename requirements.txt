@@ -1,11 +1,11 @@
 numpy == 1.15.4
 six
 pytest
-scipy >= 0.16
+scipy == 1.2.1
 matplotlib == 2.1.2
 astropy >= 3.1
 photutils >= 0.4
-Bottleneck >= 1.2
+Bottleneck == 1.2.1
 h5py
 enum-compat
 scikit-image == 0.14.1
