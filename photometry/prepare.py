@@ -73,7 +73,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 			final list of contributing pixels. Default=0.5.
 
 	Raises:
-		IOError: If the specified ``input_folder`` is not an existing directory or if settings table could not be loaded from the catalog SQLite file.
+		NotADirectoryError: If the specified ``input_folder`` is not an existing directory or if settings table could not be loaded from the catalog SQLite file.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -87,7 +87,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 	# Check that the given input directory is indeed a directory:
 	if not os.path.isdir(input_folder):
-		raise IOError("The given path does not exist or is not a directory")
+		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
 	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
@@ -157,7 +157,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 			cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
 			row = cursor.fetchone()
 			if row is None:
-				raise IOError("Settings could not be loaded from catalog")
+				raise OSError("Settings could not be loaded from catalog")
 			#sector = row['sector']
 			sector_reference_time = row['reference_time']
 			cursor.close()

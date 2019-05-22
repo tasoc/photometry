@@ -366,7 +366,7 @@ class TESS_SPICE(object):
 			star_coord (SkyCoord object): Coordinates of star.
 
 		Returns:
-			ndarray: Corrected timestamps in TBJD = BJD - 2457000.
+			ndarray: Corrected timestamps in BJD.
 			ndarray: Time corrections used to convert time into barycentric time in days.
 
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>

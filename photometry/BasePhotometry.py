@@ -112,7 +112,8 @@ class BasePhotometry(object):
 			cache (string, optional): Optional values are ``'none'``, ``'full'`` or ``'basic'`` (Default).
 
 		Raises:
-			IOError: If starid could not be found in catalog.
+			OSError: If starid could not be found in catalog.
+			FileNotFoundError: If input file (HDF5, TPF, Catalog) could not be found.
 			ValueError: On invalid datasource.
 			ValueError: If ``camera`` and ``ccd`` is not provided together with ``datasource='ffi'``.
 		"""
@@ -178,7 +179,7 @@ class BasePhotometry(object):
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
-				raise IOError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
 			filepath_hdf5 = filepath_hdf5[0]
 			self.filepath_hdf5 = filepath_hdf5
 
@@ -283,9 +284,9 @@ class BasePhotometry(object):
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
-				raise IOError("Target Pixel File not found")
+				raise FileNotFoundError("Target Pixel File not found")
 			elif len(fname) > 1:
-				raise IOError("Multiple Target Pixel Files found matching pattern")
+				raise OSError("Multiple Target Pixel Files found matching pattern")
 
 			# Open the FITS file:
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
@@ -328,7 +329,7 @@ class BasePhotometry(object):
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
-				raise IOError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
 			filepath_hdf5 = filepath_hdf5[0]
 			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
 
@@ -340,7 +341,7 @@ class BasePhotometry(object):
 		self._catalog = None
 		logger.debug('Catalog file: %s', self.catalog_file)
 		if len(self.catalog_file) != 1:
-			raise IOError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (self.sector, self.camera, self.ccd))
+			raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (self.sector, self.camera, self.ccd))
 		self.catalog_file = self.catalog_file[0]
 
 		# Load information about main target:
@@ -350,7 +351,7 @@ class BasePhotometry(object):
 			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
 			target = cursor.fetchone()
 			if target is None:
-				raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
+				raise OSError("Star could not be found in catalog: {0:d}".format(self.starid))
 			self.target = dict(target) # Dictionary of all main target properties.
 			self.target_tmag = target['tmag'] # TESS magnitude of the main target.
 			self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.

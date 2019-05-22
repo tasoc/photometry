@@ -32,7 +32,7 @@ class TaskManager(object):
 			summary_interval (int): Interval at which to write summary file. Setting this to 1 will mean writing the file after every tasks completes. Default=100.
 
 		Raises:
-			IOError: If TODO-file could not be found.
+			FileNotFoundError: If TODO-file could not be found.
 		"""
 
 		self.overwrite = overwrite
@@ -43,7 +43,7 @@ class TaskManager(object):
 			todo_file = os.path.join(todo_file, 'todo.sqlite')
 
 		if not os.path.exists(todo_file):
-			raise IOError('Could not find TODO-file')
+			raise FileNotFoundError('Could not find TODO-file')
 
 		# Setup logging:
 		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -94,10 +94,9 @@ class TaskManager(object):
 		);""") # PRIMARY KEY
 		self.conn.commit()
 
-		# Reset calculations with status STARTED or ABORT:
-		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value)
-		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
-		self.cursor.execute("DELETE FROM photometry_skipped WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
+		# Reset calculations with status STARTED, ABORT or ERROR:
+		# We are re-running all with error, in the hope that they will work this time around:
+		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value) + ',' + str(STATUS.ERROR.value)
 		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
 		self.conn.commit()
 
@@ -231,6 +230,7 @@ class TaskManager(object):
 						# This target was the brightest star in the mask,
 						# so let's keep it and simply mark all the other targets
 						# as SKIPPED:
+						self.cursor.execute("DELETE FROM photometry_skipped WHERE skipped_by=?;", (result['priority'],))
 						for row in skip_rows:
 							self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
 								STATUS.SKIPPED.value,
@@ -268,7 +268,7 @@ class TaskManager(object):
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
