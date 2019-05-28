@@ -11,7 +11,7 @@ from __future__ import division, with_statement, print_function, absolute_import
 from six.moves import range
 import numpy as np
 from astropy.io import fits
-from bottleneck import move_median, nanmedian, nanmean
+from bottleneck import move_median, nanmedian, nanmean, allnan
 import logging
 from tqdm import tqdm
 from scipy.special import erf
@@ -438,9 +438,19 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	time = np.asarray(time)
+	flux = np.asarray(flux)
+	if len(flux) == 0 or allnan(flux):
+		return np.nan
+
+	time_min = np.nanmin(time)
+	time_max = np.nanmax(time)
+	if not np.isfinite(time_min) or not np.isfinite(time_max) or time_max - time_min <= 0:
+		raise ValueError("Invalid time-vector specified")
+
 	# Construct the bin edges seperated by the timescale:
-	bins = np.arange(np.nanmin(time), np.nanmax(time), timescale)
-	bins = np.append(bins, np.nanmax(time))
+	bins = np.arange(time_min, time_max, timescale)
+	bins = np.append(bins, time_max)
 
 	# Bin the timeseries to one hour:
 	indx = np.isfinite(flux)
@@ -468,7 +478,7 @@ def find_nearest(array, value):
 		return idx-1
 	else:
 		return idx
-		
+
 #------------------------------------------------------------------------------
 def download_file(url, destination):
 	"""
@@ -495,7 +505,7 @@ def download_file(url, destination):
 				for block in response.iter_content(block_size):
 					handle.write(block)
 					pbar.update(len(block))
-					
+
 		if os.path.getsize(destination) != total_size:
 			raise Exception("File not downloaded correctly")
 

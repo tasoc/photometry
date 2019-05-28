@@ -32,7 +32,7 @@ import astropy.coordinates as coord
 from astropy.time import Time
 from astropy.wcs import WCS
 import enum
-from bottleneck import replace, nanmedian, nanvar, nanstd
+from bottleneck import replace, nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale, find_nearest
@@ -1213,6 +1213,10 @@ class BasePhotometry(object):
 
 		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
+			# Simple check that entire lightcurve is not NaN:
+			if allnan(self.lightcurve['flux']):
+				raise Exception("Final lightcurve is all NaNs")
+
 			# Calculate the mean flux level:
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
 
