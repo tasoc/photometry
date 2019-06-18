@@ -130,6 +130,7 @@ class BasePhotometry(object):
 		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
+		self.version = version
 
 		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
 
