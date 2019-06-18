@@ -7,9 +7,7 @@ All other specific photometric algorithms will inherit from BasePhotometry.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import six
-from six.moves import range
 import numpy as np
 from astropy._erfa.core import ErfaWarning
 import warnings
@@ -97,7 +95,7 @@ class BasePhotometry(object):
 	"""
 
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		sector=None, camera=None, ccd=None, plot=False, cache='basic'):
+		sector=None, camera=None, ccd=None, plot=False, cache='basic', version=5):
 		"""
 		Initialize the photometry object.
 
@@ -110,6 +108,7 @@ class BasePhotometry(object):
 			camera (integer, optional): TESS camera (1-4) to load target from (Only used for FFIs).
 			ccd (integer, optional): TESS CCD (1-4) to load target from (Only used for FFIs).
 			cache (string, optional): Optional values are ``'none'``, ``'full'`` or ``'basic'`` (Default).
+			version (integer): Data release number to be added to headers. Default=5.
 
 		Raises:
 			OSError: If starid could not be found in catalog.
@@ -1253,7 +1252,7 @@ class BasePhotometry(object):
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
-	def save_lightcurve(self, output_folder=None, version=4):
+	def save_lightcurve(self, output_folder=None, version=None):
 		"""
 		Save generated lightcurve to file.
 
@@ -1268,6 +1267,11 @@ class BasePhotometry(object):
 		# Check if another output folder was provided:
 		if output_folder is None:
 			output_folder = self.output_folder
+		if version is None:
+			if self.version is None:
+				raise ValueError("VERSION has not been set")
+			else:
+				version = self.version
 
 		# Make sure that the directory exists:
 		if not os.path.exists(output_folder):
