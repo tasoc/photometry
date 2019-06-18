@@ -7,9 +7,7 @@ All other specific photometric algorithms will inherit from BasePhotometry.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import six
-from six.moves import range
 import numpy as np
 from astropy._erfa.core import ErfaWarning
 import warnings
@@ -32,7 +30,7 @@ import astropy.coordinates as coord
 from astropy.time import Time
 from astropy.wcs import WCS
 import enum
-from bottleneck import replace, nanmedian, nanvar, nanstd
+from bottleneck import replace, nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale, find_nearest
@@ -97,7 +95,7 @@ class BasePhotometry(object):
 	"""
 
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		sector=None, camera=None, ccd=None, plot=False, cache='basic'):
+		sector=None, camera=None, ccd=None, plot=False, cache='basic', version=5):
 		"""
 		Initialize the photometry object.
 
@@ -110,6 +108,7 @@ class BasePhotometry(object):
 			camera (integer, optional): TESS camera (1-4) to load target from (Only used for FFIs).
 			ccd (integer, optional): TESS CCD (1-4) to load target from (Only used for FFIs).
 			cache (string, optional): Optional values are ``'none'``, ``'full'`` or ``'basic'`` (Default).
+			version (integer): Data release number to be added to headers. Default=5.
 
 		Raises:
 			OSError: If starid could not be found in catalog.
@@ -131,6 +130,7 @@ class BasePhotometry(object):
 		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
+		self.version = version
 
 		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
 
@@ -1213,6 +1213,10 @@ class BasePhotometry(object):
 
 		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
+			# Simple check that entire lightcurve is not NaN:
+			if allnan(self.lightcurve['flux']):
+				raise Exception("Final lightcurve is all NaNs")
+
 			# Calculate the mean flux level:
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
 
@@ -1249,7 +1253,7 @@ class BasePhotometry(object):
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
-	def save_lightcurve(self, output_folder=None, version=4):
+	def save_lightcurve(self, output_folder=None, version=None):
 		"""
 		Save generated lightcurve to file.
 
@@ -1264,6 +1268,11 @@ class BasePhotometry(object):
 		# Check if another output folder was provided:
 		if output_folder is None:
 			output_folder = self.output_folder
+		if version is None:
+			if self.version is None:
+				raise ValueError("VERSION has not been set")
+			else:
+				version = self.version
 
 		# Make sure that the directory exists:
 		if not os.path.exists(output_folder):

@@ -18,6 +18,8 @@ import h5py
 import re
 import functools
 import contextlib
+from scipy.ndimage.morphology import distance_transform_edt
+from scipy.interpolate import RectBivariateSpline
 from astropy.table import Table, vstack, Column
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -26,6 +28,7 @@ from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphe
 from .catalog import catalog_sqlite_search_footprint
 import multiprocessing
 
+#------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
 	# The distance from the camera centre to the corner furthest away:
 	camera_radius = np.sqrt( 12**2 + 12**2 ) # np.max(sphere_distance(a[:,0], a[:,1], settings['camera_centre_ra'], settings['camera_centre_dec']))
@@ -46,6 +49,46 @@ def calc_cbv_area(catalog_row, settings):
 
 	return cbv_area
 
+#------------------------------------------------------------------------------
+def edge_distance(row, column, aperture=None, image_shape=None):
+	"""
+	Distance to nearest edge.
+
+	Parameters:
+		row (ndarray): Array of row positions to calculate distance of.
+		column (ndarray): Array of column positions to calculate distance of.
+		aperture (ndarray, optional): Boolean array indicating pixels to be considered "holes" (False) and good (True).
+		image_shape (tuple, optional): Shape of aperture image.
+
+	Returns:
+		float: Distance in pixels to the nearest edge (outer or internal).
+	"""
+	# Basic check of input:
+	if image_shape is None and aperture is None:
+		raise Exception("Please provide either aperture or image_shape.")
+
+	if image_shape is None and aperture is not None:
+		image_shape = aperture.shape
+
+	# Distance from position to outer edges of image:
+	EdgeDistOuter = np.minimum.reduce([column+0.5, row+0.5, image_shape[1]-(column+0.5), image_shape[0]-(row+0.5)])
+
+	# If we have been provided with an aperture and it contains "holes",
+	# we should include the distance to these holes:
+	if aperture is not None and np.any(~aperture):
+		# TODO: This doesn't return the correct answer near internal corners.
+		aperture_dist = distance_transform_edt(aperture)
+		EdgeDistFunc = RectBivariateSpline(
+			np.arange(image_shape[0]),
+			np.arange(image_shape[1]),
+			np.clip(aperture_dist-0.5, 0, None),
+			kx=1, ky=1)
+
+		return np.minimum(EdgeDistFunc(row, column), EdgeDistOuter)
+
+	return EdgeDistOuter
+
+#------------------------------------------------------------------------------
 def _ffi_todo_wrapper(args):
 	return _ffi_todo(*args)
 
@@ -106,7 +149,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 				continue
 
 			# Calculate distance from target to edge of image:
-			EdgeDist = min(x+0.5, y+0.5, image_shape[1]-(x+0.5), image_shape[0]-(y+0.5))
+			EdgeDist = edge_distance(y, x, image_shape=image_shape)
 
 			# Calculate the Cotrending Basis Vector area the star falls in:
 			cbv_area = calc_cbv_area(row, settings)
@@ -150,6 +193,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 		sector = hdu[0].header['SECTOR']
 		camera = hdu[0].header['CAMERA']
 		ccd = hdu[0].header['CCD']
+		aperture_observed_pixels = (hdu['APERTURE'].data & 1 != 0)
 
 		if (starid, sector, 'tpf') in exclude or (starid, sector, 'all') in exclude:
 			logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf", starid, sector)
@@ -212,8 +256,14 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 						if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
 							continue
 
+						# Make sure that the pixel that the target falls on has actually been
+						# collected by the spacecraft:
+						if not aperture_observed_pixels[int(np.round(y)), int(np.round(x))]:
+							logger.debug("Secondary target rejected. Falls on non-observed pixel. (primary=%d, secondary=%d)", starid, row['starid'])
+							continue
+
 						# Calculate distance from target to edge of image:
-						EdgeDist = min(x+0.5, y+0.5, image_shape[1]-(x+0.5), image_shape[0]-(y+0.5))
+						EdgeDist = edge_distance(y, x, aperture=aperture_observed_pixels)
 
 						# Add this secondary target to the list:
 						# Note that we are storing the starid of the target

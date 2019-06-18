@@ -105,7 +105,8 @@ class TaskManager(object):
 			'slurm_jobid': os.environ.get('SLURM_JOB_ID', None),
 			'numtasks': 0,
 			'tasks_run': 0,
-			'last_error': None
+			'last_error': None,
+			'mean_elaptime': 0.0
 		}
 		# Make sure to add all the different status to summary:
 		for s in STATUS: self.summary[s.name] = 0
@@ -263,6 +264,9 @@ class TaskManager(object):
 		if error_msg:
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
+
+		# Calculate mean elapsed time using "streaming mean":
+		self.summary['mean_elaptime'] += (result['time'] - self.summary['mean_elaptime']) / self.summary['tasks_run']
 
 		stamp = details.get('stamp', None)
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]

@@ -6,14 +6,13 @@ Tests of SPICE kernels with TESS to find barycentric time correction for FFIs.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
+import os.path
+import logging
+import numpy as np
 import astropy.constants as const
 import astropy.coordinates as coord
 from astropy.time import Time
 import astropy.units as u
-import os
-import numpy as np
-import logging
 import spiceypy
 from spiceypy.utils.support_types import SpiceyError
 import hashlib
@@ -161,7 +160,7 @@ class TESS_SPICE(object):
 		if not os.path.exists(kernels_folder):
 			os.makedirs(kernels_folder)
 
-		# Automatically download kernels from MAST, if they don't already exist?
+		# Automatically download kernels from TASOC, if they don't already exist?
 		#urlbase = 'https://archive.stsci.edu/missions/tess/models/'
 		urlbase = 'https://tasoc.dk/pipeline/spice/'
 		for fname in files:
@@ -197,8 +196,14 @@ class TESS_SPICE(object):
 				already_loaded = True
 				break
 
-		# Define TESS and load kernels:
-		spiceypy.boddef('TESS', -95)
+		# Define TESS object if it doesn't already exist:
+		try:
+			spiceypy.bodn2c('TESS')
+		except SpiceyError:
+			logger.debug("Defining TESS name in SPICE")
+			spiceypy.boddef('TESS', -95)
+
+		# Load kernels if needed:
 		if not already_loaded:
 			logger.debug("Loading SPICE Meta-kernel: %s", self.METAKERNEL)
 			spiceypy.furnsh(self.METAKERNEL)
@@ -207,7 +212,7 @@ class TESS_SPICE(object):
 		# Default is to use the same as is being used by SPOC (de430).
 		# TODO: Would be nice to also use the local one
 		#self.planetary_ephemeris = 'de430'
-		#self.planetary_ephemeris = 'file://' + os.path.join(kernels_folder, 'tess2018338154429-41241_de430.bsp').replace('\\', '/')
+		#self.planetary_ephemeris = os.path.abspath(os.path.join(kernels_folder, 'tess2018338154429-41241_de430.bsp'))
 		self.planetary_ephemeris = 'https://tasoc.dk/pipeline/spice/tess2018338154429-41241_de430.bsp'
 		self._old_solar_system_ephemeris = coord.solar_system_ephemeris.get()
 		coord.solar_system_ephemeris.set(self.planetary_ephemeris)

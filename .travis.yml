@@ -30,6 +30,7 @@ branches:
   only:
     - master
     - devel
+    - /^v\d+\.\d+.+$/
 
 # Deploy to GitHub Releases, making a release of the
 # code whenever a new tag is added on the master branch
