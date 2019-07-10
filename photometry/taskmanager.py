@@ -106,7 +106,7 @@ class TaskManager(object):
 			'numtasks': 0,
 			'tasks_run': 0,
 			'last_error': None,
-			'mean_elaptime': 0.0
+			'mean_elaptime': None
 		}
 		# Make sure to add all the different status to summary:
 		for s in STATUS: self.summary[s.name] = 0
@@ -265,8 +265,12 @@ class TaskManager(object):
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
 
-		# Calculate mean elapsed time using "streaming mean":
-		self.summary['mean_elaptime'] += (result['time'] - self.summary['mean_elaptime']) / self.summary['tasks_run']
+		# Calculate mean elapsed time using "streaming weighted mean" with (alpha=0.1):
+		# https://dev.to/nestedsoftware/exponential-moving-average-on-streaming-data-4hhl
+		if self.summary['mean_elaptime'] is None:
+			self.summary['mean_elaptime'] = result['time']
+		else:
+			self.summary['mean_elaptime'] += 0.1 * (result['time'] - self.summary['mean_elaptime'])
 
 		stamp = details.get('stamp', None)
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
