@@ -57,6 +57,7 @@ class TaskManager(object):
 		self.conn = sqlite3.connect(todo_file)
 		self.conn.row_factory = sqlite3.Row
 		self.cursor = self.conn.cursor()
+		self.cursor.execute("PRAGMA foreign_keys=ON;")
 
 		# Reset the status of everything for a new run:
 		if overwrite:
@@ -99,6 +100,9 @@ class TaskManager(object):
 		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value) + ',' + str(STATUS.ERROR.value)
 		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
 		self.conn.commit()
+
+		# Analyze the tables for better query planning:
+		self.cursor.execute("ANALYZE;")
 
 		# Prepare summary object:
 		self.summary = {
