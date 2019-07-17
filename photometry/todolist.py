@@ -501,16 +501,16 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		cursor = conn.cursor()
 
 		cursor.execute("""CREATE TABLE todolist (
-			priority BIGINT NOT NULL,
+			priority INTEGER PRIMARY KEY ASC NOT NULL,
 			starid BIGINT NOT NULL,
-			sector INT NOT NULL,
+			sector INTEGER NOT NULL,
 			datasource TEXT NOT NULL DEFAULT 'ffi',
-			camera INT NOT NULL,
-			ccd INT NOT NULL,
+			camera INTEGER NOT NULL,
+			ccd INTEGER NOT NULL,
 			method TEXT DEFAULT NULL,
 			tmag REAL,
-			status INT DEFAULT NULL,
-			cbv_area INT NOT NULL
+			status INTEGER DEFAULT NULL,
+			cbv_area INTEGER NOT NULL
 		);""")
 
 		for pri, row in enumerate(cat):
@@ -531,7 +531,6 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 			))
 
 		conn.commit()
-		cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
 		cursor.execute("CREATE INDEX starid_datasource_idx ON todolist (starid, datasource);") # FIXME: Should be "UNIQUE", but something is weird in ETE-6?!
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
@@ -539,6 +538,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 
 		# Change settings of SQLite file:
 		cursor.execute("PRAGMA page_size=4096;")
+		cursor.execute("PRAGMA foreign_keys=ON;")
 		# Run a VACUUM of the table which will force a recreation of the
 		# underlying "pages" of the file.
 		# Please note that we are changing the "isolation_level" of the connection here,

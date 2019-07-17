@@ -68,7 +68,7 @@ class TaskManager(object):
 
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
-			priority INT PRIMARY KEY NOT NULL,
+			priority INTEGER PRIMARY KEY ASC NOT NULL,
 			starid BIGINT NOT NULL,
 			lightcurve TEXT,
 			elaptime REAL NOT NULL,
@@ -88,8 +88,8 @@ class TaskManager(object):
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE
 		);""")
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS photometry_skipped (
-			priority INT NOT NULL,
-			skipped_by INT NOT NULL,
+			priority INTEGER NOT NULL,
+			skipped_by INTEGER NOT NULL,
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE,
 			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
 		);""") # PRIMARY KEY
