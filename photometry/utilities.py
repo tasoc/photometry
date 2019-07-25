@@ -442,6 +442,8 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	flux = np.asarray(flux)
 	if len(flux) == 0 or allnan(flux):
 		return np.nan
+	if len(time) == 0 or allnan(time):
+		raise ValueError("Invalid time-vector specified. No valid timestamps.")
 
 	time_min = np.nanmin(time)
 	time_max = np.nanmax(time)
