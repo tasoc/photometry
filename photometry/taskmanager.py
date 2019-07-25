@@ -58,6 +58,8 @@ class TaskManager(object):
 		self.conn.row_factory = sqlite3.Row
 		self.cursor = self.conn.cursor()
 		self.cursor.execute("PRAGMA foreign_keys=ON;")
+		self.cursor.execute("PRAGMA locking_mode=EXCLUSIVE;")
+		self.cursor.execute("PRAGMA journal_mode=TRUNCATE;")
 
 		# Reset the status of everything for a new run:
 		if overwrite:

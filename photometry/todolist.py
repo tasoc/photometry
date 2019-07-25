@@ -500,6 +500,13 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 	with contextlib.closing(sqlite3.connect(todo_file)) as conn:
 		cursor = conn.cursor()
 
+		# Change settings of SQLite file:
+		cursor.execute("PRAGMA page_size=4096;")
+		cursor.execute("PRAGMA foreign_keys=ON;")
+		cursor.execute("PRAGMA locking_mode=EXCLUSIVE;")
+		cursor.execute("PRAGMA journal_mode=TRUNCATE;")
+
+		# Create TODO-list table:
 		cursor.execute("""CREATE TABLE todolist (
 			priority INTEGER PRIMARY KEY ASC NOT NULL,
 			starid BIGINT NOT NULL,
@@ -536,9 +543,6 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
 
-		# Change settings of SQLite file:
-		cursor.execute("PRAGMA page_size=4096;")
-		cursor.execute("PRAGMA foreign_keys=ON;")
 		# Run a VACUUM of the table which will force a recreation of the
 		# underlying "pages" of the file.
 		# Please note that we are changing the "isolation_level" of the connection here,
