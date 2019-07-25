@@ -13,6 +13,7 @@ import astropy.constants as const
 import astropy.coordinates as coord
 from astropy.time import Time
 import astropy.units as u
+from astropy.version import major as astropy_major_version
 import spiceypy
 from spiceypy.utils.support_types import SpiceyError
 import hashlib
@@ -210,10 +211,14 @@ class TESS_SPICE(object):
 
 		# Let's make sure astropy is using the de430 kernels as well:
 		# Default is to use the same as is being used by SPOC (de430).
-		# TODO: Would be nice to also use the local one
+		# If using astropy 4.0+, we can load the local one directly. Before this,
+		# it needs to be downloaded and cached:
+		# NOTE: https://github.com/astropy/astropy/pull/8767
 		#self.planetary_ephemeris = 'de430'
-		#self.planetary_ephemeris = os.path.abspath(os.path.join(kernels_folder, 'tess2018338154429-41241_de430.bsp'))
-		self.planetary_ephemeris = 'https://tasoc.dk/pipeline/spice/tess2018338154429-41241_de430.bsp'
+		if astropy_major_version >= 4:
+			self.planetary_ephemeris = os.path.abspath(os.path.join(kernels_folder, 'tess2018338154429-41241_de430.bsp'))
+		else:
+			self.planetary_ephemeris = 'https://tasoc.dk/pipeline/spice/tess2018338154429-41241_de430.bsp'
 		self._old_solar_system_ephemeris = coord.solar_system_ephemeris.get()
 		coord.solar_system_ephemeris.set(self.planetary_ephemeris)
 
