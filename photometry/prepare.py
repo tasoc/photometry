@@ -1,8 +1,11 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
+"""
+Preparation for Photometry extraction.
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import range, map
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+"""
+
 import os
 import numpy as np
 import warnings
@@ -53,7 +56,7 @@ def _iterate_hdf_group(dset, start=0, stop=None):
 		yield np.asarray(dset['%04d' % d])
 
 #------------------------------------------------------------------------------
-def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
+def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		calc_movement_kernel=False, backgrounds_pixels_threshold=0.5):
 	"""
 	Restructure individual FFI images (in FITS format) into

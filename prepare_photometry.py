@@ -16,11 +16,10 @@ The program internally calls the function :py:func:`photometry.prepare.create_hd
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import argparse
 import os.path
 import logging
-from photometry.prepare import create_hdf5
+from photometry.prepare import prepare_photometry
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -56,4 +55,4 @@ if __name__ == '__main__':
 		parser.error("The given path does not exist or is not a directory")
 
 	# Run the program for the selected camera/ccd combinations:
-	create_hdf5(args.input_folder, cameras=args.camera, ccds=args.ccd)
+	prepare_photometry(args.input_folder, cameras=args.camera, ccds=args.ccd)
