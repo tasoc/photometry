@@ -19,7 +19,6 @@ https://github.com/aebrahim/python-git-version
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import print_function
 from subprocess import check_output, CalledProcessError
 from os import path, name, devnull, environ, listdir
 

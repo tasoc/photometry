@@ -32,8 +32,6 @@ Example:
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, unicode_literals
-from six.moves import map, range
 import argparse
 import logging
 import numpy as np

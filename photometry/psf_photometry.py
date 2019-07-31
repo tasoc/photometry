@@ -6,18 +6,15 @@ Created on Wed Nov  8 16:37:12 2017
 @author: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import zip
 import os.path
 import numpy as np
-import matplotlib.pyplot as plt
 import logging
 from copy import deepcopy
 from scipy.optimize import minimize
 from . import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
-from .plots import plot_image, save_figure
+from .plots import plt, plot_image, save_figure
 
 class PSFPhotometry(BasePhotometry):
 

@@ -6,7 +6,6 @@ Create catalogs of stars in a given TESS observing sector.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import numpy as np
 import os
 import sqlite3

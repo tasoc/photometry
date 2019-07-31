@@ -29,8 +29,6 @@ To read more about the methods used, please see the following papers:
 # Packages
 #==============================================================================
 
-from __future__ import division, with_statement
-from six.moves import range, zip
 import numpy as np
 from ..plots import plot_image, save_figure, plt
 import matplotlib as mpl

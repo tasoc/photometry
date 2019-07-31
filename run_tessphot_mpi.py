@@ -22,7 +22,6 @@ execute the following command:
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import with_statement, print_function
 from mpi4py import MPI
 import argparse
 import logging

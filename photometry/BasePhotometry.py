@@ -7,7 +7,6 @@ All other specific photometric algorithms will inherit from BasePhotometry.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-import six
 import numpy as np
 from astropy._erfa.core import ErfaWarning
 import warnings
@@ -223,7 +222,7 @@ class BasePhotometry(object):
 					hdr_string = self.hdf['wcs']['%04d' % refindx][0]
 				else:
 					hdr_string = self.hdf['wcs'][0]
-				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+				if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
 				self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
 				attrs['wcs'] = self.wcs
 

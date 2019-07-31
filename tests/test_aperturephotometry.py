@@ -6,7 +6,6 @@ Created on Fri Sep 29 10:54:10 2017
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
 import numpy as np
 import sys
 import os

@@ -6,8 +6,6 @@ Point Spread Function (PSF).
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
-from six.moves import range
 import os
 import numpy as np
 from scipy.io import loadmat

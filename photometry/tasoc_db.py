@@ -11,8 +11,6 @@ Note:
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import input
 import psycopg2 as psql
 from psycopg2.extras import DictCursor
 import getpass
@@ -30,10 +28,10 @@ class TASOC_DB(object):
 	def __init__(self, username=None, password=None):
 		"""
 		Open connection to central TASOC database.
-		
-		If ``username`` or ``password`` is not provided or ``None``, 
+
+		If ``username`` or ``password`` is not provided or ``None``,
 		the user will be prompted for them.
-		
+
 		Parameters:
 			username (string or None, optional): Username for TASOC database.
 			password (string or None, optional): Password for TASOC database.
@@ -43,7 +41,7 @@ class TASOC_DB(object):
 			username = input('Username [%s]: ' % default_username)
 			if username == '':
 				username = default_username
-				
+
 		if password is None:
 			password = getpass.getpass('Password: ')
 

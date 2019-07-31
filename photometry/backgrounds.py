@@ -6,8 +6,6 @@ Estimation of sky background in TESS Full Frame Images.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-import six
 import warnings
 import numpy as np
 from astropy.utils.exceptions import AstropyDeprecationWarning
@@ -73,9 +71,10 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 	"""
 
 	# Load file:
+	hdr = {}
 	if isinstance(image, np.ndarray):
 		img0 = image
-	elif isinstance(image, six.string_types):
+	elif isinstance(image, str):
 		if image.endswith('.npy'):
 			img0 = np.load(image)
 		else:

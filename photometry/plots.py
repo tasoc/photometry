@@ -6,7 +6,6 @@ Plotting utilities.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-import six
 import logging
 import os
 import warnings
@@ -76,7 +75,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if ax is None:
 		ax = plt.gca()
 
-	if isinstance(cmap, six.string_types):
+	if isinstance(cmap, str):
 		cmap = plt.get_cmap(cmap)
 
 	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, interpolation='nearest', **kwargs)

@@ -5,9 +5,6 @@ Create the TODO list which is used by the pipeline to keep track of the
 targets that needs to be processed.
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-import six
-from six.moves import map
 import os
 import numpy as np
 import logging
@@ -111,7 +108,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 			hdr_string = hdf['wcs']['%04d' % refindx][0]
 		else:
 			hdr_string = hdf['wcs'][0]
-		if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+		if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
 		wcs = WCS(header=fits.Header().fromstring(hdr_string))
 		offset_rows = hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 		offset_cols = hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 0)

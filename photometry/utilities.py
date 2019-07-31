@@ -7,8 +7,6 @@ the photometry package.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import range
 import numpy as np
 from astropy.io import fits
 from bottleneck import move_median, nanmedian, nanmean, allnan

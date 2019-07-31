@@ -6,7 +6,6 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, unicode_literals
 import numpy as np
 import matplotlib.pyplot as plt
 from astroquery.mast import Catalogs

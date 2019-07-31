@@ -6,7 +6,6 @@ Created on Thu Jan 18 14:08:36 2018
 @author: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
