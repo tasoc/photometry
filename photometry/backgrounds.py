@@ -172,8 +172,11 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 
 			# Interpolate the radial curve and reshape back onto the 2D image:
 			indx = ~np.isnan(s2)
-			intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], ext=3)
-			img_bkg_radial = 10**intp(r)
+			if np.any(indx): # TODO: This should be the required number of points instead... 3?
+				intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], ext=3)
+				img_bkg_radial = 10**intp(r)
+			else:
+				img_bkg_radial = 0
 
 		# Run 2D square tiles background estimation:
 		bkg = Background2D(img0 - img_bkg_radial, (64, 64),
