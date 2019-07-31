@@ -156,7 +156,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 			catalog_file = os.path.join(input_folder, 'catalog_sector{0:03d}_camera{1:d}_ccd{2:d}.sqlite'.format(sector, camera, ccd))
 			if os.path.exists(catalog_file):
 				if overwrite:
-					os.remove(catalog_file[0])
+					os.remove(catalog_file)
 				else:
 					logger.info("Already done")
 					continue
@@ -167,10 +167,10 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 				# Table which stores information used to generate catalog:
 				cursor.execute("""CREATE TABLE settings (
-					sector INT NOT NULL,
-					camera INT NOT NULL,
-					ccd INT NOT NULL,
-					ticver INT NOT NULL,
+					sector INTEGER NOT NULL,
+					camera INTEGER NOT NULL,
+					ccd INTEGER NOT NULL,
+					ticver INTEGER NOT NULL,
 					reference_time DOUBLE PRECISION NOT NULL,
 					epoch DOUBLE PRECISION NOT NULL,
 					coord_buffer DOUBLE PRECISION NOT NULL,
@@ -180,7 +180,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				);""")
 
 				cursor.execute("""CREATE TABLE catalog (
-					starid BIGINT PRIMARY KEY NOT NULL,
+					starid INTEGER PRIMARY KEY NOT NULL,
 					ra DOUBLE PRECISION NOT NULL,
 					decl DOUBLE PRECISION NOT NULL,
 					ra_J2000 DOUBLE PRECISION NOT NULL,
@@ -250,7 +250,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 					footprint,
 					camera_centre_ra,
 					camera_centre_dec,
-					7 # TODO: TIC Version hard-coded to TIC-7. This should obviously be changed when TIC is updated
+					8 # TODO: TIC Version hard-coded to TIC-8. This should obviously be changed when TIC is updated
 				))
 				conn.commit()
 
@@ -285,18 +285,26 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 						row['Teff']
 					))
 
-				cursor.execute("CREATE UNIQUE INDEX starid_idx ON catalog (starid);")
 				cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
 				conn.commit()
 
 				# Change settings of SQLite file:
 				cursor.execute("PRAGMA page_size=4096;")
+				cursor.execute("PRAGMA foreign_keys=TRUE;")
+
+				# Analyze the tables for better query planning:
+				cursor.execute("ANALYZE;")
+
 				# Run a VACUUM of the table which will force a recreation of the
 				# underlying "pages" of the file.
 				# Please note that we are changing the "isolation_level" of the connection here,
 				# but since we closing the connnection just after, we are not changing it back
 				conn.isolation_level = None
 				cursor.execute("VACUUM;")
+
+				# Make the database read-only:
+				cursor.execute("PRAGMA query_only=TRUE;")
+				conn.commit()
 
 				cursor.close()
 
