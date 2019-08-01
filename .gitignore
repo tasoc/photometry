@@ -3,6 +3,8 @@
 tests/input/todo.sqlite-journal
 tests/input/lightcurves
 photometry/data/spice
+photometry/data/twodblack
+photometry/data/flatfield
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
