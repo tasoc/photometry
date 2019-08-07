@@ -23,6 +23,7 @@ import itertools
 import functools
 import contextlib
 from tqdm import tqdm, trange
+from .catalog import download_catalogs
 from .backgrounds import fit_background
 from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
@@ -107,13 +108,23 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 	# If no sectors are provided, find all the available FFI files and figure out
 	# which sectors they are all from:
 	if sectors is None:
-		# TODO: Could we change this so we don't have to parse the filenames?
-		files = find_ffi_files(input_folder)
 		sectors = []
-		for fname in files:
+
+		# TODO: Could we change this so we don't have to parse the filenames?
+		for fname in find_ffi_files(input_folder):
 			m = re.match(r'^tess.+-s(\d+)-.+\.fits', os.path.basename(fname))
 			if int(m.group(1)) not in sectors:
 				sectors.append(int(m.group(1)))
+
+		# Also collect sectors from TPFs. They are needed for ensuring that
+		# catalogs are available. Can be added directly to the sectors list,
+		# since the HDF5 creation below will simply skip any sectors with
+		# no FFIs available
+		for fname in find_tpf_files(input_folder):
+			m = re.match(r'^.+-s(\d+)[-_].+_tp\.fits', os.path.basename(fname))
+			if int(m.group(1)) not in sectors:
+				sectors.append(int(m.group(1)))
+
 		logger.debug("Sectors found: %s", sectors)
 	else:
 		sectors = (sectors,)
@@ -122,6 +133,11 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 	if not sectors:
 		logger.error("No sectors were found")
 		return
+
+	# Make sure that catalog files are available in the input directory.
+	# If they are not already, they will be downloaded from the cache:
+	for sector in sectors:
+		download_catalogs(input_folder, sector)
 
 	# Get the number of processes we can spawn in case it is needed for calculations:
 	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
@@ -148,10 +164,10 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 		# Catalog file:
 		catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
-		logger.debug("Catalog File: %s", catalog_file)
 		if len(catalog_file) != 1:
 			logger.error("Catalog file could not be found: SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
 			continue
+		logger.debug("Catalog File: %s", catalog_file[0])
 
 		# Load catalog settings from the SQLite database:
 		with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
