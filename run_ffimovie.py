@@ -39,9 +39,9 @@ import h5py
 import os.path
 import functools
 import multiprocessing
+from tqdm import tqdm, trange
 from photometry.plots import plt, plot_image
 from matplotlib import animation
-from tqdm import tqdm
 from photometry.quality import PixelQualityFlags
 
 #------------------------------------------------------------------------------
@@ -62,9 +62,10 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	"""
 
 	logger = logging.getLogger(__name__)
-
+	tqdm_settings = {'disable': not logger.isEnabledFor(logging.INFO)}
 	logger.info("Processing '%s'", hdf_file)
 
+	# File to be created:
 	output_file = os.path.splitext(hdf_file)[0] + '.mp4'
 	if os.path.exists(output_file):
 		if overwrite:
@@ -74,32 +75,50 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			logger.info("Movie file already exists")
 			return output_file
 
-	# Open HDF5 file for reading:
-	with h5py.File(hdf_file, 'r', libver='latest') as hdf:
+	# Open HDF5 file:
+	# We need to have write-privaledges because we are going to updated some attributes
+	with h5py.File(hdf_file, 'r+', libver='latest') as hdf:
 		numfiles = len(hdf['images'])
 		dummy_img = np.zeros_like(hdf['images/0000'])
+		time = np.asarray(hdf['time'])
+		cadenceno = np.asarray(hdf['cadenceno'])
+
+		# Load the image scales if they have already been calculated:
+		vmin = hdf['backgrounds'].attrs.get('movie_vmin')
+		vmax = hdf['backgrounds'].attrs.get('movie_vmax')
+		vmin2 = hdf['images'].attrs.get('movie_vmin')
+		vmax2 = hdf['images'].attrs.get('movie_vmax')
 
 		# Calculate scales to use for plotting the images:
-		logger.info("Calculating image scales...")
-		vmax = np.empty(numfiles)
-		vmin = np.empty(numfiles)
-		vmax2 = np.empty(numfiles)
-		vmin2 = np.empty(numfiles)
-		for k in range(numfiles):
-			vmin[k], vmax[k] = np.nanpercentile(hdf['backgrounds/%04d' % k], [1.0, 99.0])
-			vmin2[k], vmax2[k] = np.nanpercentile(hdf['images/%04d' % k], [1.0, 99.0])
+		if not vmin:
+			logger.info("Calculating image scales...")
+			vmax = np.empty(numfiles)
+			vmin = np.empty(numfiles)
+			vmax2 = np.empty(numfiles)
+			vmin2 = np.empty(numfiles)
+			for k in trange(numfiles, **tqdm_settings):
+				vmin[k], vmax[k] = np.nanpercentile(hdf['backgrounds/%04d' % k], [1.0, 99.0])
+				vmin2[k], vmax2[k] = np.nanpercentile(hdf['images/%04d' % k], [1.0, 99.0])
 
-		vmin = np.nanpercentile(vmin, 25.0)
-		vmax = np.nanpercentile(vmax, 75.0)
-		vmin2 = np.nanpercentile(vmin2, 25.0)
-		vmax2 = np.nanpercentile(vmax2, 75.0)
+			vmin = np.nanpercentile(vmin, 25.0)
+			vmax = np.nanpercentile(vmax, 75.0)
+			vmin2 = np.nanpercentile(vmin2, 25.0)
+			vmax2 = np.nanpercentile(vmax2, 75.0)
+
+			# Save image scales to HDF5 file:
+			hdf['backgrounds'].attrs['movie_vmin'] = vmin
+			hdf['backgrounds'].attrs['movie_vmax'] = vmax
+			hdf['images'].attrs['movie_vmin'] = vmin2
+			hdf['images'].attrs['movie_vmax'] = vmax2
+			hdf.flush()
+
 
 		logger.info("Creating movie...")
 		with plt.style.context('dark_background'):
-			fig, ax = plt.subplots(1, 4, figsize=(20, 6))
+			fig, ax = plt.subplots(1, 4, figsize=(20, 6.8))
 
 			imgs = [0,0,0,0]
-			imgs[0] = plot_image(dummy_img, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image - 0000', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
+			imgs[0] = plot_image(dummy_img, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
 			imgs[1] = plot_image(dummy_img, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
 			imgs[2] = plot_image(dummy_img, ax=ax[2], scale='sqrt', vmin=vmin2, vmax=vmax2, title='Background subtracted', xlabel=None, ylabel=None, cmap=plt.cm.viridis, make_cbar=True)
 			imgs[3] = plot_image(dummy_img, ax=ax[3], scale='linear', vmin=0, vmax=1, title='Background Shenanigans', xlabel=None, ylabel=None, cmap=plt.cm.Reds, make_cbar=True, clabel='Flags')
@@ -108,11 +127,13 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 				a.set_xticks([])
 				a.set_yticks([])
 
+			fig.suptitle("to come\nt=???????", fontsize=15)
 			fig.set_tight_layout('tight')
+			fig.subplots_adjust(top=0.85)
 
 			writer = animation.FFMpegWriter(fps=fps)
 			with writer.saving(fig, output_file, dpi):
-				for k in range(numfiles):
+				for k in trange(numfiles, **tqdm_settings):
 
 					dset_name = '%04d' % k
 					flux0 = np.asarray(hdf['images/' + dset_name])
@@ -120,7 +141,6 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 
 					# Plot original image, background and new image:
 					imgs[0].set_data(flux0 + bkg)
-					ax[0].set_title('Original Image - ' + dset_name)
 					imgs[1].set_data(bkg)
 					imgs[2].set_data(flux0)
 
@@ -128,6 +148,9 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 					if 'pixel_flags/' + dset_name in hdf:
 						img = np.asarray(hdf['pixel_flags/' + dset_name])
 						imgs[3].set_data(img & PixelQualityFlags.BackgroundShenanigans != 0)
+
+					# Update figure title with cadence information;
+					fig.suptitle("{0:s}\ncad={1:d}, t={2:.6f}".format(dset_name, cadenceno[k], time[k]), fontsize=15)
 
 					writer.grab_frame()
 
