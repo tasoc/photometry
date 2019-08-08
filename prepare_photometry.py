@@ -20,6 +20,7 @@ import argparse
 import os.path
 import logging
 from photometry.prepare import prepare_photometry
+from photometry.utilities import TqdmLoggingHandler
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
@@ -43,7 +44,7 @@ if __name__ == '__main__':
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 	logger = logging.getLogger(__name__)
 	logger.setLevel(logging_level)
-	console = logging.StreamHandler()
+	console = TqdmLoggingHandler()
 	console.setFormatter(formatter)
 	logger_parent = logging.getLogger('photometry')
 	logger_parent.setLevel(logging_level)

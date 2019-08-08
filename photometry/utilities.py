@@ -11,7 +11,7 @@ import numpy as np
 from astropy.io import fits
 from bottleneck import move_median, nanmedian, nanmean, allnan
 import logging
-from tqdm import tqdm
+import tqdm
 from scipy.special import erf
 from scipy.stats import binned_statistic
 import json
@@ -501,7 +501,7 @@ def download_file(url, destination):
 		total_size = int(response.headers.get('content-length', 0))
 		block_size = 1024
 		with open(destination, 'wb') as handle:
-			with tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
+			with tqdm.tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
 				for block in response.iter_content(block_size):
 					handle.write(block)
 					pbar.update(len(block))
@@ -513,3 +513,18 @@ def download_file(url, destination):
 		if os.path.exists(destination):
 			os.remove(destination)
 		raise
+
+#------------------------------------------------------------------------------
+class TqdmLoggingHandler(logging.Handler):
+	def __init__(self, level=logging.NOTSET):
+		super(self.__class__, self).__init__ (level)
+
+	def emit(self, record):
+		try:
+			msg = self.format(record)
+			tqdm.tqdm.write(msg)
+			self.flush()
+		except (KeyboardInterrupt, SystemExit):
+			raise
+		except:
+			self.handleError(record)
