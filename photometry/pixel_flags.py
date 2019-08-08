@@ -43,11 +43,11 @@ def pixel_manual_exclude(img, hdr):
 
 	# Mars falls in output channel D of camera 1, CCD 4 in the beginning of
 	# TESS Sector 1, which floods the registers and messes up the images
-	if is_tess and hdr['SECTOR'] == 1 and hdr['CAMERA'] == 1 and hdr['CCD'] == 4 and (cadenceno <= 4724 or hdr['TSTART'] <= 1325.881282301840):
+	if is_tess and hdr['CAMERA'] == 1 and hdr['CCD'] == 4 and (cadenceno <= 4724 or hdr['TSTART'] <= 1325.881282301840):
 		logger.debug("Manual Exclude: Register overflow due to Mars in FOV")
 		mask[:, 1536:] = True
 
-	if is_tess and hdr['SECTOR'] == 5 and hdr['CAMERA'] == 1 and (cadenceno >= 11354 or time >= 1464.0158778):
+	elif is_tess and hdr['CAMERA'] == 1 and (11354 <= cadenceno <= 11366 or 1464.0158778 <= time <= 1464.265871):
 		logger.debug("Manual Exclude: Excessive Earth-shine")
 		mask[:, :] = True
 
