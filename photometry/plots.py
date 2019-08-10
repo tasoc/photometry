@@ -24,7 +24,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visua
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="matplotlib.colors", message="invalid value encountered in less")
 
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
-			   ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)',
+			   ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)', cbar_ticks=None, cbar_ticklabels=None,
 			   title=None, percentile=95.0, vmin=None, vmax=None, ax=None, cmap=plt.cm.Blues, offset_axes=None, **kwargs):
 	"""
 	Utility function to plot a 2D image.
@@ -88,6 +88,8 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if make_cbar:
 		cbar = plt.colorbar(im, norm=norm, ax=ax, orientation='horizontal', pad=0.02)
 		cbar.set_label(clabel)
+		if cbar_ticks is not None: cbar.set_ticks(cbar_ticks)
+		if cbar_ticklabels is not None: cbar.set_ticklabels(cbar_ticklabels)
 
 	# Settings for ticks (to make Mikkel happy):
 	ax.xaxis.set_major_locator(MaxNLocator(integer=True))
