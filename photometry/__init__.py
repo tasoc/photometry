@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+# flake8: noqa
 
 from .BasePhotometry import BasePhotometry, STATUS
 from .AperturePhotometry import AperturePhotometry

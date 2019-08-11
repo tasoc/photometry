@@ -222,13 +222,14 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 						# Create wrapper function freezing some of the
 						# additional keyword inputs:
-						fit_background_wrapper = functools.partial(fit_background,
-							 flux_cutoff=flux_cutoff,
-							 bkgiters=bkgiters,
-							 radial_cutoff=radial_cutoff,
-							 radial_pixel_step=radial_pixel_step,
-							 radial_smooth=radial_smooth
-						 )
+						fit_background_wrapper = functools.partial(
+							fit_background,
+							flux_cutoff=flux_cutoff,
+							bkgiters=bkgiters,
+							radial_cutoff=radial_cutoff,
+							radial_pixel_step=radial_pixel_step,
+							radial_smooth=radial_smooth
+						)
 
 						tic = default_timer()
 
@@ -461,7 +462,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				# Load settings and create wrapper function with keywords set:
 				bkgshe_threshold = pixel_flags.attrs.get('bkgshe_threshold', 40)
 				pixel_flags.attrs['bkgshe_threshold'] = bkgshe_threshold
-				pixel_background_shenanigans_wrapper = functools.partial(pixel_background_shenanigans,
+				pixel_background_shenanigans_wrapper = functools.partial(
+					pixel_background_shenanigans,
 					SumImage=SumImage
 				)
 
@@ -603,7 +605,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				dset.attrs['ref_frame'] = refindx
 
 			# Transfer quality flags from TPF files from the same CAMERA and CCD to the FFIs:
-			if hdf['quality'].attrs.get('TRANSFER_FROM_TPF') != True:
+			if not hdf['quality'].attrs.get('TRANSFER_FROM_TPF', False):
 				logger.info("Transfering QUALITY flags from TPFs to FFIs...")
 
 				# Select (max) five random TPF targets from the given sector, camera and ccd:

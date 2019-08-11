@@ -253,10 +253,10 @@ class ImageMovementKernel(object):
 			# Check shape of the input:
 			if kernels.shape != (len(times), self.n_params):
 				raise ValueError("Wrong shape of kernels. Anticipated ({0},{1}), but got {2}".format(
-						len(times),
-						self.n_params,
-						kernels.shape
-					))
+					len(times),
+					self.n_params,
+					kernels.shape
+				))
 
 			# Only take the kernels that are well-defined:
 			# TODO: Should we raise a warning if there are many undefined?
@@ -278,7 +278,7 @@ class ImageMovementKernel(object):
 		Returns:
 			``numpy.ndarray``: Array with the same size as `xy` containing the
 			                   changes to rows and columns. These can be added
-							   to `xy` to yield the new positions.
+			                   to `xy` to yield the new positions.
 
 		Raises:
 			ValueError: If timeseries has not been provided.

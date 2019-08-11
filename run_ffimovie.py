@@ -57,8 +57,8 @@ from photometry.utilities import find_hdf5_files, TqdmLoggingHandler
 def set_copyright(fig, xpos=0.01, ypos=0.99, fontsize=12):
 	plt.text(ypos, xpos, 'Created by TASOC',
 		verticalalignment='bottom', horizontalalignment='right',
-        transform=fig.transFigure,
-        color='0.3', fontsize=fontsize)
+		transform=fig.transFigure,
+		color='0.3', fontsize=fontsize)
 
 #------------------------------------------------------------------------------
 def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
@@ -386,7 +386,8 @@ if __name__ == '__main__':
 		m = map
 
 	# Make wrapper function with all settings:
-	make_movie_wrapper = functools.partial(make_movie,
+	make_movie_wrapper = functools.partial(
+		make_movie,
 		fps=args.fps,
 		dpi=args.dpi,
 		overwrite=args.overwrite

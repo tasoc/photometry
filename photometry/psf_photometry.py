@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on Wed Nov  8 16:37:12 2017
+PSF Photometry.
 
-@author: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
 import os.path
@@ -29,6 +29,7 @@ class PSFPhotometry(BasePhotometry):
 		# TODO: Maybe we should move this into BasePhotometry?
 		self.psf = PSF(self.sector, self.camera, self.ccd, self.stamp)
 
+	#----------------------------------------------------------------------------------------------
 	def _lhood(self, params, img, bkg, lhood_stat='Gaussian_d', include_bkg=True):
 		"""
 		Log-likelihood function to be minimized for the PSF fit.
@@ -67,9 +68,9 @@ class PSFPhotometry(BasePhotometry):
 					var = np.abs(mdl) # has to be in _lhood
 			# Add 2nd term of Erwin (2015), eq. (13):
 			var += self.n_readout * self.readnoise**2 / self.gain**2
-			var[var<minvar] = minvar
+			var[var < minvar] = minvar
 			weightmap = 1 / var
-			weightmap[weightmap<minweight] = minweight
+			weightmap[weightmap < minweight] = minweight
 			# Return the chi2:
 			return np.nansum( weightmap * (img - mdl)**2 )
 
@@ -87,7 +88,7 @@ class PSFPhotometry(BasePhotometry):
 		else:
 			raise ValueError("Invalid statistic: '%s'" % lhood_stat)
 
-
+	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
 		"""PSF Photometry"""
 

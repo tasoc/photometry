@@ -24,8 +24,8 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visua
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="matplotlib.colors", message="invalid value encountered in less")
 
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
-			   ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)', cbar_ticks=None, cbar_ticklabels=None,
-			   title=None, percentile=95.0, vmin=None, vmax=None, ax=None, cmap=plt.cm.Blues, offset_axes=None, **kwargs):
+	ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)', cbar_ticks=None, cbar_ticklabels=None,
+	title=None, percentile=95.0, vmin=None, vmax=None, ax=None, cmap=plt.cm.Blues, offset_axes=None, **kwargs):
 	"""
 	Utility function to plot a 2D image.
 
@@ -79,9 +79,9 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		cmap = plt.get_cmap(cmap)
 
 	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, interpolation='nearest', **kwargs)
-	if not xlabel is None: ax.set_xlabel(xlabel)
-	if not ylabel is None: ax.set_ylabel(ylabel)
-	if not title is None: ax.set_title(title)
+	if xlabel is not None: ax.set_xlabel(xlabel)
+	if ylabel is not None: ax.set_ylabel(ylabel)
+	if title is not None: ax.set_title(title)
 	ax.set_xlim([extent[0], extent[1]])
 	ax.set_ylim([extent[2], extent[3]])
 

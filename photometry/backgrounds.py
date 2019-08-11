@@ -123,7 +123,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 		xycen = {
 			(1, 1): [2158.222313, 2099.523364],
 			(1, 2): [-5.653058, 2098.018608],
-		 	(1, 3): [2141.511437, 2099.868226],
+			(1, 3): [2141.511437, 2099.868226],
 			(1, 4): [-22.406442, 2100.116443],
 			(2, 1): [2148.588316, 2094.033024],
 			(2, 2): [-16.806140, 2095.810070],
@@ -169,7 +169,9 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			# Evaluate the background estimator in radial rings:
 			# We are working in logarithmic units since the mode estimator seems to
 			# work better in that case.
-			s2, _, _ = binned_statistic(r[~mask].flatten(), np.log10(img[~mask].flatten()),
+			s2, _, _ = binned_statistic(
+				r[~mask].flatten(),
+				np.log10(img[~mask].flatten()),
 				statistic=stat,
 				bins=bins
 			)

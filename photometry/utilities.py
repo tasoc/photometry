@@ -75,7 +75,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 			matches.append(os.path.join(root, filename))
 
 	# Sort the list of files by thir filename:
-	matches.sort(key = lambda x: os.path.basename(x))
+	matches.sort(key=lambda x: os.path.basename(x))
 
 	return matches
 
@@ -138,12 +138,12 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 
 				matches.append(fpath)
 				if findmax is not None and len(matches) >= findmax:
-					breakout=True
+					breakout = True
 					break
 		if breakout: break
 
 	# Sort the list of files by thir filename:
-	matches.sort(key = lambda x: os.path.basename(x))
+	matches.sort(key=lambda x: os.path.basename(x))
 
 	return matches
 
@@ -280,8 +280,8 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	# Convert BJD to epoch (year):
 	epoch_now = (bjd - 2451544.5)/365.25 + 2000.0
 
-    # How many years since the catalog's epoch?
-	timeelapsed = epoch_now - epoch  # in years
+	# How many years since the catalog's epoch?
+	timeelapsed = epoch_now - epoch # in years
 
 	# Calculate the dec:
 	decrate = pm_dec/3600000.0  # in degrees/year (assuming original was in mas/year)
@@ -323,11 +323,10 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		[ 0.92564571,  1.46631496,  0.92564571],
 		[ 0.58433556,  0.92564571,  0.58433556]])
 	"""
-	return (flux / 4 *
-		((erf((x - x_0 + 0.5) / (np.sqrt(2) * sigma)) -
-		  erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma))) *
-		 (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma)) -
-		  erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
+	return (flux / 4 * ((erf((x - x_0 + 0.5) / (np.sqrt(2) * sigma))
+		- erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma)))
+		* (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma))
+		- erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
 
 #------------------------------------------------------------------------------
 def mag2flux(mag):
@@ -517,7 +516,7 @@ def download_file(url, destination):
 #------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):
 	def __init__(self, level=logging.NOTSET):
-		super(self.__class__, self).__init__ (level)
+		super(self.__class__, self).__init__(level)
 
 	def emit(self, record):
 		try:
