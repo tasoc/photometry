@@ -314,7 +314,8 @@ class BasePhotometry(object):
 			self.pixel_offset_row = self.tpf[2].header['CRVAL2P'] - 1
 			self.pixel_offset_col = self.tpf[2].header['CRVAL1P'] - 1
 
-			logger.debug('Max stamp size: (%d, %d)',
+			logger.debug(
+				'Max stamp size: (%d, %d)',
 				self._max_stamp[1] - self._max_stamp[0],
 				self._max_stamp[3] - self._max_stamp[2]
 			)
@@ -1189,7 +1190,6 @@ class BasePhotometry(object):
 			NotImplementedError
 		"""
 		raise NotImplementedError("You have to implement the actual lightcurve extraction yourself... Sorry!")
-
 
 	def photometry(self, *args, **kwargs):
 		"""

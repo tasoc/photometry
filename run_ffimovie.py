@@ -131,7 +131,6 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			hdf['images'].attrs['movie_vmax'] = vmax2
 			hdf.flush()
 
-
 		logger.info("Creating movie...")
 		with plt.style.context('dark_background'):
 			fig, ax = plt.subplots(1, 4, figsize=(20, 6.8))
@@ -243,7 +242,6 @@ def make_combined_movie(input_dir, fps=15, dpi=100, overwrite=False):
 				logger.info("Movie file already exists")
 				return output_file
 
-
 		try:
 			hdf = [None]*16
 			vmin = np.full(16, np.NaN)
@@ -324,7 +322,7 @@ def make_combined_movie(input_dir, fps=15, dpi=100, overwrite=False):
 
 	return output_file
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	multiprocessing.freeze_support() # for Windows support
 
@@ -363,7 +361,6 @@ if __name__ == '__main__':
 		run_full_directory = args.files[0]
 		args.files = find_hdf5_files(run_full_directory)
 		logger.info("Found %d HDF5 files in directory '%s'", len(args.files), run_full_directory)
-
 
 	tqdm_settings = {
 		'disable': not logger.isEnabledFor(logging.INFO),
