@@ -37,9 +37,13 @@ install:
   - pip uninstall numpy Bottleneck -y
   - pip install numpy==1.15.4 --no-cache-dir
   - pip install -r requirements.txt
+  - pip install codecov pytest-cov
   - python -c "from photometry.spice import TESS_SPICE; print(TESS_SPICE())"
 script:
-  - pytest
+  - pytest --cov=photometry/
+after_success:
+  - codecov
+
 branches:
   only:
     - master
