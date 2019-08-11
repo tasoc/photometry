@@ -7,13 +7,13 @@ Created on Thu Jan 18 14:08:36 2018
 """
 
 import numpy as np
-import scipy
+#import scipy
 import matplotlib.pyplot as plt
 import logging
 import os
 from .BasePhotometry import BasePhotometry, STATUS
 from .psf import PSF
-from .utilities import mag2flux
+#from .utilities import mag2flux
 from .plots import plot_image_fit_residuals, save_figure
 
 class LinPSFPhotometry(BasePhotometry):
@@ -55,13 +55,13 @@ class LinPSFPhotometry(BasePhotometry):
 
 		# Load catalog to determine what stars to fit:
 		cat = self.catalog
-		staridx = np.squeeze(np.where(cat['starid']==self.starid))
+		staridx = np.squeeze(np.where(cat['starid'] == self.starid))
 
 		# Log full catalog for current stamp:
 		logger.debug(cat)
 
 		# Calculate distance from main target:
-		cat['dist'] = np.sqrt((cat['row_stamp'][staridx] - cat['row_stamp'])**2 + \
+		cat['dist'] = np.sqrt((cat['row_stamp'][staridx] - cat['row_stamp'])**2 +
 						(cat['column_stamp'][staridx] - cat['column_stamp'])**2)
 
 		# Find indices of stars in catalog to fit:
@@ -71,7 +71,7 @@ class LinPSFPhotometry(BasePhotometry):
 		nstars = np.sum(indx)
 
 		# Get target star index in the reduced catalog of stars to fit:
-		staridx = np.squeeze(np.where(cat[indx]['starid']==self.starid))
+		staridx = np.squeeze(np.where(cat[indx]['starid'] == self.starid))
 		logger.debug('Target star index: %s', np.str(staridx))
 
 		# Preallocate flux sum array for contamination calculation:
@@ -95,9 +95,7 @@ class LinPSFPhotometry(BasePhotometry):
 			A = np.empty([npx, nstars])
 			for col,target in enumerate(cat):
 				# Get star parameters with flux set to 1 and reshape:
-				params0 = np.array(
-						[target['row_stamp'], target['column_stamp'], 1.]
-						).reshape(1, 3)
+				params0 = np.array([target['row_stamp'], target['column_stamp'], 1.]).reshape(1, 3)
 
 				# Fill out column of A with reshaped PRF array from one star:
 				A[:,col] = np.reshape(self.psf.integrate_to_image(params0,
@@ -120,7 +118,7 @@ class LinPSFPhotometry(BasePhotometry):
 			logger.debug('Result of linear psf photometry: ' + np.str(res))
 
 			# Pass result if fit did not fail:
-			if res is not 'failed':
+			if res != 'failed':
 				# Get flux of target star:
 				result = fluxes[staridx]
 
@@ -140,15 +138,19 @@ class LinPSFPhotometry(BasePhotometry):
 					fig = plt.figure()
 					result4plot = []
 					for star, target in enumerate(cat):
-						result4plot.append(np.array([target['row_stamp'],
-													target['column_stamp'],
-													fluxes[star]]))
+						result4plot.append(np.array([
+							target['row_stamp'],
+							target['column_stamp'],
+							fluxes[star]
+						]))
 
 					# Add subplots with the image, fit and residuals:
-					ax_list = plot_image_fit_residuals(fig=fig,
-							image=img,
-							fit=self.psf.integrate_to_image(result4plot, cutoff_radius=20),
-							residuals=img - self.psf.integrate_to_image(result4plot, cutoff_radius=20))
+					ax_list = plot_image_fit_residuals(
+						fig=fig,
+						image=img,
+						fit=self.psf.integrate_to_image(result4plot, cutoff_radius=20),
+						residuals=img - self.psf.integrate_to_image(result4plot, cutoff_radius=20)
+					)
 
 					# Add star position to the first plot:
 					ax_list[0].scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
@@ -170,21 +172,18 @@ class LinPSFPhotometry(BasePhotometry):
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
 				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
 
-
 		if np.sum(np.isnan(self.lightcurve['flux'])) == len(self.lightcurve['flux']):
 			# Set contamination to NaN if all flux values are NaN:
 			self.report_details(error='All target flux values are NaN.')
 			return STATUS.ERROR
 		else:
 			# Divide by number of added fluxes to get the mean flux:
-			fluxes_mean =  fluxes_sum / np.sum(~np.isnan(self.lightcurve['flux']))
+			fluxes_mean = fluxes_sum / np.sum(~np.isnan(self.lightcurve['flux']))
 			logger.debug('Mean fluxes are: '+np.str(fluxes_mean))
 
 			# Calculate contamination from other stars in target PSF using latest A:
-			not_target_star = np.arange(len(fluxes_mean))!=staridx
-			contamination = \
-				np.sum(A[:,not_target_star].dot(fluxes_mean[not_target_star]) * A[:,staridx]) \
-				/fluxes_mean[staridx]
+			not_target_star = np.arange(len(fluxes_mean)) != staridx
+			contamination = np.sum(A[:,not_target_star].dot(fluxes_mean[not_target_star]) * A[:,staridx]) / fluxes_mean[staridx]
 
 			logger.info("Contamination: %f", contamination)
 			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
@@ -193,7 +192,6 @@ class LinPSFPhotometry(BasePhotometry):
 			if contamination > 0.1:
 				self.report_details(error='High contamination')
 				return STATUS.WARNING
-
 
 		# Return whether you think it went well:
 		return STATUS.OK
