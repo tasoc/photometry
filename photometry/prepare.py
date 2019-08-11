@@ -17,7 +17,7 @@ import logging
 import re
 import multiprocessing
 from astropy.wcs import WCS
-from bottleneck import replace, nanmean
+from bottleneck import replace, nanmean, nanmedian
 from timeit import default_timer
 import itertools
 import functools
@@ -28,6 +28,7 @@ from .backgrounds import fit_background
 from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
 from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
+#from .plots import plt, plot_image
 
 #------------------------------------------------------------------------------
 def quality_from_tpf(tpffile, time_start, time_end):
@@ -83,7 +84,10 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 	"""
 
 	logger = logging.getLogger(__name__)
-	tqdm_settings = {'disable': not logger.isEnabledFor(logging.INFO)}
+	tqdm_settings = {
+		'disable': not logger.isEnabledFor(logging.INFO),
+		'dynamic_ncols': True
+	}
 
 	# Check the input folder, and load the default if not provided:
 	if input_folder is None:
@@ -450,30 +454,113 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				quality = np.asarray(hdf['quality'])
 
 			# Detections and flagging of Background Shenanigans:
-			last_bkgshe = pixel_flags.attrs.get('bkgshe_done', -1)
-			if last_bkgshe < numfiles-1:
+			if pixel_flags.attrs.get('bkgshe_done', -1) < numfiles-1:
 				logger.info("Detecting background shenanigans...")
-				tic = default_timer()
+				tic_bkgshe = default_timer()
 
 				# Load settings and create wrapper function with keywords set:
 				bkgshe_threshold = pixel_flags.attrs.get('bkgshe_threshold', 40)
 				pixel_flags.attrs['bkgshe_threshold'] = bkgshe_threshold
 				pixel_background_shenanigans_wrapper = functools.partial(pixel_background_shenanigans,
-					SumImage=SumImage,
-					limit=bkgshe_threshold
+					SumImage=SumImage
 				)
 
-				# Run the background shenanigans extractor in parallel:
-				k = last_bkgshe + 1
-				for bckshe in tqdm(m(pixel_background_shenanigans_wrapper, _iterate_hdf_group(images, start=k)), initial=k, total=numfiles, **tqdm_settings):
-					if np.any(bckshe):
-						dset_name = '%04d' % k
-						pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
-					pixel_flags.attrs['bkgshe_done'] = k
-					k += 1
-					hdf.flush()
+				tmp_hdf_file = hdf_file.replace('.hdf5', '.tmp.hdf5')
+				with h5py.File(tmp_hdf_file, 'a', libver='latest') as hdftmp:
+					# Temporary dataset that will be used to store large array
+					# of background shenanigans indicator images:
+					pixel_flags_ind = hdftmp.require_dataset('pixel_flags_individual',
+						shape=(SumImage.shape[0], SumImage.shape[1], numfiles),
+						chunks=(SumImage.shape[0], SumImage.shape[1], 1),
+						dtype='float32'
+					)
 
-				logger.info("Background Shenanigans: %f sec/image", (default_timer()-tic)/(numfiles-last_bkgshe))
+					# Run the background shenanigans extractor in parallel:
+					last_bkgshe = pixel_flags_ind.attrs.get('bkgshe_done', -1)
+					if last_bkgshe < numfiles-1:
+						tic = default_timer()
+						k = last_bkgshe + 1
+						for bckshe in tqdm(m(pixel_background_shenanigans_wrapper, _iterate_hdf_group(images, start=k)), initial=k, total=numfiles, **tqdm_settings):
+							pixel_flags_ind[:, :, k] = bckshe
+							pixel_flags_ind.attrs['bkgshe_done'] = k
+							k += 1
+							hdftmp.flush()
+						logger.info("Background Shenanigans: %f sec/image", (default_timer()-tic)/(numfiles-last_bkgshe))
+
+					# Calculate the mean Background Shenanigans indicator:
+					if 'mean_shenanigans' not in hdftmp:
+						logger.info("Calculating mean shenanigans...")
+						tic = default_timer()
+
+						# Calculate robust mean by calculating the
+						# median in chunks and then taking the mean of them.
+						# This is to avoid loading the entire array into memory
+						mean_shenanigans = np.zeros_like(SumImage, dtype='float64')
+						block = 25
+						indicies = list(range(numfiles))
+						np.random.seed(0)
+						np.random.shuffle(indicies)
+						mean_shenanigans_block = np.empty((SumImage.shape[0], SumImage.shape[1], block))
+						for k in trange(0, numfiles, block, **tqdm_settings):
+							# Take median of a random block of images:
+							for j, i in enumerate(indicies[k:k+block]):
+								mean_shenanigans_block[:, :, j] = pixel_flags_ind[:, :, i]
+							bckshe = nanmedian(mean_shenanigans_block, axis=2)
+
+							# Add the median block to the mean image:
+							replace(bckshe, np.NaN, 0)
+							mean_shenanigans += bckshe
+						mean_shenanigans /= np.ceil(numfiles/block)
+						logger.info("Mean Background Shenanigans: %f sec/image", (default_timer()-tic)/numfiles)
+
+						# Save the mean shenanigans to the HDF5 file:
+						hdftmp.create_dataset('mean_shenanigans', data=mean_shenanigans)
+					else:
+						mean_shenanigans = np.asarray(hdftmp['mean_shenanigans'])
+
+					#msmax = max(np.abs(np.min(mean_shenanigans)), np.abs(np.max(mean_shenanigans)))
+					#fig = plt.figure()
+					#plot_image(mean_shenanigans, scale='linear', vmin=-msmax, vmax=msmax, cmap='coolwarm', make_cbar=True, xlabel=None, ylabel=None)
+					#fig.savefig('test.png', bbox_inches='tight')
+
+					logger.info("Setting background shenanigans...")
+					tic = default_timer()
+					for k in trange(numfiles, **tqdm_settings):
+						dset_name = '%04d' % k
+						bckshe = np.asarray(pixel_flags_ind[:, :, k])
+
+						#img = bckshe - mean_shenanigans
+						#img[np.abs(img) <= bkgshe_threshold/2] = 0
+						#fig = plt.figure(figsize=(8,9))
+						#ax = fig.add_subplot(111)
+						#plot_image(img, ax=ax, scale='linear', vmin=-bkgshe_threshold, vmax=bkgshe_threshold, xlabel=None, ylabel=None, cmap="RdBu_r", make_cbar=True)
+						#ax.set_xticks([])
+						#ax.set_yticks([])
+						#fig.savefig(dset_name + '.png', bbox_inches='tight')
+						#plt.close(fig)
+
+						# Create the mask as anything that significantly pops out
+						# (both positive and negative) in the image:
+						bckshe = np.abs(bckshe - mean_shenanigans) > bkgshe_threshold
+
+						# Clear any old flags:
+						indx = (np.asarray(pixel_flags[dset_name]) & PixelQualityFlags.BackgroundShenanigans != 0)
+						if np.any(indx):
+							pixel_flags[dset_name][indx] -= PixelQualityFlags.BackgroundShenanigans
+
+						# Save the new flags to the permanent HDF5 file:
+						if np.any(bckshe):
+							pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
+
+						pixel_flags.attrs['bkgshe_done'] = k
+						hdf.flush()
+					logger.info("Setting Background Shenanigans: %f sec/image", (default_timer()-tic)/numfiles)
+
+				# Delete the temporary HDF5 file again:
+				if os.path.exists(tmp_hdf_file):
+					os.remove(tmp_hdf_file)
+
+				logger.info("Total Background Shenanigans: %f sec/image", (default_timer()-tic_bkgshe)/numfiles)
 
 			# Check that the time vector is sorted:
 			if not np.all(hdf['time'][:-1] < hdf['time'][1:]):

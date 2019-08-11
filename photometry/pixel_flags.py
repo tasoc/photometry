@@ -54,7 +54,7 @@ def pixel_manual_exclude(img, hdr):
 	return mask
 
 #------------------------------------------------------------------------------
-def pixel_background_shenanigans(img, SumImage=None, limit=40):
+def pixel_background_shenanigans(img, SumImage=None):
 	"""
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -66,8 +66,4 @@ def pixel_background_shenanigans(img, SumImage=None, limit=40):
 	# Run median filter to get rid of residuals from individual stars:
 	flux0 = median_filter(flux0, size=15)
 
-	# Create the mask as anything that significantly pops out
-	# (both positive and negative) in the image:
-	mask = (np.abs(flux0) > limit)
-
-	return mask
+	return flux0
