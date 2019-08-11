@@ -7,9 +7,9 @@
 import os
 import numpy as np
 import sys
-import itertools
+#import itertools
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from photometry import todolist
+from photometry import todolist # noqa: F401
 
 #----------------------------------------------------------------------
 def test_methods_file():

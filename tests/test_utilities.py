@@ -9,9 +9,9 @@ import os
 import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.utilities import (move_median_central, find_ffi_files, find_tpf_files,
-								  find_hdf5_files, find_catalog_files, load_ffi_fits,
-								  sphere_distance, radec_to_cartesian, cartesian_to_radec,
-								  rms_timescale)
+	find_hdf5_files, find_catalog_files, load_ffi_fits,
+	sphere_distance, radec_to_cartesian, cartesian_to_radec,
+	rms_timescale)
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 

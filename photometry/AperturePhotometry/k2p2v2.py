@@ -88,7 +88,6 @@ def k2p2maks(frame, no_combined_images, threshold=0.5):
 		l.append((p[1]+1, p[0]+1))
 		l.append((np.nan, np.nan))
 
-
 	segments = np.array(l)
 
 	x0 = -0.5
@@ -144,9 +143,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 	# Get logger for printing messages:
 	logger = logging.getLogger(__name__)
 
-
 	unique_labels_ini = set(labels)
-
 
 	XX2 = np.array([[x,y] for x,y in zip(X.flatten(),Y.flatten())])
 
@@ -172,9 +169,8 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		class_member_mask = (Labels == lab).flatten()
 		xy = XX2[class_member_mask,:]
 
-
 		Z = np.zeros_like(flux0, dtype='float64')
-		Z[xy[:,1], xy[:,0]] = flux0[xy[:,1], xy[:,0]] #y=row, x=column
+		Z[xy[:,1], xy[:,0]] = flux0[xy[:,1], xy[:,0]] # y=row, x=column
 
 		if ws_alg == 'dist':
 			distance0 = ndimage.distance_transform_edt(Z)
@@ -185,7 +181,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 		logger.debug("Using '%s' watershed algorithm", ws_alg)
 
-		if not catalog is None:
+		if catalog is not None:
 			# Smooth the basin image with Gaussian filter:
 			distance = ndimage.gaussian_filter(distance0, ws_blur)
 
@@ -237,7 +233,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		# If masks of saturated pixels are provided, clean out in the
 		# found local maxima to make sure only one is found within
 		# each patch of saturated pixels:
-		if not saturated_masks is None and lab in saturated_masks:
+		if saturated_masks is not None and lab in saturated_masks:
 			saturated_pixels = saturated_masks[lab]
 
 			# Split the saturated pixels up into patches that are connected:
@@ -291,7 +287,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			for u in range(no_labels-2):
 				max_label += 1
 
-				idx = (labels_ws==u+2) & (Z!=0)
+				idx = (labels_ws == u+2) & (Z != 0)
 				Labels[idx] = max_label
 
 		labels_new = Labels[Y2, X2]
@@ -299,7 +295,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 		NoCluster = len(unique_labels) - (1 if -1 in labels_new else 0)
 
 		# Create plot of the watershed segmentation:
-		if not output_folder is None:
+		if output_folder is not None:
 
 			fig, axes = plt.subplots(ncols=3, figsize=(14, 6))
 			fig.subplots_adjust(hspace=0.12, wspace=0.12)
@@ -311,7 +307,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			plot_image(distance, ax=ax1, scale='log', title='Basin', xlabel=None, ylabel=None)
 
 			# Overplot the full catalog:
-			if not catalog is None:
+			if catalog is not None:
 				ax1.scatter(catalog[:,0], catalog[:,1], color='y', s=5, alpha=0.3)
 
 			#if local_maxi_all is not None:
@@ -393,9 +389,9 @@ def k2p2_saturated(SumImage, MASKS, idx):
 # Create pixel masks from Sum-image.
 #==============================================================================
 def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, show_plot=True,
-				   min_no_pixels_in_mask=8, min_for_cluster=4, cluster_radius=np.sqrt(2),
-				   segmentation=True, ws_alg='flux', ws_blur=0.5, ws_thres=0.05, ws_footprint=3,
-				   extend_overflow=True, catalog=None):
+	min_no_pixels_in_mask=8, min_for_cluster=4, cluster_radius=np.sqrt(2),
+	segmentation=True, ws_alg='flux', ws_blur=0.5, ws_thres=0.05, ws_footprint=3,
+	extend_overflow=True, catalog=None):
 	"""
 	Create pixel masks from Sum-image.
 
@@ -458,7 +454,8 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 	kernel.fit(kernel='gau', bw=background_bandwidth, fft=True, gridsize=100)
 
 	# MODE
-	def kernel_opt(x): return -1*kernel.evaluate(x)
+	def kernel_opt(x):
+		return -1*kernel.evaluate(x)
 	max_guess = kernel.support[np.argmax(kernel.density)]
 	MODE = minimize(kernel_opt, max_guess, method='Powell').x
 
@@ -534,8 +531,21 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 			saturated_masks = None
 
 		# Run the mask segmentaion algorithm on the found clusters:
-		labels, unique_labels, NoCluster = k2p2WS(X, Y, X2, Y2, SumImage, XX, labels_ini, core_samples_mask, saturated_masks=saturated_masks, ws_thres=ws_thres,
-												  ws_footprint=ws_footprint, ws_blur=ws_blur, ws_alg=ws_alg, output_folder=plot_folder, catalog=catalog)
+		labels, unique_labels, NoCluster = k2p2WS(
+			X, Y,
+			X2, Y2,
+			SumImage,
+			XX,
+			labels_ini,
+			core_samples_mask,
+			saturated_masks=saturated_masks,
+			ws_thres=ws_thres,
+			ws_footprint=ws_footprint,
+			ws_blur=ws_blur,
+			ws_alg=ws_alg,
+			output_folder=plot_folder,
+			catalog=catalog
+		)
 	else:
 		labels = labels_ini
 		unique_labels = set(labels)
@@ -569,7 +579,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 		for u in range(no_masks):
 			lab = No_pix_sort[u, 1]
 			class_member_mask = (labels == lab)
-			xy = XX[class_member_mask ,:]
+			xy = XX[class_member_mask, :]
 			MASKS[u, xy[:,1], xy[:,0]] = 1
 
 		#==========================================================================
@@ -582,7 +592,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 			logger.info("Filling %d holes in the masks", np.sum(mask_holes_indx))
 			MASKS[mask_holes_indx] = 1
 
-			if not plot_folder is None:
+			if plot_folder is not None:
 				# Create image showing all masks at different levels:
 				img = np.zeros((NY,NX))
 				for r in np.transpose(np.where(MASKS > 0)):
@@ -743,12 +753,12 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 			if lab == -1:
 				# Black used for noise.
 				ax2.plot(xy[:, 0], xy[:, 1], '+', markerfacecolor='k',
-					 markeredgecolor='k', markersize=5)
+					markeredgecolor='k', markersize=5)
 
 			else:
 				Flux_mat4[xy[:,1], xy[:,0]] = u+1
 				ax2.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(colors[u]),
-						 markeredgecolor='k', markersize=5)
+					markeredgecolor='k', markersize=5)
 
 		ax2.set_title("Clustering + Watershed")
 		ax2.set_xlim([-0.5, SumImage.shape[1]-0.5])

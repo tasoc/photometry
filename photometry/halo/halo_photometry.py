@@ -10,14 +10,14 @@ Halo Photometry.
 import logging
 import os.path
 import numpy as np
-from ..plots import plt, save_figure, plot_image
+from ..plots import plt, save_figure
 from .. import BasePhotometry, STATUS
 from ..utilities import mag2flux
 import halophot
 from halophot.halo_tools import do_lc
 from astropy.table import Table
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
 	"""Use halo photometry to observe very saturated stars.
 
@@ -34,7 +34,7 @@ class HaloPhotometry(BasePhotometry):
 		# Here you could do other things that needs doing in the beginning
 		# of the run on each target.
 
-
+	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
 		"""Performs 'halo' TV-min weighted-aperture photometry.
 
@@ -120,7 +120,7 @@ class HaloPhotometry(BasePhotometry):
 		logger.info('Formatting data for halo')
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
 		flux = self.images_cube.T[indx_goodtimes, :, :]
-		flux[:, self.aperture.T==0] = np.nan
+		flux[:, self.aperture.T == 0] = np.nan
 
 		# Get the position of the main target
 		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
