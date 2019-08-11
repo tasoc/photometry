@@ -2,27 +2,35 @@ language: python
 python:
   - "3.5"
   - "3.6"
+  - "pypy3.5"
 
 # Python 3.7+ has to be done a different way
 # https://github.com/travis-ci/travis-ci/issues/9069
-jobs:
+matrix:
   include:
-    - language: python
-      python: "3.7"
-      dist: xenial
-      sudo: required
-    - language: python
-      python: "3.8-dev"
+    - python: "3.7"
       dist: xenial
       sudo: required
 
-# Allow some newer versions of Python to fail for now
-# This will be changed once the required packages starts
-# supporting the newer versions of Python:
-matrix:
+    - python: "3.8-dev"
+      dist: xenial
+      sudo: required
+
+    - name: "Flake8"
+      python: "3.6"
+      before_script:
+        - pip install flake8
+      script:
+        - flake8
+
+  # Allow some newer versions of Python to fail for now
+  # This will be changed once the required packages starts
+  # supporting the newer versions of Python:
   fast_finish: true
   allow_failures:
+    - python: "pypy3.5"
     - python: "3.8-dev"
+    - name: "Flake8"
 
 install:
   - pip install --upgrade pip
