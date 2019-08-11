@@ -18,7 +18,7 @@ matrix:
 
     - name: "Flake8"
       python: "3.6"
-      before_script:
+      install:
         - pip install flake8
       script:
         - flake8
