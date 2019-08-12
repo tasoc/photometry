@@ -89,9 +89,7 @@ class HaloPhotometry(BasePhotometry):
 
 		# Start logger to use for print
 		logger = logging.getLogger(__name__)
-
 		logger.info("starid: %d", self.starid)
-
 		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
 
 		# Halophot settings:
@@ -107,20 +105,41 @@ class HaloPhotometry(BasePhotometry):
 		analytic = True
 		sigclip = False
 
-		# Find timestamps where the timeseries should be split:
-		if self.sector == 1:
-			split_times = (1339., 1347.366, 1349.315)
-		elif self.sector == 2:
-			split_times = (1368.,)
-		else:
-			logger.warning("No split-timestamps have been defined for this sector")
-			split_times = None # TODO: Is this correct?
-
 		# Initialize
 		logger.info('Formatting data for halo')
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
 		flux = self.images_cube.T[indx_goodtimes, :, :]
 		flux[:, self.aperture.T == 0] = np.nan
+
+		# Find timestamps where the timeseries should be split:
+		if self.sector == 1:
+			split_times = (1339., 1347.366, 1349.315)
+		elif self.sector == 2:
+			split_times = (1368.,)
+		elif self.sector == 3:
+			split_times = (1395.52,)
+		elif self.sector == 8:
+			split_times = (1529.50,)
+		else:
+			# If nothing has been explicitely defined for this sector,
+			# let's see of there is a large gap somewhere near the middle of
+			# timeseries, that is properly due to the data downlink.
+			# If a single hole is found, use it, otherwise don't try to be
+			# to clever, and just don't split the timeseries.
+			timecorr = self.lightcurve['timecorr'][indx_goodtimes]
+			t = self.lightcurve['time'][indx_goodtimes] - timecorr
+			dt = np.append(np.diff(t), 0)
+			t0 = np.nanmin(t)
+			Ttot = np.nanmax(t) - t0
+			indx = (t0+0.30*Ttot < t) & (t < t0+0.70*Ttot) & (dt > 0.5)
+			if np.sum(indx) == 1:
+				indx = np.where(indx)[0][0]
+				thole = 0.5*(t[indx] + t[indx+1]) + timecorr[indx]
+				logger.info("Automatically found split: %f", thole)
+				split_times = (thole,)
+			else:
+				logger.warning("No split-timestamps have been defined for this sector")
+				split_times = None # TODO: Is this correct?
 
 		# Get the position of the main target
 		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
