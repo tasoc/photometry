@@ -312,7 +312,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 	logger.info("All catalogs done.")
 
 #------------------------------------------------------------------------------
-def download_catalogs(input_folder, sector):
+def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	"""
 	Download catalog SQLite files from TASOC cache into input_folder.
 
@@ -324,6 +324,10 @@ def download_catalogs(input_folder, sector):
 	Parameters:
 		input_folder (string): Target directory to download files into. Should be a TESSPHOT input directory.
 		sector (integer): Sector to download catalogs for.
+		camera (integer, optional): Camera to download catalogs for.
+			If not specified, all cameras will be downloaded.
+		ccd (integer, optional): CCD to download catalogs for.
+			If not specified, all CCDs will be downloaded.
 
 	Raises:
 		NotADirectoryError: If target directory does not exist.
@@ -336,8 +340,12 @@ def download_catalogs(input_folder, sector):
 	if not os.path.isdir(input_folder):
 		raise NotADirectoryError("Directory does not exist: '%s'" % input_folder)
 
+	# Make sure cameras and ccds are iterable:
+	cameras = (1, 2, 3, 4) if camera is None else (camera, )
+	ccds = (1, 2, 3, 4) if ccd is None else (ccd, )
+
 	# Loop through all combinations of cameras and ccds:
-	for camera, ccd in itertools.product((1,2,3,4),(1,2,3,4)):
+	for camera, ccd in itertools.product(cameras, ccds):
 		# File name and path for catalog file:
 		fname = 'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'.format(
 			sector=sector,
