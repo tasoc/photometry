@@ -18,6 +18,8 @@ matrix:
 
     - name: "Flake8"
       python: "3.6"
+      git:
+        lfs_skip_smudge: true
       install:
         - pip install flake8
       script:
