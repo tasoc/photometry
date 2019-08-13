@@ -291,7 +291,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 	)
 
 #------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_secondary_targets=True):
+def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
+	find_secondary_targets=True, output_file=None):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
@@ -305,6 +306,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
 		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
 		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
+		output_file (string, optional): The file path where the output file should be saved.
+			If not specified, the file will be saved into the input directory.
+			Should only be used for testing, since the file would (proberly) otherwise end up with
+			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
 		NotADirectoryError: If the specified ``input_folder`` is not an existing directory.
@@ -327,7 +332,14 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
 
 	# The TODO file that we want to create. Delete it if it already exits:
-	todo_file = os.path.join(input_folder, 'todo.sqlite')
+	if output_file is None:
+		todo_file = os.path.join(input_folder, 'todo.sqlite')
+	else:
+		output_file = os.path.abspath(output_file)
+		if not output_file.endswith('.sqlite'):
+			output_file = output_file + '.sqlite'
+		todo_file = output_file
+
 	if os.path.exists(todo_file):
 		if overwrite:
 			os.remove(todo_file)
