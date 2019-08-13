@@ -71,7 +71,7 @@ The next part of the program is to prepare photometry on individual stars by doi
 
 The program can simply be run like the following, which will create a number of HDF5 files (`*.hdf5`) in the ``TESSPHOT_INPUT`` directory.
 
->>> python prepare_photometry.py
+>>> python run_prepare_photometry.py
 
 Make TODO list
 --------------
@@ -97,4 +97,4 @@ This is very usefull for testing different methods and settings.
 Contributing to the code
 ========================
 You are more than welcome to contribute to this code!
-Please contact `Rasmus Handberg <rasmush@phys.au.dk>`_ or `Mikkel Lund <mikkelnl@phys.au.dk>`_ if you wish to contribute.
+Please contact `Rasmus Handberg <rasmush@phys.au.dk>`_ or `Derek Buzasi <dbuzasi@fgcu.edu>`_ if you wish to contribute.

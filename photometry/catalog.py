@@ -103,7 +103,7 @@ def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=
 	return cursor.fetchall()
 
 #------------------------------------------------------------------------------
-def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False):
+def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False): # pragma: no cover
 	"""
 	Create catalogs of stars in a given TESS observing sector.
 
