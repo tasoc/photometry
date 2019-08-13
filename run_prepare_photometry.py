@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 This program will prepare the photometry on individual stars by doing all the operations which requires the full-size FFI images, like the following:
+
 * Estimating sky background for all images.
 * Estimating spacecraft jitter.
 * Creating average image.
@@ -11,7 +12,7 @@ The program can simply be run like the following, which will create a number of 
 
 >>> python prepare_photometry.py
 
-The program internally calls the function :py:func:`photometry.prepare.create_hdf5` with the given parameters.
+The program internally calls the function :py:func:`photometry.prepare.prepare_photometry` with the given parameters.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
