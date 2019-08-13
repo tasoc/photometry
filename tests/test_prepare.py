@@ -52,7 +52,6 @@ def test_prepare_photometry():
 		prepare.prepare_photometry(input_dir, sectors=1, cameras=3, ccds=2, output_file=tmpfile.name)
 
 		tmpfile.flush()
-
 		assert os.path.exists(tmpfile.name + '.hdf5'), "HDF5 was not created"
 
 		with h5py.File(tmpfile.name + '.hdf5', 'r') as hdf:
