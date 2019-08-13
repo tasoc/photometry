@@ -10,7 +10,11 @@ This program will prepare the photometry on individual stars by doing all the op
 
 The program can simply be run like the following, which will create a number of HDF5 files (`\*.hdf5`) in the ``TESSPHOT_INPUT`` directory.
 
->>> python prepare_photometry.py
+>>> python run_prepare_photometry.py
+
+You can also get a full list of the options by calling the program with:
+
+>>> python run_prepare_photometry.py --help
 
 The program internally calls the function :py:func:`photometry.prepare.prepare_photometry` with the given parameters.
 
