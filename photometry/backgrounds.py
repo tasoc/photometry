@@ -10,7 +10,7 @@ import logging
 import warnings
 import numpy as np
 from astropy.utils.exceptions import AstropyDeprecationWarning
-warnings.filterwarnings('ignore', category=AstropyDeprecationWarning)
+warnings.filterwarnings('ignore', category=AstropyDeprecationWarning, module='photutils')
 from astropy.stats import SigmaClip
 from scipy.stats import binned_statistic
 from scipy.interpolate import InterpolatedUnivariateSpline

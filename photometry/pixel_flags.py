@@ -51,6 +51,12 @@ def pixel_manual_exclude(img, hdr):
 		logger.debug("Manual Exclude: Excessive Earth-shine")
 		mask[:, :] = True
 
+	# Specific problems sometimes found where the whole image is zero:
+	# One example is in Sector 6 (DR8), camera 2, ccd 1.
+	if is_tess and np.all(img == 0):
+		logger.debug("Manual Exclude: Whole image is zero")
+		mask[:, :] = True
+
 	return mask
 
 #------------------------------------------------------------------------------
