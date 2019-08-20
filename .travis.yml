@@ -2,7 +2,7 @@ language: python
 python:
   - "3.5"
   - "3.6"
-  - "pypy3.5"
+  - "pypy3.5-6.0"
 
 # Python 3.7+ has to be done a different way
 # https://github.com/travis-ci/travis-ci/issues/9069
