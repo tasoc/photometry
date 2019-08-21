@@ -21,7 +21,6 @@ Note:
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import argparse
 import logging
 from photometry.catalog import make_catalog
@@ -37,6 +36,7 @@ if __name__ == '__main__':
 	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
 	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
 	parser.add_argument('sector', type=int, help='TESS observing sector to generate catalogs for.')
+	parser.add_argument('input_folder', type=str, help='Directory to create catalog files in.', nargs='?', default=None)
 	args = parser.parse_args()
 
 	# Set logging level:
@@ -48,11 +48,11 @@ if __name__ == '__main__':
 
 	# Setup logging:
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-	logger = logging.getLogger('photometry')
-	logger.setLevel(logging.INFO)
 	console = logging.StreamHandler()
 	console.setFormatter(formatter)
+	logger = logging.getLogger('photometry')
+	logger.setLevel(logging_level)
 	logger.addHandler(console)
 
 	# Run the program:
-	make_catalog(args.sector, cameras=args.camera, ccds=args.ccd, overwrite=args.overwrite)
+	make_catalog(args.sector, input_folder=args.input_folder, cameras=args.camera, ccds=args.ccd, overwrite=args.overwrite)

@@ -1,8 +1,12 @@
 ===========================
 The TASOC Photometry module
 ===========================
+.. image:: https://zenodo.org/badge/103402174.svg
+    :target: https://zenodo.org/badge/latestdoi/103402174
 .. image:: https://travis-ci.org/tasoc/photometry.svg?branch=devel
     :target: https://travis-ci.org/tasoc/photometry
+.. image:: https://img.shields.io/codecov/c/github/tasoc/photometry
+    :target: https://codecov.io/github/tasoc/photometry
 .. image:: https://img.shields.io/github/license/tasoc/photometry.svg
     :alt: license
     :target: https://github.com/tasoc/photometry/blob/devel/LICENSE
@@ -38,7 +42,7 @@ Just trying it out
 ------------------
 For simply trying out the code straight after installation, you can simply run the photometry code directly. This will automatically load some test input data and run the photometry (see more details in the full documentation or below).
 
->>> python run_tessphot.py 182092046
+>>> python run_tessphot.py --starid=182092046
 
 The number refers to the TIC-number of the star, and the above one can replaced with any TIC-number that is available in the TODO-list (see below).
 
@@ -67,7 +71,7 @@ The next part of the program is to prepare photometry on individual stars by doi
 
 The program can simply be run like the following, which will create a number of HDF5 files (`*.hdf5`) in the ``TESSPHOT_INPUT`` directory.
 
->>> python prepare_photometry.py
+>>> python run_prepare_photometry.py
 
 Make TODO list
 --------------
@@ -82,7 +86,7 @@ Running the photometry
 ----------------------
 The photometry program can by run on a single star by running the program::
 
-  >>> python run_tessphot.py 182092046
+  >>> python run_tessphot.py --starid=182092046
 
 Here, the number gives the TIC identifier of the star. The program accepts various other command-line parameters - Try running::
 
@@ -93,4 +97,4 @@ This is very usefull for testing different methods and settings.
 Contributing to the code
 ========================
 You are more than welcome to contribute to this code!
-Please contact `Rasmus Handberg <rasmush@phys.au.dk>`_ or `Mikkel Lund <mikkelnl@phys.au.dk>`_ if you wish to contribute.
+Please contact `Rasmus Handberg <rasmush@phys.au.dk>`_ or `Derek Buzasi <dbuzasi@fgcu.edu>`_ if you wish to contribute.

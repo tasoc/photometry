@@ -1,23 +1,20 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on Wed Nov  8 16:37:12 2017
+PSF Photometry.
 
-@author: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import zip
 import os.path
 import numpy as np
-import matplotlib.pyplot as plt
 import logging
 from copy import deepcopy
 from scipy.optimize import minimize
 from . import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
-from .plots import plot_image, save_figure
+from .plots import plt, plot_image, save_figure
 
 class PSFPhotometry(BasePhotometry):
 
@@ -30,8 +27,9 @@ class PSFPhotometry(BasePhotometry):
 		# NOTE: If we run resize_stamp at any point in the code,
 		#       we should also update self.PSF.
 		# TODO: Maybe we should move this into BasePhotometry?
-		self.psf = PSF(self.camera, self.ccd, self.stamp)
+		self.psf = PSF(self.sector, self.camera, self.ccd, self.stamp)
 
+	#----------------------------------------------------------------------------------------------
 	def _lhood(self, params, img, bkg, lhood_stat='Gaussian_d', include_bkg=True):
 		"""
 		Log-likelihood function to be minimized for the PSF fit.
@@ -70,9 +68,9 @@ class PSFPhotometry(BasePhotometry):
 					var = np.abs(mdl) # has to be in _lhood
 			# Add 2nd term of Erwin (2015), eq. (13):
 			var += self.n_readout * self.readnoise**2 / self.gain**2
-			var[var<minvar] = minvar
+			var[var < minvar] = minvar
 			weightmap = 1 / var
-			weightmap[weightmap<minweight] = minweight
+			weightmap[weightmap < minweight] = minweight
 			# Return the chi2:
 			return np.nansum( weightmap * (img - mdl)**2 )
 
@@ -90,7 +88,7 @@ class PSFPhotometry(BasePhotometry):
 		else:
 			raise ValueError("Invalid statistic: '%s'" % lhood_stat)
 
-
+	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
 		"""PSF Photometry"""
 

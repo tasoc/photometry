@@ -16,8 +16,6 @@ To calculate the image shifts between the reference image (``ref_image``) and an
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import range
 import numpy as np
 import cv2
 #from skimage.transform import estimate_transform, warp, AffineTransform, EuclideanTransform
@@ -25,33 +23,43 @@ import math
 from bottleneck import replace
 from skimage.filters import scharr
 from scipy.interpolate import interp1d
+from astropy.io import fits
+from astropy.wcs import WCS
+import warnings
 
 class ImageMovementKernel(object):
 
 	N_PARAMS = {
+		'unchanged': 0,
 		'translation': 2,
-		'euclidian': 3
+		'euclidian': 3,
+		'wcs': 1
 	}
 
 	#==============================================================================
-	def __init__(self, warpmode='euclidian', image_ref=None):
+	def __init__(self, warpmode='euclidian', image_ref=None, wcs_ref=None):
 		"""
 		Initialize ImageMovementKernel.
 
 		Parameters:
-			warpmode (string): Options are ``'translation'`` and ``'euclidian'``. Default is ``'euclidian'``.
+			warpmode (string): Options are ``'unchanged'``, ``'translation'``, ``'euclidian'`` and ``'wcs'``. Default is ``'euclidian'``.
 			image_ref (2D ndarray): Reference image used
 		"""
 
-		if warpmode not in ('translation', 'euclidian'):
+		if warpmode not in ('unchanged', 'translation', 'euclidian', 'wcs'):
 			raise ValueError("Invalid warpmode")
 
 		self.warpmode = warpmode
 		self.image_ref = image_ref
+		self.wcs_ref = wcs_ref
 		self.n_params = ImageMovementKernel.N_PARAMS[self.warpmode]
 
 		if self.image_ref is not None:
 			self.image_ref = self._prepare_flux(self.image_ref)
+
+		if self.wcs_ref is not None and not isinstance(self.wcs_ref, WCS):
+			if not isinstance(self.wcs_ref, str): self.wcs_ref = self.wcs_ref.decode("utf-8") # For Python 3
+			self.wcs_ref = WCS(header=fits.Header().fromstring(self.wcs_ref))
 
 		self._interpolator = None
 
@@ -121,7 +129,7 @@ class ImageMovementKernel(object):
 			# Set up warp matrix:
 			c = np.cos(theta)
 			s = np.sin(theta)
-			R = np.matrix([[c, -s, dx], [s, c, dy]])
+			R = np.array([[c, -s, dx], [s, c, dy]])
 
 			# Apply warp to all positions:
 			for i in range(xy.shape[0]):
@@ -135,6 +143,18 @@ class ImageMovementKernel(object):
 		elif self.warpmode == 'translation':
 			delta_pos[:, 0] = kernel[0]
 			delta_pos[:, 1] = kernel[1]
+
+		elif self.warpmode == 'unchanged':
+			delta_pos.fill(0)
+
+		elif self.warpmode == 'wcs':
+			# Calculate RA and DEC of target in the reference image:
+			radec = self.wcs_ref.all_pix2world(xy, 0, ra_dec_order=True)
+			# Use RA and DEC to find the position in the kernel image:
+			# TODO: Better handling of NoConvergence exception, which is currently silenced
+			delta_pos = kernel.all_world2pix(radec, 0, ra_dec_order=True, maxiter=50, quiet=True)
+			# Calculate the difference in pixel-position:
+			delta_pos -= xy
 
 		return delta_pos
 
@@ -158,6 +178,9 @@ class ImageMovementKernel(object):
 		.. codeauthor:: Mikkel N. Lund
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
+
+		if self.warpmode == 'unchanged':
+			return []
 
 		# Check that reference image was actually given:
 		if self.image_ref is None:
@@ -212,20 +235,35 @@ class ImageMovementKernel(object):
 			ValueError: If kernels have the wrong shape.
 		"""
 
-		# Check shape of the input:
-		if kernels.shape != (len(times), self.n_params):
-			raise ValueError("Wrong shape of kernels. Anticipated ({0},{1}), but got {2}".format(
+		self.series_times = times
+		self.series_kernels = kernels
+
+		if self.warpmode == 'wcs':
+
+			if len(kernels) != len(times):
+				raise ValueError("Wrong shape of kernels.")
+
+			for k in range(len(kernels)):
+				if isinstance(self.series_kernels[k], WCS): continue
+				hdr_string = self.series_kernels[k]
+				if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
+				self.series_kernels[k] = WCS(header=fits.Header().fromstring(hdr_string))
+
+		else:
+			# Check shape of the input:
+			if kernels.shape != (len(times), self.n_params):
+				raise ValueError("Wrong shape of kernels. Anticipated ({0},{1}), but got {2}".format(
 					len(times),
 					self.n_params,
 					kernels.shape
 				))
 
-		# Only take the kernels that are well-defined:
-		# TODO: Should we raise a warning if there are many undefined?
-		indx = np.all(np.isfinite(kernels), axis=1)
+			# Only take the kernels that are well-defined:
+			# TODO: Should we raise a warning if there are many undefined?
+			indx = np.isfinite(times) & np.all(np.isfinite(kernels), axis=1)
 
-		# Create interpolator:
-		self._interpolator = interp1d(times[indx], kernels[indx, :], axis=0, assume_sorted=True)
+			# Create interpolator:
+			self._interpolator = interp1d(times[indx], kernels[indx, :], axis=0, assume_sorted=True, bounds_error=False, fill_value=(kernels[0, :], kernels[-1, :]))
 
 	#==============================================================================
 	def interpolate(self, time, xy):
@@ -240,17 +278,74 @@ class ImageMovementKernel(object):
 		Returns:
 			``numpy.ndarray``: Array with the same size as `xy` containing the
 			                   changes to rows and columns. These can be added
-							   to `xy` to yield the new positions.
+			                   to `xy` to yield the new positions.
 
 		Raises:
 			ValueError: If timeseries has not been provided.
 		"""
 
-		#
-		if self._interpolator is None:
-			raise ValueError("Interpolator is not defined. ")
+		if self.warpmode == 'wcs':
+			# Methods where the kernel is complex (non-numeric)
+			# Handle the case where we are requesting a timestamp outside the
+			# range of the loaded kernel timeseries:
+			if time < self.series_times[0] or time > self.series_times[-1]:
+				# Allow for a bit of a margin before and after the ends of the
+				# timeseries, to account for e.g. round-off errors in the timestamps:
+				dt = np.median(np.diff(self.series_times))
+				if np.abs(time - self.series_times[0]) < dt:
+					return self.apply_kernel(xy, self.series_kernels[0])
+				elif np.abs(time - self.series_times[-1]) < dt:
+					return self.apply_kernel(xy, self.series_kernels[-1])
+				else:
+					raise ValueError("Timestamp outside timeseries interval")
 
-		# Get the kernel parameters for the timestamp:
-		kernel = self._interpolator(time)
+			# Find the point in the series where the timestamp falls:
+			k = np.searchsorted(self.series_times, time, side='right')
+			t1 = self.series_times[k-1]
+			# Find the jitter in that kernel:
+			jitter_1 = self.apply_kernel(xy, self.series_kernels[k-1])
+			if t1 == time:
+				# We actually hit spot on, so let's just return the jitter:
+				return jitter_1
+			else:
+				#
+				t2 = self.series_times[k]
+				jitter_2 = self.apply_kernel(xy, self.series_kernels[k])
 
-		return self.apply_kernel(xy, kernel)
+				int_time = [t1, t2]
+				jitter_row = interp1d(int_time, np.column_stack((jitter_1[:,0], jitter_2[:,0])), axis=1, assume_sorted=True)
+				jitter_col = interp1d(int_time, np.column_stack((jitter_1[:,1], jitter_2[:,1])), axis=1, assume_sorted=True)
+
+				return np.column_stack((jitter_row(time), jitter_col(time)))
+		else:
+			#
+			if self._interpolator is None:
+				raise ValueError("Interpolator is not defined. ")
+
+			# Get the kernel parameters for the timestamp:
+			with warnings.catch_warnings():
+				warnings.filterwarnings('ignore', category=RuntimeWarning, module='scipy')
+				kernel = self._interpolator(time)
+
+			return self.apply_kernel(xy, kernel)
+
+	#==============================================================================
+	def jitter(self, time, column, row):
+		"""
+		Calculate the change to a given position as a function of time.
+
+		Parameters:
+			time (ndarray): Array of timestamps to calculate position changes for.
+			column (float): Column position at reference time.
+			row (float): Row position at reference time.
+
+		Returns:
+			ndarray: 2D array with changes in column and row for each timestamp.
+		"""
+
+		xy = np.array([column, row])
+		jtr = np.empty((len(time), 2), dtype='float64')
+		for k in range(len(time)):
+			jtr[k, :] = self.interpolate(time[k], xy)
+
+		return jtr

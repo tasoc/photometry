@@ -4,20 +4,20 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
 import logging
 import traceback
-from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry, DiffImgPhotometry
+from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry, HaloPhotometry, DiffImgPhotometry
 
 #------------------------------------------------------------------------------
 class _PhotErrorDummy(object):
-	def __init__(self, *args, **kwargs):
+	def __init__(self, traceback, *args, **kwargs):
 		self.status = STATUS.ERROR
-		self._details = {}
+		self._details = {'errors': traceback} if traceback else {}
 
 #------------------------------------------------------------------------------
 def _try_photometry(PhotClass, *args, **kwargs):
 	logger = logging.getLogger(__name__)
+	tbcollect = []
 	try:
 		with PhotClass(*args, **kwargs) as pho:
 			pho.photometry()
@@ -39,12 +39,12 @@ def _try_photometry(PhotClass, *args, **kwargs):
 			pho._status = STATUS.ERROR
 			pho.report_details(error=tb)
 		except:
-			pass
+			tbcollect.append(tb)
 
 	try:
 		return pho
 	except UnboundLocalError:
-		return _PhotErrorDummy(*args, **kwargs)
+		return _PhotErrorDummy(tbcollect, *args, **kwargs)
 
 #------------------------------------------------------------------------------
 def tessphot(method=None, *args, **kwargs):
@@ -56,7 +56,7 @@ def tessphot(method=None, *args, **kwargs):
 	and if nessacery try another algorithm.
 
 	Parameters:
-		method (string or None): Type of photometry to run. Can be ``'aperture'``, ``'psf'``, ``'linpsf'`` or ``None``.
+		method (string or None): Type of photometry to run. Can be ``'aperture'``, ``'halo'``, ``'psf'``, ``'linpsf'`` or ``None``.
 		*args: Arguments passed on to the photometry class init-function.
 		**kwargs: Keyword-arguments passed on to the photometry class init-function.
 
@@ -82,6 +82,9 @@ def tessphot(method=None, *args, **kwargs):
 
 	elif method == 'linpsf':
 		pho = _try_photometry(LinPSFPhotometry, *args, **kwargs)
+
+	elif method == 'halo':
+		pho = _try_photometry(HaloPhotometry, *args, **kwargs)
 
 	elif method == 'diffimg':
 		pho = _try_photometry(DiffImgPhotometry, *args, **kwargs)

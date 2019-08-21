@@ -6,11 +6,11 @@ Plotting utilities.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-import six
 import logging
 import os
 import warnings
 import numpy as np
+from bottleneck import allnan
 import matplotlib
 matplotlib.use('Agg', warn=False)
 from matplotlib.ticker import MaxNLocator
@@ -24,8 +24,8 @@ warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visua
 warnings.filterwarnings("ignore", category=RuntimeWarning, module="matplotlib.colors", message="invalid value encountered in less")
 
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
-			   ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)',
-			   title=None, percentile=95.0, ax=None, cmap=plt.cm.Blues, offset_axes=None, **kwargs):
+	ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)', cbar_ticks=None, cbar_ticklabels=None,
+	title=None, percentile=95.0, vmin=None, vmax=None, ax=None, cmap=plt.cm.Blues, offset_axes=None, **kwargs):
 	"""
 	Utility function to plot a 2D image.
 
@@ -44,18 +44,16 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.imshow`.
 	"""
 
-	# Negative values will throw warnings, so add offset so we are above zero:
-	# TODO: Something weird is going on, and this doesn't work, so for now we ignore warnings?! (see above)
-	if scale == 'log' or scale == 'sqrt':
-		img_min = np.nanmin(image)
-		if img_min <= 0:
-			image = image.copy()
-			image += np.abs(img_min) + 1.0
-
-	#print(scale, np.all(np.isfinite(image)), np.all(image > 0), np.min(image), np.max(image))
+	if allnan(image):
+		logger = logging.getLogger(__name__)
+		logger.error("Image is all NaN")
+		return None
 
 	# Calcualte limits of color scaling:
-	vmin, vmax = PercentileInterval(percentile).get_limits(image)
+	if vmin is None or vmax is None:
+		vmin1, vmax1 = PercentileInterval(percentile).get_limits(image)
+		if vmin is None: vmin = vmin1
+		if vmax is None: vmax = vmax1
 
 	# Create ImageNormalize object with extracted limits:
 	if scale == 'log':
@@ -77,20 +75,21 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	if ax is None:
 		ax = plt.gca()
 
-	if isinstance(cmap, six.string_types):
+	if isinstance(cmap, str):
 		cmap = plt.get_cmap(cmap)
 
 	im = ax.imshow(image, origin=origin, norm=norm, extent=extent, cmap=cmap, interpolation='nearest', **kwargs)
-	if not xlabel is None: ax.set_xlabel(xlabel)
-	if not ylabel is None: ax.set_ylabel(ylabel)
-	if not title is None: ax.set_title(title)
+	if xlabel is not None: ax.set_xlabel(xlabel)
+	if ylabel is not None: ax.set_ylabel(ylabel)
+	if title is not None: ax.set_title(title)
 	ax.set_xlim([extent[0], extent[1]])
 	ax.set_ylim([extent[2], extent[3]])
 
 	if make_cbar:
-		# TODO: In cases where image was rescaled, should we change something here?
-		cbar = plt.colorbar(im, norm=norm)
+		cbar = plt.colorbar(im, norm=norm, ax=ax, orientation='horizontal', pad=0.02)
 		cbar.set_label(clabel)
+		if cbar_ticks is not None: cbar.set_ticks(cbar_ticks)
+		if cbar_ticklabels is not None: cbar.set_ticklabels(cbar_ticklabels)
 
 	# Settings for ticks (to make Mikkel happy):
 	ax.xaxis.set_major_locator(MaxNLocator(integer=True))
