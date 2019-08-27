@@ -6,7 +6,6 @@ A TaskManager which keeps track of which targets to process.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import numpy as np
 import os
 import sqlite3
@@ -57,6 +56,9 @@ class TaskManager(object):
 		self.conn = sqlite3.connect(todo_file)
 		self.conn.row_factory = sqlite3.Row
 		self.cursor = self.conn.cursor()
+		self.cursor.execute("PRAGMA foreign_keys=ON;")
+		self.cursor.execute("PRAGMA locking_mode=EXCLUSIVE;")
+		self.cursor.execute("PRAGMA journal_mode=TRUNCATE;")
 
 		# Reset the status of everything for a new run:
 		if overwrite:
@@ -67,7 +69,7 @@ class TaskManager(object):
 
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
-			priority INT PRIMARY KEY NOT NULL,
+			priority INTEGER PRIMARY KEY ASC NOT NULL,
 			starid BIGINT NOT NULL,
 			lightcurve TEXT,
 			elaptime REAL NOT NULL,
@@ -87,8 +89,8 @@ class TaskManager(object):
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE
 		);""")
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS photometry_skipped (
-			priority INT NOT NULL,
-			skipped_by INT NOT NULL,
+			priority INTEGER NOT NULL,
+			skipped_by INTEGER NOT NULL,
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE,
 			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
 		);""") # PRIMARY KEY
@@ -100,13 +102,16 @@ class TaskManager(object):
 		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
 		self.conn.commit()
 
+		# Analyze the tables for better query planning:
+		self.cursor.execute("ANALYZE;")
+
 		# Prepare summary object:
 		self.summary = {
 			'slurm_jobid': os.environ.get('SLURM_JOB_ID', None),
 			'numtasks': 0,
 			'tasks_run': 0,
 			'last_error': None,
-			'mean_elaptime': 0.0
+			'mean_elaptime': None
 		}
 		# Make sure to add all the different status to summary:
 		for s in STATUS: self.summary[s.name] = 0
@@ -265,8 +270,12 @@ class TaskManager(object):
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
 
-		# Calculate mean elapsed time using "streaming mean":
-		self.summary['mean_elaptime'] += (result['time'] - self.summary['mean_elaptime']) / self.summary['tasks_run']
+		# Calculate mean elapsed time using "streaming weighted mean" with (alpha=0.1):
+		# https://dev.to/nestedsoftware/exponential-moving-average-on-streaming-data-4hhl
+		if self.summary['mean_elaptime'] is None:
+			self.summary['mean_elaptime'] = result['time']
+		else:
+			self.summary['mean_elaptime'] += 0.1 * (result['time'] - self.summary['mean_elaptime'])
 
 		stamp = details.get('stamp', None)
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]

@@ -5,9 +5,6 @@ Create the TODO list which is used by the pipeline to keep track of the
 targets that needs to be processed.
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-import six
-from six.moves import map
 import os
 import numpy as np
 import logging
@@ -111,7 +108,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 			hdr_string = hdf['wcs']['%04d' % refindx][0]
 		else:
 			hdr_string = hdf['wcs'][0]
-		if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+		if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
 		wcs = WCS(header=fits.Header().fromstring(hdr_string))
 		offset_rows = hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 		offset_cols = hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 0)
@@ -294,7 +291,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 	)
 
 #------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_secondary_targets=True):
+def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
+	find_secondary_targets=True, output_file=None):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
@@ -308,6 +306,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
 		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
 		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
+		output_file (string, optional): The file path where the output file should be saved.
+			If not specified, the file will be saved into the input directory.
+			Should only be used for testing, since the file would (proberly) otherwise end up with
+			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
 		NotADirectoryError: If the specified ``input_folder`` is not an existing directory.
@@ -330,7 +332,14 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
 
 	# The TODO file that we want to create. Delete it if it already exits:
-	todo_file = os.path.join(input_folder, 'todo.sqlite')
+	if output_file is None:
+		todo_file = os.path.join(input_folder, 'todo.sqlite')
+	else:
+		output_file = os.path.abspath(output_file)
+		if not output_file.endswith('.sqlite'):
+			output_file = output_file + '.sqlite'
+		todo_file = output_file
+
 	if os.path.exists(todo_file):
 		if overwrite:
 			os.remove(todo_file)
@@ -500,17 +509,24 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 	with contextlib.closing(sqlite3.connect(todo_file)) as conn:
 		cursor = conn.cursor()
 
+		# Change settings of SQLite file:
+		cursor.execute("PRAGMA page_size=4096;")
+		cursor.execute("PRAGMA foreign_keys=ON;")
+		cursor.execute("PRAGMA locking_mode=EXCLUSIVE;")
+		cursor.execute("PRAGMA journal_mode=TRUNCATE;")
+
+		# Create TODO-list table:
 		cursor.execute("""CREATE TABLE todolist (
-			priority BIGINT NOT NULL,
+			priority INTEGER PRIMARY KEY ASC NOT NULL,
 			starid BIGINT NOT NULL,
-			sector INT NOT NULL,
+			sector INTEGER NOT NULL,
 			datasource TEXT NOT NULL DEFAULT 'ffi',
-			camera INT NOT NULL,
-			ccd INT NOT NULL,
+			camera INTEGER NOT NULL,
+			ccd INTEGER NOT NULL,
 			method TEXT DEFAULT NULL,
 			tmag REAL,
-			status INT DEFAULT NULL,
-			cbv_area INT NOT NULL
+			status INTEGER DEFAULT NULL,
+			cbv_area INTEGER NOT NULL
 		);""")
 
 		for pri, row in enumerate(cat):
@@ -531,14 +547,11 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 			))
 
 		conn.commit()
-		cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
 		cursor.execute("CREATE INDEX starid_datasource_idx ON todolist (starid, datasource);") # FIXME: Should be "UNIQUE", but something is weird in ETE-6?!
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
 
-		# Change settings of SQLite file:
-		cursor.execute("PRAGMA page_size=4096;")
 		# Run a VACUUM of the table which will force a recreation of the
 		# underlying "pages" of the file.
 		# Please note that we are changing the "isolation_level" of the connection here,

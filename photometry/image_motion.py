@@ -16,9 +16,6 @@ To calculate the image shifts between the reference image (``ref_image``) and an
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-import six
-from six.moves import range
 import numpy as np
 import cv2
 #from skimage.transform import estimate_transform, warp, AffineTransform, EuclideanTransform
@@ -61,7 +58,7 @@ class ImageMovementKernel(object):
 			self.image_ref = self._prepare_flux(self.image_ref)
 
 		if self.wcs_ref is not None and not isinstance(self.wcs_ref, WCS):
-			if not isinstance(self.wcs_ref, six.string_types): self.wcs_ref = self.wcs_ref.decode("utf-8") # For Python 3
+			if not isinstance(self.wcs_ref, str): self.wcs_ref = self.wcs_ref.decode("utf-8") # For Python 3
 			self.wcs_ref = WCS(header=fits.Header().fromstring(self.wcs_ref))
 
 		self._interpolator = None
@@ -249,17 +246,17 @@ class ImageMovementKernel(object):
 			for k in range(len(kernels)):
 				if isinstance(self.series_kernels[k], WCS): continue
 				hdr_string = self.series_kernels[k]
-				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+				if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
 				self.series_kernels[k] = WCS(header=fits.Header().fromstring(hdr_string))
 
 		else:
 			# Check shape of the input:
 			if kernels.shape != (len(times), self.n_params):
 				raise ValueError("Wrong shape of kernels. Anticipated ({0},{1}), but got {2}".format(
-						len(times),
-						self.n_params,
-						kernels.shape
-					))
+					len(times),
+					self.n_params,
+					kernels.shape
+				))
 
 			# Only take the kernels that are well-defined:
 			# TODO: Should we raise a warning if there are many undefined?
@@ -281,7 +278,7 @@ class ImageMovementKernel(object):
 		Returns:
 			``numpy.ndarray``: Array with the same size as `xy` containing the
 			                   changes to rows and columns. These can be added
-							   to `xy` to yield the new positions.
+			                   to `xy` to yield the new positions.
 
 		Raises:
 			ValueError: If timeseries has not been provided.

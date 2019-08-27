@@ -6,8 +6,6 @@ Point Spread Function (PSF).
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
-from six.moves import range
 import os
 import numpy as np
 from scipy.io import loadmat
@@ -169,8 +167,8 @@ class PSF(object):
 		ax.axis('equal')
 
 		ax = fig.add_subplot(122)
-		plot_image(img)
+		plot_image(img, ax=ax)
 		ax.scatter(stars[:,1], stars[:,0], c='r', alpha=0.5)
 
 		plt.tight_layout()
-		plt.show()
+		return fig

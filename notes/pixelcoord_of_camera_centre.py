@@ -6,8 +6,6 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, unicode_literals
-import six
 import numpy as np
 import matplotlib.pyplot as plt
 from astropy.io import fits
@@ -45,7 +43,7 @@ if __name__ == '__main__':
 			for k in trange(N):
 				if hdf['quality'][k] == 0:
 					hdr_string = hdf['wcs']['%04d' % k][0]
-					if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+					if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
 					wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True)
 
 					xycen = wcs.all_world2pix(np.atleast_2d(camera_centre), 0, ra_dec_order=True)

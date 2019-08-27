@@ -2,30 +2,50 @@ language: python
 python:
   - "3.5"
   - "3.6"
+  - "pypy3.5-6.0"
 
-# Python 3.7 has to be done a different way
+# Python 3.7+ has to be done a different way
 # https://github.com/travis-ci/travis-ci/issues/9069
-jobs:
+matrix:
   include:
-    - language: python
-      python: "3.7"
+    - python: "3.7"
       dist: xenial
       sudo: required
 
-# Allow some newer versions of Python to fail for now
-# This will be changed once the required packages starts
-# supporting the newer versions of Python:
-#matrix:
-#  fast_finish: true
-#  allow_failures:
-#    - python: "2.7"
+    - python: "3.8-dev"
+      dist: xenial
+      sudo: required
+
+    - name: "Flake8"
+      python: "3.6"
+      git:
+        lfs_skip_smudge: true
+      install:
+        - pip install flake8
+      script:
+        - flake8
+
+  # Allow some newer versions of Python to fail for now
+  # This will be changed once the required packages starts
+  # supporting the newer versions of Python:
+  fast_finish: true
+  allow_failures:
+    - python: "pypy3.5-6.0"
+    - python: "3.8-dev"
+    - name: "Flake8"
 
 install:
+  - pip install --upgrade pip
   - pip uninstall numpy Bottleneck -y
-  - pip install -r requirements.txt --no-cache-dir
+  - pip install numpy==1.15.4 --no-cache-dir
+  - pip install -r requirements.txt
+  - pip install codecov pytest-cov
   - python -c "from photometry.spice import TESS_SPICE; print(TESS_SPICE())"
 script:
-  - pytest
+  - pytest --cov=photometry/
+after_success:
+  - codecov
+
 branches:
   only:
     - master
@@ -34,11 +54,16 @@ branches:
 
 # Deploy to GitHub Releases, making a release of the
 # code whenever a new tag is added on the master branch
+before_deploy:
+  - python -c "from photometry import version; version.update_release_version(); print(version.get_version(pep440=True))"
+  - cat VERSION
 deploy:
   provider: releases
   api_key: $GITHUB_TOKEN
   skip_cleanup: true
   draft: true
+  name: "Version $TRAVIS_TAG"
+  body: "Version $TRAVIS_TAG"
   on:
     branch:
       - master

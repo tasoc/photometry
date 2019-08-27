@@ -7,13 +7,11 @@ the photometry package.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import range
 import numpy as np
 from astropy.io import fits
 from bottleneck import move_median, nanmedian, nanmean, allnan
 import logging
-from tqdm import tqdm
+import tqdm
 from scipy.special import erf
 from scipy.stats import binned_statistic
 import json
@@ -77,7 +75,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 			matches.append(os.path.join(root, filename))
 
 	# Sort the list of files by thir filename:
-	matches.sort(key = lambda x: os.path.basename(x))
+	matches.sort(key=lambda x: os.path.basename(x))
 
 	return matches
 
@@ -140,12 +138,12 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 
 				matches.append(fpath)
 				if findmax is not None and len(matches) >= findmax:
-					breakout=True
+					breakout = True
 					break
 		if breakout: break
 
 	# Sort the list of files by thir filename:
-	matches.sort(key = lambda x: os.path.basename(x))
+	matches.sort(key=lambda x: os.path.basename(x))
 
 	return matches
 
@@ -282,8 +280,8 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	# Convert BJD to epoch (year):
 	epoch_now = (bjd - 2451544.5)/365.25 + 2000.0
 
-    # How many years since the catalog's epoch?
-	timeelapsed = epoch_now - epoch  # in years
+	# How many years since the catalog's epoch?
+	timeelapsed = epoch_now - epoch # in years
 
 	# Calculate the dec:
 	decrate = pm_dec/3600000.0  # in degrees/year (assuming original was in mas/year)
@@ -325,11 +323,10 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		[ 0.92564571,  1.46631496,  0.92564571],
 		[ 0.58433556,  0.92564571,  0.58433556]])
 	"""
-	return (flux / 4 *
-		((erf((x - x_0 + 0.5) / (np.sqrt(2) * sigma)) -
-		  erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma))) *
-		 (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma)) -
-		  erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
+	return (flux / 4 * ((erf((x - x_0 + 0.5) / (np.sqrt(2) * sigma))
+		- erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma)))
+		* (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma))
+		- erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
 
 #------------------------------------------------------------------------------
 def mag2flux(mag):
@@ -442,6 +439,8 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	flux = np.asarray(flux)
 	if len(flux) == 0 or allnan(flux):
 		return np.nan
+	if len(time) == 0 or allnan(time):
+		raise ValueError("Invalid time-vector specified. No valid timestamps.")
 
 	time_min = np.nanmin(time)
 	time_max = np.nanmax(time)
@@ -501,7 +500,7 @@ def download_file(url, destination):
 		total_size = int(response.headers.get('content-length', 0))
 		block_size = 1024
 		with open(destination, 'wb') as handle:
-			with tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
+			with tqdm.tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
 				for block in response.iter_content(block_size):
 					handle.write(block)
 					pbar.update(len(block))
@@ -513,3 +512,18 @@ def download_file(url, destination):
 		if os.path.exists(destination):
 			os.remove(destination)
 		raise
+
+#------------------------------------------------------------------------------
+class TqdmLoggingHandler(logging.Handler):
+	def __init__(self, level=logging.NOTSET):
+		super(self.__class__, self).__init__(level)
+
+	def emit(self, record):
+		try:
+			msg = self.format(record)
+			tqdm.tqdm.write(msg)
+			self.flush()
+		except (KeyboardInterrupt, SystemExit):
+			raise
+		except:
+			self.handleError(record)

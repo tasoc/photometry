@@ -6,7 +6,6 @@ Handling of TESS data quality flags.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import numpy as np
 
 #------------------------------------------------------------------------------

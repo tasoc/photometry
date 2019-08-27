@@ -6,8 +6,6 @@ Simple Aperture Photometry using K2P2 to define masks.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import range, zip
 import numpy as np
 from bottleneck import allnan
 import logging

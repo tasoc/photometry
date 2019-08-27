@@ -1,8 +1,11 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
+"""
+Preparation for Photometry extraction.
 
-from __future__ import division, with_statement, print_function, absolute_import
-from six.moves import range, map
+.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+"""
+
 import os
 import numpy as np
 import warnings
@@ -14,16 +17,18 @@ import logging
 import re
 import multiprocessing
 from astropy.wcs import WCS
-from bottleneck import replace, nanmean
+from bottleneck import replace, nanmean, nanmedian
 from timeit import default_timer
 import itertools
 import functools
 import contextlib
 from tqdm import tqdm, trange
+from .catalog import download_catalogs
 from .backgrounds import fit_background
 from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
 from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
+#from .plots import plt, plot_image
 
 #------------------------------------------------------------------------------
 def quality_from_tpf(tpffile, time_start, time_end):
@@ -53,8 +58,8 @@ def _iterate_hdf_group(dset, start=0, stop=None):
 		yield np.asarray(dset['%04d' % d])
 
 #------------------------------------------------------------------------------
-def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
-		calc_movement_kernel=False, backgrounds_pixels_threshold=0.5):
+def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
+		calc_movement_kernel=False, backgrounds_pixels_threshold=0.5, output_file=None):
 	"""
 	Restructure individual FFI images (in FITS format) into
 	a combined HDF5 file which is used in the photometry
@@ -71,6 +76,10 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 			If it is not calculated, only the default WCS movement kernel will be available when doing the folllowing photometry. Default=False.
 		backgrounds_pixels_threshold (float): Percentage of times a pixel has to use used in background calculation in order to be included in the
 			final list of contributing pixels. Default=0.5.
+		output_file (string, optional): The file path where the output file should be saved.
+			If not specified, the file will be saved into the input directory.
+			Should only be used for testing, since the file would (proberly) otherwise end up with
+			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
 		NotADirectoryError: If the specified ``input_folder`` is not an existing directory or if settings table could not be loaded from the catalog SQLite file.
@@ -79,7 +88,10 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 	"""
 
 	logger = logging.getLogger(__name__)
-	tqdm_settings = {'disable': not logger.isEnabledFor(logging.INFO)}
+	tqdm_settings = {
+		'disable': not logger.isEnabledFor(logging.INFO),
+		'dynamic_ncols': True
+	}
 
 	# Check the input folder, and load the default if not provided:
 	if input_folder is None:
@@ -104,13 +116,23 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 	# If no sectors are provided, find all the available FFI files and figure out
 	# which sectors they are all from:
 	if sectors is None:
-		# TODO: Could we change this so we don't have to parse the filenames?
-		files = find_ffi_files(input_folder)
 		sectors = []
-		for fname in files:
+
+		# TODO: Could we change this so we don't have to parse the filenames?
+		for fname in find_ffi_files(input_folder):
 			m = re.match(r'^tess.+-s(\d+)-.+\.fits', os.path.basename(fname))
 			if int(m.group(1)) not in sectors:
 				sectors.append(int(m.group(1)))
+
+		# Also collect sectors from TPFs. They are needed for ensuring that
+		# catalogs are available. Can be added directly to the sectors list,
+		# since the HDF5 creation below will simply skip any sectors with
+		# no FFIs available
+		for fname in find_tpf_files(input_folder):
+			m = re.match(r'^.+-s(\d+)[-_].+_tp\.fits', os.path.basename(fname))
+			if int(m.group(1)) not in sectors:
+				sectors.append(int(m.group(1)))
+
 		logger.debug("Sectors found: %s", sectors)
 	else:
 		sectors = (sectors,)
@@ -119,6 +141,11 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 	if not sectors:
 		logger.error("No sectors were found")
 		return
+
+	# Make sure that catalog files are available in the input directory.
+	# If they are not already, they will be downloaded from the cache:
+	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
+		download_catalogs(input_folder, sector, camera=camera, ccd=ccd)
 
 	# Get the number of processes we can spawn in case it is needed for calculations:
 	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
@@ -145,10 +172,10 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 		# Catalog file:
 		catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
-		logger.debug("Catalog File: %s", catalog_file)
 		if len(catalog_file) != 1:
 			logger.error("Catalog file could not be found: SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
 			continue
+		logger.debug("Catalog File: %s", catalog_file[0])
 
 		# Load catalog settings from the SQLite database:
 		with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
@@ -163,7 +190,13 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 			cursor.close()
 
 		# HDF5 file to be created/modified:
-		hdf_file = os.path.join(input_folder, 'sector{0:03d}_camera{1:d}_ccd{2:d}.hdf5'.format(sector, camera, ccd))
+		if output_file is None:
+			hdf_file = os.path.join(input_folder, 'sector{0:03d}_camera{1:d}_ccd{2:d}.hdf5'.format(sector, camera, ccd))
+		else:
+			output_file = os.path.abspath(output_file)
+			if not output_file.endswith('.hdf5'):
+				output_file = output_file + '.hdf5'
+			hdf_file = output_file
 		logger.debug("HDF5 File: %s", hdf_file)
 
 		# Get image shape from the first file:
@@ -199,13 +232,14 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 						# Create wrapper function freezing some of the
 						# additional keyword inputs:
-						fit_background_wrapper = functools.partial(fit_background,
-							 flux_cutoff=flux_cutoff,
-							 bkgiters=bkgiters,
-							 radial_cutoff=radial_cutoff,
-							 radial_pixel_step=radial_pixel_step,
-							 radial_smooth=radial_smooth
-						 )
+						fit_background_wrapper = functools.partial(
+							fit_background,
+							flux_cutoff=flux_cutoff,
+							bkgiters=bkgiters,
+							radial_cutoff=radial_cutoff,
+							radial_pixel_step=radial_pixel_step,
+							radial_smooth=radial_smooth
+						)
 
 						tic = default_timer()
 
@@ -431,30 +465,114 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 				quality = np.asarray(hdf['quality'])
 
 			# Detections and flagging of Background Shenanigans:
-			last_bkgshe = pixel_flags.attrs.get('bkgshe_done', -1)
-			if last_bkgshe < numfiles-1:
+			if pixel_flags.attrs.get('bkgshe_done', -1) < numfiles-1:
 				logger.info("Detecting background shenanigans...")
-				tic = default_timer()
+				tic_bkgshe = default_timer()
 
 				# Load settings and create wrapper function with keywords set:
 				bkgshe_threshold = pixel_flags.attrs.get('bkgshe_threshold', 40)
 				pixel_flags.attrs['bkgshe_threshold'] = bkgshe_threshold
-				pixel_background_shenanigans_wrapper = functools.partial(pixel_background_shenanigans,
-					SumImage=SumImage,
-					limit=bkgshe_threshold
+				pixel_background_shenanigans_wrapper = functools.partial(
+					pixel_background_shenanigans,
+					SumImage=SumImage
 				)
 
-				# Run the background shenanigans extractor in parallel:
-				k = last_bkgshe + 1
-				for bckshe in tqdm(m(pixel_background_shenanigans_wrapper, _iterate_hdf_group(images, start=k)), initial=k, total=numfiles, **tqdm_settings):
-					if np.any(bckshe):
-						dset_name = '%04d' % k
-						pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
-					pixel_flags.attrs['bkgshe_done'] = k
-					k += 1
-					hdf.flush()
+				tmp_hdf_file = hdf_file.replace('.hdf5', '.tmp.hdf5')
+				with h5py.File(tmp_hdf_file, 'a', libver='latest') as hdftmp:
+					# Temporary dataset that will be used to store large array
+					# of background shenanigans indicator images:
+					pixel_flags_ind = hdftmp.require_dataset('pixel_flags_individual',
+						shape=(SumImage.shape[0], SumImage.shape[1], numfiles),
+						chunks=(SumImage.shape[0], SumImage.shape[1], 1),
+						dtype='float32'
+					)
 
-				logger.info("Background Shenanigans: %f sec/image", (default_timer()-tic)/(numfiles-last_bkgshe))
+					# Run the background shenanigans extractor in parallel:
+					last_bkgshe = pixel_flags_ind.attrs.get('bkgshe_done', -1)
+					if last_bkgshe < numfiles-1:
+						tic = default_timer()
+						k = last_bkgshe + 1
+						for bckshe in tqdm(m(pixel_background_shenanigans_wrapper, _iterate_hdf_group(images, start=k)), initial=k, total=numfiles, **tqdm_settings):
+							pixel_flags_ind[:, :, k] = bckshe
+							pixel_flags_ind.attrs['bkgshe_done'] = k
+							k += 1
+							hdftmp.flush()
+						logger.info("Background Shenanigans: %f sec/image", (default_timer()-tic)/(numfiles-last_bkgshe))
+
+					# Calculate the mean Background Shenanigans indicator:
+					if 'mean_shenanigans' not in hdftmp:
+						logger.info("Calculating mean shenanigans...")
+						tic = default_timer()
+
+						# Calculate robust mean by calculating the
+						# median in chunks and then taking the mean of them.
+						# This is to avoid loading the entire array into memory
+						mean_shenanigans = np.zeros_like(SumImage, dtype='float64')
+						block = 25
+						indicies = list(range(numfiles))
+						np.random.seed(0)
+						np.random.shuffle(indicies)
+						mean_shenanigans_block = np.empty((SumImage.shape[0], SumImage.shape[1], block))
+						for k in trange(0, numfiles, block, **tqdm_settings):
+							# Take median of a random block of images:
+							for j, i in enumerate(indicies[k:k+block]):
+								mean_shenanigans_block[:, :, j] = pixel_flags_ind[:, :, i]
+							bckshe = nanmedian(mean_shenanigans_block, axis=2)
+
+							# Add the median block to the mean image:
+							replace(bckshe, np.NaN, 0)
+							mean_shenanigans += bckshe
+						mean_shenanigans /= np.ceil(numfiles/block)
+						logger.info("Mean Background Shenanigans: %f sec/image", (default_timer()-tic)/numfiles)
+
+						# Save the mean shenanigans to the HDF5 file:
+						hdftmp.create_dataset('mean_shenanigans', data=mean_shenanigans)
+					else:
+						mean_shenanigans = np.asarray(hdftmp['mean_shenanigans'])
+
+					#msmax = max(np.abs(np.min(mean_shenanigans)), np.abs(np.max(mean_shenanigans)))
+					#fig = plt.figure()
+					#plot_image(mean_shenanigans, scale='linear', vmin=-msmax, vmax=msmax, cmap='coolwarm', make_cbar=True, xlabel=None, ylabel=None)
+					#fig.savefig('test.png', bbox_inches='tight')
+
+					logger.info("Setting background shenanigans...")
+					tic = default_timer()
+					for k in trange(numfiles, **tqdm_settings):
+						dset_name = '%04d' % k
+						bckshe = np.asarray(pixel_flags_ind[:, :, k])
+
+						#img = bckshe - mean_shenanigans
+						#img[np.abs(img) <= bkgshe_threshold/2] = 0
+						#fig = plt.figure(figsize=(8,9))
+						#ax = fig.add_subplot(111)
+						#plot_image(img, ax=ax, scale='linear', vmin=-bkgshe_threshold, vmax=bkgshe_threshold, xlabel=None, ylabel=None, cmap="RdBu_r", make_cbar=True)
+						#ax.set_xticks([])
+						#ax.set_yticks([])
+						#fig.savefig(dset_name + '.png', bbox_inches='tight')
+						#plt.close(fig)
+
+						# Create the mask as anything that significantly pops out
+						# (both positive and negative) in the image:
+						bckshe = np.abs(bckshe - mean_shenanigans) > bkgshe_threshold
+
+						# Clear any old flags:
+						indx = (np.asarray(pixel_flags[dset_name]) & PixelQualityFlags.BackgroundShenanigans != 0)
+						if np.any(indx):
+							pixel_flags[dset_name][indx] -= PixelQualityFlags.BackgroundShenanigans
+
+						# Save the new flags to the permanent HDF5 file:
+						if np.any(bckshe):
+							pixel_flags[dset_name][bckshe] |= PixelQualityFlags.BackgroundShenanigans
+
+						pixel_flags.attrs['bkgshe_done'] = k
+						hdf.flush()
+					logger.info("Setting Background Shenanigans: %f sec/image", (default_timer()-tic)/numfiles)
+
+				# Delete the temporary HDF5 file again:
+				if os.path.exists(tmp_hdf_file):
+					os.remove(tmp_hdf_file)
+
+				logger.info("Total Background Shenanigans: %f sec/image", (default_timer()-tic_bkgshe)/numfiles)
 
 			# Check that the time vector is sorted:
 			if not np.all(hdf['time'][:-1] < hdf['time'][1:]):
@@ -497,7 +615,7 @@ def create_hdf5(input_folder=None, sectors=None, cameras=None, ccds=None,
 				dset.attrs['ref_frame'] = refindx
 
 			# Transfer quality flags from TPF files from the same CAMERA and CCD to the FFIs:
-			if hdf['quality'].attrs.get('TRANSFER_FROM_TPF') != True:
+			if not hdf['quality'].attrs.get('TRANSFER_FROM_TPF', False):
 				logger.info("Transfering QUALITY flags from TPFs to FFIs...")
 
 				# Select (max) five random TPF targets from the given sector, camera and ccd:

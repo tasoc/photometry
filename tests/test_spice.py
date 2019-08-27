@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-
+Tests of SPICE Kernel module.
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
 import sys
 import os
 import numpy as np
@@ -14,16 +13,14 @@ from astropy.time import Time
 from scipy.interpolate import interp1d
 from astropy.io import fits
 import h5py
-try:
-	from tempfile import TemporaryDirectory
-except ImportError:
-	from backports.tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory
+#sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import AperturePhotometry
 from photometry.spice import TESS_SPICE
 from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_motion
 from photometry.plots import plt
-from mpl_toolkits.mplot3d import Axes3D
+from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
@@ -57,12 +54,12 @@ def test_timestamps():
 	print("="*72)
 
 #------------------------------------------------------------------------------
-def test_position_velocity():
+def test_position_velocity(keep_figures=False):
 
 	with TESS_SPICE() as knl:
 
 		# We should be able to load and close without affecting the results of the following:
-		with TESS_SPICE() as knl2:
+		with TESS_SPICE():
 			pass
 
 		time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
@@ -80,27 +77,30 @@ def test_position_velocity():
 		pos_inter = knl.position(time_inter + 2457000)
 		vel_inter = knl.velocity(time_inter + 2457000)
 
-		fig = plt.figure()
-		ax = fig.add_subplot(111, projection='3d')
+		fig1 = plt.figure()
+		ax = fig1.add_subplot(111, projection='3d')
 		ax.plot(pos_inter[:,0], pos_inter[:,1], pos_inter[:,2], 'r-')
 		ax.scatter(pos[:,0], pos[:,1], pos[:,2], alpha=0.5)
 		ax.scatter(0, 0, 0, alpha=0.5, c='b')
 
-		fig = plt.figure()
-		ax1 = fig.add_subplot(211)
+		fig2 = plt.figure()
+		ax1 = fig2.add_subplot(211)
 		ax1.plot(time_inter, np.linalg.norm(pos_inter, axis=1), 'r-')
 		ax1.scatter(time_nocorr, np.linalg.norm(pos, axis=1), alpha=0.5)
 		ax1.set_ylabel('Distance (km)')
 		ax1.set_xticks([])
 
-		ax2 = fig.add_subplot(212)
+		ax2 = fig2.add_subplot(212)
 		ax2.plot(time_inter, np.linalg.norm(vel_inter, axis=1), 'r-')
 		ax2.scatter(time_nocorr, np.linalg.norm(vel, axis=1), alpha=0.5)
 		ax2.set_ylabel('Velocity (km/s)')
 		ax2.set_xlabel('Time')
 
 		plt.tight_layout()
-		plt.show()
+
+		if not keep_figures:
+			plt.close(fig1)
+			plt.close(fig2)
 
 #------------------------------------------------------------------------------
 def test_sclk2jd():
@@ -142,7 +142,7 @@ def test_sclk2jd():
 	print("="*72)
 
 #------------------------------------------------------------------------------
-def test_spice():
+def test_spice(keep_figures=False):
 
 	# Initialize our home-made TESS Kernel object:
 	with TESS_SPICE() as knl:
@@ -181,7 +181,13 @@ def test_spice():
 			time_nocorr = ffi_time - ffi_timecorr
 
 			times = Time(time_nocorr, 2457000, format='jd', scale='tdb')
-			ras, decs = add_proper_motion(star_coord.ra.value, star_coord.dec.value, star_coord.pm_ra_cosdec.value, star_coord.pm_dec.value, times.jd)
+			ras, decs = add_proper_motion(
+				star_coord.ra.value,
+				star_coord.dec.value,
+				star_coord.pm_ra_cosdec.value,
+				star_coord.pm_dec.value,
+				times.jd
+			)
 			star_coord = coord.SkyCoord(
 				ra=ras[0],
 				dec=decs[0],
@@ -205,25 +211,26 @@ def test_spice():
 			print(timecorr_knl)
 
 			# Plot the new barycentric time correction and the old one:
-			plt.figure()
-			plt.scatter(time_nocorr, ffi_timecorr*86400, alpha=0.3, s=4, label='FFI timecorr')
-			plt.scatter(time_tpf - timecorr_tpf, timecorr_tpf*86400, alpha=0.3, s=4, label='TPF timecorr')
-			plt.scatter(time_nocorr, timecorr_greenwich*86400, alpha=0.3, s=4, label='Elenor timecorr')
-			plt.scatter(time_nocorr, timecorr_astropy*86400, alpha=0.3, s=4, label='Our timecorr')
-			plt.xlabel('Uncorrected Time (JD - 2457000)')
-			plt.ylabel('Barycentric Time Correction (s)')
-			plt.title('TIC %d' % starid)
+			fig1 = plt.figure()
+			ax = fig1.add_subplot(111)
+			ax.scatter(time_nocorr, ffi_timecorr*86400, alpha=0.3, s=4, label='FFI timecorr')
+			ax.scatter(time_tpf - timecorr_tpf, timecorr_tpf*86400, alpha=0.3, s=4, label='TPF timecorr')
+			ax.scatter(time_nocorr, timecorr_greenwich*86400, alpha=0.3, s=4, label='Elenor timecorr')
+			ax.scatter(time_nocorr, timecorr_astropy*86400, alpha=0.3, s=4, label='Our timecorr')
+			ax.set_xlabel('Uncorrected Time (JD - 2457000)')
+			ax.set_ylabel('Barycentric Time Correction (s)')
+			ax.set_title('TIC %d' % starid)
 			plt.legend()
 
 			# Plot the new barycentric time correction and the old one:
-			plt.figure(figsize=(8,10))
-			ax1 = plt.subplot(311)
+			fig2 = plt.figure(figsize=(8,10))
+			ax1 = fig2.add_subplot(311)
 			ax1.axhline(0, color='k', ls=':', lw=0.5)
 			ax1.plot(time_nocorr, (ffi_timecorr - f(time_nocorr))*86400, '.')
 			ax1.set_ylabel('FFI - TPF (seconds)')
 			ax1.set_title('TIC %d' % starid)
 
-			ax2 = plt.subplot(312)
+			ax2 = fig2.add_subplot(312)
 			ax2.axhline(0, color='k', ls=':', lw=0.5)
 			ax2.plot(time_nocorr, (timecorr_greenwich - f(time_nocorr))*86400*1000, '.')
 			ax2.set_ylabel('Elenor - TPF (ms)')
@@ -239,13 +246,17 @@ def test_spice():
 			ax2.set_xticks([])
 			plt.tight_layout()
 
+			if not keep_figures:
+				plt.close(fig1)
+				plt.close(fig2)
+
 	print("="*72)
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_position_velocity()
+	test_position_velocity(keep_figures=True)
 	test_sclk2jd()
 	test_timestamps()
-	test_spice()
+	test_spice(keep_figures=True)
 
 	plt.show()
