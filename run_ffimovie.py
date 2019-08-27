@@ -155,7 +155,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 				a.set_xticks([])
 				a.set_yticks([])
 
-			fig.suptitle("to come\nt=???????", fontsize=15)
+			figtext = fig.suptitle("to come\nt=???????", fontsize=15)
 			fig.set_tight_layout('tight')
 			fig.subplots_adjust(top=0.85)
 			set_copyright(fig)
@@ -184,14 +184,14 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 						imgs[3].set_data(flags)
 
 					# Update figure title with cadence information;
-					fig.suptitle("Sector {sector:d}, Camera {camera:d}, CCD {ccd:d}\ndset={dset:s}, cad={cad:d}, t={time:.6f}".format(
+					figtext.set_text("Sector {sector:d}, Camera {camera:d}, CCD {ccd:d}\ndset={dset:s}, cad={cad:d}, t={time:.6f}".format(
 						sector=sector,
 						camera=camera,
 						ccd=ccd,
 						dset=dset_name,
 						cad=cadenceno[k],
 						time=time[k]
-					), fontsize=15)
+					))
 
 					writer.grab_frame()
 
@@ -200,13 +200,16 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	return output_file
 
 #------------------------------------------------------------------------------
-def make_combined_movie(input_dir, fps=15, dpi=100, overwrite=False):
+def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=False):
 	"""
-	Create animation of the combined contents of all HDF5 files in a directoru,
+	Create animation of the combined contents of all HDF5 files in a directory,
 	produced by the photometry pipeline.
 
 	Parameters:
 		input_dir (string): Path to the directory with HDF5 files to produce movie from.
+		mode (string): Which images to show.
+			Choices are `'images'`, `'backgrounds'` or `'flags'`.
+			Default=images.
 		fps (integer): Frames per second of generated movie. Default=15.
 		dpi (integer): DPI of the movie. Default=100.
 		overwrite (boolean): Overwrite existing MP4 files? Default=False.
@@ -214,12 +217,15 @@ def make_combined_movie(input_dir, fps=15, dpi=100, overwrite=False):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	# Basic input checks:
+	assert mode in ('images', 'backgrounds', 'flags'), "Invalid MODE specified"
+
 	logger = logging.getLogger(__name__)
 	logger.info("Processing '%s'", input_dir)
 
-	camccd = [
-		(1,1), (1,2), (2,1), (2,2), (3,1), (3,2), (4,1), (4,2),
-		(1,4), (1,3), (2,4), (2,3), (3,4), (3,3), (4,4), (4,3)
+	camccdrot = [
+		(1,3,1), (1,2,3), (2,3,1), (2,2,3), (3,1,1), (3,4,3), (4,1,1), (4,4,3),
+		(1,4,1), (1,1,3), (2,4,1), (2,1,3), (3,2,1), (3,3,3), (4,2,1), (4,3,3)
 	]
 
 	# Find the sectors that are available:
@@ -233,7 +239,10 @@ def make_combined_movie(input_dir, fps=15, dpi=100, overwrite=False):
 	# Create one movie per found sector:
 	for sector in sectors:
 		# Define the output file, and overwrite it if needed:
-		output_file = os.path.join(input_dir, 'sector{sector:03d}_combined.mp4'.format(sector=sector))
+		output_file = os.path.join(input_dir, 'sector{sector:03d}_combined_{mode:s}.mp4'.format(
+			sector=sector,
+			mode=mode
+		))
 		if os.path.exists(output_file):
 			if overwrite:
 				logger.debug("Deleting existing output file")
@@ -246,39 +255,51 @@ def make_combined_movie(input_dir, fps=15, dpi=100, overwrite=False):
 			hdf = [None]*16
 			vmin = np.full(16, np.NaN)
 			vmax = np.full(16, np.NaN)
-			for k, (camera, ccd) in enumerate(camccd):
+			for k, (camera, ccd, rot) in enumerate(camccdrot):
 				hdf_file = find_hdf5_files(input_dir, sector=sector, camera=camera, ccd=ccd)
 				if hdf_file:
 					hdf[k] = h5py.File(hdf_file[0], 'r', libver='latest')
 
 					numfiles = len(hdf[k]['images'])
-					dummy_img = np.full_like(hdf[k]['images/0000'], np.NaN)
+					dummy_img = np.zeros_like(hdf[k]['images/0000'])
 					time = np.asarray(hdf[k]['time'])
 					cadenceno = np.asarray(hdf[k]['cadenceno'])
 
 					# Load the image scales if they have already been calculated:
-					vmin[k] = hdf[k]['images'].attrs.get('movie_vmin', 0)
-					vmax[k] = hdf[k]['images'].attrs.get('movie_vmax', 500)
-
+					if mode == 'backgrounds':
+						vmin[k] = hdf[k]['backgrounds'].attrs.get('movie_vmin', 0)
+						vmax[k] = hdf[k]['backgrounds'].attrs.get('movie_vmax', 500)
+					elif mode == 'images':
+						vmin[k] = hdf[k]['images'].attrs.get('movie_vmin', 0)
+						vmax[k] = hdf[k]['images'].attrs.get('movie_vmax', 500)
+						
 			# Summarize the different CCDs into common values:
-			vmin = np.nanmedian(vmin)
-			vmax = np.nanmedian(vmax)
+			vmin = np.nanpercentile(vmin, 25.0)
+			vmax = np.nanpercentile(vmax, 75.0)
 
 			logger.info("Creating movie...")
 			with plt.style.context('dark_background'):
-
-				fig, axes = plt.subplots(2, 8, figsize=(25, 6.8))
+				fig, axes = plt.subplots(2, 8, figsize=(25, 7.3))
 
 				cmap = plt.get_cmap('viridis')
 				cmap.set_bad('k', 1.0)
+				
+				# Colormap for Flags:
+				viridis = plt.get_cmap('Dark2')
+				newcolors = viridis(np.linspace(0, 1, 4))
+				newcolors[:1, :] = np.array([1, 1, 1, 1])
+				cmap_flags = ListedColormap(newcolors)
 
 				imgs = [None]*16
 				for k, ax in enumerate(axes.flatten()):
-					imgs[k] = plot_image(dummy_img, ax=ax, scale='sqrt', vmin=vmin, vmax=vmax, xlabel=None, ylabel=None, cmap=cmap, make_cbar=False)
+					if mode == 'flags':
+						imgs[k] = plot_image(dummy_img, ax=ax, scale='linear', vmin=-0.5, vmax=4.5, xlabel=None, ylabel=None, cmap=cmap_flags, make_cbar=False)				
+					else:
+						imgs[k] = plot_image(dummy_img, ax=ax, scale='sqrt', vmin=vmin, vmax=vmax, xlabel=None, ylabel=None, cmap=cmap, make_cbar=False)
 					ax.set_xticks([])
 					ax.set_yticks([])
 
-				fig.suptitle("to come\nt=???????", fontsize=15)
+				figtext = fig.suptitle("to come\nt=???????", fontsize=15)
 				fig.set_tight_layout('tight')
 				fig.subplots_adjust(top=0.85)
 				set_copyright(fig)
@@ -290,23 +311,32 @@ def make_combined_movie(input_dir, fps=15, dpi=100, overwrite=False):
 
 						for k in range(16):
 							if hdf[k] is None: continue
-							img = np.asarray(hdf[k]['images/' + dset_name])
-							img += np.asarray(hdf[k]['backgrounds/' + dset_name])
+							
+							# Background Shenanigans flags, if available:
+							if mode == 'flags':
+								flags = np.asarray(hdf[k]['pixel_flags/' + dset_name])
+								img = np.zeros_like(flags, dtype='uint8')
+								img[flags & PixelQualityFlags.NotUsedForBackground != 0] = 1
+								img[flags & PixelQualityFlags.ManualExclude != 0] = 2
+								img[flags & PixelQualityFlags.BackgroundShenanigans != 0] = 3
+							else:
+								img = np.asarray(hdf[k][mode + '/' + dset_name])
 
-							# TODO: This can't always be right!
-							img = np.rot90(img)
-
+							# Rotate the image:
+							cam, ccd, rot = camccdrot[k]
+							img = np.rot90(img, rot)
+							
+							# Update the image:
 							imgs[k].set_data(img)
 
-						# Update figure title with cadence information;
-						fig.suptitle("Sector {sector:d}, Camera {camera:d}, CCD {ccd:d}\ndset={dset:s}, cad={cad:d}, t={time:.6f}".format(
+						# Update figure title with cadence information:
+						figtext.set_text("Sector {sector:d} - {mode:s}\ndset={dset:s}, cad={cad:d}, t={time:.6f}".format(
 							sector=sector,
-							camera=camera,
-							ccd=ccd,
+							mode=mode,
 							dset=dset_name,
 							cad=cadenceno[k],
 							time=time[k]
-						), fontsize=15)
+						))
 
 						writer.grab_frame()
 
@@ -334,7 +364,7 @@ if __name__ == '__main__':
 	parser.add_argument('-j', '--jobs', help='Maximal number of jobs to run in parallel.', type=int, default=0, nargs='?')
 	parser.add_argument('--fps', help='Frames per second of generated movie.', type=int, default=15, nargs='?')
 	parser.add_argument('--dpi', help='DPI of generated movie.', type=int, default=100, nargs='?')
-	parser.add_argument('files', help='HDF5 file to create movie from.', nargs='+')
+	parser.add_argument('files', help='Directory or HDF5 file to create movie from.', nargs='+')
 	args = parser.parse_args()
 
 	logging_level = logging.INFO
@@ -394,11 +424,20 @@ if __name__ == '__main__':
 	for fname in tqdm(m(make_movie_wrapper, args.files), **tqdm_settings):
 		logger.info("Created movie: %s", fname)
 
+	if run_full_directory and len(args.files) > 0:
+		# Make wrapper function with all settings:
+		make_combined_movie_wrapper = functools.partial(
+			make_combined_movie,
+			run_full_directory,
+			fps=args.fps,
+			dpi=args.dpi,
+			overwrite=args.overwrite
+		)
+		
+		for fname in m(make_combined_movie_wrapper, ('backgrounds', 'images', 'flags')):
+			logger.info("Created movie: %s", fname)
+			
 	# Close workers again:
 	if threads > 1:
 		pool.close()
 		pool.join()
-
-	if run_full_directory:
-		fname = make_combined_movie(run_full_directory, overwrite=args.overwrite, fps=args.fps, dpi=args.dpi)
-		logger.info("Created movie: %s", fname)
