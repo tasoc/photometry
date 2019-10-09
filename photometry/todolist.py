@@ -552,6 +552,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
 
+		# Analyze the tables for better query planning:
+		cursor.execute("ANALYZE;")
+		conn.commit()
+
 		# Run a VACUUM of the table which will force a recreation of the
 		# underlying "pages" of the file.
 		# Please note that we are changing the "isolation_level" of the connection here,
