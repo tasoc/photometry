@@ -82,6 +82,7 @@ class TaskManager(object):
 			pos_column REAL,
 			contamination REAL,
 			mask_size INT,
+			edge_flux REAL,
 			stamp_width INT,
 			stamp_height INT,
 			stamp_resizes INT,
@@ -95,6 +96,13 @@ class TaskManager(object):
 			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
 		);""") # PRIMARY KEY
 		self.conn.commit()
+
+		# Add status indicator for corrections to todolist, if it doesn't already exists:
+		self.cursor.execute("PRAGMA table_info(diagnostics)")
+		if 'edge_flux' not in [r['name'] for r in self.cursor.fetchall()]:
+			self.logger.debug("Adding edge_flux column to diagnostics")
+			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN edge_flux REAL DEFAULT NULL")
+			self.conn.commit()
 
 		# Reset calculations with status STARTED, ABORT or ERROR:
 		# We are re-running all with error, in the hope that they will work this time around:
@@ -281,7 +289,7 @@ class TaskManager(object):
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
@@ -294,6 +302,7 @@ class TaskManager(object):
 			details.get('rms_hour', None),
 			details.get('ptp', None),
 			details.get('mask_size', None),
+			details.get('edge_flux', None),
 			details.get('contamination', None),
 			stamp_width,
 			stamp_height,

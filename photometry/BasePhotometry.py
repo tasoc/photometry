@@ -1248,7 +1248,17 @@ class BasePhotometry(object):
 			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
 
 			if self.final_mask is not None:
+				# Calculate the total number of pixels in the mask:
 				self._details['mask_size'] = int(np.sum(self.final_mask))
+
+				# Measure the total flux on the edge of the stamp,
+				# if the mask is touching the edge of the stamp:
+				# The np.sum here should return zero on an empty array.
+				edge = np.zeros_like(self.sumimage, dtype='bool')
+				edge[:, (0,-1)] = True
+				edge[(0,-1), 1:-1] = True
+				self._details['edge_flux'] = np.sum(self.sumimage[self.final_mask & edge])
+
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
