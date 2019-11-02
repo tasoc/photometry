@@ -763,18 +763,56 @@ class BasePhotometry(object):
 				ffi_bkg_int = interp1d(ffi_time, ffi_bkg_cube, axis=2, kind='linear', bounds_error=False, fill_value='extrapolate', assume_sorted=True)
 				bkg_cube = ffi_bkg_int(self.lightcurve['time'] - self.lightcurve['timecorr'])
 
-				# Load the original flux cube as we need them to :
+				# Load the original flux cube as we need them too :
 				flux_cube = self._load_cube(tpf_field='FLUX')
 
 				# Add original backgrounds back in the
 				flux_cube += self._backgrounds_cube
-				flux_cube -= bkg_cube # Subtract FFI backgrounds
 
 				# Mask of pixels used for background estimation within stamp:
-				bkg_mask = (self.aperture & 4 != 0)
+				# Calculate bin with most background pixels
+				hist, bin_edges = np.histogram((np.nanmedian(flux_cube, axis=0).flatten()), bins = np.arange(0,505,5))
+				max_cut = bin_edges[np.argmax(hist)+1]
+				# Also select lower bin if there's a lot of pixels there
+				if hist[np.argmax(hist)-1 > 5]:
+					min_cut = bin_edges[np.argmax(hist)-1]
+				else:
+					min_cut = bin_edges[np.argmin(hist)]
 
-				for k in range(self.Ntimes):
-					bkg_cube[:, :, k] += nanmedian(flux_cube[:, :, k][bkg_mask])
+				# Define background pixel mask
+				bkg_mask = np.ones_like(self.aperture,dtype='bool')
+				bkg_mask[np.nanmedian(flux_cube,axis=0) > max_cut] = False
+				bkg_mask[np.nanmedian(flux_cube,axis=0) < min_cut] = False
+				
+				# bkg_mask = (self.aperture & 4 != 0) # Select default backgound mask
+				# FIXME: output new background mask
+
+				flux_cube -= bkg_cube # Subtract FFI backgrounds
+
+				# for k in range(self.Ntimes):
+				# 	bkg_cube[:, :, k] += nanmedian(flux_cube[:, :, k][bkg_mask])
+
+				zz = np.nanmedian((flux_cube[:,bkg_mask]),axis=0)
+				z = flux_cube[:,bkg_mask]
+				z = z[:,np.isfinite(zz)].T
+				x,y = np.meshgrid(np.arange(flux_cube.shape[1]), np.arange(flux_cube.shape[2]))
+				x = x.T[bkg_mask].flatten()[np.isfinite(zz)]
+				y = y.T[bkg_mask].flatten()[np.isfinite(zz)]
+
+				ind = np.isfinite(np.sum(z,axis=0))
+
+				M = np.c_[x**2,x*y,x,y,np.ones(x.shape[0])]
+				p = np.zeros((5,flux_cube.shape[0]))
+				p[:,ind], _, _, _ = lstsq(M, z[:,ind])
+
+				x = np.tile(np.expand_dims(np.tile(np.expand_dims(np.arange(flux_cube.shape[1]),axis=1),flux_cube.shape[0]).T,axis=2),flux_cube.shape[2])
+				y = np.tile(np.expand_dims(np.tile(np.expand_dims(np.arange(flux_cube.shape[2]),axis=1),flux_cube.shape[1]),axis=2),flux_cube.shape[0]).T
+				c = np.tile(np.expand_dims(np.tile(np.expand_dims(p,axis=2),flux_cube.shape[1]),axis=3),flux_cube.shape[2])
+
+				resid_bkg = c[0,:,:,:]*x**2 + c[1,:,:,:]*x*y + c[2,:,:,:]*x + c[3,:,:,:]*y + c[4,:,:,:]
+
+				flux_cube -= resid_bkg
+				bkg_cube += resid_bkg
 
 				self._backgrounds_cube = bkg_cube
 
