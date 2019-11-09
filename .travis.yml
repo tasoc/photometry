@@ -1,6 +1,5 @@
 language: python
 python:
-  - "3.4"
   - "3.5"
   - "3.6"
   - "pypy3"
@@ -32,7 +31,6 @@ matrix:
   fast_finish: true
   allow_failures:
     - python: "pypy3"
-    - python: "3.4"
     - python: "3.8"
     - name: "Flake8"
 
