@@ -235,7 +235,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 					a = cartesian_to_radec(a_xyz)
 
 				# Make footprint into string that will be understood by database:
-				footprint = '{' + ",".join([str(s) for s in a.flatten()]) + '}'
+				footprint = '(' + ','.join(['(%.16f,%.16f)' % tuple(s) for s in a]) + ')'
 				logger.info(footprint)
 
 				# Save settings to SQLite:
@@ -255,7 +255,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 				# Query the TESS Input Catalog table for all stars in the footprint.
 				# This is a MASSIVE table, so this query may take a while.
-				tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s) AND disposition IS NULL;", (
+				tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '%s'::polygon) AND disposition IS NULL;" % (
 					footprint,
 				))
 

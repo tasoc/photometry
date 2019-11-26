@@ -13,4 +13,4 @@ opencv-python-headless == 4.0.1.24
 psycopg2-binary
 halophot >= 0.6.6.2
 jplephem >= 2.9
-spiceypy >= 2.2.0
+spiceypy == 2.2.0
