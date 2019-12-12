@@ -14,8 +14,8 @@ import matplotlib
 matplotlib.use('Agg', warn=False)
 from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
-from astropy.visualization import (PercentileInterval, ImageNormalize,
-								   SqrtStretch, LogStretch, LinearStretch)
+from astropy.visualization import (PercentileInterval, ImageNormalize, SqrtStretch,
+	LogStretch, LinearStretch)
 
 #--------------------------------------------------------------------------------------------------
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
@@ -171,7 +171,7 @@ def save_figure(path, format='png', **kwargs):
 
 	Parameters:
 		path (string): Path where to save figure. If no file extension is provided, the extension of
-		               the format is automatically appended.
+			the format is automatically appended.
 		format (string): Figure file type. Default is ``'png'``.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
 	"""

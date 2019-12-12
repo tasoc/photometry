@@ -27,8 +27,8 @@ class QualityFlagsBase(object):
 
 		Returns:
 			list of str: List of human-readable strings giving a short
-			             description of the quality flags raised.
-						 Returns an empty list if no flags raised.
+				description of the quality flags raised.
+				Returns an empty list if no flags raised.
 		"""
 		result = []
 		for flag in cls.STRINGS.keys():
@@ -120,8 +120,8 @@ class TESSQualityFlags(QualityFlagsBase):
 	ScatteredLight = 4096
 
 	# Which is the recommended QUALITY mask to identify bad data?
-	DEFAULT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint |
-					   Desat | ApertureCosmic | ManualExclude)
+	DEFAULT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint
+		| Desat | ApertureCosmic | ManualExclude)
 
 	# This bitmask includes flags that are known to identify both good and bad cadences.
 	# Use it wisely.
@@ -133,8 +133,8 @@ class TESSQualityFlags(QualityFlagsBase):
 	# and therefore be rejected in the following processing.
 	# There is also no reason for why a single timestamp in a TPF marked
 	# as ManualExclude should necessarily cause the FFI timestamp to be invalid.
-	FFI_RELEVANT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint |
-					   Desat | EarthMoonPlanetInFOV | ScatteredLight)
+	FFI_RELEVANT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint
+		| Desat | EarthMoonPlanetInFOV | ScatteredLight)
 
 	# Pretty string descriptions for each flag
 	STRINGS = {

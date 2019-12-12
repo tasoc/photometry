@@ -25,7 +25,7 @@ class TaskManager(object):
 		Parameters:
 			todo_file (string): Path to the TODO-file.
 			cleanup (boolean): Perform cleanup/optimization of TODO-file before
-			                   during initialization. Default=False.
+				during initialization. Default=False.
 			overwrite (boolean): Restart calculation from the beginning, discarding any previous results. Default=False.
 			summary (string): Path to file where to periodically write a progress summary. The output file will be in JSON format. Default=None.
 			summary_interval (int): Interval at which to write summary file. Setting this to 1 will mean writing the file after every tasks completes. Default=100.

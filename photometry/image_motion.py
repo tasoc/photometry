@@ -293,10 +293,10 @@ class ImageMovementKernel(object):
 
 			# Create interpolator:
 			self._interpolator = interp1d(times[indx], kernels[indx, :],
-				 axis=0,
-				 assume_sorted=True,
-				 bounds_error=False,
-				 fill_value=(kernels[0, :], kernels[-1, :]))
+				axis=0,
+				assume_sorted=True,
+				bounds_error=False,
+				fill_value=(kernels[0, :], kernels[-1, :]))
 
 	#----------------------------------------------------------------------------------------------
 	def interpolate(self, time, xy):
@@ -310,8 +310,8 @@ class ImageMovementKernel(object):
 
 		Returns:
 			``numpy.ndarray``: Array with the same size as `xy` containing the
-			                   changes to rows and columns. These can be added
-			                   to `xy` to yield the new positions.
+				changes to rows and columns. These can be added
+				to `xy` to yield the new positions.
 
 		Raises:
 			ValueError: If timeseries has not been provided.

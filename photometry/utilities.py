@@ -52,7 +52,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 
 	Returns:
 		list: List of full paths to FFI FITS files found in directory. The list will
-		      be sorted accoridng to the filename of the files, e.g. primarily by time.
+			be sorted accoridng to the filename of the files, e.g. primarily by time.
 	"""
 
 	logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
-		      be sorted accoriding to the filename of the files, e.g. primarily by time.
+			be sorted accoriding to the filename of the files, e.g. primarily by time.
 	"""
 
 	logger = logging.getLogger(__name__)
@@ -508,7 +508,7 @@ def download_file(url, destination):
 		if os.path.getsize(destination) != total_size:
 			raise Exception("File not downloaded correctly")
 
-	except:
+	except: # noqa: E722
 		if os.path.exists(destination):
 			os.remove(destination)
 		raise
@@ -525,5 +525,5 @@ class TqdmLoggingHandler(logging.Handler):
 			self.flush()
 		except (KeyboardInterrupt, SystemExit):
 			raise
-		except:
+		except: # noqa: E722
 			self.handleError(record)

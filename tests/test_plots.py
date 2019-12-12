@@ -54,19 +54,19 @@ def test_plot_image_invalid():
 
 	fig = plt.figure(figsize=(12,6))
 	ax1 = fig.add_subplot(111)
-	
+
 	# Run with invalid scale:
 	with pytest.raises(ValueError):
 		plot_image(gauss, ax=ax1, scale='invalid-scale')
-	
+
 	# Plot with single NaN:
 	gauss[1,1] = np.NaN
 	plot_image(gauss, ax=ax1, scale='log')
-	
+
 	# Run with all-NaN image:
 	gauss[:, :] = np.NaN
 	assert plot_image(gauss, ax=ax1) is None
-	
+
 	plt.close(fig)
 
 #-------------------------------------------------------------------------------------------------

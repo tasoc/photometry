@@ -26,7 +26,6 @@ class LinPSFPhotometry(BasePhotometry):
 		all stars in the image are fitted simultaneously using a linear least
 		squares method.
 
-
 		Note:
 			Inspired by the :py:class:`psf_photometry` class set up by
 			Rasmus Handberg <rasmush@phys.au.dk>. The code in this
@@ -61,8 +60,8 @@ class LinPSFPhotometry(BasePhotometry):
 		logger.debug(cat)
 
 		# Calculate distance from main target:
-		cat['dist'] = np.sqrt((cat['row_stamp'][staridx] - cat['row_stamp'])**2 +
-						(cat['column_stamp'][staridx] - cat['column_stamp'])**2)
+		cat['dist'] = np.sqrt((cat['row_stamp'][staridx] - cat['row_stamp'])**2
+						+ (cat['column_stamp'][staridx] - cat['column_stamp'])**2)
 
 		# Find indices of stars in catalog to fit:
 		# (only include stars that are close to the main target and that are
