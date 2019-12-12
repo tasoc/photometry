@@ -158,8 +158,7 @@ class TESS_SPICE(object):
 		)
 
 		# Make sure the kernel directory exists:
-		if not os.path.exists(kernels_folder):
-			os.makedirs(kernels_folder)
+		os.makedirs(kernels_folder, exist_ok=True)
 
 		# Automatically download kernels from TASOC, if they don't already exist?
 		#urlbase = 'https://archive.stsci.edu/missions/tess/models/'

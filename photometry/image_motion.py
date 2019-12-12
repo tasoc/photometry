@@ -279,12 +279,15 @@ class ImageMovementKernel(object):
 			self.series_kernels = self.series_kernels[good_series]
 
 		else:
+			# For these warpmodes, the kernels should be 2D arrays:
+			self.series_kernels = np.atleast_2d(self.series_kernels)
+
 			# Check shape of the input:
-			if kernels.shape != (len(times), self.n_params):
+			if self.series_kernels.shape != (len(self.series_times), self.n_params):
 				raise ValueError("Wrong shape of kernels. Anticipated ({0},{1}), but got {2}".format(
-					len(times),
+					len(self.series_times),
 					self.n_params,
-					kernels.shape
+					self.series_kernels.shape
 				))
 
 			# Only take the kernels that are well-defined:

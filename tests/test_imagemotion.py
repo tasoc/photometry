@@ -15,6 +15,13 @@ from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
 import h5py
 
 #--------------------------------------------------------------------------------------------------
+def test_imagemotion_invalid_warpmode():
+	"""Test ImageMovementKernel with ínvalid warpmode."""
+
+	with pytest.raises(ValueError):
+		ImageMovementKernel(warpmode='invalid')
+
+#--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian'])
 def test_imagemotion(warpmode):
 	"""Test of ImageMovementKernel"""
@@ -48,6 +55,10 @@ def test_imagemotion(warpmode):
 	# Create ImageMovementKernel instance:
 	imk = ImageMovementKernel(image_ref=img, warpmode=warpmode)
 
+	# If calling interpolate before defining kernels, we should get an error:
+	with pytest.raises(ValueError):
+		imk.interpolate(1234, 1234)
+
 	# Calculate kernel for the same image:
 	kernel = imk.calc_kernel(img)
 	print("Kernel:")
@@ -64,6 +75,13 @@ def test_imagemotion(warpmode):
 	# The movements should all be very close to zero,
 	# since we used the same image as the reference:
 	np.testing.assert_allclose(delta_pos, desired1, atol=1e-5, rtol=1e-5)
+
+	#
+	with pytest.raises(ValueError) as excinfo:
+		imk.load_series([1234, 1235], kernel)
+
+	print(excinfo.value)
+	assert str(excinfo.value).startswith('Wrong shape of kernels.')
 
 	"""
 	kernel = imk.calc_kernel(img2)
@@ -164,10 +182,16 @@ def test_imagemotion_wcs():
 		assert(jitter.shape == xy.shape)
 		np.testing.assert_allclose(jitter, 1)
 
+		# Removing some timestamps should so we can test if we correctky throw an exceotion;
+		times = times[1:]
+		with pytest.raises(ValueError):
+			imk.load_series(times, kernels)
+
 	print("Done")
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
+	test_imagemotion_invalid_warpmode()
 	test_imagemotion('unchanged')
 	test_imagemotion('translation')
 	test_imagemotion('euclidian')
