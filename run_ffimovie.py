@@ -272,7 +272,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 					elif mode == 'images':
 						vmin[k] = hdf[k]['images'].attrs.get('movie_vmin', 0)
 						vmax[k] = hdf[k]['images'].attrs.get('movie_vmax', 500)
-						
+
 			# Summarize the different CCDs into common values:
 			vmin = np.nanpercentile(vmin, 25.0)
 			vmax = np.nanpercentile(vmax, 75.0)
@@ -283,7 +283,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 
 				cmap = plt.get_cmap('viridis')
 				cmap.set_bad('k', 1.0)
-				
+
 				# Colormap for Flags:
 				viridis = plt.get_cmap('Dark2')
 				newcolors = viridis(np.linspace(0, 1, 4))
@@ -293,7 +293,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 				imgs = [None]*16
 				for k, ax in enumerate(axes.flatten()):
 					if mode == 'flags':
-						imgs[k] = plot_image(dummy_img, ax=ax, scale='linear', vmin=-0.5, vmax=4.5, xlabel=None, ylabel=None, cmap=cmap_flags, make_cbar=False)				
+						imgs[k] = plot_image(dummy_img, ax=ax, scale='linear', vmin=-0.5, vmax=4.5, xlabel=None, ylabel=None, cmap=cmap_flags, make_cbar=False)
 					else:
 						imgs[k] = plot_image(dummy_img, ax=ax, scale='sqrt', vmin=vmin, vmax=vmax, xlabel=None, ylabel=None, cmap=cmap, make_cbar=False)
 					ax.set_xticks([])
@@ -311,7 +311,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 
 						for k in range(16):
 							if hdf[k] is None: continue
-							
+
 							# Background Shenanigans flags, if available:
 							if mode == 'flags':
 								flags = np.asarray(hdf[k]['pixel_flags/' + dset_name])
@@ -325,7 +325,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 							# Rotate the image:
 							cam, ccd, rot = camccdrot[k]
 							img = np.rot90(img, rot)
-							
+
 							# Update the image:
 							imgs[k].set_data(img)
 
@@ -342,7 +342,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 
 				plt.close(fig)
 
-		except:
+		except: # noqa: E722
 			raise
 
 		finally:
@@ -433,10 +433,10 @@ if __name__ == '__main__':
 			dpi=args.dpi,
 			overwrite=args.overwrite
 		)
-		
+
 		for fname in m(make_combined_movie_wrapper, ('backgrounds', 'images', 'flags')):
 			logger.info("Created movie: %s", fname)
-			
+
 	# Close workers again:
 	if threads > 1:
 		pool.close()

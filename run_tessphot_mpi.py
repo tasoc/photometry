@@ -103,7 +103,7 @@ def main():
 
 				tm.logger.info("Master finishing")
 
-		except:
+		except: # noqa: E722
 			# If something fails in the master
 			print(traceback.format_exc().strip())
 			comm.Abort(1)
@@ -162,7 +162,7 @@ def main():
 					# make sure we don't run into an infinite loop:
 					raise Exception("Worker received an unknown tag: '{0}'".format(tag))
 
-		except:
+		except: # noqa: E722
 			logger.exception("Something failed in worker")
 
 		finally:
