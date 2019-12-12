@@ -8,15 +8,13 @@ Preparation for Photometry extraction.
 
 import os
 import numpy as np
-import warnings
-warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
 from astropy.io import fits
 import sqlite3
 import logging
 import re
 import multiprocessing
-from astropy.wcs import WCS
+from astropy.wcs import WCS, NoConvergence
 from bottleneck import replace, nanmean, nanmedian
 from timeit import default_timer
 import itertools
@@ -402,9 +400,21 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						flux0[manexcl] = np.nan
 
 					# Save the World Coordinate System of each image:
+					# TODO: Check if the WCS actually works for each image, and if not, set it to an empty string
 					if dset_name not in wcs:
 						dset = wcs.create_dataset(dset_name, (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
-						dset[0] = WCS(header=hdr).to_header_string(relax=True).strip().encode('ascii', 'strict')
+
+						# Test the World Coordinate System solution.
+						w = WCS(header=hdr, relax=True)
+						fp = w.calc_footprint()
+						test_coords = np.atleast_2d(fp[0, :])
+						try:
+							w.all_world2pix(test_coords, 0, ra_dec_order=True, maxiter=50)
+						except (NoConvergence, ValueError):
+							logger.info("%s has bad WCS.", dset_name)
+							dset[0] = ''
+						else:
+							dset[0] = w.to_header_string(relax=True).strip().encode('ascii', 'strict')
 
 					# Add together images for sum-image:
 					if TESSQualityFlags.filter(quality[k]):
@@ -579,41 +589,6 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				logger.error("Time vector is not sorted")
 				return
 
-			# Check that the sector reference time is within the timespan of the time vector:
-			sector_reference_time_tjd = sector_reference_time - 2457000
-			if sector_reference_time_tjd < hdf['time'][0] or sector_reference_time_tjd > hdf['time'][-1]:
-				logger.error("Sector reference time outside timespan of data")
-				#return
-
-			# Find the reference image:
-			refindx = find_nearest(hdf['time'], sector_reference_time_tjd)
-			logger.info("WCS reference frame: %d", refindx)
-
-			# Save WCS to the file:
-			wcs.attrs['ref_frame'] = refindx
-
-			if calc_movement_kernel and 'movement_kernel' not in hdf:
-				# Calculate image motion:
-				logger.info("Calculation Image Movement Kernels...")
-				imk = ImageMovementKernel(image_ref=images['%04d' % refindx], warpmode='translation')
-				kernel = np.empty((numfiles, imk.n_params), dtype='float64')
-
-				tic = default_timer()
-
-				datasets = _iterate_hdf_group(images)
-				for k, knl in enumerate(tqdm(m(imk.calc_kernel, datasets), **tqdm_settings)):
-					kernel[k, :] = knl
-					logger.debug("Kernel: %s", knl)
-					logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
-
-				toc = default_timer()
-				logger.info("Movement Kernel: %f sec/image", (toc-tic)/numfiles)
-
-				# Save Image Motion Kernel to HDF5 file:
-				dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
-				dset.attrs['warpmode'] = imk.warpmode
-				dset.attrs['ref_frame'] = refindx
-
 			# Transfer quality flags from TPF files from the same CAMERA and CCD to the FFIs:
 			if not hdf['quality'].attrs.get('TRANSFER_FROM_TPF', False):
 				logger.info("Transfering QUALITY flags from TPFs to FFIs...")
@@ -640,6 +615,44 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					hdf['quality'][:] = quality
 					hdf['quality'].attrs['TRANSFER_FROM_TPF'] = True
 					hdf.flush()
+
+			# Check that the sector reference time is within the timespan of the time vector:
+			sector_reference_time_tjd = sector_reference_time - 2457000
+			if sector_reference_time_tjd < hdf['time'][0] or sector_reference_time_tjd > hdf['time'][-1]:
+				logger.error("Sector reference time outside timespan of data")
+
+			# Find the reference image:
+			# Create numpy masked array of timestamps with good quality data and
+			# find the index in the good timestamps closest to the reference time.
+			good_times_mask = (quality == 0) & ([wcs[w][0].strip() != '' for w in wcs])
+			good_times = np.ma.masked_array(hdf['time'], mask=good_times_mask)
+			refindx = find_nearest(good_times, sector_reference_time_tjd)
+			logger.info("WCS reference frame: %d", refindx)
+
+			# Save WCS to the file:
+			wcs.attrs['ref_frame'] = refindx
+
+			if calc_movement_kernel and 'movement_kernel' not in hdf:
+				# Calculate image motion:
+				logger.info("Calculation Image Movement Kernels...")
+				imk = ImageMovementKernel(image_ref=images['%04d' % refindx], warpmode='translation')
+				kernel = np.empty((numfiles, imk.n_params), dtype='float64')
+
+				tic = default_timer()
+
+				datasets = _iterate_hdf_group(images)
+				for k, knl in enumerate(tqdm(m(imk.calc_kernel, datasets), **tqdm_settings)):
+					kernel[k, :] = knl
+					logger.debug("Kernel: %s", knl)
+					logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k+1))
+
+				toc = default_timer()
+				logger.info("Movement Kernel: %f sec/image", (toc-tic)/numfiles)
+
+				# Save Image Motion Kernel to HDF5 file:
+				dset = hdf.create_dataset('movement_kernel', data=kernel, **args)
+				dset.attrs['warpmode'] = imk.warpmode
+				dset.attrs['ref_frame'] = refindx
 
 		logger.info("Done.")
 		logger.info("Total: %f sec/image", (default_timer()-tic_total)/numfiles)

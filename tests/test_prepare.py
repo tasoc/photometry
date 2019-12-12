@@ -11,13 +11,12 @@ import tempfile
 import logging
 import h5py
 import os
-import numpy as np
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import prepare
 from photometry.utilities import TqdmLoggingHandler
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_prepare_photometry_invalid_input_dir():
 
 	invalid_input_dir = os.path.join(os.path.dirname(__file__), 'input', 'does', 'not', 'exist')
@@ -30,7 +29,7 @@ def test_prepare_photometry_invalid_input_dir():
 	with pytest.raises(NotADirectoryError):
 		prepare.prepare_photometry(not_a_directory)
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_prepare_photometry():
 
 	# The known sizes for input-data:
@@ -91,7 +90,7 @@ def test_prepare_photometry():
 				assert hdf['backgrounds/' + dset].shape == img_size, "BACKGROUNDS dset=" + dset + " does not have the correct size"
 				assert hdf['pixel_flags/' + dset].shape == img_size, "PIXEL_FLAGS dset=" + dset + " does not have the correct size"
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	test_prepare_photometry_invalid_input_dir()
 	test_prepare_photometry()
