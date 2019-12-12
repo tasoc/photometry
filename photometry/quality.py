@@ -168,5 +168,5 @@ class PixelQualityFlags(QualityFlagsBase):
 	STRINGS = {
 		NotUsedForBackground: "Pixel was not used in background calculation",
 		ManualExclude: "Manual exclude",
-		BackgroundShenanigans: "",
+		BackgroundShenanigans: "Background Shenanigans detected in pixel",
 	}
