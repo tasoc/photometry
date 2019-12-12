@@ -8,7 +8,7 @@ Handling of TESS data quality flags.
 
 import numpy as np
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class QualityFlagsBase(object):
 
 	# Using this bitmask only QUALITY == 0 cadences will remain
@@ -69,7 +69,7 @@ class QualityFlagsBase(object):
 		else:
 			return np.binary_repr(quality, width=32)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class CorrectorQualityFlags(QualityFlagsBase):
 	"""
 	This class encodes the meaning of the various TESS QUALITY bitmask flags.
@@ -100,7 +100,7 @@ class CorrectorQualityFlags(QualityFlagsBase):
 		BackgroundShenanigans: "Background Shenanigans detected in stamp",
 	}
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class TESSQualityFlags(QualityFlagsBase):
 	"""
 	This class encodes the meaning of the various TESS PIXEL_QUALITY bitmask flags.
@@ -117,6 +117,7 @@ class TESSQualityFlags(QualityFlagsBase):
 	ImpulsiveOutlier = 512
 	CollateralCosmic = 1024
 	EarthMoonPlanetInFOV = 2048
+	ScatteredLight = 4096
 
 	# Which is the recommended QUALITY mask to identify bad data?
 	DEFAULT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint |
@@ -133,7 +134,7 @@ class TESSQualityFlags(QualityFlagsBase):
 	# There is also no reason for why a single timestamp in a TPF marked
 	# as ManualExclude should necessarily cause the FFI timestamp to be invalid.
 	FFI_RELEVANT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint |
-					   Desat | EarthMoonPlanetInFOV)
+					   Desat | EarthMoonPlanetInFOV | ScatteredLight)
 
 	# Pretty string descriptions for each flag
 	STRINGS = {
@@ -151,7 +152,7 @@ class TESSQualityFlags(QualityFlagsBase):
 		EarthMoonPlanetInFOV: "Earth, Moon or other planet in camera FOV"
 	}
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class PixelQualityFlags(QualityFlagsBase):
 	"""
 	This class encodes the meaning of the various TESS QUALITY bitmask flags.
