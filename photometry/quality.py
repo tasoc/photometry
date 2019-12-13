@@ -8,7 +8,7 @@ Handling of TESS data quality flags.
 
 import numpy as np
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class QualityFlagsBase(object):
 
 	# Using this bitmask only QUALITY == 0 cadences will remain
@@ -27,8 +27,8 @@ class QualityFlagsBase(object):
 
 		Returns:
 			list of str: List of human-readable strings giving a short
-			             description of the quality flags raised.
-						 Returns an empty list if no flags raised.
+				description of the quality flags raised.
+				Returns an empty list if no flags raised.
 		"""
 		result = []
 		for flag in cls.STRINGS.keys():
@@ -69,7 +69,7 @@ class QualityFlagsBase(object):
 		else:
 			return np.binary_repr(quality, width=32)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class CorrectorQualityFlags(QualityFlagsBase):
 	"""
 	This class encodes the meaning of the various TESS QUALITY bitmask flags.
@@ -100,7 +100,7 @@ class CorrectorQualityFlags(QualityFlagsBase):
 		BackgroundShenanigans: "Background Shenanigans detected in stamp",
 	}
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class TESSQualityFlags(QualityFlagsBase):
 	"""
 	This class encodes the meaning of the various TESS PIXEL_QUALITY bitmask flags.
@@ -117,10 +117,11 @@ class TESSQualityFlags(QualityFlagsBase):
 	ImpulsiveOutlier = 512
 	CollateralCosmic = 1024
 	EarthMoonPlanetInFOV = 2048
+	ScatteredLight = 4096
 
 	# Which is the recommended QUALITY mask to identify bad data?
-	DEFAULT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint |
-					   Desat | ApertureCosmic | ManualExclude)
+	DEFAULT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint
+		| Desat | ApertureCosmic | ManualExclude)
 
 	# This bitmask includes flags that are known to identify both good and bad cadences.
 	# Use it wisely.
@@ -132,8 +133,8 @@ class TESSQualityFlags(QualityFlagsBase):
 	# and therefore be rejected in the following processing.
 	# There is also no reason for why a single timestamp in a TPF marked
 	# as ManualExclude should necessarily cause the FFI timestamp to be invalid.
-	FFI_RELEVANT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint |
-					   Desat | EarthMoonPlanetInFOV)
+	FFI_RELEVANT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint
+		| Desat | EarthMoonPlanetInFOV | ScatteredLight)
 
 	# Pretty string descriptions for each flag
 	STRINGS = {
@@ -151,7 +152,7 @@ class TESSQualityFlags(QualityFlagsBase):
 		EarthMoonPlanetInFOV: "Earth, Moon or other planet in camera FOV"
 	}
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class PixelQualityFlags(QualityFlagsBase):
 	"""
 	This class encodes the meaning of the various TESS QUALITY bitmask flags.
@@ -167,5 +168,5 @@ class PixelQualityFlags(QualityFlagsBase):
 	STRINGS = {
 		NotUsedForBackground: "Pixel was not used in background calculation",
 		ManualExclude: "Manual exclude",
-		BackgroundShenanigans: "",
+		BackgroundShenanigans: "Background Shenanigans detected in pixel",
 	}

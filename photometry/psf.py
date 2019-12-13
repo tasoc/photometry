@@ -30,6 +30,7 @@ class PSF(object):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	#----------------------------------------------------------------------------------------------
 	def __init__(self, sector, camera, ccd, stamp):
 		"""
 		Point Spread Function (PSF).
@@ -112,7 +113,7 @@ class PSF(object):
 		# Interpolation function over the PRF:
 		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf) #: 2D-interpolation of PSF (RectBivariateSpline).
 
-
+	#----------------------------------------------------------------------------------------------
 	def integrate_to_image(self, params, cutoff_radius=5):
 		"""
 		Integrate the underlying high-res PSF onto pixels.
@@ -139,7 +140,7 @@ class PSF(object):
 
 		return img
 
-
+	#----------------------------------------------------------------------------------------------
 	def plot(self):
 		"""
 		Create a plot of the shape of the PSF.

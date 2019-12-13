@@ -44,6 +44,7 @@ __docformat__ = 'restructuredtext'
 
 hdf5_cache = {}
 
+#--------------------------------------------------------------------------------------------------
 @enum.unique
 class STATUS(enum.Enum):
 	"""
@@ -57,6 +58,7 @@ class STATUS(enum.Enum):
 	ABORT = 4   #: The calculation was aborted.
 	SKIPPED = 5 #: The target was skipped because the algorithm found that to be the best solution.
 
+#--------------------------------------------------------------------------------------------------
 class BasePhotometry(object):
 	"""
 	The basic photometry class for the TASOC Photometry pipeline.
@@ -672,8 +674,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Note:
 			The images has had the large-scale background subtracted. If needed
@@ -699,8 +701,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Example:
 
@@ -722,8 +724,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Example:
 
@@ -745,8 +747,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, ffi_times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``ffi_times`` is the number of timestamps in the FFIs.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``ffi_times`` is the number of timestamps in the FFIs.
 
 		Note:
 			This function will only return flags on the timestamps of the FFIs, even though
@@ -991,14 +993,14 @@ class BasePhotometry(object):
 		Catalog of stars in the current stamp.
 
 		The table contains the following columns:
-		 * ``starid``:       TIC identifier.
-		 * ``tmag``:         TESS magnitude.
-		 * ``ra``:           Right ascension in degrees at time of observation.
-		 * ``dec``:          Declination in degrees at time of observation.
-		 * ``row``:          Pixel row on CCD.
-		 * ``column``:       Pixel column on CCD.
-		 * ``row_stamp``:    Pixel row relative to the stamp.
-		 * ``column_stamp``: Pixel column relative to the stamp.
+		* ``starid``: TIC identifier.
+		* ``tmag``: TESS magnitude.
+		* ``ra``: Right ascension in degrees at time of observation.
+		* ``dec``: Declination in degrees at time of observation.
+		* ``row``: Pixel row on CCD.
+		* ``column``: Pixel column on CCD.
+		* ``row_stamp``: Pixel row relative to the stamp.
+		* ``column_stamp``: Pixel column relative to the stamp.
 
 		Returns:
 			``astropy.table.Table``: Table with all known stars falling within the current stamp.
@@ -1248,7 +1250,17 @@ class BasePhotometry(object):
 			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
 
 			if self.final_mask is not None:
+				# Calculate the total number of pixels in the mask:
 				self._details['mask_size'] = int(np.sum(self.final_mask))
+
+				# Measure the total flux on the edge of the stamp,
+				# if the mask is touching the edge of the stamp:
+				# The np.sum here should return zero on an empty array.
+				edge = np.zeros_like(self.sumimage, dtype='bool')
+				edge[:, (0,-1)] = True
+				edge[(0,-1), 1:-1] = True
+				self._details['edge_flux'] = np.sum(self.sumimage[self.final_mask & edge])
+
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 

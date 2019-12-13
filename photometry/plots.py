@@ -8,21 +8,16 @@ Plotting utilities.
 
 import logging
 import os
-import warnings
 import numpy as np
 from bottleneck import allnan
 import matplotlib
 matplotlib.use('Agg', warn=False)
 from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
-from astropy.visualization import (PercentileInterval, ImageNormalize,
-								   SqrtStretch, LogStretch, LinearStretch)
+from astropy.visualization import (PercentileInterval, ImageNormalize, SqrtStretch,
+	LogStretch, LinearStretch)
 
-# Disable some warnings that are annoying (see below):
-warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visualization", message="invalid value encountered in log")
-warnings.filterwarnings("ignore", category=RuntimeWarning, module="astropy.visualization", message="invalid value encountered in sqrt")
-warnings.filterwarnings("ignore", category=RuntimeWarning, module="matplotlib.colors", message="invalid value encountered in less")
-
+#--------------------------------------------------------------------------------------------------
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 	ylabel='Pixel Row Number', make_cbar=False, clabel='Flux ($e^{-}s^{-1}$)', cbar_ticks=None, cbar_ticklabels=None,
 	title=None, percentile=95.0, vmin=None, vmax=None, ax=None, cmap=plt.cm.Blues, offset_axes=None, **kwargs):
@@ -31,7 +26,9 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 
 	Parameters:
 		image (2d array): Image data.
-		scale (str or astropy.visualization.ImageNormalize object, optional): Normalization used to stretch the colormap. Options: ``'linear'``, ``'sqrt'``, or ``'log'``. Can also be a `astropy.visualization.ImageNormalize` object. Default is ``'log'``.
+		scale (str or astropy.visualization.ImageNormalize object, optional): Normalization used to stretch the colormap.
+			Options: ``'linear'``, ``'sqrt'``, or ``'log'``. Can also be a `astropy.visualization.ImageNormalize` object.
+			Default is ``'log'``.
 		origin (str, optional): The origin of the coordinate system.
 		xlabel (str, optional): Label for the x-axis.
 		ylabel (str, optional): Label for the y-axis.
@@ -102,7 +99,7 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 
 	return im
 
-
+#--------------------------------------------------------------------------------------------------
 def plot_image_fit_residuals(fig, image, fit, residuals):
 	"""
 	Make a figure with three subplots showing the image, the fit and the
@@ -167,14 +164,14 @@ def plot_image_fit_residuals(fig, image, fit, residuals):
 
 	return ax_list
 
-
+#--------------------------------------------------------------------------------------------------
 def save_figure(path, format='png', **kwargs):
 	"""
 	Write current figure to file. Creates directory to place it in if needed.
 
 	Parameters:
 		path (string): Path where to save figure. If no file extension is provided, the extension of
-		               the format is automatically appended.
+			the format is automatically appended.
 		format (string): Figure file type. Default is ``'png'``.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
 	"""
