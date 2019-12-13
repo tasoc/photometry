@@ -27,7 +27,6 @@ Note:
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import with_statement, print_function
 import os
 import argparse
 import logging
@@ -50,6 +49,7 @@ if __name__ == '__main__':
 	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
 	parser.add_argument('--all', help='Run all stars, one by one. Please consider using the MPI program instead.', action='store_true')
 	parser.add_argument('--starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
+	parser.add_argument('-v', '--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
 	parser.add_argument('input_folder', type=str, help='Directory to create catalog files in.', nargs='?', default=None)
 	args = parser.parse_args()
 
@@ -90,7 +90,7 @@ if __name__ == '__main__':
 	logger.info("Putting output data in '%s'", output_folder)
 
 	# Create partial function of tessphot, setting the common keywords:
-	f = functools.partial(tessphot, input_folder=input_folder, output_folder=output_folder, plot=args.plot)
+	f = functools.partial(tessphot, input_folder=input_folder, output_folder=output_folder, plot=args.plot, version=args.version)
 
 	# Run the program:
 	with TaskManager(input_folder, overwrite=args.overwrite) as tm:

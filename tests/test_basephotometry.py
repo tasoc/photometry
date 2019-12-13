@@ -6,7 +6,6 @@ Tests of BasePhotometry.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
 import numpy as np
 import sys
 import os

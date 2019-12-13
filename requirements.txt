@@ -1,19 +1,16 @@
-numpy == 1.15.4
-six
 pytest
-scipy >= 0.16
+numpy == 1.15.4
+scipy == 1.2.1
 matplotlib == 2.1.2
-astropy >= 3.1
+astropy >= 3.2.3
 photutils >= 0.4
-Bottleneck >= 1.2
-h5py
-enum-compat
+Bottleneck == 1.2.1
+h5py >= 2.9.0
 scikit-image == 0.14.1
 scikit-learn == 0.20.2
-statsmodels == 0.9.0
+statsmodels == 0.10.2
 opencv-python-headless == 4.0.1.24
 psycopg2-binary
-backports.tempfile
 halophot >= 0.6.6.2
-jplephem
-spiceypy
+jplephem >= 2.9
+spiceypy == 2.2.0

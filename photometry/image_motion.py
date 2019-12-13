@@ -16,9 +16,6 @@ To calculate the image shifts between the reference image (``ref_image``) and an
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-import six
-from six.moves import range
 import numpy as np
 import cv2
 #from skimage.transform import estimate_transform, warp, AffineTransform, EuclideanTransform
@@ -27,7 +24,7 @@ from bottleneck import replace
 from skimage.filters import scharr
 from scipy.interpolate import interp1d
 from astropy.io import fits
-from astropy.wcs import WCS
+from astropy.wcs import WCS, NoConvergence
 import warnings
 
 class ImageMovementKernel(object):
@@ -39,14 +36,15 @@ class ImageMovementKernel(object):
 		'wcs': 1
 	}
 
-	#==============================================================================
+	#----------------------------------------------------------------------------------------------
 	def __init__(self, warpmode='euclidian', image_ref=None, wcs_ref=None):
 		"""
 		Initialize ImageMovementKernel.
 
 		Parameters:
 			warpmode (string): Options are ``'unchanged'``, ``'translation'``, ``'euclidian'`` and ``'wcs'``. Default is ``'euclidian'``.
-			image_ref (2D ndarray): Reference image used
+			image_ref (2D ndarray): Reference image used.
+			wcs_ref (``astropy.wcs.WCS`` object): Reference WCS when using `warpmode`='wcs'.
 		"""
 
 		if warpmode not in ('unchanged', 'translation', 'euclidian', 'wcs'):
@@ -61,16 +59,16 @@ class ImageMovementKernel(object):
 			self.image_ref = self._prepare_flux(self.image_ref)
 
 		if self.wcs_ref is not None and not isinstance(self.wcs_ref, WCS):
-			if not isinstance(self.wcs_ref, six.string_types): self.wcs_ref = self.wcs_ref.decode("utf-8") # For Python 3
+			if not isinstance(self.wcs_ref, str): self.wcs_ref = self.wcs_ref.decode("utf-8") # For Python 3
 			self.wcs_ref = WCS(header=fits.Header().fromstring(self.wcs_ref))
 
 		self._interpolator = None
 
-	#==============================================================================
+	#----------------------------------------------------------------------------------------------
 	def __call__(self, *args, **kwargs):
 		return self.apply_kernel(*args, **kwargs)
 
-	#==============================================================================
+	#----------------------------------------------------------------------------------------------
 	def _prepare_flux(self, flux):
 		"""
 		Preparation of images for Enhanced Correlation Coefficient (ECC) Maximization
@@ -105,7 +103,7 @@ class ImageMovementKernel(object):
 		# Make sure image is in proper units for ECC routine
 		return np.asarray(flux1, dtype='float32')
 
-	#==============================================================================
+	#----------------------------------------------------------------------------------------------
 	def apply_kernel(self, xy, kernel):
 		"""
 		Application of warp matrix to pixel coordinates
@@ -154,13 +152,14 @@ class ImageMovementKernel(object):
 			# Calculate RA and DEC of target in the reference image:
 			radec = self.wcs_ref.all_pix2world(xy, 0, ra_dec_order=True)
 			# Use RA and DEC to find the position in the kernel image:
-			delta_pos = kernel.all_world2pix(radec, 0, ra_dec_order=True)
+			# TODO: Better handling of NoConvergence exception, which is currently silenced
+			delta_pos = kernel.all_world2pix(radec, 0, ra_dec_order=True, maxiter=50, quiet=True)
 			# Calculate the difference in pixel-position:
 			delta_pos -= xy
 
 		return delta_pos
 
-	#==============================================================================
+	#----------------------------------------------------------------------------------------------
 	def calc_kernel(self, image, number_of_iterations=10000, termination_eps=1e-6):
 		"""
 		Calculates the position movement kernel for a given image. This kernel is
@@ -221,7 +220,7 @@ class ImageMovementKernel(object):
 			# Translation only:
 			return [dx, dy]
 
-	#==============================================================================
+	#----------------------------------------------------------------------------------------------
 	def load_series(self, times, kernels):
 		"""
 		Load time-series of kernels and create interpolator.
@@ -237,37 +236,72 @@ class ImageMovementKernel(object):
 			ValueError: If kernels have the wrong shape.
 		"""
 
-		self.series_times = times
+		self.series_times = np.asarray(times)
 		self.series_kernels = kernels
 
 		if self.warpmode == 'wcs':
-
+			# Check the lenghts of the provided vectors:
 			if len(kernels) != len(times):
 				raise ValueError("Wrong shape of kernels.")
 
+			good_series = np.ones_like(self.series_times, dtype='bool')
 			for k in range(len(kernels)):
-				if isinstance(self.series_kernels[k], WCS): continue
-				hdr_string = self.series_kernels[k]
-				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
-				self.series_kernels[k] = WCS(header=fits.Header().fromstring(hdr_string))
+				if not isinstance(self.series_kernels[k], WCS):
+					# Assuming that is is a string then:
+					hdr_string = self.series_kernels[k]
+					if not isinstance(hdr_string, str):
+						hdr_string = hdr_string.decode("utf-8") # For Python 3
+
+					# If the string is empty, remove the point from the series:
+					if hdr_string.strip() == '':
+						good_series[k] = False
+						continue
+
+					# Create a WCS object from the header string:
+					self.series_kernels[k] = WCS(header=fits.Header().fromstring(hdr_string), relax=True)
+
+				# Try if the WCS can return pixel coordinates for the test-coordinates:
+				# If it can't we will remove that timestamp from the series, and the
+				# pixel coordinates will therefore be interpolated when calculation jitter.
+				# Using a (ra, dec) coordinates from the actual footprint of the WCS, and
+				# using axes=(2,2), since we here don't nessacerily know the size of the image,
+				# and we are only using the first corner anyway.
+				fp = self.series_kernels[k].calc_footprint(axes=(2, 2))
+				test_coords = np.atleast_2d(fp[0, :])
+				try:
+					self.series_kernels[k].all_world2pix(test_coords, 0, ra_dec_order=True, maxiter=50)
+				except (NoConvergence, ValueError):
+					good_series[k] = False
+
+			# Remove any bad series points from the lists:
+			self.series_kernels = np.asarray(self.series_kernels)
+			self.series_times = self.series_times[good_series]
+			self.series_kernels = self.series_kernels[good_series]
 
 		else:
+			# For these warpmodes, the kernels should be 2D arrays:
+			self.series_kernels = np.atleast_2d(self.series_kernels)
+
 			# Check shape of the input:
-			if kernels.shape != (len(times), self.n_params):
+			if self.series_kernels.shape != (len(self.series_times), self.n_params):
 				raise ValueError("Wrong shape of kernels. Anticipated ({0},{1}), but got {2}".format(
-						len(times),
-						self.n_params,
-						kernels.shape
-					))
+					len(self.series_times),
+					self.n_params,
+					self.series_kernels.shape
+				))
 
 			# Only take the kernels that are well-defined:
 			# TODO: Should we raise a warning if there are many undefined?
 			indx = np.isfinite(times) & np.all(np.isfinite(kernels), axis=1)
 
 			# Create interpolator:
-			self._interpolator = interp1d(times[indx], kernels[indx, :], axis=0, assume_sorted=True, bounds_error=False, fill_value=(kernels[0, :], kernels[-1, :]))
+			self._interpolator = interp1d(times[indx], kernels[indx, :],
+				axis=0,
+				assume_sorted=True,
+				bounds_error=False,
+				fill_value=(kernels[0, :], kernels[-1, :]))
 
-	#==============================================================================
+	#----------------------------------------------------------------------------------------------
 	def interpolate(self, time, xy):
 		"""
 		Interpolate in the kernel time-series provided in :py:func:`load_series`
@@ -279,8 +313,8 @@ class ImageMovementKernel(object):
 
 		Returns:
 			``numpy.ndarray``: Array with the same size as `xy` containing the
-			                   changes to rows and columns. These can be added
-							   to `xy` to yield the new positions.
+				changes to rows and columns. These can be added
+				to `xy` to yield the new positions.
 
 		Raises:
 			ValueError: If timeseries has not been provided.
@@ -288,9 +322,21 @@ class ImageMovementKernel(object):
 
 		if self.warpmode == 'wcs':
 			# Methods where the kernel is complex (non-numeric)
+			# Handle the case where we are requesting a timestamp outside the
+			# range of the loaded kernel timeseries:
+			if time < self.series_times[0] or time > self.series_times[-1]:
+				# Allow for a bit of a margin before and after the ends of the
+				# timeseries, to account for e.g. round-off errors in the timestamps:
+				dt = np.median(np.diff(self.series_times))
+				if np.abs(time - self.series_times[0]) < dt:
+					return self.apply_kernel(xy, self.series_kernels[0])
+				elif np.abs(time - self.series_times[-1]) < dt:
+					return self.apply_kernel(xy, self.series_kernels[-1])
+				else:
+					raise ValueError("Timestamp outside timeseries interval")
+
 			# Find the point in the series where the timestamp falls:
 			k = np.searchsorted(self.series_times, time, side='right')
-			if k <= 0 or time > self.series_times[-1]: raise ValueError("Timestamp outside timeseries interval")
 			t1 = self.series_times[k-1]
 			# Find the jitter in that kernel:
 			jitter_1 = self.apply_kernel(xy, self.series_kernels[k-1])
@@ -319,7 +365,7 @@ class ImageMovementKernel(object):
 
 			return self.apply_kernel(xy, kernel)
 
-	#==============================================================================
+	#----------------------------------------------------------------------------------------------
 	def jitter(self, time, column, row):
 		"""
 		Calculate the change to a given position as a function of time.

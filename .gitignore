@@ -1,5 +1,6 @@
 # Specific directories used in the code,
 # which should be ignored by Git:
+tests/input/todo.sqlite-journal
 tests/input/lightcurves
 photometry/data/spice
 

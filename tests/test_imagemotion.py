@@ -4,7 +4,7 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
+import pytest
 import sys
 import os.path
 import numpy as np
@@ -14,8 +14,19 @@ from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
 #from photometry.plots import plt
 import h5py
 
-def test_imagemotion():
+#--------------------------------------------------------------------------------------------------
+def test_imagemotion_invalid_warpmode():
+	"""Test ImageMovementKernel with ínvalid warpmode."""
+
+	with pytest.raises(ValueError):
+		ImageMovementKernel(warpmode='invalid')
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian'])
+def test_imagemotion(warpmode):
 	"""Test of ImageMovementKernel"""
+
+	print("Testing warpmode=" + warpmode)
 
 	# Load the first image in the input directory:
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input', 'images')
@@ -41,49 +52,58 @@ def test_imagemotion():
 	desired2 = np.zeros_like(xy)
 	desired2[:, 1] = 1
 
-	for warpmode in ('unchanged', 'translation', 'euclidian'):
-		print("Testing warpmode=" + warpmode)
+	# Create ImageMovementKernel instance:
+	imk = ImageMovementKernel(image_ref=img, warpmode=warpmode)
 
-		# Create ImageMovementKernel instance:
-		imk = ImageMovementKernel(image_ref=img, warpmode=warpmode)
+	# If calling interpolate before defining kernels, we should get an error:
+	with pytest.raises(ValueError):
+		imk.interpolate(1234, 1234)
 
-		# Calculate kernel for the same image:
-		kernel = imk.calc_kernel(img)
-		print("Kernel:")
-		print(kernel)
-		assert(len(kernel) == imk.n_params)
+	# Calculate kernel for the same image:
+	kernel = imk.calc_kernel(img)
+	print("Kernel:")
+	print(kernel)
+	assert(len(kernel) == imk.n_params)
 
-		# Calculate the new positions based on the kernel:
-		delta_pos = imk(xy, kernel)
-		print("Extracted movements:")
-		print(delta_pos)
+	# Calculate the new positions based on the kernel:
+	delta_pos = imk(xy, kernel)
+	print("Extracted movements:")
+	print(delta_pos)
 
-		assert(delta_pos.shape == xy.shape)
+	assert(delta_pos.shape == xy.shape)
 
-		# The movements should all be very close to zero,
-		# since we used the same image as the reference:
-		np.testing.assert_allclose(delta_pos, desired1, atol=1e-5, rtol=1e-5)
+	# The movements should all be very close to zero,
+	# since we used the same image as the reference:
+	np.testing.assert_allclose(delta_pos, desired1, atol=1e-5, rtol=1e-5)
 
-		"""
-		kernel = imk.calc_kernel(img2)
-		print("Kernel 2:")
-		print(kernel)
+	#
+	with pytest.raises(ValueError) as excinfo:
+		imk.load_series([1234, 1235], kernel)
 
-		# Calculate the new positions based on the kernel:
-		delta_pos = imk(xy, kernel)
-		print("Extracted movements:")
-		print(delta_pos)
+	print(excinfo.value)
+	assert str(excinfo.value).startswith('Wrong shape of kernels.')
 
-		assert(delta_pos.shape == xy.shape)
+	"""
+	kernel = imk.calc_kernel(img2)
+	print("Kernel 2:")
+	print(kernel)
 
-		# The movements should all be very close to zero,
-		# since we used the same image as the reference:
-		# FIXME: Would LOVE this to be more accurate!
-		np.testing.assert_allclose(delta_pos, desired2, atol=1e-3, rtol=1e-2)
-		"""
+	# Calculate the new positions based on the kernel:
+	delta_pos = imk(xy, kernel)
+	print("Extracted movements:")
+	print(delta_pos)
+
+	assert(delta_pos.shape == xy.shape)
+
+	# The movements should all be very close to zero,
+	# since we used the same image as the reference:
+	# FIXME: Would LOVE this to be more accurate!
+	np.testing.assert_allclose(delta_pos, desired2, atol=1e-3, rtol=1e-2)
+	"""
 
 	print("Done")
 
+#--------------------------------------------------------------------------------------------------
 def test_imagemotion_wcs():
 	"""Test of ImageMovementKernel"""
 
@@ -127,6 +147,14 @@ def test_imagemotion_wcs():
 		jitter = imk.interpolate(times[-1], xy)
 		assert(jitter.shape == xy.shape)
 
+		# Just before first timestamp should also work (roundoff check):
+		jitter = imk.interpolate(times[0] - np.finfo('float64').eps, xy)
+		assert(jitter.shape == xy.shape)
+
+		# Just after last timestamp should also work (roundoff check):
+		jitter = imk.interpolate(times[-1] + np.finfo('float64').eps, xy)
+		assert(jitter.shape == xy.shape)
+
 		#plt.close('all')
 		#plt.figure()
 		#for x, y in xy:
@@ -154,8 +182,17 @@ def test_imagemotion_wcs():
 		assert(jitter.shape == xy.shape)
 		np.testing.assert_allclose(jitter, 1)
 
+		# Removing some timestamps should so we can test if we correctky throw an exceotion;
+		times = times[1:]
+		with pytest.raises(ValueError):
+			imk.load_series(times, kernels)
+
 	print("Done")
 
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_imagemotion()
+	test_imagemotion_invalid_warpmode()
+	test_imagemotion('unchanged')
+	test_imagemotion('translation')
+	test_imagemotion('euclidian')
 	test_imagemotion_wcs()

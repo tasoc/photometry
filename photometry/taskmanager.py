@@ -6,7 +6,6 @@ A TaskManager which keeps track of which targets to process.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import numpy as np
 import os
 import sqlite3
@@ -26,13 +25,13 @@ class TaskManager(object):
 		Parameters:
 			todo_file (string): Path to the TODO-file.
 			cleanup (boolean): Perform cleanup/optimization of TODO-file before
-			                   during initialization. Default=False.
+				during initialization. Default=False.
 			overwrite (boolean): Restart calculation from the beginning, discarding any previous results. Default=False.
 			summary (string): Path to file where to periodically write a progress summary. The output file will be in JSON format. Default=None.
 			summary_interval (int): Interval at which to write summary file. Setting this to 1 will mean writing the file after every tasks completes. Default=100.
 
 		Raises:
-			IOError: If TODO-file could not be found.
+			FileNotFoundError: If TODO-file could not be found.
 		"""
 
 		self.overwrite = overwrite
@@ -43,7 +42,7 @@ class TaskManager(object):
 			todo_file = os.path.join(todo_file, 'todo.sqlite')
 
 		if not os.path.exists(todo_file):
-			raise IOError('Could not find TODO-file')
+			raise FileNotFoundError('Could not find TODO-file')
 
 		# Setup logging:
 		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -57,6 +56,9 @@ class TaskManager(object):
 		self.conn = sqlite3.connect(todo_file)
 		self.conn.row_factory = sqlite3.Row
 		self.cursor = self.conn.cursor()
+		self.cursor.execute("PRAGMA foreign_keys=ON;")
+		self.cursor.execute("PRAGMA locking_mode=EXCLUSIVE;")
+		self.cursor.execute("PRAGMA journal_mode=TRUNCATE;")
 
 		# Reset the status of everything for a new run:
 		if overwrite:
@@ -67,7 +69,7 @@ class TaskManager(object):
 
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
-			priority INT PRIMARY KEY NOT NULL,
+			priority INTEGER PRIMARY KEY ASC NOT NULL,
 			starid BIGINT NOT NULL,
 			lightcurve TEXT,
 			elaptime REAL NOT NULL,
@@ -80,6 +82,7 @@ class TaskManager(object):
 			pos_column REAL,
 			contamination REAL,
 			mask_size INT,
+			edge_flux REAL,
 			stamp_width INT,
 			stamp_height INT,
 			stamp_resizes INT,
@@ -87,26 +90,36 @@ class TaskManager(object):
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE
 		);""")
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS photometry_skipped (
-			priority INT NOT NULL,
-			skipped_by INT NOT NULL,
+			priority INTEGER NOT NULL,
+			skipped_by INTEGER NOT NULL,
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE,
 			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
 		);""") # PRIMARY KEY
 		self.conn.commit()
 
-		# Reset calculations with status STARTED or ABORT:
-		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value)
-		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
-		self.cursor.execute("DELETE FROM photometry_skipped WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IN (" + clear_status + "));")
+		# Add status indicator for corrections to todolist, if it doesn't already exists:
+		self.cursor.execute("PRAGMA table_info(diagnostics)")
+		if 'edge_flux' not in [r['name'] for r in self.cursor.fetchall()]:
+			self.logger.debug("Adding edge_flux column to diagnostics")
+			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN edge_flux REAL DEFAULT NULL")
+			self.conn.commit()
+
+		# Reset calculations with status STARTED, ABORT or ERROR:
+		# We are re-running all with error, in the hope that they will work this time around:
+		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value) + ',' + str(STATUS.ERROR.value)
 		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
 		self.conn.commit()
+
+		# Analyze the tables for better query planning:
+		self.cursor.execute("ANALYZE;")
 
 		# Prepare summary object:
 		self.summary = {
 			'slurm_jobid': os.environ.get('SLURM_JOB_ID', None),
 			'numtasks': 0,
 			'tasks_run': 0,
-			'last_error': None
+			'last_error': None,
+			'mean_elaptime': None
 		}
 		# Make sure to add all the different status to summary:
 		for s in STATUS: self.summary[s.name] = 0
@@ -231,6 +244,7 @@ class TaskManager(object):
 						# This target was the brightest star in the mask,
 						# so let's keep it and simply mark all the other targets
 						# as SKIPPED:
+						self.cursor.execute("DELETE FROM photometry_skipped WHERE skipped_by=?;", (result['priority'],))
 						for row in skip_rows:
 							self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
 								STATUS.SKIPPED.value,
@@ -264,11 +278,18 @@ class TaskManager(object):
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
 
+		# Calculate mean elapsed time using "streaming weighted mean" with (alpha=0.1):
+		# https://dev.to/nestedsoftware/exponential-moving-average-on-streaming-data-4hhl
+		if self.summary['mean_elaptime'] is None:
+			self.summary['mean_elaptime'] = result['time']
+		else:
+			self.summary['mean_elaptime'] += 0.1 * (result['time'] - self.summary['mean_elaptime'])
+
 		stamp = details.get('stamp', None)
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		self.cursor.execute("INSERT INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
@@ -281,6 +302,7 @@ class TaskManager(object):
 			details.get('rms_hour', None),
 			details.get('ptp', None),
 			details.get('mask_size', None),
+			details.get('edge_flux', None),
 			details.get('contamination', None),
 			stamp_width,
 			stamp_height,

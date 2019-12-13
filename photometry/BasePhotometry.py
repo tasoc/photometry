@@ -7,9 +7,6 @@ All other specific photometric algorithms will inherit from BasePhotometry.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-import six
-from six.moves import range
 import numpy as np
 from astropy._erfa.core import ErfaWarning
 import warnings
@@ -33,7 +30,7 @@ from astropy.time import Time
 from astropy.wcs import WCS
 import enum
 from scipy.interpolate import interp1d
-from bottleneck import replace, nanmedian, nanvar, nanstd
+from bottleneck import replace, nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale, find_nearest
@@ -48,6 +45,7 @@ __docformat__ = 'restructuredtext'
 
 hdf5_cache = {}
 
+#--------------------------------------------------------------------------------------------------
 @enum.unique
 class STATUS(enum.Enum):
 	"""
@@ -61,6 +59,7 @@ class STATUS(enum.Enum):
 	ABORT = 4   #: The calculation was aborted.
 	SKIPPED = 5 #: The target was skipped because the algorithm found that to be the best solution.
 
+#--------------------------------------------------------------------------------------------------
 class BasePhotometry(object):
 	"""
 	The basic photometry class for the TASOC Photometry pipeline.
@@ -98,7 +97,7 @@ class BasePhotometry(object):
 	"""
 
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		sector=None, camera=None, ccd=None, plot=False, cache='basic'):
+		sector=None, camera=None, ccd=None, plot=False, cache='basic', version=5):
 		"""
 		Initialize the photometry object.
 
@@ -111,9 +110,11 @@ class BasePhotometry(object):
 			camera (integer, optional): TESS camera (1-4) to load target from (Only used for FFIs).
 			ccd (integer, optional): TESS CCD (1-4) to load target from (Only used for FFIs).
 			cache (string, optional): Optional values are ``'none'``, ``'full'`` or ``'basic'`` (Default).
+			version (integer): Data release number to be added to headers. Default=5.
 
 		Raises:
-			IOError: If starid could not be found in catalog.
+			OSError: If starid could not be found in catalog.
+			FileNotFoundError: If input file (HDF5, TPF, Catalog) could not be found.
 			ValueError: On invalid datasource.
 			ValueError: If ``camera`` and ``ccd`` is not provided together with ``datasource='ffi'``.
 		"""
@@ -131,6 +132,7 @@ class BasePhotometry(object):
 		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
+		self.version = version
 
 		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
 
@@ -179,7 +181,7 @@ class BasePhotometry(object):
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
-				raise IOError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
 			filepath_hdf5 = filepath_hdf5[0]
 			self.filepath_hdf5 = filepath_hdf5
 
@@ -223,7 +225,7 @@ class BasePhotometry(object):
 					hdr_string = self.hdf['wcs']['%04d' % refindx][0]
 				else:
 					hdr_string = self.hdf['wcs'][0]
-				if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+				if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
 				self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
 				attrs['wcs'] = self.wcs
 
@@ -284,9 +286,9 @@ class BasePhotometry(object):
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
-				raise IOError("Target Pixel File not found")
+				raise FileNotFoundError("Target Pixel File not found")
 			elif len(fname) > 1:
-				raise IOError("Multiple Target Pixel Files found matching pattern")
+				raise OSError("Multiple Target Pixel Files found matching pattern")
 
 			# Open the FITS file:
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
@@ -297,7 +299,7 @@ class BasePhotometry(object):
 			self.ccd = self.tpf[0].header['CCD']
 
 			# Extract the relevant information from the FITS file:
-			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64')
+			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='BJD')
 			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
@@ -315,7 +317,8 @@ class BasePhotometry(object):
 			self.pixel_offset_row = self.tpf[2].header['CRVAL2P'] - 1
 			self.pixel_offset_col = self.tpf[2].header['CRVAL1P'] - 1
 
-			logger.debug('Max stamp size: (%d, %d)',
+			logger.debug(
+				'Max stamp size: (%d, %d)',
 				self._max_stamp[1] - self._max_stamp[0],
 				self._max_stamp[3] - self._max_stamp[2]
 			)
@@ -329,7 +332,7 @@ class BasePhotometry(object):
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
-				raise IOError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
 			filepath_hdf5 = filepath_hdf5[0]
 			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
 
@@ -341,7 +344,7 @@ class BasePhotometry(object):
 		self._catalog = None
 		logger.debug('Catalog file: %s', self.catalog_file)
 		if len(self.catalog_file) != 1:
-			raise IOError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (self.sector, self.camera, self.ccd))
+			raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (self.sector, self.camera, self.ccd))
 		self.catalog_file = self.catalog_file[0]
 
 		# Load information about main target:
@@ -351,7 +354,7 @@ class BasePhotometry(object):
 			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
 			target = cursor.fetchone()
 			if target is None:
-				raise IOError("Star could not be found in catalog: {0:d}".format(self.starid))
+				raise OSError("Star could not be found in catalog: {0:d}".format(self.starid))
 			self.target = dict(target) # Dictionary of all main target properties.
 			self.target_tmag = target['tmag'] # TESS magnitude of the main target.
 			self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
@@ -378,29 +381,22 @@ class BasePhotometry(object):
 		if self.datasource == 'ffi':
 			# Coordinates of the target as astropy SkyCoord object:
 			star_coord = coord.SkyCoord(
-				ra=self.target_pos_ra_J2000,
-				dec=self.target_pos_dec_J2000,
+				ra=self.target_pos_ra,
+				dec=self.target_pos_dec,
 				unit=units.deg,
-				frame='icrs',
-				obstime=Time('J2000'),
-				pm_ra_cosdec=None if self.target['pm_ra'] is None else self.target['pm_ra']*units.mas/units.yr,
-				pm_dec=None if self.target['pm_decl'] is None else self.target['pm_decl']*units.mas/units.yr
+				frame='icrs'
 			)
 
 			# Use the SPICE kernels to get accurate positions of TESS, to be used in calculating
 			# the light-travel-time corrections:
 			with TESS_SPICE() as knl:
-				# Change the timestamps back to JD:
+				# Change the timestamps back to uncorrected JD (TDB) in the TESS frame:
 				time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
-				
-				# Use SPICE kernels to get location of TESS at the given timestamps (in JD),
-				# and create new Time object linked to the changing position of TESS:
-				tess_position = knl.EarthLocation(time_nocorr + 2457000)
-				times = Time(time_nocorr, 2457000, format='jd', scale='utc', location=tess_position)
 
-				# Calculate the light time travel correction for the stars coordinates:
-				self.lightcurve['timecorr'] = times.light_travel_time(star_coord, kind='barycentric', ephemeris=knl.planetary_ephemeris).value
-				self.lightcurve['time'] = time_nocorr + self.lightcurve['timecorr']
+				# Use SPICE kernels to get new barycentric time correction for the stars coordinates:
+				tm, tc = knl.barycorr(time_nocorr + 2457000, star_coord)
+				self.lightcurve['time'] = tm - 2457000
+				self.lightcurve['timecorr'] = tc
 
 		# Init arrays that will be filled with lightcurve stuff:
 		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
@@ -681,8 +677,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Note:
 			The images has had the large-scale background subtracted. If needed
@@ -713,8 +709,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Example:
 
@@ -736,8 +732,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Example:
 
@@ -825,8 +821,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, ffi_times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``ffi_times`` is the number of timestamps in the FFIs.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``ffi_times`` is the number of timestamps in the FFIs.
 
 		Note:
 			This function will only return flags on the timestamps of the FFIs, even though
@@ -1071,14 +1067,14 @@ class BasePhotometry(object):
 		Catalog of stars in the current stamp.
 
 		The table contains the following columns:
-		 * ``starid``:       TIC identifier.
-		 * ``tmag``:         TESS magnitude.
-		 * ``ra``:           Right ascension in degrees at time of observation.
-		 * ``dec``:          Declination in degrees at time of observation.
-		 * ``row``:          Pixel row on CCD.
-		 * ``column``:       Pixel column on CCD.
-		 * ``row_stamp``:    Pixel row relative to the stamp.
-		 * ``column_stamp``: Pixel column relative to the stamp.
+		* ``starid``: TIC identifier.
+		* ``tmag``: TESS magnitude.
+		* ``ra``: Right ascension in degrees at time of observation.
+		* ``dec``: Declination in degrees at time of observation.
+		* ``row``: Pixel row on CCD.
+		* ``column``: Pixel column on CCD.
+		* ``row_stamp``: Pixel row relative to the stamp.
+		* ``column_stamp``: Pixel column relative to the stamp.
 
 		Returns:
 			``astropy.table.Table``: Table with all known stars falling within the current stamp.
@@ -1271,7 +1267,6 @@ class BasePhotometry(object):
 		"""
 		raise NotImplementedError("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
-
 	def photometry(self, *args, **kwargs):
 		"""
 		Run photometry.
@@ -1293,6 +1288,10 @@ class BasePhotometry(object):
 
 		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
+			# Simple check that entire lightcurve is not NaN:
+			if allnan(self.lightcurve['flux']):
+				raise Exception("Final lightcurve is all NaNs")
+
 			# Calculate the mean flux level:
 			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
 
@@ -1325,11 +1324,21 @@ class BasePhotometry(object):
 			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
 
 			if self.final_mask is not None:
+				# Calculate the total number of pixels in the mask:
 				self._details['mask_size'] = int(np.sum(self.final_mask))
+
+				# Measure the total flux on the edge of the stamp,
+				# if the mask is touching the edge of the stamp:
+				# The np.sum here should return zero on an empty array.
+				edge = np.zeros_like(self.sumimage, dtype='bool')
+				edge[:, (0,-1)] = True
+				edge[(0,-1), 1:-1] = True
+				self._details['edge_flux'] = np.sum(self.sumimage[self.final_mask & edge])
+
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
-	def save_lightcurve(self, output_folder=None, version=4):
+	def save_lightcurve(self, output_folder=None, version=None):
 		"""
 		Save generated lightcurve to file.
 
@@ -1344,6 +1353,11 @@ class BasePhotometry(object):
 		# Check if another output folder was provided:
 		if output_folder is None:
 			output_folder = self.output_folder
+		if version is None:
+			if self.version is None:
+				raise ValueError("VERSION has not been set")
+			else:
+				version = self.version
 
 		# Make sure that the directory exists:
 		if not os.path.exists(output_folder):

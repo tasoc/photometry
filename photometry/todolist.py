@@ -5,9 +5,6 @@ Create the TODO list which is used by the pipeline to keep track of the
 targets that needs to be processed.
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-import six
-from six.moves import map
 import os
 import numpy as np
 import logging
@@ -18,6 +15,8 @@ import h5py
 import re
 import functools
 import contextlib
+from scipy.ndimage.morphology import distance_transform_edt
+from scipy.interpolate import RectBivariateSpline
 from astropy.table import Table, vstack, Column
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -26,6 +25,7 @@ from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphe
 from .catalog import catalog_sqlite_search_footprint
 import multiprocessing
 
+#------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
 	# The distance from the camera centre to the corner furthest away:
 	camera_radius = np.sqrt( 12**2 + 12**2 ) # np.max(sphere_distance(a[:,0], a[:,1], settings['camera_centre_ra'], settings['camera_centre_dec']))
@@ -46,6 +46,46 @@ def calc_cbv_area(catalog_row, settings):
 
 	return cbv_area
 
+#------------------------------------------------------------------------------
+def edge_distance(row, column, aperture=None, image_shape=None):
+	"""
+	Distance to nearest edge.
+
+	Parameters:
+		row (ndarray): Array of row positions to calculate distance of.
+		column (ndarray): Array of column positions to calculate distance of.
+		aperture (ndarray, optional): Boolean array indicating pixels to be considered "holes" (False) and good (True).
+		image_shape (tuple, optional): Shape of aperture image.
+
+	Returns:
+		float: Distance in pixels to the nearest edge (outer or internal).
+	"""
+	# Basic check of input:
+	if image_shape is None and aperture is None:
+		raise Exception("Please provide either aperture or image_shape.")
+
+	if image_shape is None and aperture is not None:
+		image_shape = aperture.shape
+
+	# Distance from position to outer edges of image:
+	EdgeDistOuter = np.minimum.reduce([column+0.5, row+0.5, image_shape[1]-(column+0.5), image_shape[0]-(row+0.5)])
+
+	# If we have been provided with an aperture and it contains "holes",
+	# we should include the distance to these holes:
+	if aperture is not None and np.any(~aperture):
+		# TODO: This doesn't return the correct answer near internal corners.
+		aperture_dist = distance_transform_edt(aperture)
+		EdgeDistFunc = RectBivariateSpline(
+			np.arange(image_shape[0]),
+			np.arange(image_shape[1]),
+			np.clip(aperture_dist-0.5, 0, None),
+			kx=1, ky=1)
+
+		return np.minimum(EdgeDistFunc(row, column), EdgeDistOuter)
+
+	return EdgeDistOuter
+
+#------------------------------------------------------------------------------
 def _ffi_todo_wrapper(args):
 	return _ffi_todo(*args)
 
@@ -59,7 +99,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 	# We just check if an HDF5 file exist.
 	hdf5_file = find_hdf5_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 	if len(hdf5_file) != 1:
-		raise IOError("Could not find HDF5 file")
+		raise FileNotFoundError("Could not find HDF5 file")
 
 	# Load the relevant information from the HDF5 file for this camera and ccd:
 	with h5py.File(hdf5_file[0], 'r') as hdf:
@@ -68,7 +108,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 			hdr_string = hdf['wcs']['%04d' % refindx][0]
 		else:
 			hdr_string = hdf['wcs'][0]
-		if not isinstance(hdr_string, six.string_types): hdr_string = hdr_string.decode("utf-8") # For Python 3
+		if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
 		wcs = WCS(header=fits.Header().fromstring(hdr_string))
 		offset_rows = hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 		offset_cols = hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 0)
@@ -77,7 +117,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 	# Load the corresponding catalog:
 	catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 	if len(catalog_file) != 1:
-		raise IOError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
+		raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
 
 	with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 		conn.row_factory = sqlite3.Row
@@ -106,7 +146,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 				continue
 
 			# Calculate distance from target to edge of image:
-			EdgeDist = min(x+0.5, y+0.5, image_shape[1]-(x+0.5), image_shape[0]-(y+0.5))
+			EdgeDist = edge_distance(y, x, image_shape=image_shape)
 
 			# Calculate the Cotrending Basis Vector area the star falls in:
 			cbv_area = calc_cbv_area(row, settings)
@@ -150,6 +190,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 		sector = hdu[0].header['SECTOR']
 		camera = hdu[0].header['CAMERA']
 		ccd = hdu[0].header['CCD']
+		aperture_observed_pixels = (hdu['APERTURE'].data & 1 != 0)
 
 		if (starid, sector, 'tpf') in exclude or (starid, sector, 'all') in exclude:
 			logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf", starid, sector)
@@ -159,7 +200,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 			# Load the corresponding catalog:
 			catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 			if len(catalog_file) != 1:
-				raise IOError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
+				raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
 
 			with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 				conn.row_factory = sqlite3.Row
@@ -212,8 +253,14 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 						if x < -0.5 or y < -0.5 or x > image_shape[1]-0.5 or y > image_shape[0]-0.5:
 							continue
 
+						# Make sure that the pixel that the target falls on has actually been
+						# collected by the spacecraft:
+						if not aperture_observed_pixels[int(np.round(y)), int(np.round(x))]:
+							logger.debug("Secondary target rejected. Falls on non-observed pixel. (primary=%d, secondary=%d)", starid, row['starid'])
+							continue
+
 						# Calculate distance from target to edge of image:
-						EdgeDist = min(x+0.5, y+0.5, image_shape[1]-(x+0.5), image_shape[0]-(y+0.5))
+						EdgeDist = edge_distance(y, x, aperture=aperture_observed_pixels)
 
 						# Add this secondary target to the list:
 						# Note that we are storing the starid of the target
@@ -244,7 +291,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 	)
 
 #------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_secondary_targets=True):
+def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
+	find_secondary_targets=True, output_file=None):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
@@ -258,9 +306,13 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
 		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
 		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
+		output_file (string, optional): The file path where the output file should be saved.
+			If not specified, the file will be saved into the input directory.
+			Should only be used for testing, since the file would (proberly) otherwise end up with
+			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
-		IOError: If the specified ``input_folder`` is not an existing directory.
+		NotADirectoryError: If the specified ``input_folder`` is not an existing directory.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -273,14 +325,21 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 
 	# Check that the given input directory is indeed a directory:
 	if not os.path.isdir(input_folder):
-		raise IOError("The given path does not exist or is not a directory")
+		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
 	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
 	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
 
 	# The TODO file that we want to create. Delete it if it already exits:
-	todo_file = os.path.join(input_folder, 'todo.sqlite')
+	if output_file is None:
+		todo_file = os.path.join(input_folder, 'todo.sqlite')
+	else:
+		output_file = os.path.abspath(output_file)
+		if not output_file.endswith('.sqlite'):
+			output_file = output_file + '.sqlite'
+		todo_file = output_file
+
 	if os.path.exists(todo_file):
 		if overwrite:
 			os.remove(todo_file)
@@ -450,17 +509,24 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 	with contextlib.closing(sqlite3.connect(todo_file)) as conn:
 		cursor = conn.cursor()
 
+		# Change settings of SQLite file:
+		cursor.execute("PRAGMA page_size=4096;")
+		cursor.execute("PRAGMA foreign_keys=ON;")
+		cursor.execute("PRAGMA locking_mode=EXCLUSIVE;")
+		cursor.execute("PRAGMA journal_mode=TRUNCATE;")
+
+		# Create TODO-list table:
 		cursor.execute("""CREATE TABLE todolist (
-			priority BIGINT NOT NULL,
+			priority INTEGER PRIMARY KEY ASC NOT NULL,
 			starid BIGINT NOT NULL,
-			sector INT NOT NULL,
+			sector INTEGER NOT NULL,
 			datasource TEXT NOT NULL DEFAULT 'ffi',
-			camera INT NOT NULL,
-			ccd INT NOT NULL,
+			camera INTEGER NOT NULL,
+			ccd INTEGER NOT NULL,
 			method TEXT DEFAULT NULL,
 			tmag REAL,
-			status INT DEFAULT NULL,
-			cbv_area INT NOT NULL
+			status INTEGER DEFAULT NULL,
+			cbv_area INTEGER NOT NULL
 		);""")
 
 		for pri, row in enumerate(cat):
@@ -481,14 +547,15 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 			))
 
 		conn.commit()
-		cursor.execute("CREATE UNIQUE INDEX priority_idx ON todolist (priority);")
 		cursor.execute("CREATE INDEX starid_datasource_idx ON todolist (starid, datasource);") # FIXME: Should be "UNIQUE", but something is weird in ETE-6?!
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
 
-		# Change settings of SQLite file:
-		cursor.execute("PRAGMA page_size=4096;")
+		# Analyze the tables for better query planning:
+		cursor.execute("ANALYZE;")
+		conn.commit()
+
 		# Run a VACUUM of the table which will force a recreation of the
 		# underlying "pages" of the file.
 		# Please note that we are changing the "isolation_level" of the connection here,

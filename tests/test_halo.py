@@ -6,14 +6,10 @@ Created on Fri Sep 29 10:54:10 2017
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
 import numpy as np
 import sys
 import os
-try:
-	from tempfile import TemporaryDirectory
-except ImportError:
-	from backports.tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import HaloPhotometry, STATUS
 import logging
@@ -27,7 +23,7 @@ def test_halo():
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
 	with TemporaryDirectory() as OUTPUT_DIR:
-		for datasource in ('tpf', 'ffi'):
+		for datasource in ('ffi', ):
 			with HaloPhotometry(267211065, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, sector=1, camera=3, ccd=2) as pho:
 
 				pho.photometry()

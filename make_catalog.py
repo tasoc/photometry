@@ -21,7 +21,6 @@ Note:
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
 import argparse
 import logging
 from photometry.catalog import make_catalog

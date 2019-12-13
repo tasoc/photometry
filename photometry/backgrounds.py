@@ -6,12 +6,11 @@ Estimation of sky background in TESS Full Frame Images.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, with_statement, print_function, absolute_import
-import six
+import logging
 import warnings
 import numpy as np
 from astropy.utils.exceptions import AstropyDeprecationWarning
-warnings.filterwarnings('ignore', category=AstropyDeprecationWarning)
+warnings.filterwarnings('ignore', category=AstropyDeprecationWarning, module='photutils')
 from astropy.stats import SigmaClip
 from scipy.stats import binned_statistic
 from scipy.interpolate import InterpolatedUnivariateSpline
@@ -67,15 +66,18 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 
 	Returns:
 		ndarray: Estimated background with the same size as the input image.
-		ndarray: Boolean array specifying which pixels was used to estimate the background (``True`` if pixel was used).
+		ndarray: Boolean array specifying which pixels was used to estimate the background (``True`` if pixel was not used).
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	logger = logging.getLogger(__name__)
+
 	# Load file:
+	hdr = {}
 	if isinstance(image, np.ndarray):
 		img0 = image
-	elif isinstance(image, six.string_types):
+	elif isinstance(image, str):
 		if image.endswith('.npy'):
 			img0 = np.load(image)
 		else:
@@ -95,6 +97,11 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 
 	# Mask out pixels marked for manual exclude:
 	mask |= pixel_manual_exclude(img0, hdr)
+
+	# If the entire image has been masked out,
+	# we should just stop now and return NaNs:
+	if np.all(mask):
+		return np.full_like(img0, np.NaN), mask
 
 	# Setup background estimator:
 	sigma_clip = SigmaClip(sigma=3.0, maxiters=5)
@@ -116,7 +123,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 		xycen = {
 			(1, 1): [2158.222313, 2099.523364],
 			(1, 2): [-5.653058, 2098.018608],
-		 	(1, 3): [2141.511437, 2099.868226],
+			(1, 3): [2141.511437, 2099.868226],
 			(1, 4): [-22.406442, 2100.116443],
 			(2, 1): [2148.588316, 2094.033024],
 			(2, 2): [-16.806140, 2095.810070],
@@ -162,7 +169,9 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			# Evaluate the background estimator in radial rings:
 			# We are working in logarithmic units since the mode estimator seems to
 			# work better in that case.
-			s2, _, _ = binned_statistic(r[~mask].flatten(), np.log10(img[~mask].flatten()),
+			s2, _, _ = binned_statistic(
+				r[~mask].flatten(),
+				np.log10(img[~mask].flatten()),
 				statistic=stat,
 				bins=bins
 			)
@@ -173,8 +182,17 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 
 			# Interpolate the radial curve and reshape back onto the 2D image:
 			indx = ~np.isnan(s2)
-			intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], ext=3)
-			img_bkg_radial = 10**intp(r)
+			Ngood = np.sum(indx)
+			if Ngood >= 3: # The required number of points for qubic spline
+				try:
+					intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], ext=3)
+					img_bkg_radial = 10**intp(r)
+				except:
+					logger.exception("Background interpolation failed (N=%d).", Ngood)
+					img_bkg_radial = 0
+			else:
+				logger.warning("Not enough points for radial interpolation (N=%d).", Ngood)
+				img_bkg_radial = 0
 
 		# Run 2D square tiles background estimation:
 		bkg = Background2D(img0 - img_bkg_radial, (64, 64),

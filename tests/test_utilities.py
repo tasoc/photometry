@@ -4,14 +4,14 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from __future__ import division, print_function, with_statement, absolute_import
 import sys
 import os
 import numpy as np
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.utilities import (move_median_central, find_ffi_files, find_tpf_files,
-								  find_hdf5_files, find_catalog_files, load_ffi_fits,
-								  sphere_distance, radec_to_cartesian, cartesian_to_radec)
+	find_hdf5_files, find_catalog_files, load_ffi_fits,
+	sphere_distance, radec_to_cartesian, cartesian_to_radec,
+	rms_timescale)
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
@@ -128,6 +128,34 @@ def test_coordtransforms():
 	# Test that we recoved the input:
 	np.testing.assert_allclose(radec2, inp, atol=1e-7)
 
+#----------------------------------------------------------------------
+def test_rms_timescale():
+
+	time = np.linspace(0, 27, 100)
+	flux = np.zeros(len(time))
+
+	rms = rms_timescale(time, flux)
+	print(rms)
+	np.testing.assert_allclose(rms, 0)
+
+	rms = rms_timescale(time, flux*np.nan)
+	print(rms)
+	assert np.isnan(rms), "Should return nan on pure nan input"
+
+	rms = rms_timescale([], [])
+	print(rms)
+	assert np.isnan(rms), "Should return nan on empty input"
+
+	# Pure nan in the time-column should raise ValueError:
+	with np.testing.assert_raises(ValueError):
+		rms = rms_timescale(time*np.nan, flux)
+
+	# Test with timescale longer than timespan should return zero:
+	flux = np.random.randn(1000)
+	time = np.linspace(0, 27, len(flux))
+	rms = rms_timescale(time, flux, timescale=30.0)
+	print(rms)
+	np.testing.assert_allclose(rms, 0)
 
 #----------------------------------------------------------------------
 if __name__ == '__main__':
@@ -139,3 +167,4 @@ if __name__ == '__main__':
 	test_load_ffi_files()
 	test_sphere_distance()
 	test_coordtransforms()
+	test_rms_timescale()
