@@ -8,14 +8,6 @@ All other specific photometric algorithms will inherit from BasePhotometry.
 """
 
 import numpy as np
-from astropy._erfa.core import ErfaWarning
-import warnings
-warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
-warnings.filterwarnings('ignore', category=FutureWarning, module="scipy") # they are simply annoying!
-warnings.filterwarnings('ignore', category=FutureWarning, module="skimage") # they are simply annoying!
-warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
-from astropy.io import fits
-from astropy.table import Table, Column
 import h5py
 import sqlite3
 import logging
@@ -23,7 +15,11 @@ import datetime
 import os.path
 import glob
 import contextlib
+import warnings
 from copy import deepcopy
+from astropy._erfa.core import ErfaWarning
+from astropy.io import fits
+from astropy.table import Table, Column
 from astropy import units
 import astropy.coordinates as coord
 from astropy.time import Time
@@ -37,6 +33,10 @@ from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
 from .version import get_version
+
+# Filter out annoying warnings:
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
 
 __version__ = get_version()
 
