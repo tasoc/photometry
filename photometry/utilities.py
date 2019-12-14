@@ -472,11 +472,12 @@ def find_nearest(array, value):
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
-	idx = np.searchsorted(array, value, side='left')
-	if idx > 0 and (idx == len(array) or abs(value - array[idx-1]) < abs(value - array[idx])):
-		return idx-1
-	else:
-		return idx
+	return np.nanargmin(np.abs(array - value))
+	#idx = np.searchsorted(array, value, side='left')
+	#if idx > 0 and (idx == len(array) or abs(value - array[idx-1]) <= abs(value - array[idx])):
+	#	return idx-1
+	#else:
+	#	return idx
 
 #------------------------------------------------------------------------------
 def download_file(url, destination):
