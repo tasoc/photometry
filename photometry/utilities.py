@@ -9,7 +9,7 @@ the photometry package.
 
 import numpy as np
 from astropy.io import fits
-from bottleneck import move_median, nanmedian, nanmean, allnan
+from bottleneck import move_median, nanmedian, nanmean, allnan, nanargmin
 import logging
 import tqdm
 from scipy.special import erf
@@ -472,7 +472,7 @@ def find_nearest(array, value):
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
-	return np.nanargmin(np.abs(array - value))
+	return nanargmin(np.abs(array - value))
 	#idx = np.searchsorted(array, value, side='left')
 	#if idx > 0 and (idx == len(array) or abs(value - array[idx-1]) <= abs(value - array[idx])):
 	#	return idx-1
