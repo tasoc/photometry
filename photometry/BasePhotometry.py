@@ -208,7 +208,7 @@ class BasePhotometry(object):
 				logger.debug('Loading basic data into cache...')
 
 				# Start filling out the basic vectors:
-				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
+				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
 				N = len(self.lightcurve['time'])
 				self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
 				self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
@@ -297,8 +297,13 @@ class BasePhotometry(object):
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
 
+			# Fix for timestamps that are not defined. Simply remove them from the table:
+			# This is seen in some file from sector 1.
+			indx_good_times = np.isfinite(self.tpf[1].data.field('TIME'))
+			self.tpf[1].data = self.tpf[1].data[indx_good_times]
+
 			# Extract the relevant information from the FITS file:
-			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='BJD')
+			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='TBJD')
 			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')

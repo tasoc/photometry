@@ -33,7 +33,7 @@ def test_aperturephotometry():
 
 				plt.figure()
 				plot_image(pho.sumimage, title=datasource)
-				plt.show()
+				#plt.show()
 
 				# They shouldn't be exactly zero:
 				assert( ~np.all(pho.lightcurve['flux'] == 0) )
