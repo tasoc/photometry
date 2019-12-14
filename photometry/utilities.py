@@ -9,7 +9,7 @@ the photometry package.
 
 import numpy as np
 from astropy.io import fits
-from bottleneck import move_median, nanmedian, nanmean, allnan, nanargmin
+from bottleneck import move_median, nanmedian, nanmean, allnan, nanargmin, nanargmax
 import logging
 import tqdm
 from scipy.special import erf
@@ -28,7 +28,7 @@ warnings.filterwarnings('ignore', module='scipy', category=FutureWarning, messag
 # Constants:
 mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def load_settings(sector=None):
 
 	with open(os.path.join(os.path.dirname(__file__), 'data', 'settings.json'), 'r') as fid:
@@ -39,7 +39,7 @@ def load_settings(sector=None):
 
 	return settings
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search directory recursively for TESS FFI images in FITS format.
@@ -79,7 +79,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 
 	return matches
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, findmax=None):
 	"""
 	Search directory recursively for TESS Target Pixel Files.
@@ -147,7 +147,7 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 
 	return matches
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for HDF5 files matching constraints.
@@ -176,7 +176,7 @@ def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 
 	return filelst
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for CATALOG (sqlite) files matching constraints.
@@ -205,7 +205,7 @@ def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 
 	return filelst
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def load_ffi_fits(path, return_header=False, return_uncert=False):
 	"""
 	Load FFI FITS file.
@@ -247,7 +247,7 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 	else:
 		return img
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):
 	y = move_median(x, width_points, min_count=1)
 	y = np.roll(y, -width_points//2+1)
@@ -256,11 +256,11 @@ def _move_median_central_1d(x, width_points):
 		y[-(k+1)] = nanmedian(x[-(k+2):])
 	return y
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def move_median_central(x, width_points, axis=0):
 	return np.apply_along_axis(_move_median_central_1d, axis, x, width_points)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	"""
 	Project coordinates (ra,dec) with proper motions to new epoch.
@@ -294,7 +294,7 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	# Return the current positions
 	return raindegrees, decindegrees
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 	"""
 	Evaluate a 2D symmetrical Gaussian integrated in pixels.
@@ -328,7 +328,7 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		* (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma))
 		- erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def mag2flux(mag):
 	"""
 	Convert from magnitude to flux using scaling relation from
@@ -344,7 +344,7 @@ def mag2flux(mag):
 	"""
 	return 10**(-0.4*(mag - 20.60654144))
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def sphere_distance(ra1, dec1, ra2, dec2):
 	"""
 	Calculate the great circle distance between two points using the Vincenty formulae.
@@ -374,7 +374,7 @@ def sphere_distance(ra1, dec1, ra2, dec2):
 		np.sin(dec1)*np.sin(dec2) + np.cos(dec1)*np.cos(dec2)*np.cos(ra2-ra1)
 	))
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def radec_to_cartesian(radec):
 	"""
 	Convert spherical coordinates as (ra, dec) pairs to cartesian coordinates (x,y,z).
@@ -396,7 +396,7 @@ def radec_to_cartesian(radec):
 	xyz[:,2] = np.cos(theta)
 	return xyz
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def cartesian_to_radec(xyz):
 	"""
 	Convert cartesian coordinates (x,y,z) to spherical coordinates in ra-dec form.
@@ -419,7 +419,7 @@ def cartesian_to_radec(xyz):
 
 	return np.degrees(radec)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def rms_timescale(time, flux, timescale=3600/86400):
 	"""
 	Compute robust RMS on specified timescale. Using MAD scaled to RMS.
@@ -458,7 +458,7 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	# Compute robust RMS value (MAD scaled to RMS)
 	return mad_to_sigma * nanmedian(np.abs(flux_bin - nanmedian(flux_bin)))
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_nearest(array, value):
 	"""
 	Search array for value and return the index where the value is closest.
@@ -470,8 +470,17 @@ def find_nearest(array, value):
 	Returns:
 		int: Index of ``array`` closest to ``value``.
 
+	Raises:
+		ValueError: If ``value`` is NaN.
+
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
+	if np.isnan(value):
+		raise ValueError("Invalid search value")
+	if np.isposinf(value):
+		return nanargmax(array)
+	if np.isneginf(value):
+		return nanargmin(array)
 	return nanargmin(np.abs(array - value))
 	#idx = np.searchsorted(array, value, side='left')
 	#if idx > 0 and (idx == len(array) or abs(value - array[idx-1]) <= abs(value - array[idx])):
@@ -479,7 +488,7 @@ def find_nearest(array, value):
 	#else:
 	#	return idx
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def download_file(url, destination):
 	"""
 	Download file from URL and place into specified destination.
@@ -514,7 +523,7 @@ def download_file(url, destination):
 			os.remove(destination)
 		raise
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):
 	def __init__(self, level=logging.NOTSET):
 		super(self.__class__, self).__init__(level)

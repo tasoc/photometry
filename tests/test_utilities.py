@@ -171,6 +171,12 @@ def test_find_nearest():
 	assert u.find_nearest(a, 9.4) == 9
 	assert u.find_nearest(a, 1.2) == 1
 
+	# With strange search values:
+	assert u.find_nearest(a, np.Inf) == 9
+	assert u.find_nearest(a, -np.Inf) == 0
+	with pytest.raises(ValueError):
+		u.find_nearest(a, np.NaN)
+
 	# with NaN:
 	a[1] = np.NaN
 	print(a)
@@ -196,6 +202,16 @@ def test_find_nearest():
 	assert u.find_nearest(a, 1.2) == 2
 
 #--------------------------------------------------------------------------------------------------
+def test_mag2flux():
+
+	mags = np.linspace(-1, 20, 30)
+	flux = u.mag2flux(mags)
+
+	assert np.all(np.isfinite(flux)), "MAG2FLUX should give finite fluxes on finite mags"
+	assert np.all(np.diff(flux) < 0), "MAG2FLUX should give montomical decreasing values"
+	assert np.isnan(u.mag2flux(np.NaN)), "MAG2FLUX should return NaN on NaN input"
+
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	test_move_median_central()
 	test_find_ffi_files()
@@ -207,3 +223,4 @@ if __name__ == '__main__':
 	test_coordtransforms()
 	test_rms_timescale()
 	test_find_nearest()
+	test_mag2flux()
