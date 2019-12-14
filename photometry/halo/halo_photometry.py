@@ -29,7 +29,7 @@ class HaloPhotometry(BasePhotometry):
 	def __init__(self, *args, **kwargs):
 		# Call the parent initializing:
 		# This will set several default settings
-		super(self.__class__, self).__init__(*args, **kwargs)
+		super().__init__(*args, **kwargs)
 
 		# Here you could do other things that needs doing in the beginning
 		# of the run on each target.
@@ -44,7 +44,7 @@ class HaloPhotometry(BasePhotometry):
 			A boolean array describing the aperture such that `False` means
 			that the pixel will be masked out.
 			If the string 'all' is passed, all pixels will be used.
-			The default behaviour is to use the Kepler pipeline mask.
+			The default behavior is to use the Kepler pipeline mask.
 		splits : tuple, (None, None) or (2152,2175) etc.
 			A tuple including two times at which to split the light curve and run halo
 			separately outside these splits.

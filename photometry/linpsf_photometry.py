@@ -37,7 +37,7 @@ class LinPSFPhotometry(BasePhotometry):
 		"""
 		# Call the parent initializing:
 		# This will set several default settings
-		super(self.__class__, self).__init__(*args, **kwargs)
+		super().__init__(*args, **kwargs)
 
 		# Create instance of the PSF for the given pixel stamp:
 		# NOTE: If we run resize_stamp at any point in the code,

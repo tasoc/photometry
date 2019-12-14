@@ -22,10 +22,7 @@ class AperturePhotometry(BasePhotometry):
 	def __init__(self, *args, **kwargs):
 		# Call the parent initializing:
 		# This will set several default settings
-		super(self.__class__, self).__init__(*args, **kwargs)
-
-		# Here you could do other things that needs doing in the beginning
-		# of the run on each target.
+		super().__init__(*args, **kwargs)
 
 	def _minimum_aperture(self):
 		cols, rows = self.get_pixel_grid()

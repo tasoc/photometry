@@ -525,8 +525,8 @@ def download_file(url, destination):
 
 #--------------------------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):
-	def __init__(self, level=logging.NOTSET):
-		super(self.__class__, self).__init__(level)
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 
 	def emit(self, record):
 		try:
