@@ -24,6 +24,7 @@ jobs:
         - python --version
         - python -m pip install --upgrade pip
         - git lfs pull
+        - choco install vcredist140 # Visual C++ redistributable 2015, required of OpenCV
       env: PATH=/c/Python36:/c/Python36/Scripts:$PATH
 
     - name: "Python 3.7 on Windows"
@@ -34,6 +35,7 @@ jobs:
         - python --version
         - python -m pip install --upgrade pip
         - git lfs pull
+        - choco install vcredist140 # Visual C++ redistributable 2015, required of OpenCV
       env: PATH=/c/Python37:/c/Python37/Scripts:$PATH
 
     - name: "Flake8"
