@@ -140,8 +140,6 @@ class TaskManager(object):
 			try:
 				self.conn.isolation_level = None
 				self.cursor.execute("VACUUM;")
-			except:
-				raise
 			finally:
 				self.conn.isolation_level = ''
 
@@ -329,5 +327,5 @@ class TaskManager(object):
 			try:
 				with open(self.summary_file, 'w') as fid:
 					json.dump(self.summary, fid)
-			except:
+			except: # noqa: E722
 				self.logger.exception("Could not write summary file")
