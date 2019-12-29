@@ -7,10 +7,7 @@ Estimation of sky background in TESS Full Frame Images.
 """
 
 import logging
-import warnings
 import numpy as np
-from astropy.utils.exceptions import AstropyDeprecationWarning
-warnings.filterwarnings('ignore', category=AstropyDeprecationWarning, module='photutils')
 from astropy.stats import SigmaClip
 from scipy.stats import binned_statistic
 from scipy.interpolate import InterpolatedUnivariateSpline
@@ -185,9 +182,9 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			Ngood = np.sum(indx)
 			if Ngood >= 3: # The required number of points for qubic spline
 				try:
-					intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], ext=3)
+					intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], k=3, ext=3)
 					img_bkg_radial = 10**intp(r)
-				except:
+				except ValueError:
 					logger.exception("Background interpolation failed (N=%d).", Ngood)
 					img_bkg_radial = 0
 			else:

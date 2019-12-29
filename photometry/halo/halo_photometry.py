@@ -10,12 +10,12 @@ Halo Photometry.
 import logging
 import os.path
 import numpy as np
+from astropy.table import Table
+import halophot
+from halophot.halo_tools import do_lc
 from ..plots import plt, save_figure
 from .. import BasePhotometry, STATUS
 from ..utilities import mag2flux
-import halophot
-from halophot.halo_tools import do_lc
-from astropy.table import Table
 
 #--------------------------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
@@ -30,9 +30,6 @@ class HaloPhotometry(BasePhotometry):
 		# Call the parent initializing:
 		# This will set several default settings
 		super().__init__(*args, **kwargs)
-
-		# Here you could do other things that needs doing in the beginning
-		# of the run on each target.
 
 	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
@@ -200,40 +197,28 @@ class HaloPhotometry(BasePhotometry):
 			# that it is saved into the final FITS output files:
 			self.halo_weightmap = weightmap_dict
 
-		except:
+		except: # noqa: E722
 			logger.exception('Halo optimization failed')
 			self.report_details(error='Halo optimization failed')
 			return STATUS.ERROR
 
-		# plot
+		# Plotting:
 		if self.plot:
-			try:
-				logger.info('Plotting weight map')
-				cmap = plt.get_cmap('seismic')
-				norm = np.size(weightmap_dict['weightmap'][0])
-				cmap.set_bad('k', 1.)
-				for k, wm in enumerate(weightmap_dict['weightmap']):
-					im = np.log10(wm*norm)
-					fig = plt.figure()
-					ax = fig.add_subplot(111)
-					plt.imshow(im, cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im),
-						interpolation='None', origin='lower')
-					plt.colorbar()
-					ax.set_title('TV-min Weightmap')
-					#plot_image(im, scale='log', cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), make_cbar=True, title='TV-min Weightmap')
-					save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)))
-			except:
-				logger.exception('Failed to plot')
-				self.report_details(error="Failed to plot")
-				return STATUS.WARNING
-
-		# If something went seriously wrong:
-		#self.report_details(error='What the hell?!')
-		#return STATUS.ERROR
-
-		# If something is a bit strange:
-		#self.report_details(error='')
-		#return STATUS.WARNING
+			logger.info('Plotting weight map')
+			cmap = plt.get_cmap('seismic')
+			norm = np.size(weightmap_dict['weightmap'][0])
+			cmap.set_bad('k', 1.)
+			for k, wm in enumerate(weightmap_dict['weightmap']):
+				im = np.log10(wm*norm)
+				fig = plt.figure()
+				ax = fig.add_subplot(111)
+				plt.imshow(im, cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im),
+					interpolation='None', origin='lower')
+				plt.colorbar()
+				ax.set_title('TV-min Weightmap')
+				#plot_image(im, scale='log', cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), make_cbar=True, title='TV-min Weightmap')
+				save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)))
+				plt.close(fig)
 
 		# Add additional headers specific to this method:
 		self.additional_headers['HALO_VER'] = (halophot.__version__, 'Version of halophot')
@@ -242,9 +227,6 @@ class HaloPhotometry(BasePhotometry):
 		self.additional_headers['HALO_MXI'] = (maxiter, 'Halophot maximum optimisation iterations')
 		self.additional_headers['HALO_SCL'] = (sigclip, 'Halophot sigma clipping enabled')
 		self.additional_headers['HALO_MFL'] = (minflux, 'Halophot minimum flux')
-
-		# If some stars could be skipped:
-		#self.report_details(skip_targets=skip_targets)
 
 		# Return whether you think it went well:
 		return STATUS.OK
