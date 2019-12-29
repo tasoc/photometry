@@ -13,11 +13,12 @@ import logging
 import itertools
 import contextlib
 from .tasoc_db import TASOC_DB
-from .utilities import (add_proper_motion, load_settings, find_catalog_files,
-						radec_to_cartesian, cartesian_to_radec, download_file)
+from .utilities import (add_proper_motion, load_settings, # find_catalog_files
+	radec_to_cartesian, cartesian_to_radec, download_file)
 
 #------------------------------------------------------------------------------
-def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None, buffer_size=5, pixel_scale=21.0):
+def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None,
+	buffer_size=5, pixel_scale=21.0):
 	"""
 	Query the SQLite catalog files for a specific footprint on sky.
 
@@ -316,13 +317,15 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	"""
 	Download catalog SQLite files from TASOC cache into input_folder.
 
-	This enables users to circumvent the creation of catalog files directly using :py:func:`make_catalog`,
-	which requires the user to be connected to the TASOC internal networks at Aarhus University.
-	This does require that the TASOC personel have made catalogs available in the cache for the given
-	sector, otherwise this function will throw an error.
+	This enables users to circumvent the creation of catalog files directly using
+	:py:func:`make_catalog`, which requires the user to be connected to the TASOC internal
+	networks at Aarhus University.
+	This does require that the TASOC personel have made catalogs available in the cache for
+	the given sector, otherwise this function will throw an error.
 
 	Parameters:
-		input_folder (string): Target directory to download files into. Should be a TESSPHOT input directory.
+		input_folder (string): Target directory to download files into.
+			Should be a TESSPHOT input directory.
 		sector (integer): Sector to download catalogs for.
 		camera (integer, optional): Camera to download catalogs for.
 			If not specified, all cameras will be downloaded.

@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on Thu Jan 18 14:08:36 2018
+Linear PSF Photometry.
 
-@author: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
+Do point spread function photometry with fixed centroids. The flux of
+all stars in the image are fitted simultaneously using a linear least
+squares method.
+
+.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 """
 
 import numpy as np
@@ -11,7 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 import os
-from .BasePhotometry import BasePhotometry, STATUS
+from . import BasePhotometry, STATUS
 from .psf import PSF
 #from .utilities import mag2flux
 from .plots import plot_image_fit_residuals, save_figure
@@ -33,7 +37,7 @@ class LinPSFPhotometry(BasePhotometry):
 			time domain loop structure, catalog star limits and lightcurve
 			output is copied from that class.
 
-		.. code author:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
+		.. codeauthor:: Jonas Svenstrup Hansen <jonas.svenstrup@gmail.com>
 		"""
 		# Call the parent initializing:
 		# This will set several default settings
@@ -185,7 +189,7 @@ class LinPSFPhotometry(BasePhotometry):
 			contamination = np.sum(A[:,not_target_star].dot(fluxes_mean[not_target_star]) * A[:,staridx]) / fluxes_mean[staridx]
 
 			logger.info("Contamination: %f", contamination)
-			self.additional_headers['AP_CONT'] = (contamination, 'AP contamination')
+			self.additional_headers['PSF_CONT'] = (contamination, 'PSF contamination')
 
 			# If contamination is high, return a warning:
 			if contamination > 0.1:

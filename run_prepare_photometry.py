@@ -1,14 +1,16 @@
 #!/bin/env python
 # -*- coding: utf-8 -*-
 """
-This program will prepare the photometry on individual stars by doing all the operations which requires the full-size FFI images, like the following:
+This program will prepare the photometry on individual stars by doing all the operations which
+requires the full-size FFI images, like the following:
 
 * Estimating sky background for all images.
 * Estimating spacecraft jitter.
 * Creating average image.
 * Restructuring data into HDF5 files for efficient I/O operations.
 
-The program can simply be run like the following, which will create a number of HDF5 files (`\*.hdf5`) in the ``TESSPHOT_INPUT`` directory.
+The program can simply be run like the following, which will create a number of HDF5 files in the
+``TESSPHOT_INPUT`` directory.
 
 >>> python run_prepare_photometry.py
 
@@ -16,7 +18,8 @@ You can also get a full list of the options by calling the program with:
 
 >>> python run_prepare_photometry.py --help
 
-The program internally calls the function :py:func:`photometry.prepare.prepare_photometry` with the given parameters.
+The program internally calls the function :py:func:`photometry.prepare.prepare_photometry` with
+the given parameters.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -27,9 +30,8 @@ import logging
 from photometry.prepare import prepare_photometry
 from photometry.utilities import TqdmLoggingHandler
 
-#------------------------------------------------------------------------------
-if __name__ == '__main__':
-
+#--------------------------------------------------------------------------------------------------
+def main():
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
@@ -62,3 +64,7 @@ if __name__ == '__main__':
 
 	# Run the program for the selected camera/ccd combinations:
 	prepare_photometry(args.input_folder, cameras=args.camera, ccds=args.ccd)
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == '__main__':
+	main()
