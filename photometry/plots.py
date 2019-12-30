@@ -11,11 +11,14 @@ import os
 import numpy as np
 from bottleneck import allnan
 import matplotlib
-matplotlib.use('Agg', warn=False)
 from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
 from astropy.visualization import (PercentileInterval, ImageNormalize, SqrtStretch,
 	LogStretch, LinearStretch)
+
+# Change to a non-GUI backend since this
+# should be able to run on a cluster:
+plt.switch_backend('Agg')
 
 #--------------------------------------------------------------------------------------------------
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
