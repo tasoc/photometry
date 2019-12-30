@@ -73,7 +73,7 @@ class LinPSFPhotometry(BasePhotometry):
 		# (only include stars that are close to the main target and that are
 		# not much fainter)
 		indx = (cat['dist'] < 5) & (cat['tmag'][staridx]-cat['tmag'] > -5)
-		nstars = np.sum(indx)
+		nstars = int(np.sum(indx))
 
 		# Get target star index in the reduced catalog of stars to fit:
 		staridx = np.squeeze(np.where(cat[indx]['starid'] == self.starid))

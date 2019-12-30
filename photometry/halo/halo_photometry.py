@@ -3,6 +3,7 @@
 """
 Halo Photometry.
 
+.. codeauthor:: Benjamin Pope <benjamin.pope@nyu.edu>
 .. codeauthor:: Tim White <white@phys.au.dk>
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -19,7 +20,8 @@ from ..utilities import mag2flux
 
 #--------------------------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
-	"""Use halo photometry to observe very saturated stars.
+	"""
+	Use halo photometry to observe very saturated stars.
 
 	.. codeauthor:: Benjamin Pope <benjamin.pope@nyu.edu>
 	.. codeauthor:: Tim White <white@phys.au.dk>
@@ -33,7 +35,8 @@ class HaloPhotometry(BasePhotometry):
 
 	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
-		"""Performs 'halo' TV-min weighted-aperture photometry.
+		"""
+		Performs 'halo' TV-min weighted-aperture photometry.
 
 		Parameters
 		----------
