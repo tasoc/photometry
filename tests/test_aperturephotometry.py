@@ -9,6 +9,7 @@ Created on Fri Sep 29 10:54:10 2017
 import pytest
 import numpy as np
 from bottleneck import allnan
+import logging
 import sys
 import os
 from tempfile import TemporaryDirectory
