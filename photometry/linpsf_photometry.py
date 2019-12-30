@@ -12,14 +12,15 @@ squares method.
 
 import numpy as np
 #import scipy
-import matplotlib.pyplot as plt
 import logging
 import os
+from bottleneck import allnan
 from . import BasePhotometry, STATUS
 from .psf import PSF
 #from .utilities import mag2flux
-from .plots import plot_image_fit_residuals, save_figure
+from .plots import plt, plot_image_fit_residuals, save_figure
 
+#--------------------------------------------------------------------------------------------------
 class LinPSFPhotometry(BasePhotometry):
 
 	def __init__(self, *args, **kwargs):
@@ -49,6 +50,7 @@ class LinPSFPhotometry(BasePhotometry):
 		# TODO: Maybe we should move this into BasePhotometry?
 		self.psf = PSF(self.sector, self.camera, self.ccd, self.stamp)
 
+	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
 		"""Linear PSF Photometry
 		TODO: add description of method and what A and b are
@@ -78,7 +80,7 @@ class LinPSFPhotometry(BasePhotometry):
 		logger.debug('Target star index: %s', np.str(staridx))
 
 		# Preallocate flux sum array for contamination calculation:
-		fluxes_sum = np.zeros(nstars)
+		fluxes_sum = np.zeros(nstars, dtype='float64')
 
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
@@ -87,57 +89,57 @@ class LinPSFPhotometry(BasePhotometry):
 
 			# Reduce catalog to only include stars that should be fitted:
 			cat = cat[indx]
-
-			# Log reduced catalog for the stamp at the current time:
 			logger.debug(cat)
 
 			# Get the number of pixels in the image:
-			npx = img.size
+			good_pixels = np.isfinite(img)
+			npx = int(np.sum(good_pixels))
 
 			# Create A, the 2D of vertically reshaped PRF 1D arrays:
-			A = np.empty([npx, nstars])
-			for col,target in enumerate(cat):
+			A = np.empty([npx, nstars], dtype='float64')
+			for col, target in enumerate(cat):
 				# Get star parameters with flux set to 1 and reshape:
-				params0 = np.array([target['row_stamp'], target['column_stamp'], 1.]).reshape(1, 3)
+				params0 = np.atleast_2d([target['row_stamp'], target['column_stamp'], 1.])
 
 				# Fill out column of A with reshaped PRF array from one star:
-				A[:,col] = np.reshape(self.psf.integrate_to_image(params0,
-										cutoff_radius=20), npx)
+				A[:, col] = self.psf.integrate_to_image(params0, ctoff_radius=20)[good_pixels].flatten()
 
 			# Crate b, the solution array by reshaping the image to a 1D array:
-			b = np.reshape(img, npx)
+			b = img[good_pixels].flatten()
 
 			# Do linear least squares fit to solve Ax=b:
 			try:
 				# Linear least squares:
-				res = np.linalg.lstsq(A,b)
+				res = np.linalg.lstsq(A, b)
 				fluxes = res[0]
 
 				# Non-negative linear least squares:
-#				fluxes, rnorm = scipy.optimize.nnls(A,b)
-#				res = 'notfailed'
-			except:
-				res = 'failed'
-			logger.debug('Result of linear psf photometry: ' + np.str(res))
+				#fluxes, rnorm = scipy.optimize.nnls(A, b)
+			except np.linalg.LinAlgError:
+				logger.debug("Linear PSF Fitting failed")
+				fluxes = None
 
 			# Pass result if fit did not fail:
-			if res != 'failed':
+			if fluxes is None:
+				logger.warning("We should flag that this has not gone well.")
+				self.lightcurve['flux'][k] = np.NaN
+				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
+
+			else:
 				# Get flux of target star:
 				result = fluxes[staridx]
 
-				logger.debug('Fluxes are: ' + np.str(fluxes))
-				logger.debug('Result is: ' + np.str(result))
+				logger.debug('Fluxes are: %s', fluxes)
+				logger.debug('Result is: %f', result)
 
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result
-				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
-				self.lightcurve['quality'][k] = 0
 
 				# Add current fitted fluxes for contamination calculation:
 				fluxes_sum += fluxes
 
-				if self.plot:
-					# Make plot for debugging:
+				# Make plots for debugging:
+				if self.plot and logger.isEnabledFor(logging.DEBUG):
 					fig = plt.figure()
 					result4plot = []
 					for star, target in enumerate(cat):
@@ -164,37 +166,30 @@ class LinPSFPhotometry(BasePhotometry):
 						ax.set_title(title)
 
 					# Save figure to file:
-					fig_name = 'tess_{0:09d}'.format(self.starid) + '_linpsf_{0:09d}'.format(k)
+					fig_name = 'tess_{0:011d}_linpsf_{1:05d}'.format(self.starid, k)
 					save_figure(os.path.join(self.plot_folder, fig_name))
+					plt.close(fig)
 
-			# Pass result if fit failed:
-			else:
-				logger.warning("We should flag that this has not gone well.")
-
-				self.lightcurve['flux'][k] = np.NaN
-				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
-				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
-
-		if np.sum(np.isnan(self.lightcurve['flux'])) == len(self.lightcurve['flux']):
-			# Set contamination to NaN if all flux values are NaN:
+		# Set contamination to NaN if all flux values are NaN:
+		if allnan(self.lightcurve['flux']):
 			self.report_details(error='All target flux values are NaN.')
 			return STATUS.ERROR
-		else:
-			# Divide by number of added fluxes to get the mean flux:
-			fluxes_mean = fluxes_sum / np.sum(~np.isnan(self.lightcurve['flux']))
-			logger.debug('Mean fluxes are: '+np.str(fluxes_mean))
 
-			# Calculate contamination from other stars in target PSF using latest A:
-			not_target_star = np.arange(len(fluxes_mean)) != staridx
-			contamination = np.sum(A[:,not_target_star].dot(fluxes_mean[not_target_star]) * A[:,staridx]) / fluxes_mean[staridx]
+		# Divide by number of added fluxes to get the mean flux:
+		fluxes_mean = fluxes_sum / np.sum(~np.isnan(self.lightcurve['flux']))
+		logger.debug('Mean fluxes are: %s', fluxes_mean)
 
-			logger.info("Contamination: %f", contamination)
-			self.additional_headers['PSF_CONT'] = (contamination, 'PSF contamination')
+		# Calculate contamination from other stars in target PSF using latest A:
+		not_target_star = np.arange(len(fluxes_mean)) != staridx
+		contamination = np.sum(A[:,not_target_star].dot(fluxes_mean[not_target_star]) * A[:,staridx]) / fluxes_mean[staridx]
 
-			# If contamination is high, return a warning:
-			if contamination > 0.1:
-				self.report_details(error='High contamination')
-				return STATUS.WARNING
+		logger.info("Contamination: %f", contamination)
+		self.additional_headers['PSF_CONT'] = (contamination, 'PSF contamination')
+
+		# If contamination is high, return a warning:
+		if contamination > 0.1:
+			self.report_details(error='High contamination')
+			return STATUS.WARNING
 
 		# Return whether you think it went well:
 		return STATUS.OK
