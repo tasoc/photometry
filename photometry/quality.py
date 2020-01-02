@@ -121,7 +121,7 @@ class TESSQualityFlags(QualityFlagsBase):
 
 	# Which is the recommended QUALITY mask to identify bad data?
 	DEFAULT_BITMASK = (AttitudeTweak | SafeMode | CoarsePoint | EarthPoint
-		| Desat | ApertureCosmic | ManualExclude)
+		| Desat | ApertureCosmic | ManualExclude | ScatteredLight)
 
 	# This bitmask includes flags that are known to identify both good and bad cadences.
 	# Use it wisely.
@@ -149,7 +149,8 @@ class TESSQualityFlags(QualityFlagsBase):
 		SensitivityDropout: "Sudden sensitivity dropout",
 		ImpulsiveOutlier: "Impulsive outlier",
 		CollateralCosmic: "Cosmic ray in collateral data",
-		EarthMoonPlanetInFOV: "Earth, Moon or other planet in camera FOV"
+		EarthMoonPlanetInFOV: "Earth, Moon or other planet in camera FOV",
+		ScatteredLight: "Scattered light from Earth or Moon in CCD"
 	}
 
 #--------------------------------------------------------------------------------------------------
