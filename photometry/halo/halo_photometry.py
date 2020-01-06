@@ -11,11 +11,13 @@ Halo Photometry.
 import logging
 import os.path
 import numpy as np
+import contextlib
 from astropy.table import Table
 import halophot
 from halophot.halo_tools import do_lc
 from ..plots import plt, save_figure
 from .. import BasePhotometry, STATUS
+from ..quality import TESSQualityFlags
 from ..utilities import mag2flux
 
 #--------------------------------------------------------------------------------------------------
@@ -51,14 +53,6 @@ class HaloPhotometry(BasePhotometry):
 		sub : int
 			Do you want to subsample every nth pixel in your light curve? Not advised,
 			but can come in handy for very large TPFs.
-		order: int
-			Run nth order TV - ie first order is L1 norm on first derivative,
-			second order is L1 norm on second derivative, etc.
-			This is part of the Pock generalized TV scheme, so that
-			1st order gives you piecewise constant functions,
-			2nd order gives you piecewise affine functions, etc.
-			Currently implemented only up to 2nd order in numerical, 1st in analytic!
-			We recommend first order very strongly.
 		maxiter: int
 			Number of iterations to optimize. 101 is default & usually sufficient.
 		w_init: None or array-like.
@@ -74,10 +68,8 @@ class HaloPhotometry(BasePhotometry):
 			Because halo is usually intended for saturated stars, the default is 0.8,
 			to deal with saturated pixels. If your star is not saturated, set this
 			greater than 1.0.
-		consensus: Boolean
-			If True, this will subsample the pixel space, separately calculate halo time
-			series for eah set of pixels, and merge these at the end. This is to check
-			for validation, but is typically not useful, and is by default set False.
+		objective: string
+			Objective function: can be tv, tv_o2, l2v, or l3v.
 		analytic: Boolean
 			If True, it will optimize the TV with autograd analytic derivatives, which is
 			several orders of magnitude faster than with numerical derivatives. This is
@@ -95,13 +87,12 @@ class HaloPhotometry(BasePhotometry):
 		# Halophot settings:
 		splits = (None, None)
 		sub = 1
-		order = 1
 		maxiter = 101
 		w_init = None
 		random_init = False
 		thresh = -1
-		minflux = -100
-		consensus = False
+		minflux = -100.0
+		objective = 'tv'
 		analytic = True
 		sigclip = False
 
@@ -156,54 +147,56 @@ class HaloPhotometry(BasePhotometry):
 
 		# Run the halo photometry core function
 		try:
+			# TODO: Redirect stdout to logger.info
 			pf, ts, weights, weightmap_dict, pixels_sub = do_lc(
 				flux,
 				ts,
 				splits,
 				sub,
-				order,
 				maxiter=maxiter,
 				split_times=split_times,
 				w_init=w_init,
 				random_init=random_init,
 				thresh=thresh,
 				minflux=minflux,
-				consensus=consensus,
+				objective=objective,
 				analytic=analytic,
-				sigclip=sigclip
+				sigclip=sigclip,
+				verbose=logger.isEnabledFor(logging.INFO),
+				mission='TESS',
+				bitmask=TESSQualityFlags.DEFAULT_BITMASK
 			)
-
-			# Fix for halophot sometimes not returning lists:
-			for key, value in weightmap_dict.items():
-				if not isinstance(value, list):
-					weightmap_dict[key] = [value]
-
-			# Rescale the extracted flux:
-			normfactor = mag2flux(self.target['tmag'])
-			self.lightcurve['flux'][indx_goodtimes] = ts['corr_flux'] * normfactor
-
-			# Create mapping from each cadence to which weightmap was used:
-			wmindx = np.zeros_like(indx_goodtimes, dtype=int)
-			for k, (cad1, cad2) in enumerate(zip(weightmap_dict['initial_cadence'], weightmap_dict['final_cadence'])):
-				wmindx[(self.lightcurve['cadenceno'] >= cad1) & (self.lightcurve['cadenceno'] <= cad2)] = k
-
-			# Calculate the flux error by uncertainty propergation:
-			for k, imgerr in enumerate(self.images_err):
-				if not indx_goodtimes[k]: continue
-				wm = weightmap_dict['weightmap'][wmindx[k]] # Get the weightmap for this cadence
-				self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( wm**2 * imgerr**2 ))
-
-			self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
-			self.lightcurve['pos_centroid'][:,1] = row
-
-			# Save the weightmap into special property which will make sure
-			# that it is saved into the final FITS output files:
-			self.halo_weightmap = weightmap_dict
-
 		except: # noqa: E722
 			logger.exception('Halo optimization failed')
 			self.report_details(error='Halo optimization failed')
 			return STATUS.ERROR
+
+		# Fix for halophot sometimes not returning lists:
+		for key, value in weightmap_dict.items():
+			if not isinstance(value, list):
+				weightmap_dict[key] = [value]
+
+		# Rescale the extracted flux:
+		normfactor = mag2flux(self.target['tmag'])
+		self.lightcurve['flux'][indx_goodtimes] = ts['corr_flux'] * normfactor
+
+		# Create mapping from each cadence to which weightmap was used:
+		wmindx = np.zeros_like(indx_goodtimes, dtype=int)
+		for k, (cad1, cad2) in enumerate(zip(weightmap_dict['initial_cadence'], weightmap_dict['final_cadence'])):
+			wmindx[(self.lightcurve['cadenceno'] >= cad1) & (self.lightcurve['cadenceno'] <= cad2)] = k
+
+		# Calculate the flux error by uncertainty propergation:
+		for k, imgerr in enumerate(self.images_err):
+			if not indx_goodtimes[k]: continue
+			wm = weightmap_dict['weightmap'][wmindx[k]] # Get the weightmap for this cadence
+			self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( wm**2 * imgerr**2 ))
+
+		self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
+		self.lightcurve['pos_centroid'][:,1] = row
+
+		# Save the weightmap into special property which will make sure
+		# that it is saved into the final FITS output files:
+		self.halo_weightmap = weightmap_dict
 
 		# Plotting:
 		if self.plot:
@@ -225,7 +218,7 @@ class HaloPhotometry(BasePhotometry):
 
 		# Add additional headers specific to this method:
 		self.additional_headers['HALO_VER'] = (halophot.__version__, 'Version of halophot')
-		self.additional_headers['HALO_ODR'] = (order, 'Halophot nth order TV')
+		self.additional_headers['HALO_OBJ'] = (objective, 'Halophot objective function')
 		self.additional_headers['HALO_THR'] = (thresh, 'Halophot saturated pixel threshold')
 		self.additional_headers['HALO_MXI'] = (maxiter, 'Halophot maximum optimisation iterations')
 		self.additional_headers['HALO_SCL'] = (sigclip, 'Halophot sigma clipping enabled')
