@@ -11,7 +11,6 @@ Halo Photometry.
 import logging
 import os.path
 import numpy as np
-import contextlib
 from astropy.table import Table
 import halophot
 from halophot.halo_tools import do_lc
@@ -95,12 +94,20 @@ class HaloPhotometry(BasePhotometry):
 		objective = 'tv'
 		analytic = True
 		sigclip = False
+		dist_max = 20.0
 
 		# Initialize
 		logger.info('Formatting data for halo')
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
 		flux = self.images_cube.T[indx_goodtimes, :, :]
 		flux[:, self.aperture.T == 0] = np.nan
+
+		# Cut away pixels farther away than 20 pixels:
+		# TODO: We should maybe use self.resize_stamp instead, at least for FFIs.
+		# TODO: Should the limit scale with Tmag?
+		cols, rows = self.get_pixel_grid()
+		dist = (cols - self.target_pos_column)**2 + (rows - self.target_pos_row)**2
+		flux[:, dist.T > dist_max] = np.NaN
 
 		# Find timestamps where the timeseries should be split:
 		if self.sector == 1:
