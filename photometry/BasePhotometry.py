@@ -89,7 +89,8 @@ class BasePhotometry(object):
 
 		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
 		pixelflags (numpy.ndarray): Flags for each pixel, as defined by the TESS data product manual.
-		final_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
+		final_phot_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
+		final_position_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of positions. ``True`` if used, ``False`` otherwise.
 		additional_headers (dict): Additional headers to be included in FITS files.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -403,7 +404,8 @@ class BasePhotometry(object):
 				self.lightcurve['timecorr'] = tc
 
 		# Init arrays that will be filled with lightcurve stuff:
-		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
+		self.final_phot_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
+		self.final_position_mask = None # Mask indicating which pixels were used in extraction of position.
 		self.additional_headers = {} # Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
@@ -1254,9 +1256,9 @@ class BasePhotometry(object):
 			# polynomial-subtracted lightcurve devided by the median error:
 			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
 
-			if self.final_mask is not None:
+			if self.final_phot_mask is not None:
 				# Calculate the total number of pixels in the mask:
-				self._details['mask_size'] = int(np.sum(self.final_mask))
+				self._details['mask_size'] = int(np.sum(self.final_phot_mask))
 
 				# Measure the total flux on the edge of the stamp,
 				# if the mask is touching the edge of the stamp:
@@ -1264,7 +1266,7 @@ class BasePhotometry(object):
 				edge = np.zeros_like(self.sumimage, dtype='bool')
 				edge[:, (0,-1)] = True
 				edge[(0,-1), 1:-1] = True
-				self._details['edge_flux'] = np.sum(self.sumimage[self.final_mask & edge])
+				self._details['edge_flux'] = np.sum(self.sumimage[self.final_phot_mask & edge])
 
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
@@ -1515,8 +1517,10 @@ class BasePhotometry(object):
 		# Make aperture image:
 		# TODO: Pixels used in background calculation (value=4)
 		mask = self.aperture
-		if self.final_mask is not None:
-			mask[self.final_mask] += 10 # 2 + 8
+		if self.final_phot_mask is not None:
+			mask[self.final_phot_mask] |= 2
+		if self.final_position_mask is not None:
+			mask[self.final_position_mask] |= 8
 
 		# Construct FITS header for image extensions:
 		wcs = self.wcs[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]

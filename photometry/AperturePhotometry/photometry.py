@@ -156,7 +156,8 @@ class AperturePhotometry(BasePhotometry):
 				self.lightcurve['flux_background'][k] = np.nansum(bck[mask_main])
 
 		# Save the mask to be stored in the outout file:
-		self.final_mask = mask_main
+		self.final_phot_mask = mask_main
+		self.final_position_mask = mask_main
 
 		# Add additional headers specific to this method:
 		#self.additional_headers['KP_SUBKG'] = (bool(subtract_background), 'K2P2 subtract background?')

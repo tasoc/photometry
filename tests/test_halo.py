@@ -9,10 +9,11 @@ Created on Fri Sep 29 10:54:10 2017
 import pytest
 import logging
 import numpy as np
-from bottleneck import allnan
+from bottleneck import allnan, anynan
 import sys
 import os
 from tempfile import TemporaryDirectory
+from astropy.io import fits
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import HaloPhotometry, STATUS
 
@@ -28,7 +29,7 @@ def test_halo(datasource):
 		with HaloPhotometry(267211065, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, sector=1, camera=3, ccd=2) as pho:
 
 			pho.photometry()
-			pho.save_lightcurve()
+			filepath = pho.save_lightcurve()
 			print( pho.lightcurve )
 
 			# It should set the status to one of these:
@@ -37,15 +38,35 @@ def test_halo(datasource):
 
 			# They shouldn't be exactly zero:
 			assert not np.all(pho.lightcurve['flux'] == 0)
+			assert not np.all(pho.lightcurve['flux_err'] == 0)
 			assert not np.all(pho.lightcurve['pos_centroid'][:,0] == 0)
 			assert not np.all(pho.lightcurve['pos_centroid'][:,1] == 0)
 
 			# They shouldn't be NaN (in this case!):
 			assert not allnan(pho.lightcurve['flux'])
+			assert not allnan(pho.lightcurve['flux_err'])
 			assert not allnan(pho.lightcurve['pos_centroid'][:,0])
 			assert not allnan(pho.lightcurve['pos_centroid'][:,1])
 
-			print("Passed Tests for %s" % datasource)
+			# Test the outputted FITS file:
+			with fits.open(filepath, mode='readonly') as hdu:
+				# Should be the same vectors in FITS as returned in Table:
+				np.testing.assert_allclose(pho.lightcurve['time'], hdu[1].data['TIME'])
+				np.testing.assert_allclose(pho.lightcurve['timecorr'], hdu[1].data['TIMECORR'])
+				np.testing.assert_allclose(pho.lightcurve['flux'], hdu[1].data['FLUX_RAW'])
+				np.testing.assert_allclose(pho.lightcurve['flux_err'], hdu[1].data['FLUX_RAW_ERR'])
+				np.testing.assert_allclose(pho.lightcurve['cadenceno'], hdu[1].data['CADENCENO'])
+
+				# Test FITS aperture image:
+				ap = hdu['APERTURE'].data
+				print(ap)
+				assert np.all(pho.aperture == ap), "Aperture image mismatch"
+				assert not anynan(ap), "NaN in aperture image"
+				assert np.all(ap >= 0), "Negative values in aperture image"
+				assert np.any(ap & 2 != 0), "No photometric mask set"
+				#assert np.any(ap & 8 != 0), "No position mask set"
+
+	print("Passed Tests for %s" % datasource)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
