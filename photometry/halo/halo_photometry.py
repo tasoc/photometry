@@ -101,7 +101,7 @@ class HaloPhotometry(BasePhotometry):
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
 		flux = self.images_cube.T[indx_goodtimes, :, :]
 
-		# Cut away pixels farther away than 20 pixels:
+		# Cut out pixels closer than 20 pixels, that were actually observed:
 		# TODO: We should maybe use self.resize_stamp instead, at least for FFIs.
 		# TODO: Should the limit scale with Tmag?
 		# TODO: Is there a one pixel offset in dist?
@@ -233,6 +233,9 @@ class HaloPhotometry(BasePhotometry):
 		self.additional_headers['HALO_MXI'] = (maxiter, 'Halophot maximum optimisation iterations')
 		self.additional_headers['HALO_SCL'] = (sigclip, 'Halophot sigma clipping enabled')
 		self.additional_headers['HALO_MFL'] = (minflux, 'Halophot minimum flux')
+
+		# Return mask used for photometry:
+		self.final_phot_mask = pixel_mask
 
 		# Return whether you think it went well:
 		return STATUS.OK
