@@ -106,7 +106,7 @@ class HaloPhotometry(BasePhotometry):
 		# TODO: We should maybe use self.resize_stamp instead, at least for FFIs.
 		# TODO: Should the limit scale with Tmag?
 		cols, rows = self.get_pixel_grid()
-		dist = (cols - self.target_pos_column)**2 + (rows - self.target_pos_row)**2
+		dist = np.sqrt((cols - self.target_pos_column)**2 + (rows - self.target_pos_row)**2)
 		flux[:, dist.T > dist_max] = np.NaN
 
 		# Find timestamps where the timeseries should be split:
