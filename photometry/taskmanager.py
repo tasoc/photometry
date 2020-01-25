@@ -209,6 +209,7 @@ class TaskManager(object):
 
 		# Extract details dictionary:
 		details = result.get('details', {})
+		error_msg = details.get('errors', [])
 
 		# The status of this target returned by the photometry:
 		my_status = result['status']
@@ -220,12 +221,23 @@ class TaskManager(object):
 				# This secondary target is in the mask of the primary target.
 				# We never want to return a lightcurve for a secondary target over
 				# a primary target, so we are going to mark this one as SKIPPED.
-				self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target", result['priority'])
+				primary_tpf_target_starid = int(result['datasource'][4:])
+				self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=?;", (primary_tpf_target_starid, result['sector']))
+				primary_tpf_target_priority = self.cursor.fetchone()
+				# Mark the current star as SKIPPED and that it was caused by the primary:
+				self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target TIC %d", result['priority'], primary_tpf_target_starid)
 				my_status = STATUS.SKIPPED
+				if primary_tpf_target_priority is not None:
+					self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
+						result['priority'],
+						primary_tpf_target_priority[0]
+					))
+				else:
+					self.logger.warning("Could not find primary TPF target (TIC %d) for priority=%d", primary_tpf_target_starid, result['priority'])
+					error_msg.append("Could not find primary TPF target (TIC %d)" % primary_tpf_target_starid)
 			else:
 				# Create unique list of starids to be masked as skipped:
-				skip_starids = [str(starid) for starid in skip_targets]
-				skip_starids = ','.join(skip_starids)
+				skip_starids = ','.join([str(starid) for starid in skip_targets])
 
 				# Ask the todolist if there are any stars that are brighter than this
 				# one among the other targets in the mask:
@@ -260,6 +272,12 @@ class TaskManager(object):
 						# one run later on
 						self.logger.info("Changing status to SKIPPED for priority %s", result['priority'])
 						my_status = STATUS.SKIPPED
+						# Mark that the brightest star among the skip-list is the reason for
+						# for skipping this target:
+						self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
+							result['priority'],
+							skip_rows[np.argmin(skip_tmags)]['priority']
+						))
 
 		# Update the status in the TODO list:
 		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
@@ -271,10 +289,11 @@ class TaskManager(object):
 		self.summary['STARTED'] -= 1
 
 		# Save additional diagnostics:
-		error_msg = details.get('errors', None)
 		if error_msg:
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
+		else:
+			error_msg = None
 
 		# Calculate mean elapsed time using "streaming weighted mean" with (alpha=0.1):
 		# https://dev.to/nestedsoftware/exponential-moving-average-on-streaming-data-4hhl
