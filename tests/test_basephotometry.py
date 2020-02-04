@@ -21,7 +21,7 @@ INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 DUMMY_TARGET = 260795451
 DUMMY_KWARG = {'sector': 1, 'camera': 3, 'ccd': 2}
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_stamp():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
@@ -57,7 +57,34 @@ def test_stamp():
 			assert(rows.shape == (22, 20))
 			assert(cols.shape == (22, 20))
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+def test_stamp_width_height():
+	with TemporaryDirectory() as OUTPUT_DIR:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
+
+			print("Original")
+			orig_stamp = pho._stamp
+			orig_sumimage = pho.sumimage
+			print(orig_stamp)
+
+			# Change the size of the stamp:
+			print("New")
+			pho.resize_stamp(width=25, height=11)
+			print(pho._stamp)
+
+			cols, rows = pho.get_pixel_grid()
+			print(cols.shape, rows.shape)
+			assert cols.shape == (11, 25)
+			assert rows.shape == (11, 25)
+			assert pho.sumimage.shape == (11, 25)
+
+			# Make the stamp the same size as the original again:
+			pho.resize_stamp(width=17, height=17)
+			print(pho._stamp)
+			assert pho._stamp == orig_stamp
+			np.testing.assert_allclose(pho.sumimage, orig_sumimage)
+
+#--------------------------------------------------------------------------------------------------
 def test_images():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
@@ -68,7 +95,7 @@ def test_images():
 			for img in pho.images:
 				assert(img.shape == (10, 20))
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_backgrounds():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
@@ -79,7 +106,7 @@ def test_backgrounds():
 			for img in pho.backgrounds:
 				assert(img.shape == (10, 20))
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
 def test_catalog(datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
@@ -101,7 +128,7 @@ def test_catalog(datasource):
 			np.testing.assert_allclose(pho.catalog[indx_main]['column'], pho.target_pos_column)
 			np.testing.assert_allclose(pho.catalog[indx_main]['row'], pho.target_pos_row)
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
 def test_catalog_attime(datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
@@ -114,7 +141,7 @@ def test_catalog_attime(datasource):
 			assert(cat.colnames == pho.catalog.colnames)
 			# TODO: Add more tests here, once we change the test input data
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
 def test_aperture(datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
@@ -153,7 +180,7 @@ def test_aperture(datasource):
 		central_pixel = pho.aperture[int(np.round(pho.target_pos_row_stamp)), int(np.round(pho.target_pos_column_stamp))]
 		assert central_pixel & 4 == 0, "Central pixel of this bright star should not be used in background"
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
 def test_pixelflags(datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
@@ -196,7 +223,7 @@ def test_pixelflags(datasource):
 				for i in tpfs_with_flag:
 					assert quality[i] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_wcs():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='tpf', **DUMMY_KWARG) as pho:
@@ -272,7 +299,7 @@ def test_wcs():
 	print(radec_ffi - radec_fits_sumimage)
 	np.testing.assert_allclose(radec_fits_sumimage, radec_ffi)
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 """
 def test_cache():
 
@@ -301,7 +328,7 @@ def test_cache():
 			assert(cube.shape == (2048, 2048, 2))
 """
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_tpf_with_other_target():
 	sub_target = 267091131
 	with TemporaryDirectory() as OUTPUT_DIR:
@@ -309,9 +336,10 @@ def test_tpf_with_other_target():
 			assert(pho.starid == sub_target)
 			assert(pho.datasource == 'tpf')
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	test_stamp()
+	test_stamp_width_height()
 	test_images()
 	test_backgrounds()
 	test_catalog('tpf')

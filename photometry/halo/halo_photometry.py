@@ -81,7 +81,6 @@ class HaloPhotometry(BasePhotometry):
 		# Start logger to use for print
 		logger = logging.getLogger(__name__)
 		logger.info("starid: %d", self.starid)
-		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
 
 		# Halophot settings:
 		splits = (None, None)
@@ -95,6 +94,13 @@ class HaloPhotometry(BasePhotometry):
 		analytic = True
 		sigclip = False
 		dist_max = 20.0
+
+		# In the case of FFI, set the size of the postage stamp to be just slightly larger than
+		# the maximum distance from the target (allowing for one pixel on each side):
+		if self.datasource == 'ffi':
+			self.resize_stamp(width=dist_max+2, height=dist_max+2)
+
+		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
 
 		# Initialize
 		logger.info('Formatting data for halo')
