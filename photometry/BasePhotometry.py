@@ -532,10 +532,10 @@ class BasePhotometry(object):
 			self._stamp[2] -= left
 		if right:
 			self._stamp[3] += right
-		if width:
+		if height:
 			self._stamp[0] = int(np.round(self.target_pos_row)) - height//2
 			self._stamp[1] = int(np.round(self.target_pos_row)) + height//2 + 1
-		if height:
+		if width:
 			self._stamp[2] = int(np.round(self.target_pos_column)) - width//2
 			self._stamp[3] = int(np.round(self.target_pos_column)) + width//2 + 1
 		self._stamp = tuple(self._stamp)

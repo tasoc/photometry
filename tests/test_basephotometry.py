@@ -70,19 +70,35 @@ def test_stamp_width_height():
 			# Change the size of the stamp:
 			print("New")
 			pho.resize_stamp(width=25, height=11)
-			print(pho._stamp)
+			large_stamp = pho._stamp
+			large_sumimage = pho.sumimage
+			print(large_stamp)
 
 			cols, rows = pho.get_pixel_grid()
 			print(cols.shape, rows.shape)
 			assert cols.shape == (11, 25)
 			assert rows.shape == (11, 25)
-			assert pho.sumimage.shape == (11, 25)
+			assert large_sumimage.shape == (11, 25)
 
 			# Make the stamp the same size as the original again:
 			pho.resize_stamp(width=17, height=17)
 			print(pho._stamp)
 			assert pho._stamp == orig_stamp
 			np.testing.assert_allclose(pho.sumimage, orig_sumimage)
+
+			# Make the stamp the same size large one, but only changing width:
+			pho.resize_stamp(width=25)
+			print(pho._stamp)
+			cols, rows = pho.get_pixel_grid()
+			assert cols.shape == (17, 25)
+			assert rows.shape == (17, 25)
+
+			# Make really large stamp now:
+			pho.resize_stamp(height=25)
+			print(pho._stamp)
+			cols, rows = pho.get_pixel_grid()
+			assert cols.shape == (25, 25)
+			assert rows.shape == (25, 25)
 
 #--------------------------------------------------------------------------------------------------
 def test_images():
