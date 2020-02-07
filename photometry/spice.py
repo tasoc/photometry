@@ -17,7 +17,7 @@ from astropy.version import major as astropy_major_version
 import spiceypy
 from spiceypy.utils.support_types import SpiceyError
 import hashlib
-from .utilities import download_file
+from .utilities import download_parallel
 
 class InadequateSpiceException(Exception):
 	pass
@@ -163,10 +163,14 @@ class TESS_SPICE(object):
 		# Automatically download kernels from TASOC, if they don't already exist?
 		#urlbase = 'https://archive.stsci.edu/missions/tess/models/'
 		urlbase = 'https://tasoc.dk/pipeline/spice/'
+		downlist = []
 		for fname in files:
 			fpath = os.path.join(kernels_folder, fname)
 			if not os.path.exists(fpath):
-				download_file(urlbase + fname, fpath)
+				downlist.append([urlbase + fname, fpath])
+
+		if downlist:
+			download_parallel(downlist)
 
 		# Path where meta-kernel will be saved:
 		fileshash = hashlib.md5(','.join(files).encode()).hexdigest()
@@ -217,7 +221,7 @@ class TESS_SPICE(object):
 		if astropy_major_version >= 4:
 			self.planetary_ephemeris = os.path.abspath(os.path.join(kernels_folder, 'tess2018338154429-41241_de430.bsp'))
 		else:
-			self.planetary_ephemeris = 'https://tasoc.dk/pipeline/spice/tess2018338154429-41241_de430.bsp'
+			self.planetary_ephemeris = urlbase + 'tess2018338154429-41241_de430.bsp'
 		self._old_solar_system_ephemeris = coord.solar_system_ephemeris.get()
 		coord.solar_system_ephemeris.set(self.planetary_ephemeris)
 

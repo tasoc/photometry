@@ -19,11 +19,9 @@ import os.path
 import fnmatch
 import glob
 import itertools
-import warnings
 import requests
-
-# Filter out annoying warnings:
-warnings.filterwarnings('ignore', module='scipy', category=FutureWarning, message='Using a non-tuple sequence for multidimensional indexing is deprecated;', lineno=607)
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 # Constants:
 mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)
@@ -489,7 +487,7 @@ def find_nearest(array, value):
 	#	return idx
 
 #--------------------------------------------------------------------------------------------------
-def download_file(url, destination):
+def download_file(url, destination, position_holders=None, position_lock=None):
 	"""
 	Download file from URL and place into specified destination.
 
@@ -500,17 +498,32 @@ def download_file(url, destination):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	print("Downloading %s" % url)
-	try:
-		response = requests.get(url, stream=True, allow_redirects=True)
+	logger = logging.getLogger(__name__)
+	tqdm_settings = {
+		'unit': 'B',
+		'unit_scale': True,
+		'position': None,
+		'leave': True,
+		'disable': not logger.isEnabledFor(logging.INFO)
+	}
 
-		# Throw an error for bad status codes
+	if position_holders is not None:
+		tqdm_settings['leave'] = False
+		position_lock.acquire()
+		tqdm_settings['position'] = position_holders.index(False)
+		position_holders[tqdm_settings['position']] = True
+		position_lock.release()
+
+	try:
+		# Start stream from URL and throw an error for bad status codes:
+		response = requests.get(url, stream=True, allow_redirects=True)
 		response.raise_for_status()
 
 		total_size = int(response.headers.get('content-length', 0))
 		block_size = 1024
+
 		with open(destination, 'wb') as handle:
-			with tqdm.tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
+			with tqdm.tqdm(total=total_size, **tqdm_settings) as pbar:
 				for block in response.iter_content(block_size):
 					handle.write(block)
 					pbar.update(len(block))
@@ -519,9 +532,40 @@ def download_file(url, destination):
 			raise Exception("File not downloaded correctly")
 
 	except: # noqa: E722
+		logger.exception("Could not download file")
 		if os.path.exists(destination):
 			os.remove(destination)
 		raise
+
+	# Pause before returning to give progress bar time to write.
+	if position_holders is not None:
+		position_lock.acquire()
+		position_holders[tqdm_settings['position']] = False
+		position_lock.release()
+
+#--------------------------------------------------------------------------------------------------
+def download_parallel(urls, workers=4):
+	"""
+	Download several files in parallel using multiple threads.
+
+	Parameters:
+		urls (iterable): List of files to download. Each element should consist of a list or tuple,
+			containing two elements: The URL to download, and the path to the destination where the
+			file should be saved.
+		workers (integer, optional): Number of threads to use for downloading. Default=4.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	workers = min(workers, len(urls))
+	position_holders = [False] * workers
+	plock = Lock()
+
+	def _wrapper(arg):
+		download_file(arg[0], arg[1], position_holders=position_holders, position_lock=plock)
+
+	with ThreadPoolExecutor(max_workers=workers) as executor:
+		executor.map(_wrapper, urls)
 
 #--------------------------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):
