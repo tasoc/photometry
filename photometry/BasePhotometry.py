@@ -503,7 +503,7 @@ class BasePhotometry(object):
 		Ncolumns = np.maximum(np.ceil(Ncolumns), 15)
 		return Nrows, Ncolumns
 
-	def resize_stamp(self, down=None, up=None, left=None, right=None):
+	def resize_stamp(self, down=None, up=None, left=None, right=None, width=None, height=None):
 		"""
 		Resize the stamp in a given direction.
 
@@ -512,6 +512,10 @@ class BasePhotometry(object):
 			up (int, optional): Number of pixels to extend upwards.
 			left (int, optional): Number of pixels to extend left.
 			right (int, optional): Number of pixels to extend right.
+			width (int, optional): Set the width of the stamp to this number of pixels.
+				This takes presendence over ``left`` and ``right`` if they are also provided.
+			height (int, optional): Set the height of the stamp to this number of pixels.
+				This takes presendence over ``up`` and ``down`` if they are also provided.
 
 		Returns:
 			bool: `True` if the stamp could be resized, `False` otherwise.
@@ -528,10 +532,16 @@ class BasePhotometry(object):
 			self._stamp[2] -= left
 		if right:
 			self._stamp[3] += right
+		if height:
+			self._stamp[0] = int(np.round(self.target_pos_row)) - height//2
+			self._stamp[1] = int(np.round(self.target_pos_row)) + height//2 + 1
+		if width:
+			self._stamp[2] = int(np.round(self.target_pos_column)) - width//2
+			self._stamp[3] = int(np.round(self.target_pos_column)) + width//2 + 1
 		self._stamp = tuple(self._stamp)
 
 		# Set stamp and check if the stamp actually changed:
-		stamp_changed = self._set_stamp(old_stamp)
+		stamp_changed = self._set_stamp(compare_stamp=old_stamp)
 
 		# Count the number of times that we are resizing the stamp:
 		if stamp_changed:
