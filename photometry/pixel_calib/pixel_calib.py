@@ -6,11 +6,12 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-import os
+import os.path
 import numpy as np
 from astropy.io import fits
+from astropy.nddata import CCDData
+import astropy.units as u
 import xml.etree.ElementTree as ET
-#from lxml import etree
 import logging
 from bottleneck import replace, nanmedian
 from .polynomial import polynomial
@@ -20,19 +21,15 @@ from ..utilities import download_file
 #------------------------------------------------------------------------------
 class PixelCalibrator(object):
 
-	def __init__(self, tpf=None):
+	def __init__(self, camera=None, ccd=None):
 
 		self.logger = logging.getLogger(__name__)
 		self.logger.info("Starting calibration module")
 
-		self.camera = 1
-		self.ccd = 1
-		self.coadds = 10
-
-		self.exposure_time = 1.96 # seconds
-		self.frametransfer_time = 0.04 # seconds
-		self.readout_time = 0.5 # seconds
-
+		# General settings for TESS data:
+		self.exposure_time = 1.96 * u.second # seconds
+		self.frametransfer_time = 0.04 * u.second # seconds
+		self.readout_time = 0.5 * u.second # seconds
 
 		self._twodblack = None
 		self._flatfield = None
@@ -65,13 +62,12 @@ class PixelCalibrator(object):
 				url = 'https://tasoc.dk/pipeline/twodblack/' + os.path.basename(blackfile)
 				download_file(url, blackfile)
 
-			ir1 = self._stamp[0]
-			ir2 = self._stamp[1]
-			ic1 = self._stamp[2]
-			ic2 = self._stamp[3]
-
 			with fits.open(blackfile, mode='readonly', memmap=True) as hdu:
-				self._twodblack = np.asarray(hdu[1].data[ir1:ir2, ic1:ic2])
+				self._twodblack = CCDData(
+					data=np.asarray(hdu[1].data,
+					uncertainty=np.asarray(hdu[2].data),
+					unit=u.adu # u.ct?
+				)
 
 		return self._twodblack
 
@@ -96,13 +92,12 @@ class PixelCalibrator(object):
 				url = 'https://tasoc.dk/pipeline/flatfield/' + os.path.basename(flatfile)
 				download_file(url, flatfile)
 
-			ir1 = self._stamp[0]
-			ir2 = self._stamp[1]
-			ic1 = self._stamp[2]
-			ic2 = self._stamp[3]
-
 			with fits.open(flatfile, mode='readonly', memmap=True) as hdu:
-				self._flatfield = np.asarray(hdu[1].data[ir1:ir2, ic1:ic2])
+				self._flatfield = CCDData(
+					data=np.asarray(hdu[1].data),
+					uncertainty=np.asarray(hdu[2].data),
+					unit=u.dimensionless_unscaled
+				)
 
 		return self._flatfield
 
@@ -126,7 +121,7 @@ class PixelCalibrator(object):
 				vrowsfile = os.path.join('data', 'flatfield',
 				   'tess2018234235059-s{sector:04d}-vrow-{camera:d}-{ccd:d}-{output:s}-0121-s_col.fits'.format(
 						sector=self.sector,
-					   camera=self.camera,
+						camera=self.camera,
 						ccd=self.ccd,
 						output='a'
 					))
@@ -158,7 +153,7 @@ class PixelCalibrator(object):
 				ccd=self.ccd,
 				output=output
 			)).get('gainElectronsPerDN')
-			gain = float(gain)
+			gain = float(gain) # * u.photon/u.adu
 
 			linpoly = linearity_model.find("./channel[@cameraNumber='{camera:d}'][@ccdNumber='{ccd:d}'][@ccdOutput='{output}']/linearityPoly".format(
 				camera=self.camera,
@@ -168,9 +163,9 @@ class PixelCalibrator(object):
 			linpoly = polynomial(linpoly)
 
 			# Evaluate the polynomial and multiply the image values by it:
-			DN0 = img.data[img.outputs == output]/self.coadds
-			img.data[img.outputs == output] = DN0 * linpoly(DN0)
-			img.data[img.outputs == output] *= gain * self.coadds
+			DN0 = img[img.outputs == output] / img.coadds
+			img[img.outputs == output] = DN0 * linpoly(DN0)
+			img[img.outputs == output] *= gain * img.coadds
 
 		return img
 
@@ -239,9 +234,9 @@ class PixelCalibrator(object):
 			collateral_columns = np.asarray(grp['collateral_columns'])
 
 		# Correct the science pixels for dark current and smear:
-		img.data -= fdark
-		for k,col in enumerate(collateral_columns):
-			img.data[img.columns == col] -= fsmear[k]
+		img -= fdark
+		for k, col in enumerate(collateral_columns):
+			img[img.columns == col] -= fsmear[k]
 
 		return img
 
@@ -253,27 +248,45 @@ class PixelCalibrator(object):
 			 - Correct collateral pixels as well.
 		"""
 		self.logger.info("Doing 2D black correction...")
-		img.data -= self.twodblack
+		img -= self.twodblack[img.index_rows, img.index_columns]
 		return img
 
 	#--------------------------------------------------------------------------
 	def apply_flatfield(self, img):
 		"""CCD flat-field correction."""
 		self.logger.info("Doing flatfield correction...")
-		img.data /= self.flatfield_image[img.camera, img.ccd][img.index_rows, img.index_columns]
+		img /= self.flatfield[img.index_rows, img.index_columns]
 		return img
 
 	#--------------------------------------------------------------------------
 	def to_counts_per_second(self, img):
-		img.data /= self.exposure_time * self.coadds
+		img /= self.exposure_time * img.coadds
 		return img
 
 	#--------------------------------------------------------------------------
 	def calibrate(self, img):
 		"""Perform all calibration steps in sequence."""
+		
 		img = self.apply_twodblack(img)
 		img = self.linearity_gain(img)
 		img = self.smear(img)
 		img = self.apply_flatfield(img)
 		img = self.to_counts_per_second(img)
+		
 		return img
+
+	#--------------------------------------------------------------------------
+	def calibrate_tpf(self, tpf):
+	
+		for k in range(len(tpf['PIXELS'].data['RAW_CNTS'])):
+			img = CCDData(
+				data=tpf['PIXELS'].data['RAW_CNTS'][k]
+				uncertainty=np.sqrt(tpf['PIXELS'].data['RAW_CNTS'][k]),
+				unit=u.adu # u.ct?
+			)
+			
+			img_cal = self.calibrate(img)
+		
+			tpf['PIXELS']['FLUX'][k] = img_cal.data
+			tpf['PIXELS']['FLUX_ERR'][k] = img_cal.uncertainty
+	
