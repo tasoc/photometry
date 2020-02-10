@@ -22,10 +22,7 @@ class AperturePhotometry(BasePhotometry):
 	def __init__(self, *args, **kwargs):
 		# Call the parent initializing:
 		# This will set several default settings
-		super(self.__class__, self).__init__(*args, **kwargs)
-
-		# Here you could do other things that needs doing in the beginning
-		# of the run on each target.
+		super().__init__(*args, **kwargs)
 
 	def _minimum_aperture(self):
 		cols, rows = self.get_pixel_grid()
@@ -159,7 +156,8 @@ class AperturePhotometry(BasePhotometry):
 				self.lightcurve['flux_background'][k] = np.nansum(bck[mask_main])
 
 		# Save the mask to be stored in the outout file:
-		self.final_mask = mask_main
+		self.final_phot_mask = mask_main
+		self.final_position_mask = mask_main
 
 		# Add additional headers specific to this method:
 		#self.additional_headers['KP_SUBKG'] = (bool(subtract_background), 'K2P2 subtract background?')

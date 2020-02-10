@@ -9,12 +9,11 @@ import os
 import numpy as np
 import logging
 import sqlite3
-import warnings
-warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
 import re
 import functools
 import contextlib
+import multiprocessing
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import RectBivariateSpline
 from astropy.table import Table, vstack, Column
@@ -23,7 +22,6 @@ from astropy.wcs import WCS
 from timeit import default_timer
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
 from .catalog import catalog_sqlite_search_footprint
-import multiprocessing
 
 #------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
@@ -291,7 +289,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 	)
 
 #------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_secondary_targets=True):
+def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
+	find_secondary_targets=True, output_file=None):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
 	targets that needs to be processed.
@@ -305,6 +304,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
 		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
 		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
+		output_file (string, optional): The file path where the output file should be saved.
+			If not specified, the file will be saved into the input directory.
+			Should only be used for testing, since the file would (proberly) otherwise end up with
+			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
 		NotADirectoryError: If the specified ``input_folder`` is not an existing directory.
@@ -327,7 +330,14 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
 
 	# The TODO file that we want to create. Delete it if it already exits:
-	todo_file = os.path.join(input_folder, 'todo.sqlite')
+	if output_file is None:
+		todo_file = os.path.join(input_folder, 'todo.sqlite')
+	else:
+		output_file = os.path.abspath(output_file)
+		if not output_file.endswith('.sqlite'):
+			output_file = output_file + '.sqlite'
+		todo_file = output_file
+
 	if os.path.exists(todo_file):
 		if overwrite:
 			os.remove(todo_file)
@@ -538,6 +548,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False, find_
 		cursor.execute("CREATE INDEX starid_datasource_idx ON todolist (starid, datasource);") # FIXME: Should be "UNIQUE", but something is weird in ETE-6?!
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
+		conn.commit()
+
+		# Analyze the tables for better query planning:
+		cursor.execute("ANALYZE;")
 		conn.commit()
 
 		# Run a VACUUM of the table which will force a recreation of the

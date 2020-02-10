@@ -13,11 +13,12 @@ import logging
 import itertools
 import contextlib
 from .tasoc_db import TASOC_DB
-from .utilities import (add_proper_motion, load_settings, find_catalog_files,
-						radec_to_cartesian, cartesian_to_radec)
+from .utilities import (add_proper_motion, load_settings, # find_catalog_files
+	radec_to_cartesian, cartesian_to_radec, download_file)
 
 #------------------------------------------------------------------------------
-def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None, buffer_size=5, pixel_scale=21.0):
+def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None,
+	buffer_size=5, pixel_scale=21.0):
 	"""
 	Query the SQLite catalog files for a specific footprint on sky.
 
@@ -103,7 +104,7 @@ def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=
 	return cursor.fetchall()
 
 #------------------------------------------------------------------------------
-def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False):
+def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False): # pragma: no cover
 	"""
 	Create catalogs of stars in a given TESS observing sector.
 
@@ -235,7 +236,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 					a = cartesian_to_radec(a_xyz)
 
 				# Make footprint into string that will be understood by database:
-				footprint = '{' + ",".join([str(s) for s in a.flatten()]) + '}'
+				footprint = '(' + ','.join(['(%.16f,%.16f)' % tuple(s) for s in a]) + ')'
 				logger.info(footprint)
 
 				# Save settings to SQLite:
@@ -255,7 +256,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 				# Query the TESS Input Catalog table for all stars in the footprint.
 				# This is a MASSIVE table, so this query may take a while.
-				tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, %s) AND disposition IS NULL;", (
+				tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '%s'::polygon) AND disposition IS NULL;" % (
 					footprint,
 				))
 
@@ -310,3 +311,62 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 		logger.info("Catalog done.")
 
 	logger.info("All catalogs done.")
+
+#------------------------------------------------------------------------------
+def download_catalogs(input_folder, sector, camera=None, ccd=None):
+	"""
+	Download catalog SQLite files from TASOC cache into input_folder.
+
+	This enables users to circumvent the creation of catalog files directly using
+	:py:func:`make_catalog`, which requires the user to be connected to the TASOC internal
+	networks at Aarhus University.
+	This does require that the TASOC personel have made catalogs available in the cache for
+	the given sector, otherwise this function will throw an error.
+
+	Parameters:
+		input_folder (string): Target directory to download files into.
+			Should be a TESSPHOT input directory.
+		sector (integer): Sector to download catalogs for.
+		camera (integer, optional): Camera to download catalogs for.
+			If not specified, all cameras will be downloaded.
+		ccd (integer, optional): CCD to download catalogs for.
+			If not specified, all CCDs will be downloaded.
+
+	Raises:
+		NotADirectoryError: If target directory does not exist.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+	logger = logging.getLogger(__name__)
+
+	# Check that the target directory exists:
+	if not os.path.isdir(input_folder):
+		raise NotADirectoryError("Directory does not exist: '%s'" % input_folder)
+
+	# Make sure cameras and ccds are iterable:
+	cameras = (1, 2, 3, 4) if camera is None else (camera, )
+	ccds = (1, 2, 3, 4) if ccd is None else (ccd, )
+
+	# Loop through all combinations of cameras and ccds:
+	for camera, ccd in itertools.product(cameras, ccds):
+		# File name and path for catalog file:
+		fname = 'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'.format(
+			sector=sector,
+			camera=camera,
+			ccd=ccd
+		)
+		fpath = os.path.join(input_folder, fname)
+
+		# If the file already exists, skip the download:
+		if os.path.exists(fpath):
+			logger.debug("Skipping download of existing catalog: %s", fname)
+			continue
+
+		# URL for the missing catalog file:
+		url = 'https://tasoc.dk/pipeline/catalogs/tic8/sector{sector:03d}/{fname:s}'.format(
+			sector=sector,
+			fname=fname
+		)
+
+		# Download the file using the utilities function:
+		download_file(url, fpath)

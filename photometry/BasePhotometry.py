@@ -8,14 +8,6 @@ All other specific photometric algorithms will inherit from BasePhotometry.
 """
 
 import numpy as np
-from astropy._erfa.core import ErfaWarning
-import warnings
-warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
-warnings.filterwarnings('ignore', category=FutureWarning, module="scipy") # they are simply annoying!
-warnings.filterwarnings('ignore', category=FutureWarning, module="skimage") # they are simply annoying!
-warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
-from astropy.io import fits
-from astropy.table import Table, Column
 import h5py
 import sqlite3
 import logging
@@ -23,7 +15,11 @@ import datetime
 import os.path
 import glob
 import contextlib
+import warnings
 from copy import deepcopy
+from astropy._erfa.core import ErfaWarning
+from astropy.io import fits
+from astropy.table import Table, Column
 from astropy import units
 import astropy.coordinates as coord
 from astropy.time import Time
@@ -38,12 +34,17 @@ from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
 from .version import get_version
 
+# Filter out annoying warnings:
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
+
 __version__ = get_version()
 
 __docformat__ = 'restructuredtext'
 
 hdf5_cache = {}
 
+#--------------------------------------------------------------------------------------------------
 @enum.unique
 class STATUS(enum.Enum):
 	"""
@@ -57,6 +58,7 @@ class STATUS(enum.Enum):
 	ABORT = 4   #: The calculation was aborted.
 	SKIPPED = 5 #: The target was skipped because the algorithm found that to be the best solution.
 
+#--------------------------------------------------------------------------------------------------
 class BasePhotometry(object):
 	"""
 	The basic photometry class for the TASOC Photometry pipeline.
@@ -87,7 +89,8 @@ class BasePhotometry(object):
 
 		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
 		pixelflags (numpy.ndarray): Flags for each pixel, as defined by the TESS data product manual.
-		final_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
+		final_phot_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
+		final_position_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of positions. ``True`` if used, ``False`` otherwise.
 		additional_headers (dict): Additional headers to be included in FITS files.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -206,7 +209,7 @@ class BasePhotometry(object):
 				logger.debug('Loading basic data into cache...')
 
 				# Start filling out the basic vectors:
-				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
+				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
 				N = len(self.lightcurve['time'])
 				self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
 				self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
@@ -295,8 +298,13 @@ class BasePhotometry(object):
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
 
+			# Fix for timestamps that are not defined. Simply remove them from the table:
+			# This is seen in some file from sector 1.
+			indx_good_times = np.isfinite(self.tpf[1].data.field('TIME'))
+			self.tpf[1].data = self.tpf[1].data[indx_good_times]
+
 			# Extract the relevant information from the FITS file:
-			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='BJD')
+			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='TBJD')
 			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
@@ -314,7 +322,8 @@ class BasePhotometry(object):
 			self.pixel_offset_row = self.tpf[2].header['CRVAL2P'] - 1
 			self.pixel_offset_col = self.tpf[2].header['CRVAL1P'] - 1
 
-			logger.debug('Max stamp size: (%d, %d)',
+			logger.debug(
+				'Max stamp size: (%d, %d)',
 				self._max_stamp[1] - self._max_stamp[0],
 				self._max_stamp[3] - self._max_stamp[2]
 			)
@@ -395,7 +404,8 @@ class BasePhotometry(object):
 				self.lightcurve['timecorr'] = tc
 
 		# Init arrays that will be filled with lightcurve stuff:
-		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
+		self.final_phot_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
+		self.final_position_mask = None # Mask indicating which pixels were used in extraction of position.
 		self.additional_headers = {} # Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
@@ -493,7 +503,7 @@ class BasePhotometry(object):
 		Ncolumns = np.maximum(np.ceil(Ncolumns), 15)
 		return Nrows, Ncolumns
 
-	def resize_stamp(self, down=None, up=None, left=None, right=None):
+	def resize_stamp(self, down=None, up=None, left=None, right=None, width=None, height=None):
 		"""
 		Resize the stamp in a given direction.
 
@@ -502,6 +512,10 @@ class BasePhotometry(object):
 			up (int, optional): Number of pixels to extend upwards.
 			left (int, optional): Number of pixels to extend left.
 			right (int, optional): Number of pixels to extend right.
+			width (int, optional): Set the width of the stamp to this number of pixels.
+				This takes presendence over ``left`` and ``right`` if they are also provided.
+			height (int, optional): Set the height of the stamp to this number of pixels.
+				This takes presendence over ``up`` and ``down`` if they are also provided.
 
 		Returns:
 			bool: `True` if the stamp could be resized, `False` otherwise.
@@ -518,10 +532,16 @@ class BasePhotometry(object):
 			self._stamp[2] -= left
 		if right:
 			self._stamp[3] += right
+		if height:
+			self._stamp[0] = int(np.round(self.target_pos_row)) - height//2
+			self._stamp[1] = int(np.round(self.target_pos_row)) + height//2 + 1
+		if width:
+			self._stamp[2] = int(np.round(self.target_pos_column)) - width//2
+			self._stamp[3] = int(np.round(self.target_pos_column)) + width//2 + 1
 		self._stamp = tuple(self._stamp)
 
 		# Set stamp and check if the stamp actually changed:
-		stamp_changed = self._set_stamp(old_stamp)
+		stamp_changed = self._set_stamp(compare_stamp=old_stamp)
 
 		# Count the number of times that we are resizing the stamp:
 		if stamp_changed:
@@ -671,8 +691,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Note:
 			The images has had the large-scale background subtracted. If needed
@@ -698,8 +718,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Example:
 
@@ -721,8 +741,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``times`` is the number of timestamps.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``times`` is the number of timestamps.
 
 		Example:
 
@@ -744,8 +764,8 @@ class BasePhotometry(object):
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, ffi_times)``, where
-			        ``rows`` is the number of rows in the image, ``cols`` is the number
-					   of columns and ``ffi_times`` is the number of timestamps in the FFIs.
+				``rows`` is the number of rows in the image, ``cols`` is the number
+				of columns and ``ffi_times`` is the number of timestamps in the FFIs.
 
 		Note:
 			This function will only return flags on the timestamps of the FFIs, even though
@@ -990,14 +1010,14 @@ class BasePhotometry(object):
 		Catalog of stars in the current stamp.
 
 		The table contains the following columns:
-		 * ``starid``:       TIC identifier.
-		 * ``tmag``:         TESS magnitude.
-		 * ``ra``:           Right ascension in degrees at time of observation.
-		 * ``dec``:          Declination in degrees at time of observation.
-		 * ``row``:          Pixel row on CCD.
-		 * ``column``:       Pixel column on CCD.
-		 * ``row_stamp``:    Pixel row relative to the stamp.
-		 * ``column_stamp``: Pixel column relative to the stamp.
+		* ``starid``: TIC identifier.
+		* ``tmag``: TESS magnitude.
+		* ``ra``: Right ascension in degrees at time of observation.
+		* ``dec``: Declination in degrees at time of observation.
+		* ``row``: Pixel row on CCD.
+		* ``column``: Pixel column on CCD.
+		* ``row_stamp``: Pixel row relative to the stamp.
+		* ``column_stamp``: Pixel column relative to the stamp.
 
 		Returns:
 			``astropy.table.Table``: Table with all known stars falling within the current stamp.
@@ -1190,7 +1210,6 @@ class BasePhotometry(object):
 		"""
 		raise NotImplementedError("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
-
 	def photometry(self, *args, **kwargs):
 		"""
 		Run photometry.
@@ -1247,8 +1266,18 @@ class BasePhotometry(object):
 			# polynomial-subtracted lightcurve devided by the median error:
 			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
 
-			if self.final_mask is not None:
-				self._details['mask_size'] = int(np.sum(self.final_mask))
+			if self.final_phot_mask is not None:
+				# Calculate the total number of pixels in the mask:
+				self._details['mask_size'] = int(np.sum(self.final_phot_mask))
+
+				# Measure the total flux on the edge of the stamp,
+				# if the mask is touching the edge of the stamp:
+				# The np.sum here should return zero on an empty array.
+				edge = np.zeros_like(self.sumimage, dtype='bool')
+				edge[:, (0,-1)] = True
+				edge[(0,-1), 1:-1] = True
+				self._details['edge_flux'] = np.sum(self.sumimage[self.final_phot_mask & edge])
+
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
@@ -1498,8 +1527,10 @@ class BasePhotometry(object):
 		# Make aperture image:
 		# TODO: Pixels used in background calculation (value=4)
 		mask = self.aperture
-		if self.final_mask is not None:
-			mask[self.final_mask] += 10 # 2 + 8
+		if self.final_phot_mask is not None:
+			mask[self.final_phot_mask] |= 2
+		if self.final_position_mask is not None:
+			mask[self.final_position_mask] |= 8
 
 		# Construct FITS header for image extensions:
 		wcs = self.wcs[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]

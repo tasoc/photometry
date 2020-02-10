@@ -28,22 +28,35 @@ import logging
 import traceback
 import os
 import enum
+from timeit import default_timer
+import photometry
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def main():
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry in parallel using MPI.')
-	#parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
-	#parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
+	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
 	parser.add_argument('-v', '--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
+	parser.add_argument('input_folder', type=str, help='Input directory. This directory should contain a TODO-file.', nargs='?', default=None)
 	args = parser.parse_args()
 
+	# Set logging level:
+	logging_level = logging.INFO
+	if args.quiet:
+		logging_level = logging.WARNING
+	elif args.debug:
+		logging_level = logging.DEBUG
+
 	# Get paths to input and output files from environment variables:
-	input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
-	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.abspath('.'))
-	todo_file = os.path.join(input_folder, 'todo.sqlite')
+	input_folder = args.input_folder
+	if input_folder is None:
+		input_folder = os.environ.get('TESSPHOT_INPUT', os.path.join(os.path.dirname(__file__), 'tests', 'input'))
+	if not input_folder:
+		parser.error("Please specify an INPUT_FOLDER.")
+	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(input_folder, 'lightcurves'))
 
 	# Define MPI message tags
 	tags = enum.IntEnum('tags', ('READY', 'DONE', 'EXIT', 'START'))
@@ -56,10 +69,11 @@ def main():
 
 	if rank == 0:
 		# Master process executes code below
-		from photometry import TaskManager
-
 		try:
-			with TaskManager(todo_file, cleanup=True, overwrite=args.overwrite, summary=os.path.join(output_folder, 'summary.json')) as tm:
+			with photometry.TaskManager(input_folder, cleanup=True, overwrite=args.overwrite, summary=os.path.join(output_folder, 'summary.json')) as tm:
+				# Set level of TaskManager logger:
+				tm.logger.setLevel(logging_level)
+
 				# Get list of tasks:
 				numtasks = tm.get_number_tasks()
 				tm.logger.info("%d tasks to be run", numtasks)
@@ -77,7 +91,7 @@ def main():
 
 					if tag == tags.DONE:
 						# The worker is done with a task
-						tm.logger.info("Got data from worker %d: %s", source, data)
+						tm.logger.debug("Got data from worker %d: %s", source, data)
 						tm.save_result(data)
 
 					if tag in (tags.DONE, tags.READY):
@@ -87,7 +101,7 @@ def main():
 							task_index = task['priority']
 							tm.start_task(task_index)
 							comm.send(task, dest=source, tag=tags.START)
-							tm.logger.info("Sending task %d to worker %d", task_index, source)
+							tm.logger.debug("Sending task %d to worker %d", task_index, source)
 						else:
 							comm.send(None, dest=source, tag=tags.EXIT)
 
@@ -103,16 +117,13 @@ def main():
 
 				tm.logger.info("Master finishing")
 
-		except:
+		except: # noqa: E722
 			# If something fails in the master
 			print(traceback.format_exc().strip())
 			comm.Abort(1)
 
 	else:
 		# Worker processes execute code below
-		from photometry import tessphot
-		from timeit import default_timer
-
 		# Configure logging within photometry:
 		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 		console = logging.StreamHandler()
@@ -136,7 +147,7 @@ def main():
 					del task['priority'], task['tmag']
 
 					t1 = default_timer()
-					pho = tessphot(input_folder=input_folder, output_folder=output_folder, plot=args.plot, version=args.version, **task)
+					pho = photometry.tessphot(input_folder=input_folder, output_folder=output_folder, plot=args.plot, version=args.version, **task)
 					t2 = default_timer()
 
 					# Construct result message:
@@ -162,11 +173,12 @@ def main():
 					# make sure we don't run into an infinite loop:
 					raise Exception("Worker received an unknown tag: '{0}'".format(tag))
 
-		except:
+		except: # noqa: E722
 			logger.exception("Something failed in worker")
 
 		finally:
 			comm.send(None, dest=0, tag=tags.EXIT)
 
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	main()

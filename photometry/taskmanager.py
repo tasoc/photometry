@@ -25,7 +25,7 @@ class TaskManager(object):
 		Parameters:
 			todo_file (string): Path to the TODO-file.
 			cleanup (boolean): Perform cleanup/optimization of TODO-file before
-			                   during initialization. Default=False.
+				during initialization. Default=False.
 			overwrite (boolean): Restart calculation from the beginning, discarding any previous results. Default=False.
 			summary (string): Path to file where to periodically write a progress summary. The output file will be in JSON format. Default=None.
 			summary_interval (int): Interval at which to write summary file. Setting this to 1 will mean writing the file after every tasks completes. Default=100.
@@ -82,6 +82,7 @@ class TaskManager(object):
 			pos_column REAL,
 			contamination REAL,
 			mask_size INT,
+			edge_flux REAL,
 			stamp_width INT,
 			stamp_height INT,
 			stamp_resizes INT,
@@ -95,6 +96,13 @@ class TaskManager(object):
 			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
 		);""") # PRIMARY KEY
 		self.conn.commit()
+
+		# Add status indicator for corrections to todolist, if it doesn't already exists:
+		self.cursor.execute("PRAGMA table_info(diagnostics)")
+		if 'edge_flux' not in [r['name'] for r in self.cursor.fetchall()]:
+			self.logger.debug("Adding edge_flux column to diagnostics")
+			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN edge_flux REAL DEFAULT NULL")
+			self.conn.commit()
 
 		# Reset calculations with status STARTED, ABORT or ERROR:
 		# We are re-running all with error, in the hope that they will work this time around:
@@ -132,8 +140,6 @@ class TaskManager(object):
 			try:
 				self.conn.isolation_level = None
 				self.cursor.execute("VACUUM;")
-			except:
-				raise
 			finally:
 				self.conn.isolation_level = ''
 
@@ -203,6 +209,7 @@ class TaskManager(object):
 
 		# Extract details dictionary:
 		details = result.get('details', {})
+		error_msg = details.get('errors', [])
 
 		# The status of this target returned by the photometry:
 		my_status = result['status']
@@ -214,12 +221,23 @@ class TaskManager(object):
 				# This secondary target is in the mask of the primary target.
 				# We never want to return a lightcurve for a secondary target over
 				# a primary target, so we are going to mark this one as SKIPPED.
-				self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target", result['priority'])
+				primary_tpf_target_starid = int(result['datasource'][4:])
+				self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=?;", (primary_tpf_target_starid, result['sector']))
+				primary_tpf_target_priority = self.cursor.fetchone()
+				# Mark the current star as SKIPPED and that it was caused by the primary:
+				self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target TIC %d", result['priority'], primary_tpf_target_starid)
 				my_status = STATUS.SKIPPED
+				if primary_tpf_target_priority is not None:
+					self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
+						result['priority'],
+						primary_tpf_target_priority[0]
+					))
+				else:
+					self.logger.warning("Could not find primary TPF target (TIC %d) for priority=%d", primary_tpf_target_starid, result['priority'])
+					error_msg.append("Could not find primary TPF target (TIC %d)" % primary_tpf_target_starid)
 			else:
 				# Create unique list of starids to be masked as skipped:
-				skip_starids = [str(starid) for starid in skip_targets]
-				skip_starids = ','.join(skip_starids)
+				skip_starids = ','.join([str(starid) for starid in skip_targets])
 
 				# Ask the todolist if there are any stars that are brighter than this
 				# one among the other targets in the mask:
@@ -254,6 +272,12 @@ class TaskManager(object):
 						# one run later on
 						self.logger.info("Changing status to SKIPPED for priority %s", result['priority'])
 						my_status = STATUS.SKIPPED
+						# Mark that the brightest star among the skip-list is the reason for
+						# for skipping this target:
+						self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
+							result['priority'],
+							skip_rows[np.argmin(skip_tmags)]['priority']
+						))
 
 		# Update the status in the TODO list:
 		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
@@ -265,10 +289,11 @@ class TaskManager(object):
 		self.summary['STARTED'] -= 1
 
 		# Save additional diagnostics:
-		error_msg = details.get('errors', None)
 		if error_msg:
 			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
+		else:
+			error_msg = None
 
 		# Calculate mean elapsed time using "streaming weighted mean" with (alpha=0.1):
 		# https://dev.to/nestedsoftware/exponential-moving-average-on-streaming-data-4hhl
@@ -281,7 +306,7 @@ class TaskManager(object):
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
@@ -294,6 +319,7 @@ class TaskManager(object):
 			details.get('rms_hour', None),
 			details.get('ptp', None),
 			details.get('mask_size', None),
+			details.get('edge_flux', None),
 			details.get('contamination', None),
 			stamp_width,
 			stamp_height,
@@ -320,5 +346,5 @@ class TaskManager(object):
 			try:
 				with open(self.summary_file, 'w') as fid:
 					json.dump(self.summary, fid)
-			except:
+			except: # noqa: E722
 				self.logger.exception("Could not write summary file")

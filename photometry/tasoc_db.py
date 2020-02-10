@@ -16,7 +16,7 @@ from psycopg2.extras import DictCursor
 import getpass
 
 #------------------------------------------------------------------------------
-class TASOC_DB(object):
+class TASOC_DB(object): # pragma: no cover
 	"""
 	Connection to the central TASOC database.
 

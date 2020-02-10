@@ -6,13 +6,11 @@ Tests of BasePhotometry.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
+import pytest
 import numpy as np
 import sys
 import os
-try:
-	from tempfile import TemporaryDirectory
-except ImportError:
-	from backports.tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory
 from astropy.io import fits
 from astropy.wcs import WCS
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -23,7 +21,7 @@ INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 DUMMY_TARGET = 260795451
 DUMMY_KWARG = {'sector': 1, 'camera': 3, 'ccd': 2}
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_stamp():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
@@ -59,7 +57,50 @@ def test_stamp():
 			assert(rows.shape == (22, 20))
 			assert(cols.shape == (22, 20))
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
+def test_stamp_width_height():
+	with TemporaryDirectory() as OUTPUT_DIR:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
+
+			print("Original")
+			orig_stamp = pho._stamp
+			orig_sumimage = pho.sumimage
+			print(orig_stamp)
+
+			# Change the size of the stamp:
+			print("New")
+			pho.resize_stamp(width=25, height=11)
+			large_stamp = pho._stamp
+			large_sumimage = pho.sumimage
+			print(large_stamp)
+
+			cols, rows = pho.get_pixel_grid()
+			print(cols.shape, rows.shape)
+			assert cols.shape == (11, 25)
+			assert rows.shape == (11, 25)
+			assert large_sumimage.shape == (11, 25)
+
+			# Make the stamp the same size as the original again:
+			pho.resize_stamp(width=17, height=17)
+			print(pho._stamp)
+			assert pho._stamp == orig_stamp
+			np.testing.assert_allclose(pho.sumimage, orig_sumimage)
+
+			# Make the stamp the same size large one, but only changing width:
+			pho.resize_stamp(width=25)
+			print(pho._stamp)
+			cols, rows = pho.get_pixel_grid()
+			assert cols.shape == (17, 25)
+			assert rows.shape == (17, 25)
+
+			# Make really large stamp now:
+			pho.resize_stamp(height=25)
+			print(pho._stamp)
+			cols, rows = pho.get_pixel_grid()
+			assert cols.shape == (25, 25)
+			assert rows.shape == (25, 25)
+
+#--------------------------------------------------------------------------------------------------
 def test_images():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
@@ -70,7 +111,7 @@ def test_images():
 			for img in pho.images:
 				assert(img.shape == (10, 20))
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_backgrounds():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
@@ -81,124 +122,124 @@ def test_backgrounds():
 			for img in pho.backgrounds:
 				assert(img.shape == (10, 20))
 
-#----------------------------------------------------------------------
-def test_catalog():
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
+def test_catalog(datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
-				print(pho.catalog)
-				assert(DUMMY_TARGET in pho.catalog['starid'])
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+			print(pho.catalog)
+			assert(DUMMY_TARGET in pho.catalog['starid'])
 
-				assert(pho.target_pos_ra >= np.min(pho.catalog['ra']))
-				assert(pho.target_pos_ra <= np.max(pho.catalog['ra']))
-				assert(pho.target_pos_dec >= np.min(pho.catalog['dec']))
-				assert(pho.target_pos_dec <= np.max(pho.catalog['dec']))
+			assert(pho.target_pos_ra >= np.min(pho.catalog['ra']))
+			assert(pho.target_pos_ra <= np.max(pho.catalog['ra']))
+			assert(pho.target_pos_dec >= np.min(pho.catalog['dec']))
+			assert(pho.target_pos_dec <= np.max(pho.catalog['dec']))
 
-				indx_main = (pho.catalog['starid'] == DUMMY_TARGET)
+			indx_main = (pho.catalog['starid'] == DUMMY_TARGET)
 
-				# Test the real position - TODO: How do we find this?
-				#np.testing.assert_allclose(pho.target_pos_column, 1978.082)
-				#np.testing.assert_allclose(pho.target_pos_row, 652.5701)
+			# Test the real position - TODO: How do we find this?
+			#np.testing.assert_allclose(pho.target_pos_column, 1978.082)
+			#np.testing.assert_allclose(pho.target_pos_row, 652.5701)
 
-				np.testing.assert_allclose(pho.catalog[indx_main]['column'], pho.target_pos_column)
-				np.testing.assert_allclose(pho.catalog[indx_main]['row'], pho.target_pos_row)
+			np.testing.assert_allclose(pho.catalog[indx_main]['column'], pho.target_pos_column)
+			np.testing.assert_allclose(pho.catalog[indx_main]['row'], pho.target_pos_row)
 
-#----------------------------------------------------------------------
-def test_catalog_attime():
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
+def test_catalog_attime(datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 
-				time = pho.lightcurve['time']
+			time = pho.lightcurve['time']
 
-				cat = pho.catalog_attime(time[0])
+			cat = pho.catalog_attime(time[0])
 
-				assert(cat.colnames == pho.catalog.colnames)
-				# TODO: Add more tests here, once we change the test input data
+			assert(cat.colnames == pho.catalog.colnames)
+			# TODO: Add more tests here, once we change the test input data
 
-#----------------------------------------------------------------------
-def test_aperture():
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
+def test_aperture(datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 
-				print("------------------------------------")
-				print(pho.aperture)
+			print("------------------------------------")
+			print(pho.aperture)
 
-				print(pho.sumimage.shape)
-				print(pho.aperture.shape)
-				assert(pho.sumimage.shape == pho.aperture.shape)
+			print(pho.sumimage.shape)
+			print(pho.aperture.shape)
+			assert(pho.sumimage.shape == pho.aperture.shape)
 
-				# For this target, all the pixels should be available:
-				assert np.all(pho.aperture & 1 != 0)
+			# For this target, all the pixels should be available:
+			assert np.all(pho.aperture & 1 != 0)
 
-				# This target should fall on CCD output B:
-				assert np.all(pho.aperture & 64 != 0)
+			# This target should fall on CCD output B:
+			assert np.all(pho.aperture & 64 != 0)
 
-				if datasource == 'ffi':
-					# For the FFI's all pixels for this target was used for the backgrounds
-					# (the target is not bright enough to be masked out)
-					assert np.all(pho.aperture & 4 != 0)
+			if datasource == 'ffi':
+				# For the FFI's all pixels for this target was used for the backgrounds
+				# (the target is not bright enough to be masked out)
+				assert np.all(pho.aperture & 4 != 0)
 
-				# Make the stamp one pixel smaller:
-				# The sumimage and aperture should still match in size!
-				pho.resize_stamp(right=-1)
-				print(pho.sumimage.shape)
-				print(pho.aperture.shape)
+			# Make the stamp one pixel smaller:
+			# The sumimage and aperture should still match in size!
+			pho.resize_stamp(right=-1)
+			print(pho.sumimage.shape)
+			print(pho.aperture.shape)
 
-				assert pho.sumimage.shape == pho.aperture.shape
+			assert pho.sumimage.shape == pho.aperture.shape
 
-		# Try this very bright star, where the centre is saturated.
-		# The aperture for this star should have pixels near the centre that
-		# were not used in the background calculation for FFIs:
-		with BasePhotometry(267211065, INPUT_DIR, '.', datasource='ffi', plot=True, **DUMMY_KWARG) as pho:
-			central_pixel = pho.aperture[int(np.round(pho.target_pos_row_stamp)), int(np.round(pho.target_pos_column_stamp))]
-			assert central_pixel & 4 == 0, "Central pixel of this bright star should not be used in background"
+	# Try this very bright star, where the centre is saturated.
+	# The aperture for this star should have pixels near the centre that
+	# were not used in the background calculation for FFIs:
+	with BasePhotometry(267211065, INPUT_DIR, '.', datasource='ffi', plot=True, **DUMMY_KWARG) as pho:
+		central_pixel = pho.aperture[int(np.round(pho.target_pos_row_stamp)), int(np.round(pho.target_pos_column_stamp))]
+		assert central_pixel & 4 == 0, "Central pixel of this bright star should not be used in background"
 
-#----------------------------------------------------------------------
-def test_pixelflags():
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
+def test_pixelflags(datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		for datasource in ('ffi', 'tpf'):
-			with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
-				# Check the size of the pixelflags cube:
-				print(pho.pixelflags_cube.shape)
-				expected_size = (pho.stamp[1]-pho.stamp[0], pho.stamp[3]-pho.stamp[2], len(pho.hdf['time']))
-				print(expected_size)
-				assert pho.pixelflags_cube.shape == expected_size, "pixelflags_cube does not have the correct size"
+		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+			# Check the size of the pixelflags cube:
+			print(pho.pixelflags_cube.shape)
+			expected_size = (pho.stamp[1]-pho.stamp[0], pho.stamp[3]-pho.stamp[2], len(pho.hdf['time']))
+			print(expected_size)
+			assert pho.pixelflags_cube.shape == expected_size, "pixelflags_cube does not have the correct size"
 
-				# Insert a fake pixel flag:
-				pho._pixelflags_cube[:, :, :] = 0
-				pho._pixelflags_cube[0, 0, 2] |= PixelQualityFlags.BackgroundShenanigans
+			# Insert a fake pixel flag:
+			pho._pixelflags_cube[:, :, :] = 0
+			pho._pixelflags_cube[0, 0, 2] |= PixelQualityFlags.BackgroundShenanigans
 
-				# Try to loop through the pixelflags:
-				tpfs_with_flag = []
-				for k, pf in enumerate(pho.pixelflags):
-					if datasource == 'ffi' and k == 2:
-						print(pf)
-						assert pf[0,0] & PixelQualityFlags.BackgroundShenanigans != 0
-					else:
-						if pf[0, 0] & PixelQualityFlags.BackgroundShenanigans != 0:
-							tpfs_with_flag.append(k)
-
-				# The pixelflags iterator should have Ntimes points:
-				assert k+1 == pho.Ntimes, "The pixelflags iterator does not have the correct number of elements"
-
-				# Save the final lightcurve and load the resulting QUALITY flags:
-				tmpfile = pho.save_lightcurve()
-				with fits.open(tmpfile) as hdu:
-					quality = hdu['LIGHTCURVE'].data['QUALITY']
-
-				# Check that the quality flag is being peopergated through to the QUALITY column:
-				if datasource == 'ffi':
-					assert quality[2] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
+			# Try to loop through the pixelflags:
+			tpfs_with_flag = []
+			for k, pf in enumerate(pho.pixelflags):
+				if datasource == 'ffi' and k == 2:
+					print(pf)
+					assert pf[0,0] & PixelQualityFlags.BackgroundShenanigans != 0
 				else:
-					# Since we have only set the flag for a single FFI, there should be 15 TPFs affected:
-					assert len(tpfs_with_flag) == 15, "Not the correct number of TPFs with flag set"
+					if pf[0, 0] & PixelQualityFlags.BackgroundShenanigans != 0:
+						tpfs_with_flag.append(k)
 
-					for i in tpfs_with_flag:
-						assert quality[i] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
+			# The pixelflags iterator should have Ntimes points:
+			assert k+1 == pho.Ntimes, "The pixelflags iterator does not have the correct number of elements"
 
-#----------------------------------------------------------------------
+			# Save the final lightcurve and load the resulting QUALITY flags:
+			tmpfile = pho.save_lightcurve()
+			with fits.open(tmpfile) as hdu:
+				quality = hdu['LIGHTCURVE'].data['QUALITY']
+
+			# Check that the quality flag is being peopergated through to the QUALITY column:
+			if datasource == 'ffi':
+				assert quality[2] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
+			else:
+				# Since we have only set the flag for a single FFI, there should be 15 TPFs affected:
+				assert len(tpfs_with_flag) == 15, "Not the correct number of TPFs with flag set"
+
+				for i in tpfs_with_flag:
+					assert quality[i] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
+
+#--------------------------------------------------------------------------------------------------
 def test_wcs():
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, datasource='tpf', **DUMMY_KWARG) as pho:
@@ -274,7 +315,7 @@ def test_wcs():
 	print(radec_ffi - radec_fits_sumimage)
 	np.testing.assert_allclose(radec_fits_sumimage, radec_ffi)
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 """
 def test_cache():
 
@@ -303,7 +344,7 @@ def test_cache():
 			assert(cube.shape == (2048, 2048, 2))
 """
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_tpf_with_other_target():
 	sub_target = 267091131
 	with TemporaryDirectory() as OUTPUT_DIR:
@@ -311,15 +352,20 @@ def test_tpf_with_other_target():
 			assert(pho.starid == sub_target)
 			assert(pho.datasource == 'tpf')
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	test_stamp()
+	test_stamp_width_height()
 	test_images()
 	test_backgrounds()
-	test_catalog()
-	test_catalog_attime()
-	test_aperture()
-	test_pixelflags()
+	test_catalog('tpf')
+	test_catalog('ffi')
+	test_catalog_attime('tpf')
+	test_catalog_attime('ffi')
+	test_aperture('tpf')
+	test_aperture('ffi')
+	test_pixelflags('tpf')
+	test_pixelflags('ffi')
 	test_wcs()
 	#test_cache()
 	test_tpf_with_other_target()

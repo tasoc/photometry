@@ -4,11 +4,15 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
+import pytest
 import sys
 import os.path
+import json
+import tempfile
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import TaskManager, STATUS
 
+#--------------------------------------------------------------------------------------------------
 def test_taskmanager():
 	"""Test of background estimator"""
 
@@ -56,5 +60,143 @@ def test_taskmanager():
 
 		assert(task1_status == STATUS.STARTED.value)
 
+#--------------------------------------------------------------------------------------------------
+def test_taskmanager_invalid():
+
+	# Load the first image in the input directory:
+	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
+	with pytest.raises(FileNotFoundError):
+		TaskManager(os.path.join(INPUT_DIR, 'does-not-exists'))
+
+#--------------------------------------------------------------------------------------------------
+def test_get_tasks():
+
+	# Load the first image in the input directory:
+	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
+	with TaskManager(INPUT_DIR, overwrite=True) as tm:
+		task = tm.get_task(starid=267211065)
+		assert task['priority'] == 1
+
+		# Call with non-existing starid:
+		task = tm.get_task(starid=-1234567890)
+		assert task is None
+
+#--------------------------------------------------------------------------------------------------
+def test_taskmanager_summary():
+
+	# Load the first image in the input directory:
+	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
+	with tempfile.TemporaryDirectory() as tmpdir:
+		summary_file = os.path.join(tmpdir, 'summary.json')
+		with TaskManager(INPUT_DIR, overwrite=True, summary=summary_file) as tm:
+			# Load the summary file:
+			with open(summary_file, 'r') as fid:
+				j = json.load(fid)
+
+			# Everytning should be really empty:
+			print(j)
+			assert j['numtasks'] == 168642
+			assert j['UNKNOWN'] == 0
+			assert j['OK'] == 0
+			assert j['ERROR'] == 0
+			assert j['WARNING'] == 0
+			assert j['ABORT'] == 0
+			assert j['STARTED'] == 0
+			assert j['SKIPPED'] == 0
+			assert j['tasks_run'] == 0
+			assert j['slurm_jobid'] is None
+			assert j['last_error'] is None
+			assert j['mean_elaptime'] is None
+
+			# Start task with priority=1:
+			task = tm.get_random_task()
+			print(task)
+			tm.start_task(task['priority'])
+			tm.write_summary()
+
+			with open(summary_file, 'r') as fid:
+				j = json.load(fid)
+
+			print(j)
+			assert j['numtasks'] == 168642
+			assert j['UNKNOWN'] == 0
+			assert j['OK'] == 0
+			assert j['ERROR'] == 0
+			assert j['WARNING'] == 0
+			assert j['ABORT'] == 0
+			assert j['STARTED'] == 1
+			assert j['SKIPPED'] == 0
+			assert j['tasks_run'] == 0
+			assert j['slurm_jobid'] is None
+			assert j['last_error'] is None
+			assert j['mean_elaptime'] is None
+
+			# Make a fake result we can save;
+			result = task.copy()
+			result['status'] = STATUS.OK
+			result['time'] = 3.14
+
+			# Save the result:
+			tm.save_result(result)
+			tm.write_summary()
+
+			# Load the summary file after "running the task":
+			with open(summary_file, 'r') as fid:
+				j = json.load(fid)
+
+			print(j)
+			assert j['numtasks'] == 168642
+			assert j['UNKNOWN'] == 0
+			assert j['OK'] == 1
+			assert j['ERROR'] == 0
+			assert j['WARNING'] == 0
+			assert j['ABORT'] == 0
+			assert j['STARTED'] == 0
+			assert j['SKIPPED'] == 0
+			assert j['tasks_run'] == 1
+			assert j['slurm_jobid'] is None
+			assert j['last_error'] is None
+			assert j['mean_elaptime'] == 3.14
+
+			task = tm.get_random_task()
+			tm.start_task(task['priority'])
+
+			# Make a fake result we can save;
+			result = task.copy()
+			result['status'] = STATUS.ERROR
+			result['time'] = 6.14
+			result['details'] = {
+				'errors': ['dummy error 1', 'dummy error 2']
+			}
+
+			# Save the result:
+			tm.save_result(result)
+			tm.write_summary()
+
+			# Load the summary file after "running the task":
+			with open(summary_file, 'r') as fid:
+				j = json.load(fid)
+
+			print(j)
+			assert j['numtasks'] == 168642
+			assert j['UNKNOWN'] == 0
+			assert j['OK'] == 1
+			assert j['ERROR'] == 1
+			assert j['WARNING'] == 0
+			assert j['ABORT'] == 0
+			assert j['STARTED'] == 0
+			assert j['SKIPPED'] == 0
+			assert j['tasks_run'] == 2
+			assert j['slurm_jobid'] is None
+			assert j['last_error'] == "dummy error 1\ndummy error 2"
+			assert j['mean_elaptime'] == 3.44
+
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	test_taskmanager()
+	test_get_tasks()
+	test_taskmanager_invalid()
+	test_taskmanager_summary()

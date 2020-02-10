@@ -44,11 +44,9 @@ if name == "nt":
 		possible_locations = []
 		# look in program files for msysgit
 		if "PROGRAMFILES(X86)" in environ:
-			possible_locations.append("%s/Git/cmd/git.exe" %
-									  environ["PROGRAMFILES(X86)"])
+			possible_locations.append("%s/Git/cmd/git.exe" % environ["PROGRAMFILES(X86)"])
 		if "PROGRAMFILES" in environ:
-			possible_locations.append("%s/Git/cmd/git.exe" %
-									  environ["PROGRAMFILES"])
+			possible_locations.append("%s/Git/cmd/git.exe" % environ["PROGRAMFILES"])
 		# look for the github version of git
 		if "LOCALAPPDATA" in environ:
 			github_dir = "%s/GitHub" % environ["LOCALAPPDATA"]
@@ -56,8 +54,7 @@ if name == "nt":
 				for subdir in listdir(github_dir):
 					if not subdir.startswith("PortableGit"):
 						continue
-					possible_locations.append("%s/%s/bin/git.exe" %
-											  (github_dir, subdir))
+					possible_locations.append("%s/%s/bin/git.exe" % (github_dir, subdir))
 		for possible_location in possible_locations:
 			if path.isfile(possible_location):
 				return possible_location
@@ -71,8 +68,7 @@ def call_git_describe(abbrev=7):
 	"""return the string output of git desribe"""
 	try:
 		with open(devnull, "w") as fnull:
-			arguments = [GIT_COMMAND, "describe", "--tags",
-						 "--abbrev=%d" % abbrev]
+			arguments = [GIT_COMMAND, "describe", "--tags", "--abbrev=%d" % abbrev]
 			return check_output(arguments, cwd=CURRENT_DIRECTORY,
 								stderr=fnull).decode("ascii").strip()
 	except (OSError, CalledProcessError):
@@ -151,7 +147,7 @@ def get_version(pep440=False, include_branch=True):
 
 	if include_branch:
 		git_branch = call_git_getbranch()
-		if not git_branch is None:
+		if git_branch is not None:
 			git_version = git_branch + '-' + git_version
 
 	return git_version
