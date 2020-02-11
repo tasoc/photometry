@@ -32,10 +32,13 @@ class polynomial():
 	def __call__(self, x):
 		if self.type == 'standard':
 			return polyval(self.offsetx + self.scalex * (x - self.originx), self.coeffs)
+
 		elif self.type == 'legendre':
 			return legval(self.offsetx + self.scalex * (x - self.originx), self.coeffs)
+
 		elif self.type == 'NotScaled':
 			#return polyval(x, self.coeffs)
 			raise NotImplementedError("Polynomial of type 'NotScaled' is not implemented yet.")
+
 		else:
 			raise NotImplementedError("Unknown polynomial type: '%s'", self.type)
