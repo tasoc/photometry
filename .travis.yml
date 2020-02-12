@@ -31,7 +31,6 @@ jobs:
       before_install:
         - choco install python --version 3.7.4
         - python --version
-        - python -m pip install --upgrade pip
         - git lfs pull
       env: PATH=/c/Python37:/c/Python37/Scripts:$PATH
 
@@ -53,10 +52,10 @@ jobs:
     - os: windows
 
 install:
-  - pip install --upgrade pip
+  - python -m pip install --upgrade pip
   - pip install -r requirements.txt
   - pip install codecov pytest-cov
-  - python run_download_cache.py
+  - travis_wait python run_download_cache.py -q
 script:
   - pytest --cov=photometry/
 after_success:
