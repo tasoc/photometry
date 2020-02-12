@@ -6,6 +6,7 @@ Download any missing data files to cache.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
+import logging
 from astropy.utils.iers import IERS_Auto
 from .spice import TESS_SPICE
 
@@ -22,13 +23,19 @@ def download_cache():
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	logger = logging.getLogger(__name__)
+
 	# This will download IERS data needed for astropy.Time transformations:
 	# https://docs.astropy.org/en/stable/utils/iers.html
+	logger.info("Downloading IERS data...")
 	IERS_Auto().open()
 
 	# The TESS SPICE kernels should be downloaded, if they
 	# are not already.
 	# We also make sure to unload any loaded kernels again,
 	# to ensure that this function has zero effect.
+	logger.info("Downloading SPICE kernels...")
 	with TESS_SPICE() as tsp:
 		tsp.unload()
+
+	logger.info("All cache data downloaded.")
