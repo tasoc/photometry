@@ -12,7 +12,6 @@ import subprocess
 import re
 from datetime import datetime
 import matplotlib.pyplot as plt
-from tqdm import tqdm
 import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.spice import TESS_SPICE
@@ -20,15 +19,10 @@ from photometry.spice import TESS_SPICE
 if __name__ == '__main__':
 	plt.switch_backend('Qt5Agg')
 
-	kernel_folder = os.path.abspath('../photometry/data/spice')
-
-	#files = glob.glob(os.path.join(kernel_folder, '*.bsp'))
-	files = [os.path.join(kernel_folder, k) for k in TESS_SPICE.kernel_files if k.endswith('.bsp')]
-
 	# List of sectors from tess.mit.edu:
-	# WARNING: These are in UTC? The kernels are in ET! We are being a little inconsistent!
+	# TODO: Are these actually in UTC?
 	sectors = [
-		[0,  datetime.strptime('04/18/18', '%m/%d/%y'), datetime.strptime('07/25/18', '%m/%d/%y')],
+		[0,  datetime.strptime('04/18/18 22:51:00.338000', '%m/%d/%y %H:%M:%S.%f'), datetime.strptime('07/25/18', '%m/%d/%y')],
 		[1,  datetime.strptime('07/25/18', '%m/%d/%y'), datetime.strptime('08/22/18', '%m/%d/%y')],
 		[2,  datetime.strptime('08/22/18', '%m/%d/%y'), datetime.strptime('09/20/18', '%m/%d/%y')],
 		[3,  datetime.strptime('09/20/18', '%m/%d/%y'), datetime.strptime('10/18/18', '%m/%d/%y')],
@@ -70,59 +64,69 @@ if __name__ == '__main__':
 		[39, datetime.strptime('05/26/21', '%m/%d/%y'), datetime.strptime('06/24/21', '%m/%d/%y')],
 	]
 
-	fig = plt.figure(figsize=(20,6))
-	ax = fig.add_subplot(111)
+	with TESS_SPICE() as ts:
 
-	for k, fpath in enumerate(tqdm(files)):
-		fname = os.path.basename(fpath)
+		fig = plt.figure(figsize=(15,6), dpi=100)
+		ax = fig.add_subplot(111)
 
 		# This requires the "brief" utility tool
 		# https://naif.jpl.nasa.gov/naif/utilities.html
 		# TODO: There is proberly a way to do this with SpiceyPy
-		proc = subprocess.Popen('brief -s --95 "' + fpath + '"', shell=True, stdout=subprocess.PIPE, universal_newlines=True)
+		proc = subprocess.Popen('brief --95 -utc "' + ts.METAKERNEL + '"', shell=True, stdout=subprocess.PIPE, universal_newlines=True)
 		stdout, stderr = proc.communicate()
 		lines = stdout.split("\n")
 
-		# Parse the two dates into datetime objects:
-		date_line = lines[9].strip()
-		m = re.match('^(\d{4} .{3} \d{2} \d{2}:\d{2}:\d{2})\.(\d+)\s+(\d{4} .{3} \d{2} \d{2}:\d{2}:\d{2})\.(\d+)$', date_line)
-		if m is None:
-			print(stdout)
-			continue
+		k = -1
+		for line in lines:
+			line = line.strip()
+			if not line: continue
+			if line.startswith('Summary for: '):
+				fpath = line[13:]
+				fname = os.path.basename(fpath)
+				k += 1
+				continue
 
-		dt_start = datetime.strptime(m.group(1) + '.{:0<6}'.format(m.group(2)), "%Y %b %d %H:%M:%S.%f")
-		dt_end = datetime.strptime(m.group(3) + '.{:0<6}'.format(m.group(4)), "%Y %b %d %H:%M:%S.%f")
+			m = re.match('^(\d{4}-.{3}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+)\s+(\d{4}-.{3}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+)$', line)
+			if m is not None:
+				dt_start = datetime.strptime(m.group(1) + '.{:0<6}'.format(m.group(2)), "%Y-%b-%d %H:%M:%S.%f")
+				dt_end = datetime.strptime(m.group(3) + '.{:0<6}'.format(m.group(4)), "%Y-%b-%d %H:%M:%S.%f")
 
-		# Plot in different style depending on the type of kernel:
-		if 'DEF' in fname:
-			ax.plot([dt_start, dt_end], [k, k], 'b.-', alpha=0.5, label=fname)
-			ax.fill_between([dt_start, dt_end], 0, k, color='b', alpha=0.1
-					   )
-		elif 'PRE_LONG' in fname:
-			ax.plot([dt_start, dt_end], [k, k], 'r.-', alpha=0.5)
-			ax.fill_between([dt_start, dt_end], 0, k, color='r', alpha=0.1)
+				print(fname + ": " + str(dt_start) + " - " + str(dt_end))
 
-		elif 'PRE_COMM' in fname:
-			ax.plot([dt_start, dt_end], [k, k], 'g.-', alpha=0.5)
-			ax.fill_between([dt_start, dt_end], 0, k, color='g', alpha=0.1)
+				# Plot in different style depending on the type of kernel:
+				if 'DEF' in fname:
+					color = 'b'
+				elif 'PRE_LONG' in fname:
+					color = 'r'
+				elif 'PRE_MNVR' in fname:
+					color = 'g'
+				elif 'PRE_COMM' in fname:
+					color = 'c'
+				elif 'PRE' in fname:
+					color = 'y'
+				else:
+					print("???????")
 
-		elif 'PRE_MNVR' in fname:
-			ax.plot([dt_start, dt_end], [k, k], 'c.-', alpha=0.5)
-			ax.fill_between([dt_start, dt_end], 0, k, color='c', alpha=0.1)
+				ax.plot([dt_start, dt_end], [k, k], color=color, ls='-', marker='.', alpha=0.5, label=fname)
+				ax.fill_between([dt_start, dt_end], 0, k, color=color, alpha=0.1)
 
-		elif 'PRE' in fname:
-			ax.plot([dt_start, dt_end], [k, k], 'y.-', alpha=0.5)
-			ax.fill_between([dt_start, dt_end], 0, k, color='y', alpha=0.1)
+				fpath = None
+				fname = None
 
-		else:
-			print(fname)
+		# Plot sectors as well:
+		for s in sectors:
+			ax.axvline(s[1], color='0.7', ls=':')
+			ax.text(s[1] + (s[2] - s[1])/2, k+10, '%d' % s[0], horizontalalignment='center', verticalalignment='top')
+		ax.axvline(sectors[-1][2], color='0.7', ls=':')
 
-	# Plot sectors as well:
-	for s in sectors:
-		ax.axvline(s[1], color='0.7', ls=':')
-		ax.text(s[1] + (s[2] - s[1])/2, k+10, '%d' % s[0], horizontalalignment='center', verticalalignment='top')
-
+	ax.set_xlim(left=datetime(2018, 3, 20))
 	ax.set_ylim(bottom=0)
+	# For zooming in on pre-sector1:
+	#ax.set_xlim(right=datetime(2018, 8, 15))
+	#ax.set_ylim(top=45)
+
 	ax.set_ylabel('Kernel number')
-	ax.set_xlabel('Time (ET)')
-	plt.show()
+	ax.set_xlabel('Time (UTC)')
+	fig.savefig('spice_coverage.png', bbox_inches='tight')
+
+	plt.show(block=True)
