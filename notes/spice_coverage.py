@@ -17,12 +17,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.spice import TESS_SPICE
 
 if __name__ == '__main__':
+	# Switch back to interactive plotting backend:
+	# Importing photometry currently changes the backend to Agg, which is non-interactive.
 	plt.switch_backend('Qt5Agg')
 
 	# List of sectors from tess.mit.edu:
 	# TODO: Are these actually in UTC?
 	sectors = [
-		[0,  datetime.strptime('04/18/18 22:51:00.338000', '%m/%d/%y %H:%M:%S.%f'), datetime.strptime('07/25/18', '%m/%d/%y')],
+		[0,  datetime.strptime('04/18/18 22:51:00.338000 UTC', '%m/%d/%y %H:%M:%S.%f %Z'), datetime.strptime('07/25/18', '%m/%d/%y')],
 		[1,  datetime.strptime('07/25/18', '%m/%d/%y'), datetime.strptime('08/22/18', '%m/%d/%y')],
 		[2,  datetime.strptime('08/22/18', '%m/%d/%y'), datetime.strptime('09/20/18', '%m/%d/%y')],
 		[3,  datetime.strptime('09/20/18', '%m/%d/%y'), datetime.strptime('10/18/18', '%m/%d/%y')],
