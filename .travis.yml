@@ -56,7 +56,7 @@ install:
   - pip install --upgrade pip
   - pip install -r requirements.txt
   - pip install codecov pytest-cov
-  - python -c "from photometry import download_cache; download_cache()"
+  - python run_download_cache.py
 script:
   - pytest --cov=photometry/
 after_success:

@@ -64,11 +64,10 @@ if __name__ == '__main__':
 		[39, datetime.strptime('05/26/21', '%m/%d/%y'), datetime.strptime('06/24/21', '%m/%d/%y')],
 	]
 
+	fig = plt.figure(figsize=(15,6), dpi=100)
+	ax = fig.add_subplot(111)
+
 	with TESS_SPICE() as ts:
-
-		fig = plt.figure(figsize=(15,6), dpi=100)
-		ax = fig.add_subplot(111)
-
 		# This requires the "brief" utility tool
 		# https://naif.jpl.nasa.gov/naif/utilities.html
 		# TODO: There is proberly a way to do this with SpiceyPy
@@ -113,11 +112,13 @@ if __name__ == '__main__':
 				fpath = None
 				fname = None
 
-		# Plot sectors as well:
-		for s in sectors:
-			ax.axvline(s[1], color='0.7', ls=':')
-			ax.text(s[1] + (s[2] - s[1])/2, k+10, '%d' % s[0], horizontalalignment='center', verticalalignment='top')
-		ax.axvline(sectors[-1][2], color='0.7', ls=':')
+		ts.unload()
+
+	# Plot sectors as well:
+	for s in sectors:
+		ax.axvline(s[1], color='0.7', ls=':')
+		ax.text(s[1] + (s[2] - s[1])/2, k+10, '%d' % s[0], horizontalalignment='center', verticalalignment='top')
+	ax.axvline(sectors[-1][2], color='0.7', ls=':')
 
 	ax.set_xlim(left=datetime(2018, 3, 20))
 	ax.set_ylim(bottom=0)
