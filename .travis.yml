@@ -1,6 +1,6 @@
 language: python
 cache: pip
-sudo: required
+os: linux
 
 # We are specifying the build matrix manually, since there is too little overlap
 # between the different builds:
@@ -55,7 +55,7 @@ install:
   - python -m pip install --upgrade pip
   - pip install -r requirements.txt
   - pip install codecov pytest-cov
-  - python -c "from photometry.spice import TESS_SPICE; print(TESS_SPICE())"
+  - travis_wait python run_download_cache.py -q
 script:
   - pytest --cov=photometry/
 after_success:
@@ -70,15 +70,15 @@ branches:
 # Deploy to GitHub Releases, making a release of the
 # code whenever a new tag is added on the master branch
 before_deploy:
-  - python -c "from photometry import version; version.update_release_version(); print(version.get_version(pep440=True))"
-  - cat VERSION
+  - git stash --all
+  - python -c "from photometry import version; version.update_release_version();"
 deploy:
   provider: releases
-  api_key: $GITHUB_TOKEN
+  token: $GITHUB_TOKEN
   skip_cleanup: true
   draft: true
-  name: "Version $TRAVIS_TAG"
-  body: "Version $TRAVIS_TAG"
+  name: "${TRAVIS_TAG/v/Version }"
+  body: "${TRAVIS_TAG/v/Version }"
   on:
     branch:
       - master

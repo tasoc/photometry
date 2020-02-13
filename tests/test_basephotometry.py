@@ -189,12 +189,12 @@ def test_aperture(datasource):
 
 			assert pho.sumimage.shape == pho.aperture.shape
 
-	# Try this very bright star, where the centre is saturated.
-	# The aperture for this star should have pixels near the centre that
-	# were not used in the background calculation for FFIs:
-	with BasePhotometry(267211065, INPUT_DIR, '.', datasource='ffi', plot=True, **DUMMY_KWARG) as pho:
-		central_pixel = pho.aperture[int(np.round(pho.target_pos_row_stamp)), int(np.round(pho.target_pos_column_stamp))]
-		assert central_pixel & 4 == 0, "Central pixel of this bright star should not be used in background"
+		# Try this very bright star, where the centre is saturated.
+		# The aperture for this star should have pixels near the centre that
+		# were not used in the background calculation for FFIs:
+		with BasePhotometry(267211065, INPUT_DIR, OUTPUT_DIR, datasource='ffi', plot=True, **DUMMY_KWARG) as pho:
+			central_pixel = pho.aperture[int(np.round(pho.target_pos_row_stamp)), int(np.round(pho.target_pos_column_stamp))]
+			assert central_pixel & 4 == 0, "Central pixel of this bright star should not be used in background"
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
