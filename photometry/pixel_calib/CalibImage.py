@@ -31,8 +31,13 @@ class CalibImage(CCDData):
 	def __radd__(self, other):
 		return self.__add__(other)
 
-	#def __rsub__(self, other):
-	#	return self.__sub__(other)
+	def __rsub__(self, other):
+		return self.subtract(other, handle_meta='first_found').multiply(-1, handle_meta='first_found')
 
 	def __rmul__(self, other):
 		return self.__mul__(other)
+
+	def __setitem__(self, index, value):	
+		self.data[index] = value.data
+		self.uncertainty.array[index] = value.uncertainty.array	
+		#self.mask[index] = value.mask

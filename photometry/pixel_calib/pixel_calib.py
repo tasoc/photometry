@@ -18,7 +18,6 @@ from .CalibImage import CalibImage
 from .polynomial import polynomial
 from ..utilities import download_file
 from ..plots import plt, plot_image
-plt.switch_backend('Qt5Agg')
 
 #--------------------------------------------------------------------------------------------------
 class PixelCalibrator(object):
@@ -344,20 +343,23 @@ class PixelCalibrator(object):
 
 	#---------------------------------------------------------------------------------------------
 	def apply_undershoot(self, img):
-	
+
 		self.logger.info("Doing undershoot correction...")
 		outputs = img.meta['aperture'][0,:] & (32 + 64 + 128 + 256)
-	
+
 		for output in np.unique(outputs):
 			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
 			ushoot = self.undershoot[output_name]
-			
+
 			#
 			indx = (outputs == output)
 			subimg = img[:, indx]
-			
-			subimg[:, 1:] = subimg[:, 1:] + ushoot * subimg[:, :-1]
-		
+
+			if output in ('B', 'D'):
+				subimg[:, 1:] = subimg[:, 1:] + ushoot * subimg[:, :-1]
+			else:
+				subimg[:, :-1] = subimg[:, :-1] + ushoot * subimg[:, 1:]
+
 		return img
 
 	#--------------------------------------------------------------------------
@@ -376,10 +378,10 @@ class PixelCalibrator(object):
 		"""Perform all calibration steps in sequence."""
 
 		img = self.apply_twodblack(img)
-		#img = self.apply_undershoot(img)
-		#img = self.apply_linearity_gain(img)
+		img = self.apply_undershoot(img)
+		img = self.apply_linearity_gain(img)
 		#img = self.apply_smear(img)
-		img = self.apply_flatfield(img)
+		#img = self.apply_flatfield(img)
 		img = self.to_counts_per_second(img)
 
 		return img
@@ -395,7 +397,7 @@ class PixelCalibrator(object):
 
 		# Mask of pixels not to include in any kind of calculations:
 		mask = (meta['aperture'] & 1 == 0)
-		
+
 		#outputs = img.meta['aperture'][0, :] & (32 + 64 + 128 + 256)
 
 		for k in range(len(tpf['PIXELS'].data['RAW_CNTS'])):
@@ -414,15 +416,16 @@ class PixelCalibrator(object):
 
 			plt.figure(figsize=(20,6))
 			plt.subplot(131)
-			plot_image(img.data, xlabel=None, ylabel=None, make_cbar=True)
+			plot_image(img.data, xlabel=None, ylabel=None, make_cbar=True, clabel='Raw counts (e/cadence)')
 			plt.subplot(132)
 			plot_image(tpf['PIXELS'].data['FLUX'][k] + tpf['PIXELS'].data['FLUX_BKG'][k], xlabel=None, ylabel=None, make_cbar=True)
 			plt.subplot(133)
 			plot_image(img_cal.data, xlabel=None, ylabel=None, make_cbar=True)
-			plt.show(block=True)
 
 			# Store the resulting calibrated image in the FITS hdu:
 			tpf['PIXELS'].data['FLUX'][k][:] = np.asarray(img_cal.data)
 			tpf['PIXELS'].data['FLUX_ERR'][k][:] = img_cal.uncertainty.array
+
+			break
 
 		return tpf
