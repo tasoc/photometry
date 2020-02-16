@@ -4,6 +4,7 @@
 Tests of SPICE Kernel module.
 """
 
+import pytest
 import sys
 import os
 import numpy as np
@@ -25,21 +26,22 @@ from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
 #------------------------------------------------------------------------------
-def test_timestamps():
-
+@pytest.mark.datafiles(INPUT_DIR)
+def test_timestamps(datafiles):
+	test_dir = str(datafiles)
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for starid in (260795451, 267211065):
 			print("="*72)
 			print("TIC %d" % starid)
 
-			tpf_file = find_tpf_files(INPUT_DIR, starid=starid)[0]
+			tpf_file = find_tpf_files(test_dir, starid=starid)[0]
 			with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
 				time_tpf = hdu[1].data['TIME']
 				timecorr_tpf = hdu[1].data['TIMECORR'] * 86400 * 1000
 
 			intp_timecorr = interp1d(time_tpf, timecorr_tpf, kind='linear')
 
-			with AperturePhotometry(starid, INPUT_DIR, OUTPUT_DIR, plot=False, datasource='ffi', sector=1, camera=3, ccd=2) as pho:
+			with AperturePhotometry(starid, test_dir, OUTPUT_DIR, plot=False, datasource='ffi', sector=1, camera=3, ccd=2) as pho:
 				#pho.photometry()
 				time_ffi = np.asarray(pho.lightcurve['time'])
 				timecorr_ffi = np.asarray(pho.lightcurve['timecorr']) * 86400 * 1000

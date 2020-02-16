@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 29 10:54:10 2017
+Tests of Aperture Photometry.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -23,11 +23,12 @@ DUMMY_TARGET = 260795451
 DUMMY_KWARG = {'sector': 1, 'camera': 3, 'ccd': 2}
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
-def test_aperturephotometry(datasource):
-
+def test_aperturephotometry(datafiles, datasource):
+	test_dir = str(datafiles)
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with AperturePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho:
+		with AperturePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho:
 
 			pho.photometry()
 			filepath = pho.save_lightcurve()
@@ -70,17 +71,18 @@ def test_aperturephotometry(datasource):
 				assert np.any(ap & 8 != 0), "No position mask set"
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
-def test_aperturephotometry_plots(datasource):
-
+def test_aperturephotometry_plots(datafiles, datasource):
+	test_dir = str(datafiles)
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with AperturePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, plot=False, datasource=datasource, **DUMMY_KWARG) as pho_noplot:
+		with AperturePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, plot=False, datasource=datasource, **DUMMY_KWARG) as pho_noplot:
 			pho_noplot.photometry()
 			assert isinstance(pho_noplot.plot, bool), "PLOT should be boolean"
 			assert not pho_noplot.plot, "PLOT should be False"
 			print(pho_noplot.status)
 
-		with AperturePhotometry(DUMMY_TARGET, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho_plot:
+		with AperturePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho_plot:
 			pho_plot.photometry()
 			assert isinstance(pho_plot.plot, bool), "PLOT should be boolean"
 			assert pho_plot.plot, "PLOT should be True"
@@ -101,8 +103,4 @@ if __name__ == '__main__':
 	if not logger_phot.hasHandlers(): logger_phot.addHandler(console)
 	logger_phot.setLevel(logging.INFO)
 
-	test_aperturephotometry('tpf')
-	test_aperturephotometry('ffi')
-	test_aperturephotometry_plots('tpf')
-	test_aperturephotometry_plots('ffi')
-	plt.show()
+	pytest.main([__file__])

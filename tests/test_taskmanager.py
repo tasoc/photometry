@@ -12,15 +12,14 @@ import tempfile
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import TaskManager, STATUS
 
+INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
 #--------------------------------------------------------------------------------------------------
-def test_taskmanager():
-	"""Test of background estimator"""
-
-	# Load the first image in the input directory:
-	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
-	# Find the shape of the original image:
-	with TaskManager(INPUT_DIR, overwrite=True) as tm:
+@pytest.mark.datafiles(INPUT_DIR)
+def test_taskmanager(datafiles):
+	"""Test of TaskManager"""
+	test_dir = str(datafiles)
+	with TaskManager(test_dir, overwrite=True) as tm:
 		# Get the number of tasks:
 		numtasks = tm.get_number_tasks()
 		print(numtasks)
@@ -61,21 +60,17 @@ def test_taskmanager():
 		assert(task1_status == STATUS.STARTED.value)
 
 #--------------------------------------------------------------------------------------------------
-def test_taskmanager_invalid():
-
-	# Load the first image in the input directory:
-	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
+@pytest.mark.datafiles(INPUT_DIR)
+def test_taskmanager_invalid(datafiles):
+	test_dir = str(datafiles)
 	with pytest.raises(FileNotFoundError):
-		TaskManager(os.path.join(INPUT_DIR, 'does-not-exists'))
+		TaskManager(os.path.join(test_dir, 'does-not-exists'))
 
 #--------------------------------------------------------------------------------------------------
-def test_get_tasks():
-
-	# Load the first image in the input directory:
-	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
-	with TaskManager(INPUT_DIR, overwrite=True) as tm:
+@pytest.mark.datafiles(INPUT_DIR)
+def test_get_tasks(datafiles):
+	test_dir = str(datafiles)
+	with TaskManager(test_dir, overwrite=True) as tm:
 		task = tm.get_task(starid=267211065)
 		assert task['priority'] == 1
 
@@ -84,14 +79,12 @@ def test_get_tasks():
 		assert task is None
 
 #--------------------------------------------------------------------------------------------------
-def test_taskmanager_summary():
-
-	# Load the first image in the input directory:
-	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
+@pytest.mark.datafiles(INPUT_DIR)
+def test_taskmanager_summary(datafiles):
+	test_dir = str(datafiles)
 	with tempfile.TemporaryDirectory() as tmpdir:
 		summary_file = os.path.join(tmpdir, 'summary.json')
-		with TaskManager(INPUT_DIR, overwrite=True, summary=summary_file) as tm:
+		with TaskManager(test_dir, overwrite=True, summary=summary_file) as tm:
 			# Load the summary file:
 			with open(summary_file, 'r') as fid:
 				j = json.load(fid)
@@ -196,7 +189,9 @@ def test_taskmanager_summary():
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_taskmanager()
-	test_get_tasks()
-	test_taskmanager_invalid()
-	test_taskmanager_summary()
+	test_taskmanager(INPUT_DIR)
+	test_get_tasks(INPUT_DIR)
+	test_taskmanager_invalid(INPUT_DIR)
+	test_taskmanager_summary(INPUT_DIR)
+
+	#pytest.main([__file__])
