@@ -49,6 +49,13 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		logger.error("Image is all NaN")
 		return None
 
+	# Special treatment for boolean arrays:
+	if isinstance(image, np.ndarray) and image.dtype == 'bool':
+		if vmin is None: vmin = 0
+		if vmax is None: vmax = 1
+		if cbar_ticks is None: cbar_ticks = [0, 1]
+		if cbar_ticklabels is None: cbar_ticklabels = ['False', 'True']
+
 	# Calcualte limits of color scaling:
 	if vmin is None or vmax is None:
 		vmin1, vmax1 = PercentileInterval(percentile).get_limits(image)
