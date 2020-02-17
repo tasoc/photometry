@@ -6,6 +6,7 @@ Tests of photometry.quality.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
+import pytest
 import numpy as np
 import sys
 import os.path
@@ -160,6 +161,4 @@ def test_PixelQuality():
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_CorrectorQuality()
-	test_TESSQuality()
-	test_PixelQuality()
+	pytest.main([__file__])

@@ -14,6 +14,8 @@ from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
 #from photometry.plots import plt
 import h5py
 
+INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
 #--------------------------------------------------------------------------------------------------
 def test_imagemotion_invalid_warpmode():
 	"""Test ImageMovementKernel with ínvalid warpmode."""
@@ -22,15 +24,16 @@ def test_imagemotion_invalid_warpmode():
 		ImageMovementKernel(warpmode='invalid')
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian'])
-def test_imagemotion(warpmode):
+def test_imagemotion(datafiles, warpmode):
 	"""Test of ImageMovementKernel"""
 
 	print("Testing warpmode=" + warpmode)
+	test_dir = str(datafiles)
 
 	# Load the first image in the input directory:
-	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input', 'images')
-	files = find_ffi_files(INPUT_DIR, camera=1, ccd=1)
+	files = find_ffi_files(os.path.join(test_dir, 'images'), camera=1, ccd=1)
 	fname = files[0]
 
 	# Load the image:
@@ -104,8 +107,11 @@ def test_imagemotion(warpmode):
 	print("Done")
 
 #--------------------------------------------------------------------------------------------------
-def test_imagemotion_wcs():
+@pytest.mark.datafiles(INPUT_DIR)
+def test_imagemotion_wcs(datafiles):
 	"""Test of ImageMovementKernel"""
+
+	test_dir = str(datafiles)
 
 	# Some positions across the image:
 	xx, yy = np.meshgrid(
@@ -117,7 +123,7 @@ def test_imagemotion_wcs():
 	print(xy)
 
 	# Load the first image in the input directory:
-	INPUT_FILE = find_hdf5_files(os.path.join(os.path.dirname(__file__), 'input'), sector=1, camera=1, ccd=1)[0]
+	INPUT_FILE = find_hdf5_files(test_dir, sector=1, camera=1, ccd=1)[0]
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 
@@ -191,8 +197,4 @@ def test_imagemotion_wcs():
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_imagemotion_invalid_warpmode()
-	test_imagemotion('unchanged')
-	test_imagemotion('translation')
-	test_imagemotion('euclidian')
-	test_imagemotion_wcs()
+	pytest.main([__file__])

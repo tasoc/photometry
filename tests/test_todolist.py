@@ -4,6 +4,7 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
+import pytest
 import os
 import numpy as np
 import sys
@@ -15,6 +16,8 @@ import contextlib
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import todolist
 from photometry.utilities import TqdmLoggingHandler
+
+INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
 #----------------------------------------------------------------------
 def test_methods_file():
@@ -67,21 +70,12 @@ def test_exclude_file():
 #		assert(cbv_area == 131)
 
 #----------------------------------------------------------------------
-def test_make_todolist():
-
-	# Setup logging:
-	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-	console = TqdmLoggingHandler()
-	console.setFormatter(formatter)
-	logger_parent = logging.getLogger('photometry')
-	logger_parent.setLevel(logging.INFO)
-	if not logger_parent.hasHandlers():
-		logger_parent.addHandler(console)
-
-	input_dir = os.path.join(os.path.dirname(__file__), 'input')
+@pytest.mark.datafiles(INPUT_DIR)
+def test_make_todolist(datafiles):
+	test_dir = str(datafiles)
 	with tempfile.NamedTemporaryFile() as tmpfile:
 		# Run make_todo and save output to temp-file:
-		todolist.make_todo(input_dir, cameras=3, ccds=2, output_file=tmpfile.name)
+		todolist.make_todo(test_dir, cameras=3, ccds=2, output_file=tmpfile.name)
 
 		tmpfile.flush()
 		assert os.path.exists(tmpfile.name + '.sqlite'), "TODO-file was not created"
@@ -103,7 +97,13 @@ def test_make_todolist():
 
 #----------------------------------------------------------------------
 if __name__ == '__main__':
-	test_methods_file()
-	test_exclude_file()
-	#test_calc_cbv_area()
-	test_make_todolist()
+	# Setup logging:
+	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+	console = TqdmLoggingHandler()
+	console.setFormatter(formatter)
+	logger_parent = logging.getLogger('photometry')
+	logger_parent.setLevel(logging.INFO)
+	if not logger_parent.hasHandlers():
+		logger_parent.addHandler(console)
+
+	pytest.main([__file__])

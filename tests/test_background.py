@@ -4,23 +4,27 @@
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
+import pytest
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.backgrounds import fit_background
 from photometry.utilities import find_ffi_files, load_ffi_fits
 
+INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input', 'images')
+
 #------------------------------------------------------------------------------
-def test_background():
+@pytest.mark.datafiles(INPUT_DIR)
+def test_background(datafiles):
 	"""Test of background estimator"""
 
 	# Load the first image in the input directory:
-	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input', 'images')
-	fname = find_ffi_files(INPUT_DIR)[0]
+	test_dir = str(datafiles)
+	fname = find_ffi_files(test_dir)[0]
 	img, hdr = load_ffi_fits(fname, return_header=True)
 
 	# Estimate the background:
-	bck, mask = fit_background(fname, )
+	bck, mask = fit_background(fname)
 
 	# Print some information:
 	print(fname)
@@ -33,4 +37,4 @@ def test_background():
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_background()
+	pytest.main([__file__])

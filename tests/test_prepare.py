@@ -16,21 +16,24 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import prepare
 from photometry.utilities import TqdmLoggingHandler
 
+INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
 #--------------------------------------------------------------------------------------------------
 def test_prepare_photometry_invalid_input_dir():
 
-	invalid_input_dir = os.path.join(os.path.dirname(__file__), 'input', 'does', 'not', 'exist')
+	invalid_input_dir = os.path.join(INPUT_DIR, 'does', 'not', 'exist')
 	print(invalid_input_dir)
 	with pytest.raises(NotADirectoryError):
 		prepare.prepare_photometry(invalid_input_dir)
 
-	not_a_directory = os.path.join(os.path.dirname(__file__), 'input', 'catalog_sector001_camera1_ccd1.sqlite')
+	not_a_directory = os.path.join(INPUT_DIR, 'catalog_sector001_camera1_ccd1.sqlite')
 	print(not_a_directory)
 	with pytest.raises(NotADirectoryError):
 		prepare.prepare_photometry(not_a_directory)
 
 #--------------------------------------------------------------------------------------------------
-def test_prepare_photometry():
+@pytest.mark.datafiles(INPUT_DIR)
+def test_prepare_photometry(datafiles):
 
 	# The known sizes for input-data:
 	Ntimes = 4
@@ -45,10 +48,10 @@ def test_prepare_photometry():
 	if not logger_parent.hasHandlers():
 		logger_parent.addHandler(console)
 
-	input_dir = os.path.join(os.path.dirname(__file__), 'input')
+	test_dir = str(datafiles)
 	with tempfile.NamedTemporaryFile() as tmpfile:
 		# Run prepare_photometry and save output to temp-file:
-		prepare.prepare_photometry(input_dir, sectors=1, cameras=3, ccds=2, output_file=tmpfile.name)
+		prepare.prepare_photometry(test_dir, sectors=1, cameras=3, ccds=2, output_file=tmpfile.name)
 
 		tmpfile.flush()
 		assert os.path.exists(tmpfile.name + '.hdf5'), "HDF5 was not created"
@@ -93,4 +96,4 @@ def test_prepare_photometry():
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	test_prepare_photometry_invalid_input_dir()
-	test_prepare_photometry()
+	test_prepare_photometry(INPUT_DIR)

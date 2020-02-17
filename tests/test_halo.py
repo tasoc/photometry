@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-Created on Fri Sep 29 10:54:10 2017
+Tests of HaloPhotometry.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -17,16 +17,17 @@ from astropy.io import fits
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import HaloPhotometry, STATUS
 
+INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
 #--------------------------------------------------------------------------------------------------
 #@pytest.mark.skipif(os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true',
 #	reason="This is simply too slow to run on Travis. We need to do something about that.'")
+@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf',]) # Not testing 'ffi' since there is not enough data
-def test_halo(datasource):
-
-	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
+def test_halo(datafiles, datasource):
+	test_dir = str(datafiles)
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with HaloPhotometry(267211065, INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, sector=1, camera=3, ccd=2) as pho:
+		with HaloPhotometry(267211065, test_dir, OUTPUT_DIR, plot=True, datasource=datasource, sector=1, camera=3, ccd=2) as pho:
 
 			pho.photometry()
 			filepath = pho.save_lightcurve()
@@ -78,5 +79,5 @@ if __name__ == '__main__':
 	if not logger_phot.hasHandlers(): logger_phot.addHandler(console)
 	logger_phot.setLevel(logging.INFO)
 
-	test_halo('tpf')
-	#test_halo('ffi')
+	test_halo(INPUT_DIR, 'tpf')
+	#test_halo(INPUT_DIR, 'ffi')
