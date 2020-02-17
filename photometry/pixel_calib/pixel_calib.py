@@ -41,6 +41,7 @@ class PixelCalibrator(object):
 		self.readout_time = 0.5 * u.second
 
 		# Storage of calibration data:
+		self._readnoise = None
 		self._twodblack = None
 		self._flatfield = None
 		self._gain = None
@@ -164,6 +165,27 @@ class PixelCalibrator(object):
 					self._virtual_rows = np.asarray(hdu[1].data['VROW_CAL'][:, ic1:ic2])
 
 		return self._virtual_rows
+
+	#----------------------------------------------------------------------------------------------
+	@property
+	def readnoise(self):
+		"""CCD read-noise model."""
+
+		if self._readnoise is None:
+			self.logger.info("Loading read-noise model...")
+			readnoise_model = ET.parse(os.path.join(self.datadir, 'tess2018143203310-41006_100-read-noise.xml')).getroot()
+
+			self._readnoise = {}
+			for output in ('A', 'B', 'C', 'D'):
+				readnoise = readnoise_model.find("./channel[@cameraNumber='{camera:d}'][@ccdNumber='{ccd:d}'][@ccdOutput='{output}']".format(
+					camera=self.camera,
+					ccd=self.ccd,
+					output=output
+				)).get('readNoiseDNPerRead')
+
+				self._readnoise[output] = float(readnoise) * u.electron
+
+		return self._readnoise
 
 	#----------------------------------------------------------------------------------------------
 	@property
@@ -398,13 +420,24 @@ class PixelCalibrator(object):
 		# Mask of pixels not to include in any kind of calculations:
 		mask = (meta['aperture'] & 1 == 0)
 
-		#outputs = img.meta['aperture'][0, :] & (32 + 64 + 128 + 256)
+		# Build read-noise image:
+		outputs = meta['aperture'] & (32 + 64 + 128 + 256)
+		read_noise = np.zeros_like(meta['aperture'], dtype='float64')
+		for output in np.unique(outputs):
+			indx = (outputs == output)
+			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
+			read_noise[indx] = meta['coadds'] * self.readnoise[output_name].value
+
 
 		for k in range(len(tpf['PIXELS'].data['RAW_CNTS'])):
+
+			shot_noise = np.sqrt(tpf['PIXELS'].data['RAW_CNTS'][k])
+			total_noise = np.sqrt( read_noise**2 + shot_noise**2 )
+
 			# Construct CCDData image object:
 			img = CalibImage(
 				data=tpf['PIXELS'].data['RAW_CNTS'][k],
-				uncertainty=StdDevUncertainty(np.sqrt(tpf['PIXELS'].data['RAW_CNTS'][k])),
+				uncertainty=StdDevUncertainty(total_noise),
 				unit=u.electron, # u.ct? u.adu?
 				mask=mask,
 				meta=meta
@@ -412,15 +445,21 @@ class PixelCalibrator(object):
 
 			# Calibrate the image:
 			img_cal = self.calibrate(img.copy())
-			print(img_cal.unit)
 
-			plt.figure(figsize=(20,6))
-			plt.subplot(131)
-			plot_image(img.data, xlabel=None, ylabel=None, make_cbar=True, clabel='Raw counts (e/cadence)')
-			plt.subplot(132)
-			plot_image(tpf['PIXELS'].data['FLUX'][k] + tpf['PIXELS'].data['FLUX_BKG'][k], xlabel=None, ylabel=None, make_cbar=True)
-			plt.subplot(133)
-			plot_image(img_cal.data, xlabel=None, ylabel=None, make_cbar=True)
+			plt.figure(figsize=(6,10))
+			plt.subplot(321)
+			plot_image(img.data, xlabel=None, ylabel=None, make_cbar=True, clabel='Raw counts (e/cadence)', title='RAW_CNTS')
+			plt.subplot(323)
+			plot_image(tpf['PIXELS'].data['FLUX'][k] + tpf['PIXELS'].data['FLUX_BKG'][k], xlabel=None, ylabel=None, make_cbar=True, title='SPOC Flux')
+			plt.subplot(324)
+			plot_image(img_cal.data, xlabel=None, ylabel=None, make_cbar=True, title='TASOC Flux')
+
+			#plt.subplot(324)
+			#plot_image(img.uncertainty.array, xlabel=None, ylabel=None, make_cbar=True, clabel='Raw counts (e/cadence)')
+			plt.subplot(325)
+			plot_image(tpf['PIXELS'].data['FLUX_ERR'][k], xlabel=None, ylabel=None, make_cbar=True, title='SPOC Error')
+			plt.subplot(326)
+			plot_image(img_cal.uncertainty.array, xlabel=None, ylabel=None, make_cbar=True, title='TASOC Error')
 
 			# Store the resulting calibrated image in the FITS hdu:
 			tpf['PIXELS'].data['FLUX'][k][:] = np.asarray(img_cal.data)
