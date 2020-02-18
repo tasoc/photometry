@@ -7,7 +7,6 @@ Visualize the time coverage of the loaded SPICE kernels.
 """
 
 import os.path
-import glob
 import subprocess
 import re
 from datetime import datetime

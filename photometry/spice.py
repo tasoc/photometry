@@ -45,6 +45,7 @@ class TESS_SPICE(object):
 		#'TESS_EPH_PRE_LONG_2018004_01.bsp', # No informaion on TESS
 		#'TESS_EPH_PRE_LONG_2018080_01.bsp', # Only (really) providing info before launch
 		'TESS_EPH_PRE_LONG_2018109_02.bsp',
+		'TESS_EPH_PRE_LONG_2018176_01.bsp',
 		'TESS_EPH_PRE_LONG_2019045_01.bsp',
 		'TESS_EPH_PRE_LONG_2019364_21.bsp',
 
