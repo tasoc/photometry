@@ -14,8 +14,6 @@ from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
 #from photometry.plots import plt
 import h5py
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
 #--------------------------------------------------------------------------------------------------
 def test_imagemotion_invalid_warpmode():
 	"""Test ImageMovementKernel with ínvalid warpmode."""
@@ -24,16 +22,14 @@ def test_imagemotion_invalid_warpmode():
 		ImageMovementKernel(warpmode='invalid')
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian'])
-def test_imagemotion(datafiles, warpmode):
+def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 	"""Test of ImageMovementKernel"""
 
 	print("Testing warpmode=" + warpmode)
-	test_dir = str(datafiles)
 
 	# Load the first image in the input directory:
-	files = find_ffi_files(os.path.join(test_dir, 'images'), camera=1, ccd=1)
+	files = find_ffi_files(os.path.join(SHARED_INPUT_DIR, 'images'), camera=1, ccd=1)
 	fname = files[0]
 
 	# Load the image:
@@ -107,11 +103,8 @@ def test_imagemotion(datafiles, warpmode):
 	print("Done")
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_imagemotion_wcs(datafiles):
+def test_imagemotion_wcs(SHARED_INPUT_DIR):
 	"""Test of ImageMovementKernel"""
-
-	test_dir = str(datafiles)
 
 	# Some positions across the image:
 	xx, yy = np.meshgrid(
@@ -123,7 +116,7 @@ def test_imagemotion_wcs(datafiles):
 	print(xy)
 
 	# Load the first image in the input directory:
-	INPUT_FILE = find_hdf5_files(test_dir, sector=1, camera=1, ccd=1)[0]
+	INPUT_FILE = find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=1, ccd=1)[0]
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 

@@ -17,11 +17,9 @@ from photometry import TaskManager, STATUS
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(os.path.join(INPUT_DIR, 'todo.sqlite'))
-def test_taskmanager(datafiles):
+def test_taskmanager(PRIVATE_TODO_FILE):
 	"""Test of TaskManager"""
-	todo_file = str(datafiles)
-	with TaskManager(todo_file, overwrite=True) as tm:
+	with TaskManager(PRIVATE_TODO_FILE, overwrite=True) as tm:
 		# Get the number of tasks:
 		numtasks = tm.get_number_tasks()
 		print(numtasks)
@@ -67,10 +65,8 @@ def test_taskmanager_invalid():
 		TaskManager(os.path.join(INPUT_DIR, 'does-not-exists'))
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(os.path.join(INPUT_DIR, 'todo.sqlite'))
-def test_get_tasks(datafiles):
-	todo_file = str(datafiles)
-	with TaskManager(todo_file, overwrite=True) as tm:
+def test_get_tasks(PRIVATE_TODO_FILE):
+	with TaskManager(PRIVATE_TODO_FILE, overwrite=True) as tm:
 		task = tm.get_task(starid=267211065)
 		assert task['priority'] == 1
 
@@ -79,12 +75,10 @@ def test_get_tasks(datafiles):
 		assert task is None
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(os.path.join(INPUT_DIR, 'todo.sqlite'))
-def test_taskmanager_summary(datafiles):
-	todo_file = str(datafiles)
+def test_taskmanager_summary(PRIVATE_TODO_FILE):
 	with tempfile.TemporaryDirectory() as tmpdir:
 		summary_file = os.path.join(tmpdir, 'summary.json')
-		with TaskManager(todo_file, overwrite=True, summary=summary_file) as tm:
+		with TaskManager(PRIVATE_TODO_FILE, overwrite=True, summary=summary_file) as tm:
 			# Load the summary file:
 			with open(summary_file, 'r') as fid:
 				j = json.load(fid)

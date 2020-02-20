@@ -32,8 +32,7 @@ def test_prepare_photometry_invalid_input_dir():
 		prepare.prepare_photometry(not_a_directory)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_prepare_photometry(datafiles):
+def test_prepare_photometry(SHARED_INPUT_DIR):
 
 	# The known sizes for input-data:
 	Ntimes = 4
@@ -48,10 +47,9 @@ def test_prepare_photometry(datafiles):
 	if not logger_parent.hasHandlers():
 		logger_parent.addHandler(console)
 
-	test_dir = str(datafiles)
 	with tempfile.NamedTemporaryFile() as tmpfile:
 		# Run prepare_photometry and save output to temp-file:
-		prepare.prepare_photometry(test_dir, sectors=1, cameras=3, ccds=2, output_file=tmpfile.name)
+		prepare.prepare_photometry(SHARED_INPUT_DIR, sectors=1, cameras=3, ccds=2, output_file=tmpfile.name)
 
 		tmpfile.flush()
 		assert os.path.exists(tmpfile.name + '.hdf5'), "HDF5 was not created"
@@ -95,5 +93,4 @@ def test_prepare_photometry(datafiles):
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_prepare_photometry_invalid_input_dir()
-	test_prepare_photometry(INPUT_DIR)
+	pytest.main([__file__])

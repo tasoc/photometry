@@ -11,16 +11,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry.backgrounds import fit_background
 from photometry.utilities import find_ffi_files, load_ffi_fits
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input', 'images')
-
 #------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_background(datafiles):
+def test_background(SHARED_INPUT_DIR):
 	"""Test of background estimator"""
 
 	# Load the first image in the input directory:
-	test_dir = str(datafiles)
-	fname = find_ffi_files(test_dir)[0]
+	fname = find_ffi_files(SHARED_INPUT_DIR)[0]
 	img, hdr = load_ffi_fits(fname, return_header=True)
 
 	# Estimate the background:

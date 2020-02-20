@@ -17,8 +17,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import todolist
 from photometry.utilities import TqdmLoggingHandler
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
 #----------------------------------------------------------------------
 def test_methods_file():
 
@@ -70,12 +68,10 @@ def test_exclude_file():
 #		assert(cbv_area == 131)
 
 #----------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_make_todolist(datafiles):
-	test_dir = str(datafiles)
+def test_make_todolist(SHARED_INPUT_DIR):
 	with tempfile.NamedTemporaryFile() as tmpfile:
 		# Run make_todo and save output to temp-file:
-		todolist.make_todo(test_dir, cameras=3, ccds=2, output_file=tmpfile.name)
+		todolist.make_todo(SHARED_INPUT_DIR, cameras=3, ccds=2, output_file=tmpfile.name)
 
 		tmpfile.flush()
 		assert os.path.exists(tmpfile.name + '.sqlite'), "TODO-file was not created"

@@ -29,70 +29,60 @@ def test_move_median_central():
 	np.testing.assert_allclose(result_2d, expected_2d)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_find_ffi_files(datafiles):
-	test_dir = str(datafiles)
+def test_find_ffi_files(SHARED_INPUT_DIR):
 
-	files = u.find_ffi_files(test_dir)
+	files = u.find_ffi_files(SHARED_INPUT_DIR)
 	assert(len(files) == 8)
 
-	files = u.find_ffi_files(test_dir, camera=1)
+	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=1)
 	assert(len(files) == 4)
 
-	files = u.find_ffi_files(test_dir, camera=3)
+	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=3)
 	assert(len(files) == 4)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_find_tpf_files(datafiles):
-	test_dir = str(datafiles)
+def test_find_tpf_files(SHARED_INPUT_DIR):
 
-	files = u.find_tpf_files(test_dir)
+	files = u.find_tpf_files(SHARED_INPUT_DIR)
 	assert(len(files) == 2)
 
-	files = u.find_tpf_files(test_dir, starid=267211065)
+	files = u.find_tpf_files(SHARED_INPUT_DIR, starid=267211065)
 	assert(len(files) == 1)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_find_hdf5_files(datafiles):
-	test_dir = str(datafiles)
+def test_find_hdf5_files(SHARED_INPUT_DIR):
 
-	files = u.find_hdf5_files(test_dir)
+	files = u.find_hdf5_files(SHARED_INPUT_DIR)
 	assert(len(files) == 2)
 
-	files = u.find_hdf5_files(test_dir, sector=1)
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1)
 	assert(len(files) == 2)
 
-	files = u.find_hdf5_files(test_dir, camera=1)
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, camera=1)
 	assert(len(files) == 1)
 
-	files = u.find_hdf5_files(test_dir, sector=1, camera=3)
-	assert(len(files) == 1)
-
-#--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_find_catalog_files(datafiles):
-	test_dir = str(datafiles)
-
-	files = u.find_catalog_files(test_dir)
-	assert(len(files) == 2)
-
-	files = u.find_catalog_files(test_dir, sector=1)
-	assert(len(files) == 2)
-
-	files = u.find_catalog_files(test_dir, camera=1)
-	assert(len(files) == 1)
-
-	files = u.find_catalog_files(test_dir, sector=1, camera=3, ccd=2)
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3)
 	assert(len(files) == 1)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_load_ffi_files(datafiles):
-	test_dir = str(datafiles)
+def test_find_catalog_files(SHARED_INPUT_DIR):
 
-	files = u.find_ffi_files(test_dir, camera=1)
+	files = u.find_catalog_files(SHARED_INPUT_DIR)
+	assert(len(files) == 2)
+
+	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=1)
+	assert(len(files) == 2)
+
+	files = u.find_catalog_files(SHARED_INPUT_DIR, camera=1)
+	assert(len(files) == 1)
+
+	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert(len(files) == 1)
+
+#--------------------------------------------------------------------------------------------------
+def test_load_ffi_files(SHARED_INPUT_DIR):
+
+	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=1)
 
 	img = u.load_ffi_fits(files[0])
 	assert(img.shape == (2048, 2048))

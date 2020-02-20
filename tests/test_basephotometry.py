@@ -17,16 +17,13 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from photometry import BasePhotometry, PixelQualityFlags, CorrectorQualityFlags
 #import photometry.BasePhotometry.hdf5_cache as bf
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 DUMMY_TARGET = 260795451
 DUMMY_KWARG = {'sector': 1, 'camera': 3, 'ccd': 2}
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_stamp(datafiles):
-	test_dir = str(datafiles)
+def test_stamp(SHARED_INPUT_DIR):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -60,11 +57,9 @@ def test_stamp(datafiles):
 			assert(cols.shape == (22, 20))
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_stamp_width_height(datafiles):
-	test_dir = str(datafiles)
+def test_stamp_width_height(SHARED_INPUT_DIR):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 
 			print("Original")
 			orig_stamp = pho._stamp
@@ -105,11 +100,9 @@ def test_stamp_width_height(datafiles):
 			assert rows.shape == (25, 25)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_images(datafiles):
-	test_dir = str(datafiles)
+def test_images(SHARED_INPUT_DIR):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -118,11 +111,9 @@ def test_images(datafiles):
 				assert(img.shape == (10, 20))
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_backgrounds(datafiles):
-	test_dir = str(datafiles)
+def test_backgrounds(SHARED_INPUT_DIR):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 
 			pho._stamp = (50, 60, 50, 70)
 			pho._set_stamp()
@@ -131,12 +122,10 @@ def test_backgrounds(datafiles):
 				assert(img.shape == (10, 20))
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
-def test_catalog(datafiles, datasource):
-	test_dir = str(datafiles)
+def test_catalog(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 			print(pho.catalog)
 			assert(DUMMY_TARGET in pho.catalog['starid'])
 
@@ -155,12 +144,10 @@ def test_catalog(datafiles, datasource):
 			np.testing.assert_allclose(pho.catalog[indx_main]['row'], pho.target_pos_row)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
-def test_catalog_attime(datafiles, datasource):
-	test_dir = str(datafiles)
+def test_catalog_attime(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 
 			time = pho.lightcurve['time']
 
@@ -170,12 +157,10 @@ def test_catalog_attime(datafiles, datasource):
 			# TODO: Add more tests here, once we change the test input data
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
-def test_aperture(datafiles, datasource):
-	test_dir = str(datafiles)
+def test_aperture(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 
 			print("------------------------------------")
 			print(pho.aperture)
@@ -206,17 +191,15 @@ def test_aperture(datafiles, datasource):
 		# Try this very bright star, where the centre is saturated.
 		# The aperture for this star should have pixels near the centre that
 		# were not used in the background calculation for FFIs:
-		with BasePhotometry(267211065, test_dir, OUTPUT_DIR, datasource='ffi', plot=True, **DUMMY_KWARG) as pho:
+		with BasePhotometry(267211065, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', plot=True, **DUMMY_KWARG) as pho:
 			central_pixel = pho.aperture[int(np.round(pho.target_pos_row_stamp)), int(np.round(pho.target_pos_column_stamp))]
 			assert central_pixel & 4 == 0, "Central pixel of this bright star should not be used in background"
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
-def test_pixelflags(datafiles, datasource):
-	test_dir = str(datafiles)
+def test_pixelflags(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 			# Check the size of the pixelflags cube:
 			print(pho.pixelflags_cube.shape)
 			expected_size = (pho.stamp[1]-pho.stamp[0], pho.stamp[3]-pho.stamp[2], len(pho.hdf['time']))
@@ -256,18 +239,16 @@ def test_pixelflags(datafiles, datasource):
 					assert quality[i] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_wcs(datafiles):
-	test_dir = str(datafiles)
+def test_wcs(SHARED_INPUT_DIR):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='tpf', **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='tpf', **DUMMY_KWARG) as pho:
 			cols_tpf, rows_tpf = pho.get_pixel_grid()
 			wcs_tpf = pho.wcs
 			filepath = pho.save_lightcurve()
 			print(pho.target['ra'])
 			print(pho.target['decl'])
 
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
 			cols, rows = pho.get_pixel_grid()
 			wcs_ffi = pho.wcs
 			filepath = pho.save_lightcurve()
@@ -335,22 +316,19 @@ def test_wcs(datafiles):
 
 #--------------------------------------------------------------------------------------------------
 """
-@pytest.mark.datafiles(INPUT_DIR)
-def test_cache(datafiles):
-
-	test_dir = str(datafiles)
+def test_cache(SHARED_INPUT_DIR):
 	#global hdf5_cache
 	print(bf)
 
 	with TemporaryDirectory() as OUTPUT_DIR:
 		print("Running with no cache...")
 		#BasePhotometry.hdf5_cache = {}
-		#with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='none'):
+		#with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='none'):
 		#	assert(BasePhotometry.hdf5_cache == {})
 
 		print("Running with basic cache...")
 		#hdf5_cache = {}
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='basic') as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='basic') as pho:
 			print("WHAT?", BasePhotometry.hdf5_cache)
 			assert(pho.filepath_hdf5 in BasePhotometry.hdf5_cache)
 			c = BasePhotometry.hdf5_cache.get(pho.filepath_hdf5)
@@ -358,19 +336,17 @@ def test_cache(datafiles):
 
 		#print(hdf5_cache)
 		BasePhotometry.hdf5_cache = {}
-		with BasePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='full') as pho:
+		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='full') as pho:
 			c = BasePhotometry.hdf5_cache.get(pho.filepath_hdf5)
 			cube = c.get('_images_cube_full')
 			assert(cube.shape == (2048, 2048, 2))
 """
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_tpf_with_other_target(datafiles):
-	test_dir = str(datafiles)
+def test_tpf_with_other_target(SHARED_INPUT_DIR):
 	sub_target = 267091131
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(sub_target, test_dir, OUTPUT_DIR, datasource='tpf:267211065', sector=1, camera=3, ccd=2) as pho:
+		with BasePhotometry(sub_target, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='tpf:267211065', sector=1, camera=3, ccd=2) as pho:
 			assert(pho.starid == sub_target)
 			assert(pho.datasource == 'tpf')
 
