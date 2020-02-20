@@ -135,39 +135,6 @@ class PixelCalibrator(object):
 
 	#----------------------------------------------------------------------------------------------
 	@property
-	def virtual_rows(self):
-		"""
-		Flatfield for current stamp.
-
-		Returns:
-			numpy.array: 2D array with image of flatfield for current stamp.
-		"""
-		if self._virtual_rows is None:
-			if self.datasource == 'ffi':
-				pass
-				#self.hdf['virtual_rows/%04d' % k][:, ic1:ic2]
-
-			else:
-				outputs = self.aperture & (32+64+128+256)
-
-				vrowsfile = os.path.join(self.datadir, 'flatfield',
-				   'tess2018234235059-s{sector:04d}-vrow-{camera:d}-{ccd:d}-{output:s}-0121-s_col.fits'.format(
-						sector=self.sector,
-						camera=self.camera,
-						ccd=self.ccd,
-						output='a'
-					))
-
-				ic1 = self._stamp[2]
-				ic2 = self._stamp[3]
-
-				with fits.open(vrowsfile, mode='readonly', memmap=True) as hdu:
-					self._virtual_rows = np.asarray(hdu[1].data['VROW_CAL'][:, ic1:ic2])
-
-		return self._virtual_rows
-
-	#----------------------------------------------------------------------------------------------
-	@property
 	def readnoise(self):
 		"""CCD read-noise model."""
 
@@ -258,7 +225,7 @@ class PixelCalibrator(object):
 
 		self.logger.info("Doing gain/linearity correction...")
 
-		outputs = img.meta['aperture'][0,:] & (32 + 64 + 128 + 256)
+		outputs = img.meta['aperture'] & (32 + 64 + 128 + 256)
 		coadds = img.meta['coadds']
 
 		#
@@ -269,7 +236,7 @@ class PixelCalibrator(object):
 
 			#
 			indx = (outputs == output)
-			subimg = img[:, indx]
+			subimg = img[indx]
 
 			# Evaluate the polynomial and multiply the image values by it:
 			DN0 = subimg / coadds
@@ -278,12 +245,12 @@ class PixelCalibrator(object):
 			# Multiply with the gain:
 			subimg *= gain * coadds
 
-			img[:, indx] = subimg
+			img[indx] = subimg
 
 		return img
 
 	#----------------------------------------------------------------------------------------------
-	def prepare_smear(self, img):
+	def apply_dark_smear(self, img):
 		"""
 		TODO:
 			 - Should we weight everything with the number of rows used in masked vs virtual regions?
@@ -291,65 +258,50 @@ class PixelCalibrator(object):
 			 - Cosmic ray rejection requires images before and after in time?
 		"""
 
-		#Remove cosmic rays in collateral data:
+		# Short-hand for the meta-data:
+		img_masked_smear = np.asarray(img.meta['masked_smear'], dtype='float64')
+		img_virtual_smear = np.asarray(img.meta['virtual_smear'], dtype='float64')
+
+		# Remove cosmic rays in collateral data:
 		# TODO: Can cosmic rays also show up in virtual pixels? If so, also include img.virtual_smear
-		#index_collateral_cosmicrays = cosmic_rays(img.masked_smear)
-		index_collateral_cosmicrays = np.zeros_like(img.masked_smear, dtype='bool')
-		img.masked_smear[index_collateral_cosmicrays] = np.nan
+		#index_collateral_cosmicrays = cosmic_rays(img_masked_smear)
+		index_collateral_cosmicrays = np.zeros_like(img_masked_smear, dtype='bool')
+		img_masked_smear[index_collateral_cosmicrays] = np.nan
 
 		# Average the masked and virtual smear across their rows:
-		masked_smear = nanmedian(img.masked_smear, axis=0)
-		virtual_smear = nanmedian(img.virtual_smear, axis=0)
+		masked_smear = nanmedian(img_masked_smear, axis=0)
+		virtual_smear = nanmedian(img_virtual_smear, axis=0)
 
 		# Estimate dark current:
-		# TODO: Should this be self.frametransfer_time?
-		fdark = nanmedian( masked_smear - virtual_smear * (self.exposure_time + self.readout_time) / self.exposure_time )
-		img.dark = fdark # Save for later use
-		self.logger.info('Dark current: %f', img.dark)
+		masked_virtual_ratio = float((self.exposure_time + self.frametransfer_time) / self.exposure_time)
+		fdark = nanmedian( masked_smear - virtual_smear * masked_virtual_ratio )
+		img.meta['dark'] = fdark * u.electron # Save for later use
+		self.logger.info('Dark current: %s', img.meta['dark'])
 		if np.isnan(fdark):
 			fdark = 0
 
 		# Correct the smear regions for the dark current:
 		masked_smear -= fdark
-		virtual_smear -= fdark * (self.exposure_time + self.readout_time) / self.exposure_time
+		virtual_smear -= fdark * masked_virtual_ratio
 
 		# Weights from number of pixels in different regions:
-		Nms = np.sum(~np.isnan(img.masked_smear), axis=0)
-		Nvs = np.sum(~np.isnan(img.virtual_smear), axis=0)
+		Nms = np.sum(~np.isnan(img_masked_smear), axis=0)
+		Nvs = np.sum(~np.isnan(img_virtual_smear), axis=0)
 		c_ms = Nms/np.maximum(Nms + Nvs, 1)
 		c_vs = Nvs/np.maximum(Nms + Nvs, 1)
-
-		# Weights as in Kepler where you only have one row in each sector:
-		#g_ms = ~np.isnan(masked_smear)
-		#g_vs = ~np.isnan(virtual_smear)
-		#c_ms = g_ms/np.maximum(g_ms + g_vs, 1)
-		#c_vs = g_vs/np.maximum(g_ms + g_vs, 1)
 
 		# Estimate the smear for all columns, taking into account
 		# that some columns could be missing:
 		replace(masked_smear, np.nan, 0)
 		replace(virtual_smear, np.nan, 0)
-		smear = c_ms*masked_smear + c_vs*virtual_smear
+		img.meta['smear'] = c_ms*masked_smear + c_vs*virtual_smear
 
-		return fdark, smear, index_collateral_cosmicrays
-
-	#--------------------------------------------------------------------------
-	def apply_smear(self, img):
-		"""CCD dark current and smear correction.
-		"""
 		self.logger.info("Doing smear correction...")
 
-		# Load collateral data from collateral library:
-		with h5py.File(self.collateral_library, 'r') as hdf:
-			grp = hdf['cadence-%09d' % img.cadence_no]
-			fdark = np.asarray(grp['dark'])
-			fsmear = np.asarray(grp['smear'])
-			collateral_columns = np.asarray(grp['collateral_columns'])
-
 		# Correct the science pixels for dark current and smear:
-		img -= fdark
-		for k, col in enumerate(collateral_columns):
-			img[img.columns == col] -= fsmear[k]
+		img -= img.meta['dark']
+		#for k in range(44, 44+len(img.meta['smear'])):
+		#	img[:2048, k] -= img.meta['smear'][k] * u.electron
 
 		return img
 
@@ -361,7 +313,19 @@ class PixelCalibrator(object):
 			 - Correct collateral pixels as well.
 		"""
 		self.logger.info("Doing 2D black correction...")
-		return img - img.meta['coadds'] * self.twodblack[img.meta['index_rows'], img.meta['index_columns']]
+
+		# Subtract fixed offset:
+		img -= int(img.meta['header']['FXDOFF']) * u.electron
+
+		# Add mean black level per outout:
+		outputs = img.meta['aperture'] & (32 + 64 + 128 + 256)
+		for output in np.unique(outputs):
+			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
+			indx = (outputs == output)
+			img[indx] += float(img.meta['header']['MEANBLC' + output_name]) * u.electron
+
+		# Subtract 2D-black model:
+		return img - (img.meta['coadds'] * self.twodblack[img.meta['index_rows'], img.meta['index_columns']])
 
 	#---------------------------------------------------------------------------------------------
 	def apply_undershoot(self, img):
@@ -400,10 +364,10 @@ class PixelCalibrator(object):
 		"""Perform all calibration steps in sequence."""
 
 		img = self.apply_twodblack(img)
-		img = self.apply_undershoot(img)
+		#img = self.apply_undershoot(img)
 		img = self.apply_linearity_gain(img)
-		#img = self.apply_smear(img)
-		#img = self.apply_flatfield(img)
+		img = self.apply_dark_smear(img)
+		img = self.apply_flatfield(img)
 		img = self.to_counts_per_second(img)
 
 		return img
@@ -468,3 +432,81 @@ class PixelCalibrator(object):
 			break
 
 		return tpf
+
+	#--------------------------------------------------------------------------
+	def calibrate_ffi(self, ffi):
+
+		meta = {}
+		meta['coadds'] = int(ffi[1].header['NREADOUT'])
+		meta['header'] = ffi[1].header
+
+		meta['index_rows'] = slice(None, None, 1)
+		meta['index_columns'] = slice(None, None, 1)
+
+		# Create a large and aperture image:
+		meta['aperture'] = np.ones_like(ffi[1].data, dtype='int32')
+		meta['aperture'][:, 44:556] |= 32 # CCD output A
+		meta['aperture'][:, 556:1068] |= 64 # CCD output B
+		meta['aperture'][:, 1068:1580] |= 128 # CCD output C
+		meta['aperture'][:, 1580:2092] |= 256 # CCD output D
+
+		# Leading columns (underclocks):
+		meta['aperture'][:, 0:11] |= 32 # CCD output A
+		meta['aperture'][:, 11:22] |= 64 # CCD output B
+		meta['aperture'][:, 22:33] |= 128 # CCD output C
+		meta['aperture'][:, 33:44] |= 256 # CCD output C
+
+		# Trailing columns (overclocks):
+		meta['aperture'][:, 2092:2103] |= 32 # CCD output A
+		meta['aperture'][:, 2103:2114] |= 64 # CCD output B
+		meta['aperture'][:, 2114:2125] |= 128 # CCD output C
+		meta['aperture'][:, 2125:2136] |= 256 # CCD output C
+
+		# Mask of pixels not to include in any kind of calculations:
+		mask = (meta['aperture'] & 1 == 0)
+
+		# Build read-noise image:
+		outputs = meta['aperture'] & (32 + 64 + 128 + 256)
+		read_noise = np.zeros_like(meta['aperture'], dtype='float64')
+		for output in np.unique(outputs):
+			indx = (outputs == output)
+			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
+			read_noise[indx] = meta['coadds'] * self.readnoise[output_name].value
+
+		shot_noise = np.sqrt(ffi[1].data)
+		total_noise = np.sqrt( read_noise**2 + shot_noise**2 )
+
+		meta['masked_smear'] = ffi[1].data[2058:2068, 44:2092]
+		meta['virtual_smear'] = ffi[1].data[2068:, 44:2092]
+
+		print(meta['masked_smear'].shape)
+		print(meta['virtual_smear'].shape)
+
+		# Construct CCDData image object:
+		img = CalibImage(
+			data=ffi[1].data,
+			uncertainty=StdDevUncertainty(total_noise),
+			unit=u.electron, # u.ct? u.adu?
+			mask=mask,
+			meta=meta
+		)
+
+		plt.figure()
+		plot_image(meta['aperture'])
+
+		# Calibrate the image:
+		img_cal = self.calibrate(img.copy())
+
+
+		plt.figure()
+		plt.plot(img_cal.meta['smear'])
+
+
+		plt.figure(figsize=(15,8))
+
+		ax = plt.subplot(121)
+		plot_image(img.data, xlabel=None, ylabel=None, make_cbar=True, clabel='Raw counts (e/cadence)', title='RAW_CNTS')
+		#plot_image(meta['aperture'], xlabel=None, ylabel=None, clabel='Raw counts (e/cadence)', title='APERTURE', alpha=1, cmap='viridis')
+
+		plt.subplot(122, sharex=ax, sharey=ax)
+		plot_image(img_cal.data, xlabel=None, ylabel=None, make_cbar=True, clabel='Flux (e/s)', title='TASOC Flux')

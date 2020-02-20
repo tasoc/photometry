@@ -32,7 +32,13 @@ if __name__ == '__main__':
 		logger.addHandler(console)
 	logger.setLevel(logging_level)
 
+	with fits.open('tess2018210095942-s0001-3-4-0120-s_ffir.fits', mode='readonly') as ffi:
+		with PixelCalibrator(camera=ffi[1].header['CAMERA'], ccd=ffi[1].header['CCD']) as pcal:
+			print(pcal)
 
+			ffi_cal = pcal.calibrate_ffi(ffi)
+
+"""
 	with fits.open('tess2018206045859-s0001-0000000008195886-0120-s_tp.fits.gz', mode='readonly') as tpf:
 
 		with PixelCalibrator(camera=tpf[0].header['CAMERA'], ccd=tpf[0].header['CCD']) as pcal:
@@ -44,4 +50,4 @@ if __name__ == '__main__':
 			tpf_cal = pcal.calibrate_tpf(tpf)
 
 			plt.show()
-
+"""

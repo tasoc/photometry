@@ -37,7 +37,7 @@ class CalibImage(CCDData):
 	def __rmul__(self, other):
 		return self.__mul__(other)
 
-	def __setitem__(self, index, value):	
+	def __setitem__(self, index, value):
 		self.data[index] = value.data
-		self.uncertainty.array[index] = value.uncertainty.array	
+		self.uncertainty.array[index] = value.uncertainty.array
 		#self.mask[index] = value.mask
