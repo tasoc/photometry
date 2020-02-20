@@ -140,7 +140,7 @@ def test_sclk2jd():
 	print("="*72)
 
 #------------------------------------------------------------------------------
-def test_spice(keep_figures=False):
+def test_spice(SHARED_INPUT_DIR, keep_figures=False):
 
 	# Initialize our home-made TESS Kernel object:
 	with TESS_SPICE() as knl:
@@ -148,7 +148,7 @@ def test_spice(keep_figures=False):
 			print("="*72)
 			print("TIC %d" % starid)
 
-			tpf_file = find_tpf_files(INPUT_DIR, starid=starid)[0]
+			tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 			with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
 				time_tpf = hdu[1].data['TIME']
 				timecorr_tpf = hdu[1].data['TIMECORR']
@@ -168,7 +168,7 @@ def test_spice(keep_figures=False):
 				)
 
 			# Load the original timestamps from FFIs:
-			hdf_file = find_hdf5_files(INPUT_DIR, camera=camera, ccd=ccd)[0]
+			hdf_file = find_hdf5_files(SHARED_INPUT_DIR, camera=camera, ccd=ccd)[0]
 			with h5py.File(hdf_file, 'r') as hdf:
 				ffi_time = np.asarray(hdf['time'])
 				ffi_timecorr = np.asarray(hdf['timecorr'])
