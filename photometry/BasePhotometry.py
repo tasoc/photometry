@@ -1235,36 +1235,41 @@ class BasePhotometry(object):
 			if allnan(self.lightcurve['flux']):
 				raise Exception("Final lightcurve is all NaNs")
 
+			# Pick out the part of the lightcurve that has a good quality
+			# and only use this subset to calculate the diagnostic metrics:
+			indx_good = TESSQualityFlags.filter(self.lightcurve['quality'])
+			goodlc = self.lightcurve[indx_good]
+
 			# Calculate the mean flux level:
-			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
+			self._details['mean_flux'] = nanmedian(goodlc['flux'])
 
 			# Convert to relative flux:
-			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
-			flux_err = np.abs(1/self._details['mean_flux']) * self.lightcurve['flux_err']
+			flux = (goodlc['flux'] / self._details['mean_flux']) - 1
+			flux_err = np.abs(1/self._details['mean_flux']) * goodlc['flux_err']
 
 			# Calculate noise metrics of the relative flux:
 			self._details['variance'] = nanvar(flux, ddof=1)
-			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], flux, timescale=3600/86400)
+			self._details['rms_hour'] = rms_timescale(goodlc['time'], flux, timescale=3600/86400)
 			self._details['ptp'] = nanmedian(np.abs(np.diff(flux)))
 
 			# Calculate the median centroid position in pixel coordinates:
-			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
+			self._details['pos_centroid'] = nanmedian(goodlc['pos_centroid'], axis=0)
 
 			# Calculate variability used e.g. in CBV selection of stars:
-			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux) & np.isfinite(flux_err)
+			indx = np.isfinite(goodlc['time']) & np.isfinite(flux) & np.isfinite(flux_err)
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
 			# This happens in the test-data because there are so few points.
 			with warnings.catch_warnings():
 				warnings.filterwarnings('error', category=np.RankWarning)
 				try:
-					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/flux_err[indx])
+					p = np.polyfit(goodlc['time'][indx], flux[indx], 3, w=1/flux_err[indx])
 				except np.RankWarning:
 					p = [0]
 
 			# Calculate the variability as the standard deviation of the
 			# polynomial-subtracted lightcurve devided by the median error:
-			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
+			self._details['variability'] = nanstd(flux - np.polyval(p, goodlc['time'])) / nanmedian(flux_err)
 
 			if self.final_phot_mask is not None:
 				# Calculate the total number of pixels in the mask:
