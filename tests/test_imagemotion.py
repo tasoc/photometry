@@ -23,14 +23,13 @@ def test_imagemotion_invalid_warpmode():
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian'])
-def test_imagemotion(warpmode):
+def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 	"""Test of ImageMovementKernel"""
 
 	print("Testing warpmode=" + warpmode)
 
 	# Load the first image in the input directory:
-	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input', 'images')
-	files = find_ffi_files(INPUT_DIR, camera=1, ccd=1)
+	files = find_ffi_files(os.path.join(SHARED_INPUT_DIR, 'images'), camera=1, ccd=1)
 	fname = files[0]
 
 	# Load the image:
@@ -104,7 +103,7 @@ def test_imagemotion(warpmode):
 	print("Done")
 
 #--------------------------------------------------------------------------------------------------
-def test_imagemotion_wcs():
+def test_imagemotion_wcs(SHARED_INPUT_DIR):
 	"""Test of ImageMovementKernel"""
 
 	# Some positions across the image:
@@ -117,7 +116,7 @@ def test_imagemotion_wcs():
 	print(xy)
 
 	# Load the first image in the input directory:
-	INPUT_FILE = find_hdf5_files(os.path.join(os.path.dirname(__file__), 'input'), sector=1, camera=1, ccd=1)[0]
+	INPUT_FILE = find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=1, ccd=1)[0]
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 
@@ -191,8 +190,4 @@ def test_imagemotion_wcs():
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_imagemotion_invalid_warpmode()
-	test_imagemotion('unchanged')
-	test_imagemotion('translation')
-	test_imagemotion('euclidian')
-	test_imagemotion_wcs()
+	pytest.main([__file__])

@@ -30,14 +30,35 @@ from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
 
 #------------------------------------------------------------------------------
 def quality_from_tpf(tpffile, time_start, time_end):
+	"""
+	Transfer quality flags from Target Pixel File to FFIs.
 
+	Only quality flags in ``TESSQualityFlags.FFI_RELEVANT_BITMASK`` are transfered.
+
+	Parameters:
+		tpffile (string): Path to Target Pixel File to load quality flags from.
+		time_start (ndarray): Array of start-timestamps for FFIs.
+		time_end (ndarray): Array of end-timestamps for FFIs.
+
+	Returns:
+		ndarray: Quality flags for FFIs coming from Target Pixel File.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+	# Load the timestamps and qualities from Target Pixel File:
 	with fits.open(tpffile, mode='readonly', memmap=True) as hdu:
 		time_tpf = hdu[1].data['TIME'] - hdu[1].data['TIMECORR']
 		quality_tpf = hdu[1].data['QUALITY']
 
-	numfiles = len(time_start)
-	quality = np.zeros(numfiles, dtype='int32')
-	for k in range(numfiles):
+	# Remove any non-defined timestamps
+	indx_goodtimes = np.isfinite(time_tpf)
+	time_tpf = time_tpf[indx_goodtimes]
+	quality_tpf = quality_tpf[indx_goodtimes]
+
+	# Loop trough the FFI timestamps and see if any TPF qualities matches:
+	Ntimes = len(time_start)
+	quality = np.zeros(Ntimes, dtype='int32')
+	for k in range(Ntimes):
 		# Timestamps from TPF that correspond to the FFI:
 		# TODO: Rewrite to using np.searchsorted
 		indx = (time_tpf > time_start[k]) & (time_tpf < time_end[k])

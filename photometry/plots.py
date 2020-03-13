@@ -11,11 +11,14 @@ import os
 import numpy as np
 from bottleneck import allnan
 import matplotlib
-matplotlib.use('Agg', warn=False)
 from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
 from astropy.visualization import (PercentileInterval, ImageNormalize, SqrtStretch,
 	LogStretch, LinearStretch)
+
+# Change to a non-GUI backend since this
+# should be able to run on a cluster:
+plt.switch_backend('Agg')
 
 #--------------------------------------------------------------------------------------------------
 def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
@@ -45,6 +48,13 @@ def plot_image(image, scale='log', origin='lower', xlabel='Pixel Column Number',
 		logger = logging.getLogger(__name__)
 		logger.error("Image is all NaN")
 		return None
+
+	# Special treatment for boolean arrays:
+	if isinstance(image, np.ndarray) and image.dtype == 'bool':
+		if vmin is None: vmin = 0
+		if vmax is None: vmax = 1
+		if cbar_ticks is None: cbar_ticks = [0, 1]
+		if cbar_ticklabels is None: cbar_ticklabels = ['False', 'True']
 
 	# Calcualte limits of color scaling:
 	if vmin is None or vmax is None:

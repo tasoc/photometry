@@ -1,20 +1,38 @@
 language: python
-python:
-  - "3.5"
-  - "3.6"
-  - "pypy3"
+cache: pip
+os: linux
 
-# Python 3.7+ has to be done a different way
-# https://github.com/travis-ci/travis-ci/issues/9069
-matrix:
+# We are specifying the build matrix manually, since there is too little overlap
+# between the different builds:
+jobs:
   include:
-    - python: "3.7"
-      dist: xenial
-      sudo: required
+    - name: "Python 3.5 on Linux"
+      python: "3.5"
 
-    - python: "3.8"
+    - name: "Python 3.6 on Linux"
+      python: "3.6"
+
+    - name: "Python 3.7 on Linux"
+      python: "3.7"
       dist: xenial
-      sudo: required
+
+    - name: "Python 3.6 on Windows"
+      os: windows
+      language: shell  # 'language: python' is an error on Travis CI Windows
+      before_install:
+        - choco install python --version 3.6.8
+        - python --version
+        - git lfs pull
+      env: PATH=/c/Python36:/c/Python36/Scripts:$PATH
+
+    - name: "Python 3.7 on Windows"
+      os: windows
+      language: shell  # 'language: python' is an error on Travis CI Windows
+      before_install:
+        - choco install python --version 3.7.4
+        - python --version
+        - git lfs pull
+      env: PATH=/c/Python37:/c/Python37/Scripts:$PATH
 
     - name: "Flake8"
       python: "3.6"
@@ -30,17 +48,14 @@ matrix:
   # supporting the newer versions of Python:
   fast_finish: true
   allow_failures:
-    - python: "pypy3"
-    - python: "3.8"
     - name: "Flake8"
+    - os: windows
 
 install:
-  - pip install --upgrade pip
-  - pip uninstall numpy Bottleneck -y
-  - pip install numpy==1.15.4 --no-cache-dir
+  - python -m pip install --upgrade pip
   - pip install -r requirements.txt
   - pip install codecov pytest-cov
-  - python -c "from photometry.spice import TESS_SPICE; print(TESS_SPICE())"
+  - travis_wait python run_download_cache.py -q
 script:
   - pytest --cov=photometry/
 after_success:
@@ -55,15 +70,15 @@ branches:
 # Deploy to GitHub Releases, making a release of the
 # code whenever a new tag is added on the master branch
 before_deploy:
-  - python -c "from photometry import version; version.update_release_version(); print(version.get_version(pep440=True))"
-  - cat VERSION
+  - git stash --all
+  - python -c "from photometry import version; version.update_release_version();"
 deploy:
   provider: releases
-  api_key: $GITHUB_TOKEN
+  token: $GITHUB_TOKEN
   skip_cleanup: true
   draft: true
-  name: "Version $TRAVIS_TAG"
-  body: "Version $TRAVIS_TAG"
+  name: "${TRAVIS_TAG/v/Version }"
+  body: "${TRAVIS_TAG/v/Version }"
   on:
     branch:
       - master

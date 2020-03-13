@@ -4,6 +4,7 @@
 Tests of SPICE Kernel module.
 """
 
+import pytest
 import sys
 import os
 import numpy as np
@@ -22,24 +23,21 @@ from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_mot
 from photometry.plots import plt
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
 #------------------------------------------------------------------------------
-def test_timestamps():
-
+def test_timestamps(SHARED_INPUT_DIR):
 	with TemporaryDirectory() as OUTPUT_DIR:
 		for starid in (260795451, 267211065):
 			print("="*72)
 			print("TIC %d" % starid)
 
-			tpf_file = find_tpf_files(INPUT_DIR, starid=starid)[0]
+			tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 			with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
 				time_tpf = hdu[1].data['TIME']
 				timecorr_tpf = hdu[1].data['TIMECORR'] * 86400 * 1000
 
 			intp_timecorr = interp1d(time_tpf, timecorr_tpf, kind='linear')
 
-			with AperturePhotometry(starid, INPUT_DIR, OUTPUT_DIR, plot=False, datasource='ffi', sector=1, camera=3, ccd=2) as pho:
+			with AperturePhotometry(starid, SHARED_INPUT_DIR, OUTPUT_DIR, plot=False, datasource='ffi', sector=1, camera=3, ccd=2) as pho:
 				#pho.photometry()
 				time_ffi = np.asarray(pho.lightcurve['time'])
 				timecorr_ffi = np.asarray(pho.lightcurve['timecorr']) * 86400 * 1000
@@ -142,7 +140,7 @@ def test_sclk2jd():
 	print("="*72)
 
 #------------------------------------------------------------------------------
-def test_spice(keep_figures=False):
+def test_spice(SHARED_INPUT_DIR, keep_figures=False):
 
 	# Initialize our home-made TESS Kernel object:
 	with TESS_SPICE() as knl:
@@ -150,7 +148,7 @@ def test_spice(keep_figures=False):
 			print("="*72)
 			print("TIC %d" % starid)
 
-			tpf_file = find_tpf_files(INPUT_DIR, starid=starid)[0]
+			tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 			with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
 				time_tpf = hdu[1].data['TIME']
 				timecorr_tpf = hdu[1].data['TIMECORR']
@@ -170,7 +168,7 @@ def test_spice(keep_figures=False):
 				)
 
 			# Load the original timestamps from FFIs:
-			hdf_file = find_hdf5_files(INPUT_DIR, camera=camera, ccd=ccd)[0]
+			hdf_file = find_hdf5_files(SHARED_INPUT_DIR, camera=camera, ccd=ccd)[0]
 			with h5py.File(hdf_file, 'r') as hdf:
 				ffi_time = np.asarray(hdf['time'])
 				ffi_timecorr = np.asarray(hdf['timecorr'])
@@ -254,9 +252,5 @@ def test_spice(keep_figures=False):
 
 #------------------------------------------------------------------------------
 if __name__ == '__main__':
-	test_position_velocity(keep_figures=True)
-	test_sclk2jd()
-	test_timestamps()
-	test_spice(keep_figures=True)
-
+	pytest.main([__file__])
 	plt.show()

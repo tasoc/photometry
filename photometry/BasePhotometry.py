@@ -8,14 +8,6 @@ All other specific photometric algorithms will inherit from BasePhotometry.
 """
 
 import numpy as np
-from astropy._erfa.core import ErfaWarning
-import warnings
-warnings.filterwarnings('ignore', category=FutureWarning, module="h5py") # they are simply annoying!
-warnings.filterwarnings('ignore', category=FutureWarning, module="scipy") # they are simply annoying!
-warnings.filterwarnings('ignore', category=FutureWarning, module="skimage") # they are simply annoying!
-warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
-from astropy.io import fits
-from astropy.table import Table, Column
 import h5py
 import sqlite3
 import logging
@@ -23,7 +15,11 @@ import datetime
 import os.path
 import glob
 import contextlib
+import warnings
 from copy import deepcopy
+from astropy._erfa.core import ErfaWarning
+from astropy.io import fits
+from astropy.table import Table, Column
 from astropy import units
 import astropy.coordinates as coord
 from astropy.time import Time
@@ -37,6 +33,10 @@ from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
 from .version import get_version
+
+# Filter out annoying warnings:
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
 
 __version__ = get_version()
 
@@ -89,7 +89,8 @@ class BasePhotometry(object):
 
 		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
 		pixelflags (numpy.ndarray): Flags for each pixel, as defined by the TESS data product manual.
-		final_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
+		final_phot_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
+		final_position_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of positions. ``True`` if used, ``False`` otherwise.
 		additional_headers (dict): Additional headers to be included in FITS files.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -208,7 +209,7 @@ class BasePhotometry(object):
 				logger.debug('Loading basic data into cache...')
 
 				# Start filling out the basic vectors:
-				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='BJD')
+				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
 				N = len(self.lightcurve['time'])
 				self.lightcurve['cadenceno'] = Column(self.hdf['cadenceno'], description='Cadence number', dtype='int32')
 				self.lightcurve['quality'] = Column(self.hdf['quality'], description='Quality flags', dtype='int32')
@@ -297,8 +298,13 @@ class BasePhotometry(object):
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
 
+			# Fix for timestamps that are not defined. Simply remove them from the table:
+			# This is seen in some file from sector 1.
+			indx_good_times = np.isfinite(self.tpf[1].data.field('TIME'))
+			self.tpf[1].data = self.tpf[1].data[indx_good_times]
+
 			# Extract the relevant information from the FITS file:
-			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='BJD')
+			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='TBJD')
 			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
 			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
 			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
@@ -398,7 +404,8 @@ class BasePhotometry(object):
 				self.lightcurve['timecorr'] = tc
 
 		# Init arrays that will be filled with lightcurve stuff:
-		self.final_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
+		self.final_phot_mask = None # Mask indicating which pixels were used in extraction of lightcurve.
+		self.final_position_mask = None # Mask indicating which pixels were used in extraction of position.
 		self.additional_headers = {} # Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
@@ -496,7 +503,7 @@ class BasePhotometry(object):
 		Ncolumns = np.maximum(np.ceil(Ncolumns), 15)
 		return Nrows, Ncolumns
 
-	def resize_stamp(self, down=None, up=None, left=None, right=None):
+	def resize_stamp(self, down=None, up=None, left=None, right=None, width=None, height=None):
 		"""
 		Resize the stamp in a given direction.
 
@@ -505,6 +512,10 @@ class BasePhotometry(object):
 			up (int, optional): Number of pixels to extend upwards.
 			left (int, optional): Number of pixels to extend left.
 			right (int, optional): Number of pixels to extend right.
+			width (int, optional): Set the width of the stamp to this number of pixels.
+				This takes presendence over ``left`` and ``right`` if they are also provided.
+			height (int, optional): Set the height of the stamp to this number of pixels.
+				This takes presendence over ``up`` and ``down`` if they are also provided.
 
 		Returns:
 			bool: `True` if the stamp could be resized, `False` otherwise.
@@ -521,10 +532,16 @@ class BasePhotometry(object):
 			self._stamp[2] -= left
 		if right:
 			self._stamp[3] += right
+		if height:
+			self._stamp[0] = int(np.round(self.target_pos_row)) - height//2
+			self._stamp[1] = int(np.round(self.target_pos_row)) + height//2 + 1
+		if width:
+			self._stamp[2] = int(np.round(self.target_pos_column)) - width//2
+			self._stamp[3] = int(np.round(self.target_pos_column)) + width//2 + 1
 		self._stamp = tuple(self._stamp)
 
 		# Set stamp and check if the stamp actually changed:
-		stamp_changed = self._set_stamp(old_stamp)
+		stamp_changed = self._set_stamp(compare_stamp=old_stamp)
 
 		# Count the number of times that we are resizing the stamp:
 		if stamp_changed:
@@ -1218,40 +1235,45 @@ class BasePhotometry(object):
 			if allnan(self.lightcurve['flux']):
 				raise Exception("Final lightcurve is all NaNs")
 
+			# Pick out the part of the lightcurve that has a good quality
+			# and only use this subset to calculate the diagnostic metrics:
+			indx_good = TESSQualityFlags.filter(self.lightcurve['quality'])
+			goodlc = self.lightcurve[indx_good]
+
 			# Calculate the mean flux level:
-			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
+			self._details['mean_flux'] = nanmedian(goodlc['flux'])
 
 			# Convert to relative flux:
-			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
-			flux_err = np.abs(1/self._details['mean_flux']) * self.lightcurve['flux_err']
+			flux = (goodlc['flux'] / self._details['mean_flux']) - 1
+			flux_err = np.abs(1/self._details['mean_flux']) * goodlc['flux_err']
 
 			# Calculate noise metrics of the relative flux:
 			self._details['variance'] = nanvar(flux, ddof=1)
-			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], flux, timescale=3600/86400)
+			self._details['rms_hour'] = rms_timescale(goodlc['time'], flux, timescale=3600/86400)
 			self._details['ptp'] = nanmedian(np.abs(np.diff(flux)))
 
 			# Calculate the median centroid position in pixel coordinates:
-			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
+			self._details['pos_centroid'] = nanmedian(goodlc['pos_centroid'], axis=0)
 
 			# Calculate variability used e.g. in CBV selection of stars:
-			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux) & np.isfinite(flux_err)
+			indx = np.isfinite(goodlc['time']) & np.isfinite(flux) & np.isfinite(flux_err)
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
 			# This happens in the test-data because there are so few points.
 			with warnings.catch_warnings():
 				warnings.filterwarnings('error', category=np.RankWarning)
 				try:
-					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/flux_err[indx])
+					p = np.polyfit(goodlc['time'][indx], flux[indx], 3, w=1/flux_err[indx])
 				except np.RankWarning:
 					p = [0]
 
 			# Calculate the variability as the standard deviation of the
 			# polynomial-subtracted lightcurve devided by the median error:
-			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
+			self._details['variability'] = nanstd(flux - np.polyval(p, goodlc['time'])) / nanmedian(flux_err)
 
-			if self.final_mask is not None:
+			if self.final_phot_mask is not None:
 				# Calculate the total number of pixels in the mask:
-				self._details['mask_size'] = int(np.sum(self.final_mask))
+				self._details['mask_size'] = int(np.sum(self.final_phot_mask))
 
 				# Measure the total flux on the edge of the stamp,
 				# if the mask is touching the edge of the stamp:
@@ -1259,7 +1281,7 @@ class BasePhotometry(object):
 				edge = np.zeros_like(self.sumimage, dtype='bool')
 				edge[:, (0,-1)] = True
 				edge[(0,-1), 1:-1] = True
-				self._details['edge_flux'] = np.sum(self.sumimage[self.final_mask & edge])
+				self._details['edge_flux'] = np.sum(self.sumimage[self.final_phot_mask & edge])
 
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
@@ -1510,8 +1532,10 @@ class BasePhotometry(object):
 		# Make aperture image:
 		# TODO: Pixels used in background calculation (value=4)
 		mask = self.aperture
-		if self.final_mask is not None:
-			mask[self.final_mask] += 10 # 2 + 8
+		if self.final_phot_mask is not None:
+			mask[self.final_phot_mask] |= 2
+		if self.final_position_mask is not None:
+			mask[self.final_position_mask] |= 8
 
 		# Construct FITS header for image extensions:
 		wcs = self.wcs[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]

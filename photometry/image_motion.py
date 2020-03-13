@@ -171,7 +171,8 @@ class ImageMovementKernel(object):
 		Parameters:
 			image (ndarray): Image to calculate kernel for.
 			number_of_iterations (integer, optional): Specify the number of iterations.
-			termination_eps (float, optional): Specify the threshold of the increment in the correlation coefficient between two iterations.
+			termination_eps (float, optional): Specify the threshold of the increment in the
+				correlation coefficient between two iterations.
 
 		Returns:
 			ndarray:
@@ -205,7 +206,7 @@ class ImageMovementKernel(object):
 		# Run the ECC algorithm. The results are stored in warp_matrix.
 		try:
 			cc, warp_matrix = cv2.findTransformECC(self.image_ref, image, warp_matrix, warp_mode, criteria)
-		except:
+		except: # noqa: E722
 			return np.NaN*np.ones(self.n_params)
 
 		# Extract movement in pixel units in x- and y direction

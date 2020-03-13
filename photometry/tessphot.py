@@ -30,16 +30,16 @@ def _try_photometry(PhotClass, *args, **kwargs):
 		logger.info("Stopped by user or system")
 		try:
 			pho._status = STATUS.ABORT
-		except:
+		except: # noqa: E722
 			pass
 
-	except:
+	except: # noqa: E722
 		logger.exception("Something happened")
 		tb = traceback.format_exc().strip()
 		try:
 			pho._status = STATUS.ERROR
 			pho.report_details(error=tb)
-		except:
+		except: # noqa: E722
 			tbcollect.append(tb)
 
 	try:
@@ -60,6 +60,9 @@ def tessphot(method=None, *args, **kwargs):
 		method (string or None): Type of photometry to run. Can be ``'aperture'``, ``'halo'``, ``'psf'``, ``'linpsf'`` or ``None``.
 		*args: Arguments passed on to the photometry class init-function.
 		**kwargs: Keyword-arguments passed on to the photometry class init-function.
+
+	Raises:
+		ValueError: On invalid method.
 
 	Returns:
 		:py:class:`photometry.BasePhotometry`: Photometry object that inherits from :py:class:`photometry.BasePhotometry`.

@@ -9,12 +9,11 @@ import os
 import numpy as np
 import logging
 import sqlite3
-import warnings
-warnings.filterwarnings('ignore', category=FutureWarning, module='h5py')
 import h5py
 import re
 import functools
 import contextlib
+import multiprocessing
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import RectBivariateSpline
 from astropy.table import Table, vstack, Column
@@ -23,7 +22,6 @@ from astropy.wcs import WCS
 from timeit import default_timer
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
 from .catalog import catalog_sqlite_search_footprint
-import multiprocessing
 
 #------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):

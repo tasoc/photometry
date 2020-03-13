@@ -9,7 +9,7 @@ the photometry package.
 
 import numpy as np
 from astropy.io import fits
-from bottleneck import move_median, nanmedian, nanmean, allnan
+from bottleneck import move_median, nanmedian, nanmean, allnan, nanargmin, nanargmax
 import logging
 import tqdm
 from scipy.special import erf
@@ -19,16 +19,14 @@ import os.path
 import fnmatch
 import glob
 import itertools
-import warnings
 import requests
-
-# Filter out annoying warnings:
-warnings.filterwarnings('ignore', module='scipy', category=FutureWarning, message='Using a non-tuple sequence for multidimensional indexing is deprecated;', lineno=607)
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 # Constants:
 mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def load_settings(sector=None):
 
 	with open(os.path.join(os.path.dirname(__file__), 'data', 'settings.json'), 'r') as fid:
@@ -39,7 +37,7 @@ def load_settings(sector=None):
 
 	return settings
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search directory recursively for TESS FFI images in FITS format.
@@ -79,7 +77,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 
 	return matches
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, findmax=None):
 	"""
 	Search directory recursively for TESS Target Pixel Files.
@@ -147,7 +145,7 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 
 	return matches
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for HDF5 files matching constraints.
@@ -176,7 +174,7 @@ def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 
 	return filelst
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for CATALOG (sqlite) files matching constraints.
@@ -205,7 +203,7 @@ def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 
 	return filelst
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def load_ffi_fits(path, return_header=False, return_uncert=False):
 	"""
 	Load FFI FITS file.
@@ -247,7 +245,7 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 	else:
 		return img
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):
 	y = move_median(x, width_points, min_count=1)
 	y = np.roll(y, -width_points//2+1)
@@ -256,11 +254,11 @@ def _move_median_central_1d(x, width_points):
 		y[-(k+1)] = nanmedian(x[-(k+2):])
 	return y
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def move_median_central(x, width_points, axis=0):
 	return np.apply_along_axis(_move_median_central_1d, axis, x, width_points)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	"""
 	Project coordinates (ra,dec) with proper motions to new epoch.
@@ -294,7 +292,7 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	# Return the current positions
 	return raindegrees, decindegrees
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 	"""
 	Evaluate a 2D symmetrical Gaussian integrated in pixels.
@@ -328,7 +326,7 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		* (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma))
 		- erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def mag2flux(mag):
 	"""
 	Convert from magnitude to flux using scaling relation from
@@ -344,7 +342,7 @@ def mag2flux(mag):
 	"""
 	return 10**(-0.4*(mag - 20.60654144))
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def sphere_distance(ra1, dec1, ra2, dec2):
 	"""
 	Calculate the great circle distance between two points using the Vincenty formulae.
@@ -374,7 +372,7 @@ def sphere_distance(ra1, dec1, ra2, dec2):
 		np.sin(dec1)*np.sin(dec2) + np.cos(dec1)*np.cos(dec2)*np.cos(ra2-ra1)
 	))
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def radec_to_cartesian(radec):
 	"""
 	Convert spherical coordinates as (ra, dec) pairs to cartesian coordinates (x,y,z).
@@ -396,7 +394,7 @@ def radec_to_cartesian(radec):
 	xyz[:,2] = np.cos(theta)
 	return xyz
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def cartesian_to_radec(xyz):
 	"""
 	Convert cartesian coordinates (x,y,z) to spherical coordinates in ra-dec form.
@@ -419,7 +417,7 @@ def cartesian_to_radec(xyz):
 
 	return np.degrees(radec)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def rms_timescale(time, flux, timescale=3600/86400):
 	"""
 	Compute robust RMS on specified timescale. Using MAD scaled to RMS.
@@ -458,7 +456,7 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	# Compute robust RMS value (MAD scaled to RMS)
 	return mad_to_sigma * nanmedian(np.abs(flux_bin - nanmedian(flux_bin)))
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def find_nearest(array, value):
 	"""
 	Search array for value and return the index where the value is closest.
@@ -470,16 +468,26 @@ def find_nearest(array, value):
 	Returns:
 		int: Index of ``array`` closest to ``value``.
 
+	Raises:
+		ValueError: If ``value`` is NaN.
+
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
-	idx = np.searchsorted(array, value, side='left')
-	if idx > 0 and (idx == len(array) or abs(value - array[idx-1]) < abs(value - array[idx])):
-		return idx-1
-	else:
-		return idx
+	if np.isnan(value):
+		raise ValueError("Invalid search value")
+	if np.isposinf(value):
+		return nanargmax(array)
+	if np.isneginf(value):
+		return nanargmin(array)
+	return nanargmin(np.abs(array - value))
+	#idx = np.searchsorted(array, value, side='left')
+	#if idx > 0 and (idx == len(array) or abs(value - array[idx-1]) <= abs(value - array[idx])):
+	#	return idx-1
+	#else:
+	#	return idx
 
-#------------------------------------------------------------------------------
-def download_file(url, destination):
+#--------------------------------------------------------------------------------------------------
+def download_file(url, destination, position_holders=None, position_lock=None):
 	"""
 	Download file from URL and place into specified destination.
 
@@ -490,17 +498,32 @@ def download_file(url, destination):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	print("Downloading %s" % url)
-	try:
-		response = requests.get(url, stream=True, allow_redirects=True)
+	logger = logging.getLogger(__name__)
+	tqdm_settings = {
+		'unit': 'B',
+		'unit_scale': True,
+		'position': None,
+		'leave': True,
+		'disable': not logger.isEnabledFor(logging.INFO)
+	}
 
-		# Throw an error for bad status codes
+	if position_holders is not None:
+		tqdm_settings['leave'] = False
+		position_lock.acquire()
+		tqdm_settings['position'] = position_holders.index(False)
+		position_holders[tqdm_settings['position']] = True
+		position_lock.release()
+
+	try:
+		# Start stream from URL and throw an error for bad status codes:
+		response = requests.get(url, stream=True, allow_redirects=True)
 		response.raise_for_status()
 
 		total_size = int(response.headers.get('content-length', 0))
 		block_size = 1024
+
 		with open(destination, 'wb') as handle:
-			with tqdm.tqdm(total=total_size, unit='B', unit_scale=True) as pbar:
+			with tqdm.tqdm(total=total_size, **tqdm_settings) as pbar:
 				for block in response.iter_content(block_size):
 					handle.write(block)
 					pbar.update(len(block))
@@ -509,14 +532,45 @@ def download_file(url, destination):
 			raise Exception("File not downloaded correctly")
 
 	except: # noqa: E722
+		logger.exception("Could not download file")
 		if os.path.exists(destination):
 			os.remove(destination)
 		raise
 
-#------------------------------------------------------------------------------
+	# Pause before returning to give progress bar time to write.
+	if position_holders is not None:
+		position_lock.acquire()
+		position_holders[tqdm_settings['position']] = False
+		position_lock.release()
+
+#--------------------------------------------------------------------------------------------------
+def download_parallel(urls, workers=4):
+	"""
+	Download several files in parallel using multiple threads.
+
+	Parameters:
+		urls (iterable): List of files to download. Each element should consist of a list or tuple,
+			containing two elements: The URL to download, and the path to the destination where the
+			file should be saved.
+		workers (integer, optional): Number of threads to use for downloading. Default=4.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	workers = min(workers, len(urls))
+	position_holders = [False] * workers
+	plock = Lock()
+
+	def _wrapper(arg):
+		download_file(arg[0], arg[1], position_holders=position_holders, position_lock=plock)
+
+	with ThreadPoolExecutor(max_workers=workers) as executor:
+		executor.map(_wrapper, urls)
+
+#--------------------------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):
-	def __init__(self, level=logging.NOTSET):
-		super(self.__class__, self).__init__(level)
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
 
 	def emit(self, record):
 		try:
