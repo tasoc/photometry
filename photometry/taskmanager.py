@@ -13,6 +13,7 @@ import logging
 import json
 from . import STATUS
 
+#--------------------------------------------------------------------------------------------------
 class TaskManager(object):
 	"""
 	A TaskManager which keeps track of which targets to process.
@@ -70,9 +71,10 @@ class TaskManager(object):
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
 			priority INTEGER PRIMARY KEY ASC NOT NULL,
-			starid BIGINT NOT NULL,
+			starid INTEGER NOT NULL,
 			lightcurve TEXT,
 			elaptime REAL NOT NULL,
+			worker_wait_time REAL,
 			mean_flux DOUBLE PRECISION,
 			variance DOUBLE PRECISION,
 			variability DOUBLE PRECISION,
@@ -81,11 +83,11 @@ class TaskManager(object):
 			pos_row REAL,
 			pos_column REAL,
 			contamination REAL,
-			mask_size INT,
+			mask_size INTEGER,
 			edge_flux REAL,
-			stamp_width INT,
-			stamp_height INT,
-			stamp_resizes INT,
+			stamp_width INTEGER,
+			stamp_height INTEGER,
+			stamp_resizes INTEGER,
 			errors TEXT,
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE
 		);""")
@@ -98,10 +100,16 @@ class TaskManager(object):
 		self.conn.commit()
 
 		# Add status indicator for corrections to todolist, if it doesn't already exists:
+		# This is only for backwards compatibility.
 		self.cursor.execute("PRAGMA table_info(diagnostics)")
-		if 'edge_flux' not in [r['name'] for r in self.cursor.fetchall()]:
+		existing_tables = [r['name'] for r in self.cursor.fetchall()]
+		if 'edge_flux' not in existing_tables:
 			self.logger.debug("Adding edge_flux column to diagnostics")
 			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN edge_flux REAL DEFAULT NULL")
+			self.conn.commit()
+		if 'worker_wait_time' not in existing_tables:
+			self.logger.debug("Adding worker_wait_time column to diagnostics")
+			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN worker_wait_time REAL DEFAULT NULL")
 			self.conn.commit()
 
 		# Reset calculations with status STARTED, ABORT or ERROR:
@@ -119,10 +127,12 @@ class TaskManager(object):
 			'numtasks': 0,
 			'tasks_run': 0,
 			'last_error': None,
-			'mean_elaptime': None
+			'mean_elaptime': None,
+			'mean_worker_waittime': None
 		}
 		# Make sure to add all the different status to summary:
-		for s in STATUS: self.summary[s.name] = 0
+		for s in STATUS:
+			self.summary[s.name] = 0
 		# If we are going to output summary, make sure to fill it up:
 		if self.summary_file:
 			# Extract information from database:
@@ -143,18 +153,36 @@ class TaskManager(object):
 			finally:
 				self.conn.isolation_level = ''
 
+	#----------------------------------------------------------------------------------------------
 	def close(self):
 		"""Close TaskManager and all associated objects."""
-		self.cursor.close()
-		self.conn.close()
+		if hasattr(self, 'cursor') and hasattr(self, 'conn'):
+			try:
+				self.conn.rollback()
+				self.cursor.execute("PRAGMA journal_mode=DELETE;")
+				self.conn.commit()
+				self.cursor.close()
+			except sqlite3.ProgrammingError:
+				pass
+
+		if hasattr(self, 'conn') and self.conn:
+			self.conn.close()
+
 		self.write_summary()
 
-	def __exit__(self, *args):
-		self.close()
-
+	#----------------------------------------------------------------------------------------------
 	def __enter__(self):
 		return self
 
+	#----------------------------------------------------------------------------------------------
+	def __exit__(self, *args):
+		self.close()
+
+	#----------------------------------------------------------------------------------------------
+	def __del__(self):
+		self.close()
+
+	#----------------------------------------------------------------------------------------------
 	def get_number_tasks(self):
 		"""
 		Get number of tasks due to be processed.
@@ -166,6 +194,7 @@ class TaskManager(object):
 		num = int(self.cursor.fetchone()['num'])
 		return num
 
+	#----------------------------------------------------------------------------------------------
 	def get_task(self, starid=None):
 		"""
 		Get next task to be processed.
@@ -187,6 +216,7 @@ class TaskManager(object):
 		if task: return dict(task)
 		return None
 
+	#----------------------------------------------------------------------------------------------
 	def get_random_task(self):
 		"""
 		Get random task to be processed.
@@ -199,6 +229,16 @@ class TaskManager(object):
 		if task: return dict(task)
 		return None
 
+	#----------------------------------------------------------------------------------------------
+	def start_task(self, taskid):
+		"""
+		Mark a task as STARTED in the TODO-list.
+		"""
+		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (STATUS.STARTED.value, taskid))
+		self.conn.commit()
+		self.summary['STARTED'] += 1
+
+	#----------------------------------------------------------------------------------------------
 	def save_result(self, result):
 		"""
 		Save results and diagnostics. This will update the TODO list.
@@ -302,15 +342,23 @@ class TaskManager(object):
 		else:
 			self.summary['mean_elaptime'] += 0.1 * (result['time'] - self.summary['mean_elaptime'])
 
+		# All the results should have the same worker_waittime.
+		# So only update this once, using just that last result in the list:
+		if self.summary['mean_worker_waittime'] is None and result.get('worker_wait_time') is not None:
+			self.summary['mean_worker_waittime'] = result['worker_wait_time']
+		elif result.get('worker_wait_time') is not None:
+			self.summary['mean_worker_waittime'] += 0.1 * (result['worker_wait_time'] - self.summary['mean_worker_waittime'])
+
 		stamp = details.get('stamp', None)
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
 			result['time'],
+			result.get('worker_wait_time', None),
 			details.get('pos_centroid', (None, None))[0],
 			details.get('pos_centroid', (None, None))[1],
 			details.get('mean_flux', None),
@@ -332,17 +380,10 @@ class TaskManager(object):
 		if self.summary_file and self.summary['tasks_run'] % self.summary_interval == 0:
 			self.write_summary()
 
-	def start_task(self, taskid):
-		"""
-		Mark a task as STARTED in the TODO-list.
-		"""
-		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (STATUS.STARTED.value, taskid))
-		self.conn.commit()
-		self.summary['STARTED'] += 1
-
+	#----------------------------------------------------------------------------------------------
 	def write_summary(self):
 		"""Write summary of progress to file. The summary file will be in JSON format."""
-		if self.summary_file:
+		if hasattr(self, 'summary_file') and self.summary_file:
 			try:
 				with open(self.summary_file, 'w') as fid:
 					json.dump(self.summary, fid)

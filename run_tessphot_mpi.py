@@ -138,8 +138,10 @@ def main():
 
 			while True:
 				# Receive a task from the master:
+				tic = default_timer()
 				task = comm.recv(source=0, tag=MPI.ANY_TAG, status=status)
 				tag = status.Get_tag()
+				toc = default_timer()
 
 				if tag == tags.START:
 					# Do the work here
@@ -154,6 +156,7 @@ def main():
 					result.update({
 						'status': pho.status,
 						'time': t2 - t1,
+						'worker_wait_time': toc - tic,
 						'details': pho._details
 					})
 
