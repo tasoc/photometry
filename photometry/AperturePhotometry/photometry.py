@@ -12,24 +12,28 @@ import logging
 from .. import BasePhotometry, STATUS
 from . import k2p2v2 as k2p2
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class AperturePhotometry(BasePhotometry):
-	"""Simple Aperture Photometry using K2P2 to define masks.
+	"""
+	Simple Aperture Photometry using K2P2 to define masks.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	#----------------------------------------------------------------------------------------------
 	def __init__(self, *args, **kwargs):
 		# Call the parent initializing:
 		# This will set several default settings
 		super().__init__(*args, **kwargs)
 
+	#----------------------------------------------------------------------------------------------
 	def _minimum_aperture(self):
 		cols, rows = self.get_pixel_grid()
 		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
 					& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
 		return mask_main
 
+	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
 		"""Perform photometry on the given target.
 
@@ -52,7 +56,12 @@ class AperturePhotometry(BasePhotometry):
 			'extend_overflow': True
 		}
 
-		for retries in range(5):
+		# For bright saturated stars we allow for more retries:
+		allow_retries = 5
+		if self.target['tmag'] < 6:
+			allow_retries = 10
+
+		for retries in range(allow_retries):
 			# Delete any plots left over in the plots folder from an earlier iteration:
 			self.delete_plots()
 
@@ -60,9 +69,13 @@ class AperturePhotometry(BasePhotometry):
 			SumImage = self.sumimage
 
 			logger.info(self.stamp)
-			logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
+			logger.info("Target position in stamp: (%f, %f)",
+				self.target_pos_row_stamp, self.target_pos_column_stamp )
 
-			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
+			cat = np.column_stack((
+				self.catalog['column_stamp'],
+				self.catalog['row_stamp'],
+				self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
 			try:

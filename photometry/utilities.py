@@ -327,7 +327,7 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		- erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
 
 #--------------------------------------------------------------------------------------------------
-def mag2flux(mag):
+def mag2flux(mag, zp=20.60654144):
 	"""
 	Convert from magnitude to flux using scaling relation from
 	aperture photometry. This is an estimate.
@@ -340,7 +340,7 @@ def mag2flux(mag):
 	Returns:
 		float: Corresponding flux value
 	"""
-	return 10**(-0.4*(mag - 20.60654144))
+	return np.clip(10**(-0.4*(mag - zp)), 0, None)
 
 #--------------------------------------------------------------------------------------------------
 def sphere_distance(ra1, dec1, ra2, dec2):
