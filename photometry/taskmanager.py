@@ -115,6 +115,7 @@ class TaskManager(object):
 		# Reset calculations with status STARTED, ABORT or ERROR:
 		# We are re-running all with error, in the hope that they will work this time around:
 		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value) + ',' + str(STATUS.ERROR.value)
+		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IS NULL OR status IN (" + clear_status + "));")
 		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
 		self.conn.commit()
 
@@ -165,7 +166,7 @@ class TaskManager(object):
 			except sqlite3.ProgrammingError:
 				pass
 
-		if hasattr(self, 'conn') and self.conn:
+		if hasattr(self, 'conn'):
 			self.conn.close()
 
 		self.write_summary()
@@ -191,8 +192,7 @@ class TaskManager(object):
 			int: Number of tasks due to be processed.
 		"""
 		self.cursor.execute("SELECT COUNT(*) AS num FROM todolist WHERE status IS NULL;")
-		num = int(self.cursor.fetchone()['num'])
-		return num
+		return int(self.cursor.fetchone()['num'])
 
 	#----------------------------------------------------------------------------------------------
 	def get_task(self, starid=None):
@@ -213,7 +213,8 @@ class TaskManager(object):
 
 		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
-		if task: return dict(task)
+		if task:
+			return dict(task)
 		return None
 
 	#----------------------------------------------------------------------------------------------
@@ -226,7 +227,8 @@ class TaskManager(object):
 		"""
 		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
 		task = self.cursor.fetchone()
-		if task: return dict(task)
+		if task:
+			return dict(task)
 		return None
 
 	#----------------------------------------------------------------------------------------------
