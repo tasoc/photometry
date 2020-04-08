@@ -28,7 +28,8 @@ import enum
 from bottleneck import replace, nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
-from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale, find_nearest
+from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale,
+	find_nearest, ListHandler)
 from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
@@ -151,6 +152,16 @@ class BasePhotometry(object):
 		self._backgrounds_cube_full = None
 		self._pixelflags_cube_full = None
 		self._sumimage_full = None
+
+		# Add a ListHandler to the logging of the corrections module.
+		# This is needed to catch any errors and warnings made by the correctors
+		# for ultimately storing them in the TODO-file.
+		# https://stackoverflow.com/questions/36408496/python-logging-handler-to-append-to-list
+		self.message_queue = []
+		handler = ListHandler(message_queue=self.message_queue, level=logging.WARNING)
+		formatter = logging.Formatter('%(levelname)s: %(message)s')
+		handler.setFormatter(formatter)
+		logging.getLogger('photometry').addHandler(handler)
 
 		# Directory where output files will be saved:
 		self.output_folder = os.path.join(
@@ -1325,6 +1336,14 @@ class BasePhotometry(object):
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
+		# Unpack any errors or warnings that were sent to the logger during the photometry:
+		if self.message_queue:
+			if not self._details.get('errors'):
+				self._details['errors'] = []
+			self._details['errors'] += self.message_queue
+			self.message_queue.clear()
+
+	#----------------------------------------------------------------------------------------------
 	def save_lightcurve(self, output_folder=None, version=None):
 		"""
 		Save generated lightcurve to file.

@@ -10,6 +10,7 @@ Halo Photometry.
 
 import logging
 import os.path
+import contextlib
 import numpy as np
 from astropy.table import Table
 import halophot
@@ -17,7 +18,7 @@ from halophot.halo_tools import do_lc
 from ..plots import plt, save_figure
 from .. import BasePhotometry, STATUS
 from ..quality import TESSQualityFlags
-from ..utilities import mag2flux
+from ..utilities import mag2flux, LoggerWriter
 
 #--------------------------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
@@ -165,28 +166,28 @@ class HaloPhotometry(BasePhotometry):
 
 		# Run the halo photometry core function
 		try:
-			# TODO: Redirect stdout to logger.info
-			pf, ts, weights, weightmap_dict, pixels_sub = do_lc(
-				flux,
-				ts,
-				splits,
-				sub,
-				maxiter=maxiter,
-				split_times=split_times,
-				w_init=w_init,
-				random_init=random_init,
-				thresh=thresh,
-				minflux=minflux,
-				objective=objective,
-				analytic=analytic,
-				sigclip=sigclip,
-				verbose=logger.isEnabledFor(logging.INFO),
-				mission='TESS',
-				bitmask=TESSQualityFlags.DEFAULT_BITMASK
-			)
+			# Redirect stdout to logger.info
+			with contextlib.redirect_stdout(LoggerWriter(logger)):
+				pf, ts, weights, weightmap_dict, pixels_sub = do_lc(
+					flux,
+					ts,
+					splits,
+					sub,
+					maxiter=maxiter,
+					split_times=split_times,
+					w_init=w_init,
+					random_init=random_init,
+					thresh=thresh,
+					minflux=minflux,
+					objective=objective,
+					analytic=analytic,
+					sigclip=sigclip,
+					verbose=logger.isEnabledFor(logging.INFO),
+					mission='TESS',
+					bitmask=TESSQualityFlags.DEFAULT_BITMASK
+				)
 		except: # noqa: E722
 			logger.exception('Halo optimization failed')
-			self.report_details(error='Halo optimization failed')
 			return STATUS.ERROR
 
 		# Fix for halophot sometimes not returning lists:
