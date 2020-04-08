@@ -208,7 +208,7 @@ class HaloPhotometry(BasePhotometry):
 		for k, imgerr in enumerate(self.images_err):
 			if not indx_goodtimes[k]: continue
 			wm = weightmap_dict['weightmap'][wmindx[k]] # Get the weightmap for this cadence
-			self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( wm**2 * imgerr**2 ))
+			self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.nansum( wm**2 * imgerr**2 ))
 
 		self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
 		self.lightcurve['pos_centroid'][:,1] = row
