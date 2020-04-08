@@ -100,7 +100,9 @@ class HaloPhotometry(BasePhotometry):
 		if self.datasource == 'ffi':
 			self.resize_stamp(width=dist_max+2, height=dist_max+2)
 
-		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
+		logger.info("Target position in stamp: (%f, %f)",
+			self.target_pos_row_stamp,
+			self.target_pos_column_stamp)
 
 		# Initialize
 		logger.info('Formatting data for halo')

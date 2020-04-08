@@ -20,7 +20,7 @@ from photometry.plots import matplotlib, plt, plot_image, plot_image_fit_residua
 
 kwargs = {'baseline_dir': 'baseline_images'}
 
-#-------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 #@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image():
 
@@ -43,7 +43,7 @@ def test_plot_image():
 
 	return fig
 
-#-------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_plot_image_invalid():
 
 	mu = [3.5, 3]
@@ -69,7 +69,7 @@ def test_plot_image_invalid():
 
 	plt.close(fig)
 
-#-------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 #@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid():
 
@@ -87,7 +87,7 @@ def test_plot_image_grid():
 	ax.grid(True)
 	return fig
 
-#-------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 #@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid_offset():
 
@@ -105,7 +105,7 @@ def test_plot_image_grid_offset():
 	ax.grid(True)
 	return fig
 
-#-------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_plot_image_data_change():
 	"""Test that the plotting function does not change input data"""
 
@@ -134,13 +134,8 @@ def test_plot_image_data_change():
 	plot_image_fit_residuals(fig, img, img, img)
 	np.testing.assert_allclose(img, img_before)
 
-#-------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	matplotlib.use('TkAgg')
-	plt.close('all')
-	test_plot_image()
-	test_plot_image_invalid()
-	test_plot_image_grid()
-	test_plot_image_grid_offset()
-	test_plot_image_data_change()
+	plt.switch_backend('Qt5Agg')
+	pytest.main([__file__])
 	plt.show()

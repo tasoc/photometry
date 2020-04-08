@@ -130,7 +130,7 @@ class PSFPhotometry(BasePhotometry):
 
 			# Run the fitting routine for this image:
 			res = minimize(self._lhood, params0, args=(img, bkg), method='Nelder-Mead',
-						options={'maxiter': maxiter})
+				options={'maxiter': maxiter})
 			logger.debug(res)
 
 			if res.success:
