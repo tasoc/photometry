@@ -72,6 +72,16 @@ jobs:
       env:
         - PATH=/c/Python37:/c/Python37/Scripts:$PATH
 
+    - name: "Python 3.8 on Windows"
+      os: windows
+      language: shell  # 'language: python' is an error on Travis CI Windows
+      before_install:
+        - choco install python --version 3.8.2
+        - python --version
+        - git lfs pull
+      env:
+        - PATH=/c/Python38:/c/Python38/Scripts:$PATH
+
     - name: "Flake8"
       python: "3.6"
       git:
