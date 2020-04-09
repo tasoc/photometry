@@ -3,6 +3,13 @@ cache: pip
 os: linux
 dist: xenial
 
+# Since the different OS can't agree what the executables are called,
+# we will use environment variables to store the names:
+env:
+  global:
+    - PYTHON="python"
+    - PIP="pip"
+
 # We are specifying the build matrix manually, since there is too little overlap
 # between the different builds:
 jobs:
@@ -16,6 +23,35 @@ jobs:
     - name: "Python 3.7 on Linux"
       python: "3.7"
 
+    - name: "Python 3.8 on Linux"
+      python: "3.8"
+
+    - name: "Python 3.6 on Mac"
+      os: osx
+      osx_image: xcode9.4 # Python 3.6.5
+      language: shell
+      before_install:
+        - brew install git-lfs
+        - python3 --version
+        - git lfs install
+        - git lfs pull
+      env:
+        - PYTHON="python3"
+        - PIP="pip3"
+
+    - name: "Python 3.7 on Mac"
+      os: osx
+      osx_image: xcode11.2 # Python 3.7.4 running on macOS 10.14.4
+      language: shell
+      before_install:
+        - brew install git-lfs
+        - python3 --version
+        - git lfs install
+        - git lfs pull
+      env:
+        - PYTHON="python3"
+        - PIP="pip3"
+
     - name: "Python 3.6 on Windows"
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
@@ -23,7 +59,8 @@ jobs:
         - choco install python --version 3.6.8
         - python --version
         - git lfs pull
-      env: PATH=/c/Python36:/c/Python36/Scripts:$PATH
+      env:
+        - PATH=/c/Python36:/c/Python36/Scripts:$PATH
 
     - name: "Python 3.7 on Windows"
       os: windows
@@ -32,7 +69,8 @@ jobs:
         - choco install python --version 3.7.4
         - python --version
         - git lfs pull
-      env: PATH=/c/Python37:/c/Python37/Scripts:$PATH
+      env:
+        - PATH=/c/Python37:/c/Python37/Scripts:$PATH
 
     - name: "Flake8"
       python: "3.6"
@@ -49,17 +87,19 @@ jobs:
   fast_finish: true
   allow_failures:
     - name: "Flake8"
+    - python: "3.8"
     - os: windows
+    - os: osx
 
 install:
-  - python -m pip install --upgrade pip
-  - pip install -r requirements.txt
-  - pip install codecov pytest-cov
-  - travis_wait python run_download_cache.py -q
+  - $PYTHON -m pip install --upgrade pip
+  - $PIP install -r requirements.txt
+  - $PIP install codecov pytest-cov
+  - travis_wait $PYTHON run_download_cache.py -q
 script:
-  - pytest --cov=photometry/
+  - $PYTHON -m pytest --cov=photometry/
 after_success:
-  - codecov
+  - $PYTHON -m codecov
 
 branches:
   only:
@@ -71,7 +111,7 @@ branches:
 # code whenever a new tag is added on the master branch
 before_deploy:
   - git stash --all
-  - python -c "from photometry import version; version.update_release_version();"
+  - $PYTHON -c "from photometry import version; version.update_release_version();"
 deploy:
   provider: releases
   token: $GITHUB_TOKEN
