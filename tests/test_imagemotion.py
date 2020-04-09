@@ -22,7 +22,7 @@ def test_imagemotion_invalid_warpmode():
 		ImageMovementKernel(warpmode='invalid')
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian'])
+@pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian', 'affine'])
 def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 	"""Test of ImageMovementKernel"""
 
