@@ -82,13 +82,12 @@ class AperturePhotometry(BasePhotometry):
 				masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
 				masks = np.asarray(masks, dtype='bool')
 			except k2p2.K2P2NoStars:
-				self.report_details(error='No flux above threshold.')
+				logger.error('No flux above threshold.')
 				masks = np.asarray(0, dtype='bool')
 
 			using_minimum_mask = False
 			if len(masks.shape) == 0:
-				logger.warning("No masks found")
-				self.report_details(error='No masks found. Using minimum aperture.')
+				logger.warning("No masks found. Using minimum aperture.")
 				mask_main = self._minimum_aperture()
 				using_minimum_mask = True
 
@@ -98,13 +97,11 @@ class AperturePhotometry(BasePhotometry):
 
 				if not np.any(indx_main):
 					logger.warning('No mask found for main target. Using minimum aperture.')
-					self.report_details(error='No mask found for main target. Using minimum aperture.')
 					mask_main = self._minimum_aperture()
 					using_minimum_mask = True
 
 				elif np.sum(indx_main) > 1:
-					logger.error('Too many masks')
-					self.report_details(error='Too many masks')
+					logger.error('Too many masks.')
 					return STATUS.ERROR
 
 				else:
@@ -123,18 +120,18 @@ class AperturePhotometry(BasePhotometry):
 				resize_args['right'] = 10
 
 			if resize_args:
-				logger.warning("Touching the edges! Retrying")
+				logger.warning("Touching the edges! Retrying.")
 				logger.info(resize_args)
 				if not self.resize_stamp(**resize_args):
 					resize_args = {}
-					logger.warning("Could not resize stamp any further")
+					logger.warning("Could not resize stamp any further.")
 					break
 			else:
 				break
 
 		# If we reached the last retry but still needed a resize, give up:
 		if resize_args:
-			self.report_details(error='Too many stamp resizes')
+			logger.error('Too many stamp resizes.')
 			return STATUS.ERROR
 
 		# XY of pixels in frame
@@ -151,7 +148,7 @@ class AperturePhotometry(BasePhotometry):
 				self.lightcurve['flux'][k] = np.NaN
 				self.lightcurve['flux_err'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k, :] = np.NaN
-				#self.lightcurve['quality']
+				#self.lightcurve['quality'][k] |= ?
 			else:
 				self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
 				self.lightcurve['flux_err'][k] = np.sqrt(np.sum(imgerr[mask_main]**2))
@@ -193,8 +190,7 @@ class AperturePhotometry(BasePhotometry):
 
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 0:
-			logger.error("No targets in mask")
-			self.report_details(error='No targets in mask')
+			logger.error("No targets in mask.")
 			contamination = np.nan
 			my_status = STATUS.ERROR
 		elif len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
