@@ -53,14 +53,14 @@ from matplotlib.colors import ListedColormap
 from photometry.quality import PixelQualityFlags
 from photometry.utilities import find_hdf5_files, TqdmLoggingHandler
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def set_copyright(fig, xpos=0.01, ypos=0.99, fontsize=12):
 	plt.text(ypos, xpos, 'Created by TASOC',
 		verticalalignment='bottom', horizontalalignment='right',
 		transform=fig.transFigure,
 		color='0.3', fontsize=fontsize)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	"""
 	Create animation of the contents of a HDF5 files produced by the photometry pipeline.
@@ -95,7 +95,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	# We need to have write-privaledges because we are going to updated some attributes
 	with h5py.File(hdf_file, 'r+', libver='latest') as hdf:
 		numfiles = len(hdf['images'])
-		dummy_img = np.zeros_like(hdf['images/0000'])
+		dummy_img = np.full_like(hdf['images/0000'], np.NaN)
 		time = np.asarray(hdf['time'])
 		cadenceno = np.asarray(hdf['cadenceno'])
 		sector = hdf['images'].attrs.get('SECTOR')
@@ -133,6 +133,8 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 
 		logger.info("Creating movie...")
 		with plt.style.context('dark_background'):
+			plt.rc('axes', titlesize=15)
+
 			fig, ax = plt.subplots(1, 4, figsize=(20, 6.8))
 
 			# Colormap to use for FFIs:
@@ -145,19 +147,18 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			newcolors[:1, :] = np.array([1, 1, 1, 1])
 			cmap_flags = ListedColormap(newcolors)
 
-			imgs = [0,0,0,0]
-			imgs[0] = plot_image(dummy_img, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image', xlabel=None, ylabel=None, cmap=cmap, make_cbar=True)
-			imgs[1] = plot_image(dummy_img, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', xlabel=None, ylabel=None, cmap=cmap, make_cbar=True)
-			imgs[2] = plot_image(dummy_img, ax=ax[2], scale='sqrt', vmin=vmin2, vmax=vmax2, title='Background subtracted', xlabel=None, ylabel=None, cmap=cmap, make_cbar=True)
-			imgs[3] = plot_image(dummy_img, ax=ax[3], scale='linear', vmin=-0.5, vmax=3.5, title='Pixel Flags', xlabel=None, ylabel=None, cmap=cmap_flags, make_cbar=True, clabel='Flags', cbar_ticks=[0,1,2,3], cbar_ticklabels=['None','Not used','Man Excl','Shenan'])
+			imgs = [None]*4
+			imgs[0] = plot_image(dummy_img, ax=ax[0], scale='sqrt', vmin=vmin, vmax=vmax, title='Original Image', cmap=cmap, cbar='bottom', cbar_pad=0.05)
+			imgs[1] = plot_image(dummy_img, ax=ax[1], scale='sqrt', vmin=vmin, vmax=vmax, title='Background', cmap=cmap, cbar='bottom', cbar_pad=0.05)
+			imgs[2] = plot_image(dummy_img, ax=ax[2], scale='sqrt', vmin=vmin2, vmax=vmax2, title='Background subtracted', cmap=cmap, cbar='bottom', cbar_pad=0.05)
+			imgs[3] = plot_image(dummy_img, ax=ax[3], scale='linear', vmin=-0.5, vmax=3.5, title='Pixel Flags', cmap=cmap_flags, cbar='bottom', cbar_pad=0.05, clabel='Flags', cbar_ticks=[0,1,2,3], cbar_ticklabels=['None','Not used','Man Excl','Shenan'])
 
 			for a in ax:
 				a.set_xticks([])
 				a.set_yticks([])
 
-			figtext = fig.suptitle("to come\nt=???????", fontsize=15)
-			fig.set_tight_layout('tight')
-			fig.subplots_adjust(top=0.85)
+			figtext = fig.suptitle("to come\nt=???????", fontsize=16)
+			fig.subplots_adjust(left=0.03, right=0.97, top=0.95, bottom=0.03, wspace=0.05)
 			set_copyright(fig)
 
 			writer = animation.FFMpegWriter(fps=fps)
@@ -199,7 +200,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 
 	return output_file
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=False):
 	"""
 	Create animation of the combined contents of all HDF5 files in a directory,
@@ -261,7 +262,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 					hdf[k] = h5py.File(hdf_file[0], 'r', libver='latest')
 
 					numfiles = len(hdf[k]['images'])
-					dummy_img = np.zeros_like(hdf[k]['images/0000'])
+					dummy_img = np.full_like(hdf[k]['images/0000'], np.NaN)
 					time = np.asarray(hdf[k]['time'])
 					cadenceno = np.asarray(hdf[k]['cadenceno'])
 
@@ -277,9 +278,9 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 			vmin = np.nanpercentile(vmin, 25.0)
 			vmax = np.nanpercentile(vmax, 75.0)
 
-			logger.info("Creating movie...")
+			logger.info("Creating combined %s movie...", mode)
 			with plt.style.context('dark_background'):
-				fig, axes = plt.subplots(2, 8, figsize=(25, 7.3))
+				fig, axes = plt.subplots(2, 8, figsize=(25, 6.8))
 
 				cmap = plt.get_cmap('viridis')
 				cmap.set_bad('k', 1.0)
@@ -293,24 +294,24 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 				imgs = [None]*16
 				for k, ax in enumerate(axes.flatten()):
 					if mode == 'flags':
-						imgs[k] = plot_image(dummy_img, ax=ax, scale='linear', vmin=-0.5, vmax=4.5, xlabel=None, ylabel=None, cmap=cmap_flags, make_cbar=False)
+						imgs[k] = plot_image(dummy_img, ax=ax, scale='linear', vmin=-0.5, vmax=4.5, cmap=cmap_flags)
 					else:
-						imgs[k] = plot_image(dummy_img, ax=ax, scale='sqrt', vmin=vmin, vmax=vmax, xlabel=None, ylabel=None, cmap=cmap, make_cbar=False)
+						imgs[k] = plot_image(dummy_img, ax=ax, scale='sqrt', vmin=vmin, vmax=vmax, cmap=cmap)
 					ax.set_xticks([])
 					ax.set_yticks([])
 
-				figtext = fig.suptitle("to come\nt=???????", fontsize=15)
-				fig.set_tight_layout('tight')
-				fig.subplots_adjust(top=0.85)
+				figtext = fig.suptitle("to come\nt=???????", fontsize=16)
+				fig.subplots_adjust(left=0.03, right=0.97, top=0.90, bottom=0.05, wspace=0.05, hspace=0.05)
 				set_copyright(fig)
 
 				writer = animation.FFMpegWriter(fps=fps)
 				with writer.saving(fig, output_file, dpi):
-					for k in trange(numfiles):
-						dset_name = '%04d' % k
+					for i in trange(numfiles):
+						dset_name = '%04d' % i
 
 						for k in range(16):
-							if hdf[k] is None: continue
+							if hdf[k] is None:
+								continue
 
 							# Background Shenanigans flags, if available:
 							if mode == 'flags':
@@ -334,8 +335,8 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 							sector=sector,
 							mode=mode,
 							dset=dset_name,
-							cad=cadenceno[k],
-							time=time[k]
+							cad=cadenceno[i],
+							time=time[i]
 						))
 
 						writer.grab_frame()
@@ -357,7 +358,7 @@ if __name__ == '__main__':
 	multiprocessing.freeze_support() # for Windows support
 
 	# Parse command line arguments:
-	parser = argparse.ArgumentParser(description='Create movie of TESS camera.')
+	parser = argparse.ArgumentParser(description='Create movies of TESS cameras.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
@@ -381,8 +382,10 @@ if __name__ == '__main__':
 	console.setFormatter(formatter)
 	logger_parent = logging.getLogger('photometry')
 	logger_parent.setLevel(logging_level)
-	if not logger.hasHandlers(): logger.addHandler(console)
-	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
+	if not logger.hasHandlers():
+		logger.addHandler(console)
+	if not logger_parent.hasHandlers():
+		logger_parent.addHandler(console)
 
 	# If the user provided the path to a single directory,
 	# find all the HDF5 files in that directory and process them:

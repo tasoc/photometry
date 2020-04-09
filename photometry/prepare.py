@@ -563,7 +563,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 					#msmax = max(np.abs(np.min(mean_shenanigans)), np.abs(np.max(mean_shenanigans)))
 					#fig = plt.figure()
-					#plot_image(mean_shenanigans, scale='linear', vmin=-msmax, vmax=msmax, cmap='coolwarm', make_cbar=True, xlabel=None, ylabel=None)
+					#plot_image(mean_shenanigans, scale='linear', vmin=-msmax, vmax=msmax, cmap='coolwarm', cbar=True)
 					#fig.savefig('test.png', bbox_inches='tight')
 
 					logger.info("Setting background shenanigans...")
@@ -576,7 +576,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						#img[np.abs(img) <= bkgshe_threshold/2] = 0
 						#fig = plt.figure(figsize=(8,9))
 						#ax = fig.add_subplot(111)
-						#plot_image(img, ax=ax, scale='linear', vmin=-bkgshe_threshold, vmax=bkgshe_threshold, xlabel=None, ylabel=None, cmap="RdBu_r", make_cbar=True)
+						#plot_image(img, ax=ax, scale='linear', vmin=-bkgshe_threshold, vmax=bkgshe_threshold, cmap="RdBu_r", cbar=True)
 						#ax.set_xticks([])
 						#ax.set_yticks([])
 						#fig.savefig(dset_name + '.png', bbox_inches='tight')

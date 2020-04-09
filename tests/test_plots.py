@@ -3,10 +3,6 @@
 """
 Tests of plots
 
->>> pytest --mpl
-
->>> pytest --mpl-generate-path=tests/baseline_images
-
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
@@ -15,31 +11,29 @@ import sys
 import os.path
 import numpy as np
 from scipy.stats import multivariate_normal
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from photometry.plots import matplotlib, plt, plot_image, plot_image_fit_residuals
-
-kwargs = {'baseline_dir': 'baseline_images'}
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from photometry.plots import plt, plot_image, plot_image_fit_residuals
 
 #--------------------------------------------------------------------------------------------------
-#@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image():
 
 	mu = [3.5, 3]
 	x, y = np.mgrid[0:10, 0:10]
 	pos = np.dstack((x, y))
 	var = multivariate_normal(mean=mu, cov=[[1,0],[0,1]])
-	gauss = var.pdf(pos) - 0.05
+	gauss = var.pdf(pos) - 0.05 # Make sure it has some negative values as well
 
-	fig = plt.figure(figsize=(12,6))
-	ax1 = fig.add_subplot(131)
-	plot_image(gauss, ax=ax1, scale='linear', title='Linear')
-	ax1.plot(mu[1], mu[0], 'r+')
-	ax2 = fig.add_subplot(132)
-	plot_image(gauss, ax=ax2, scale='sqrt', title='Sqrt')
-	ax2.plot(mu[1], mu[0], 'r+')
-	ax3 = fig.add_subplot(133)
-	plot_image(gauss, ax=ax3, scale='log', title='Log', cmap='Reds', make_cbar=True)
-	ax3.plot(mu[1], mu[0], 'r+')
+	scales = ['linear', 'sqrt', 'log', 'asinh', 'histeq', 'sinh', 'squared']
+
+	fig, axes = plt.subplots(2, 4, figsize=(14, 8))
+	axes = axes.flatten()
+	for k, scale in enumerate(scales):
+		ax = axes[k]
+		plot_image(gauss, ax=ax, scale=scale, title=scale, cbar='right')
+		ax.plot(mu[1], mu[0], 'r+')
+
+	# In the final plot:
+	plot_image(gauss, ax=axes[-1], scale='log', title='log - Reds', cmap='Reds', cbar='right')
 
 	return fig
 
@@ -52,8 +46,7 @@ def test_plot_image_invalid():
 	var = multivariate_normal(mean=mu, cov=[[1,0],[0,1]])
 	gauss = var.pdf(pos)
 
-	fig = plt.figure(figsize=(12,6))
-	ax1 = fig.add_subplot(111)
+	fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
 	# Run with invalid scale:
 	with pytest.raises(ValueError):
@@ -65,12 +58,9 @@ def test_plot_image_invalid():
 
 	# Run with all-NaN image:
 	gauss[:, :] = np.NaN
-	assert plot_image(gauss, ax=ax1) is None
-
-	plt.close(fig)
+	plot_image(gauss, ax=ax2, cbar='right')
 
 #--------------------------------------------------------------------------------------------------
-#@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid():
 
 	img = np.zeros((5,7))
@@ -88,7 +78,6 @@ def test_plot_image_grid():
 	return fig
 
 #--------------------------------------------------------------------------------------------------
-#@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid_offset():
 
 	img = np.zeros((5,7))
@@ -110,6 +99,7 @@ def test_plot_image_data_change():
 	"""Test that the plotting function does not change input data"""
 
 	# Construct random image:
+	np.random.seed(42)
 	img = np.random.randn(15, 10)
 	img[0,0] = -1.0 # Make 100% sure there is a negative point
 
@@ -133,6 +123,20 @@ def test_plot_image_data_change():
 	fig = plt.figure()
 	plot_image_fit_residuals(fig, img, img, img)
 	np.testing.assert_allclose(img, img_before)
+
+#--------------------------------------------------------------------------------------------------
+def test_plot_cbar_and_nans():
+
+	# Construct image:
+	np.random.seed(42)
+	img = np.random.rand(10, 10)
+	img[2:8, 2:8] = np.NaN
+
+	fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(16, 6))
+	plot_image(img, ax=ax1, scale='linear', vmin=0.4, cbar='left')
+	plot_image(img, ax=ax2, scale='sqrt', vmin=0.4, cbar='bottom')
+	plot_image(img, ax=ax3, scale='log', vmin=0.4, cbar='right')
+	plot_image(img, ax=ax4, scale='log', vmin=0.4, cbar='top')
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

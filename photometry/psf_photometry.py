@@ -150,13 +150,13 @@ class PSFPhotometry(BasePhotometry):
 
 					fig = plt.figure()
 					ax = fig.add_subplot(131)
-					plot_image(img, ax=ax, scale='log', xlabel=None, ylabel=None, title='Image')
+					plot_image(img, ax=ax, scale='log', title='Image')
 					ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
 					ax.scatter(result[:,1], result[:,0], c='r', alpha=0.5)
 					ax = fig.add_subplot(132)
-					plot_image(mdl, ax=ax, scale='log', xlabel=None, ylabel=None, title='Model')
+					plot_image(mdl, ax=ax, scale='log', title='Model')
 					ax = fig.add_subplot(133)
-					plot_image(img - mdl, ax=ax, scale='linear', xlabel=None, ylabel=None, title='Residuals')
+					plot_image(img - mdl, ax=ax, scale='linear', title='Residuals')
 
 					# Export figure to file:
 					fig_name = 'psf_photometry_{sector:02d}_{starid:011d}_{time:05d}'.format(

@@ -991,9 +991,9 @@ class BasePhotometry(object):
 				self._sumimage /= Nimg
 
 			if self.plot:
-				fig = plt.figure()
-				ax = fig.add_subplot(111)
-				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2]+1, self._stamp[0]+1))
+				fig, ax = plt.subplots()
+				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2]+1, self._stamp[0]+1),
+					xlabel='Pixel Column Number', ylabel='Pixel Row Number', cbar='right')
 				ax.plot(self.target_pos_column + 1, self.target_pos_row + 1, 'r+')
 				save_figure(os.path.join(self.plot_folder, 'sumimage'), fig=fig)
 				plt.close(fig)

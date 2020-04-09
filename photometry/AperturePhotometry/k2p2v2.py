@@ -301,10 +301,10 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			fig.subplots_adjust(hspace=0.12, wspace=0.12)
 			ax0, ax1, ax2 = axes
 
-			plot_image(Z, ax=ax0, scale='log', title='Overlapping objects', xlabel=None, ylabel=None)
+			plot_image(Z, ax=ax0, scale='log', title='Overlapping objects')
 
 			# Plot the basin used for watershed:
-			plot_image(distance, ax=ax1, scale='log', title='Basin', xlabel=None, ylabel=None)
+			plot_image(distance, ax=ax1, scale='log', title='Basin')
 
 			# Overplot the full catalog:
 			if catalog is not None:
@@ -318,7 +318,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			# Overplot the final markers for the watershed:
 			ax1.scatter(X[local_maxi], Y[local_maxi], color='r', s=5, alpha=0.7)
 
-			plot_image(labels_ws, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects', xlabel=None, ylabel=None)
+			plot_image(labels_ws, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects')
 
 			for ax in axes:
 				ax.set_xticklabels([])
@@ -728,7 +728,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 		# ---------------
 		# PLOT 1
 		ax0 = fig0.add_subplot(151)
-		plot_image(SumImage, ax=ax0, scale='log', title='Sum-image', xlabel=None, ylabel=None)
+		plot_image(SumImage, ax=ax0, scale='log', title='Sum-image')
 
 		# ---------------
 		# PLOT 2
@@ -740,7 +740,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 		Flux_mat2[ori_mask == 0] = 0
 
 		ax2 = fig0.add_subplot(152)
-		plot_image(Flux_mat2, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Significant flux', xlabel=None, ylabel=None)
+		plot_image(Flux_mat2, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Significant flux')
 
 		# ---------------
 		# PLOT 3
@@ -768,12 +768,12 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 		# ---------------
 		# PLOT 4
 		ax4 = fig0.add_subplot(154)
-		plot_image(Flux_mat4, ax=ax4, scale='linear', percentile=100, cmap='nipy_spectral', title='Extracted clusters', xlabel=None, ylabel=None)
+		plot_image(Flux_mat4, ax=ax4, scale='linear', percentile=100, cmap='nipy_spectral', title='Extracted clusters')
 
 		# ---------------
 		# PLOT 5
 		ax5 = fig0.add_subplot(155)
-		plot_image(SumImage, ax=ax5, scale='log', title='Final masks', xlabel=None, ylabel=None)
+		plot_image(SumImage, ax=ax5, scale='log', title='Final masks')
 
 		# Plot outlines of selected masks:
 		for u in range(no_masks):
