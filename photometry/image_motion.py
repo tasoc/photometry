@@ -235,7 +235,7 @@ class ImageMovementKernel(object):
 			warp_matrix = np.asarray(warp_matrix.get(), dtype='float64')
 		except: # noqa: E722
 			logger.exception("Could not find transform")
-			return np.NaN*np.ones(self.n_params)
+			return np.full(self.n_params, np.NaN)
 
 		# The affine transformation uses six parameters,
 		# so let's just store a flattened version of the matrix:

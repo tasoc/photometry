@@ -14,9 +14,6 @@ env:
 # between the different builds:
 jobs:
   include:
-    - name: "Python 3.5 on Linux"
-      python: "3.5"
-
     - name: "Python 3.6 on Linux"
       python: "3.6"
 
@@ -97,7 +94,6 @@ jobs:
   fast_finish: true
   allow_failures:
     - name: "Flake8"
-    - python: "3.8"
     - os: windows
     - os: osx
 
