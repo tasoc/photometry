@@ -1,6 +1,7 @@
 language: python
 cache: pip
 os: linux
+dist: xenial
 
 # We are specifying the build matrix manually, since there is too little overlap
 # between the different builds:
@@ -14,7 +15,6 @@ jobs:
 
     - name: "Python 3.7 on Linux"
       python: "3.7"
-      dist: xenial
 
     - name: "Python 3.6 on Windows"
       os: windows
@@ -78,7 +78,7 @@ deploy:
   skip_cleanup: true
   draft: true
   name: "${TRAVIS_TAG/v/Version }"
-  body: "${TRAVIS_TAG/v/Version }"
+  release_notes: "${TRAVIS_TAG/v/Version }"
   on:
     branch:
       - master
