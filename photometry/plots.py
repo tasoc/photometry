@@ -92,6 +92,10 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 			logger.warning("Image is all NaN")
 			vmin = 0
 			vmax = 1
+			if cbar_ticks is None:
+				cbar_ticks = []
+			if cbar_ticklabels is None:
+				cbar_ticklabels = []
 		elif isinstance(percentile, (list, tuple, np.ndarray)):
 			interval = viz.AsymmetricPercentileInterval(percentile[0], percentile[1])
 		else:
@@ -122,7 +126,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 			vmin=vmin,
 			vmax=vmax,
 			stretch=stretch,
-			clip=False)
+			clip=True if scale=='sqrt' else False)
 
 	elif isinstance(scale, (viz.ImageNormalize, matplotlib.colors.Normalize)):
 		norm = scale
