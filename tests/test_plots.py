@@ -15,7 +15,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from photometry.plots import plt, plot_image, plot_image_fit_residuals
 
 kwargs = {
-	'baseline_dir': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'correct_plots')
+	'baseline_dir': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'correct_plots'),
+	'remove_text': True # Fonts may be unavailable
 }
 
 #--------------------------------------------------------------------------------------------------
@@ -156,7 +157,7 @@ def test_plot_cbar_and_nans():
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	print("To generate new correct images:")
-	print('  pytest --mpl-generate-path="' + kwargs['baseline_dir'] + '" "' + __file__ + '"')
+	print('pytest --mpl-generate-path="' + kwargs['baseline_dir'] + '" "' + __file__ + '"')
 
 	plt.switch_backend('Qt5Agg')
 	pytest.main([__file__])
