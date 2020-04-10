@@ -38,8 +38,8 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		image (2d array): Image data.
 		ax (matplotlib.pyplot.axes, optional): Axes in which to plot.
 			Default (None) is to use current active axes.
-		scale (str or :py:class:`astropy.visualization.ImageNormalize` object, optional): Normalization used to
-			stretch the colormap.
+		scale (str or :py:class:`astropy.visualization.ImageNormalize` object, optional):
+			Normalization used to stretch the colormap.
 			Options: ``'linear'``, ``'sqrt'``, ``'log'``, ``'asinh'``, ``'histeq'``, ``'sinh'``
 			and ``'squared'``.
 			Can also be a :py:class:`astropy.visualization.ImageNormalize` object.
@@ -47,7 +47,8 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		origin (str, optional): The origin of the coordinate system.
 		xlabel (str, optional): Label for the x-axis.
 		ylabel (str, optional): Label for the y-axis.
-		cbar (string, optional): Location of color bar. Choises are 'right', 'left', 'top', 'bottom.
+		cbar (string, optional): Location of color bar.
+			Choises are ``'right'``, ``'left'``, ``'top'``, ``'bottom'``.
 			Default is not to create colorbar.
 		clabel (str, optional): Label for the color bar.
 		cbar_size (float, optional): Fractional size of colorbar compared to axes. Default=0.03.
@@ -64,7 +65,8 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		kwargs (dict, optional): Keyword arguments to be passed to :py:func:`matplotlib.pyplot.imshow`.
 
 	Returns:
-		:py:class:`matplotlib.image.AxesImage`: Image from returned by :py:func:`matplotlib.pyplot.imshow`.
+		:py:class:`matplotlib.image.AxesImage`: Image from returned
+			by :py:func:`matplotlib.pyplot.imshow`.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -126,7 +128,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 			vmin=vmin,
 			vmax=vmax,
 			stretch=stretch,
-			clip=True if scale=='sqrt' else False)
+			clip=False)
 
 	elif isinstance(scale, (viz.ImageNormalize, matplotlib.colors.Normalize)):
 		norm = scale
@@ -197,14 +199,19 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		if cbar_ticklabels is not None:
 			cb.set_ticklabels(cbar_ticklabels)
 
-	# Settings for ticks (to make Mikkel happy):
-	ax.xaxis.set_major_locator(MaxNLocator(integer=True))
-	ax.xaxis.set_minor_locator(MaxNLocator(integer=True))
-	ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-	ax.yaxis.set_minor_locator(MaxNLocator(integer=True))
-	ax.tick_params(direction='out', which='both', pad=5)
+		#cax.yaxis.set_major_locator(matplotlib.ticker.AutoLocator())
+		#cax.yaxis.set_minor_locator(matplotlib.ticker.AutoLocator())
+		cax.tick_params(which='both', direction='out', pad=5)
+
+	# Settings for ticks:
+	integer_locator = MaxNLocator(nbins=10, integer=True)
+	ax.xaxis.set_major_locator(integer_locator)
+	ax.xaxis.set_minor_locator(integer_locator)
+	ax.yaxis.set_major_locator(integer_locator)
+	ax.yaxis.set_minor_locator(integer_locator)
+	ax.tick_params(which='both', direction='out', pad=5)
 	ax.xaxis.tick_bottom()
-	#ax.set_aspect(aspect)
+	ax.yaxis.tick_left()
 
 	return im
 

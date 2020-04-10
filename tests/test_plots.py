@@ -14,15 +14,21 @@ from scipy.stats import multivariate_normal
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from photometry.plots import plt, plot_image, plot_image_fit_residuals
 
+kwargs = {
+	'baseline_dir': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'correct_plots')
+}
+
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image():
 
 	mu = [3.5, 3]
-	x, y = np.mgrid[0:10, 0:10]
+	x, y = np.mgrid[0:15, 0:15]
 	pos = np.dstack((x, y))
 	var = multivariate_normal(mean=mu, cov=[[1,0],[0,1]])
-	gauss = var.pdf(pos) - 0.05 # Make sure it has some negative values as well
+	gauss = 5 * var.pdf(pos) - 0.05 # Make sure it has some negative values as well
 	gauss[8,8] = np.NaN
+	gauss[4,4] = -0.2
 
 	scales = ['linear', 'sqrt', 'log', 'asinh', 'histeq', 'sinh', 'squared']
 
@@ -36,9 +42,12 @@ def test_plot_image():
 	# In the final plot:
 	plot_image(gauss, ax=axes[-1], scale='log', title='log - Reds', cmap='Reds', cbar='right')
 
+	fig.tight_layout()
+
 	return fig
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_invalid():
 
 	mu = [3.5, 3]
@@ -60,8 +69,10 @@ def test_plot_image_invalid():
 	# Run with all-NaN image:
 	gauss[:, :] = np.NaN
 	plot_image(gauss, ax=ax2, cbar='right')
+	return fig
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid():
 
 	img = np.zeros((5,7))
@@ -79,6 +90,7 @@ def test_plot_image_grid():
 	return fig
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_image_grid_offset():
 
 	img = np.zeros((5,7))
@@ -126,6 +138,7 @@ def test_plot_image_data_change():
 	np.testing.assert_allclose(img, img_before)
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.mpl_image_compare(**kwargs)
 def test_plot_cbar_and_nans():
 
 	# Construct image:
@@ -138,9 +151,13 @@ def test_plot_cbar_and_nans():
 	plot_image(img, ax=ax2, scale='sqrt', vmin=0.4, cbar='bottom')
 	plot_image(img, ax=ax3, scale='log', vmin=0.4, cbar='right')
 	plot_image(img, ax=ax4, scale='asinh', vmin=0.4, cbar='top')
+	return fig
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
+	print("To generate new correct images:")
+	print('  pytest --mpl-generate-path="' + kwargs['baseline_dir'] + '" "' + __file__ + '"')
+
 	plt.switch_backend('Qt5Agg')
 	pytest.main([__file__])
 	plt.show()
