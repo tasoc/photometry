@@ -121,7 +121,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		# Create ImageNormalize object. Very important to use clip=False here, otherwise
 		# NaN points will not be plotted correctly.
 		norm = viz.ImageNormalize(
-			data=image,
+			data=image[np.isfinite(image)],
 			interval=interval,
 			vmin=vmin,
 			vmax=vmax,
