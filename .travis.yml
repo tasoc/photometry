@@ -34,7 +34,7 @@ jobs:
         - git lfs pull
       env:
         - PYTHON="python3"
-        - PIP="pip3"
+        - PIP="sudo pip3"
 
     - name: "Python 3.7 on Mac"
       os: osx
@@ -47,7 +47,7 @@ jobs:
         - git lfs pull
       env:
         - PYTHON="python3"
-        - PIP="pip3"
+        - PIP="sudo pip3"
 
     - name: "Python 3.6 on Windows"
       os: windows
