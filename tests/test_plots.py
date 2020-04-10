@@ -16,7 +16,7 @@ from photometry.plots import plt, plot_image, plot_image_fit_residuals
 
 kwargs = {
 	'baseline_dir': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'correct_plots'),
-	'remove_text': True # Fonts may be unavailable
+	'tolerance': 30
 }
 
 #--------------------------------------------------------------------------------------------------
