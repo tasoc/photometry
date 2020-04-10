@@ -22,6 +22,7 @@ def test_plot_image():
 	pos = np.dstack((x, y))
 	var = multivariate_normal(mean=mu, cov=[[1,0],[0,1]])
 	gauss = var.pdf(pos) - 0.05 # Make sure it has some negative values as well
+	gauss[8,8] = np.NaN
 
 	scales = ['linear', 'sqrt', 'log', 'asinh', 'histeq', 'sinh', 'squared']
 
@@ -136,7 +137,7 @@ def test_plot_cbar_and_nans():
 	plot_image(img, ax=ax1, scale='linear', vmin=0.4, cbar='left')
 	plot_image(img, ax=ax2, scale='sqrt', vmin=0.4, cbar='bottom')
 	plot_image(img, ax=ax3, scale='log', vmin=0.4, cbar='right')
-	plot_image(img, ax=ax4, scale='log', vmin=0.4, cbar='top')
+	plot_image(img, ax=ax4, scale='asinh', vmin=0.4, cbar='top')
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

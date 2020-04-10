@@ -108,7 +108,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		elif scale == 'asinh':
 			stretch = viz.AsinhStretch()
 		elif scale == 'histeq':
-			stretch = viz.HistEqStretch(image)
+			stretch = viz.HistEqStretch(image[np.isfinite(image)])
 		elif scale == 'sinh':
 			stretch = viz.SinhStretch()
 		elif scale == 'squared':
