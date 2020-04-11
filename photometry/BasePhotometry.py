@@ -315,27 +315,27 @@ class BasePhotometry(object):
 
 			# Fix for timestamps that are not defined. Simply remove them from the table:
 			# This is seen in some file from sector 1.
-			indx_good_times = np.isfinite(self.tpf[1].data.field('TIME'))
-			self.tpf[1].data = self.tpf[1].data[indx_good_times]
+			indx_good_times = np.isfinite(self.tpf['PIXELS'].data['TIME'])
+			self.tpf['PIXELS'].data = self.tpf['PIXELS'].data[indx_good_times]
 
 			# Extract the relevant information from the FITS file:
-			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='TBJD')
-			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
-			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
-			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
+			self.lightcurve['time'] = Column(self.tpf['PIXELS'].data['TIME'], description='Time', dtype='float64', unit='TBJD')
+			self.lightcurve['timecorr'] = Column(self.tpf['PIXELS'].data['TIMECORR'], description='Barycentric time correction', unit='days', dtype='float32')
+			self.lightcurve['cadenceno'] = Column(self.tpf['PIXELS'].data['CADENCENO'], description='Cadence number', dtype='int32')
+			self.lightcurve['quality'] = Column(self.tpf['PIXELS'].data['QUALITY'], description='Quality flags', dtype='int32')
 
 			# World Coordinate System solution:
-			self.wcs = WCS(header=self.tpf[2].header, relax=True)
+			self.wcs = WCS(header=self.tpf['APERTURE'].header, relax=True)
 
 			# Get the positions of the stamp from the FITS header:
 			self._max_stamp = (
-				self.tpf[2].header['CRVAL2P'] - 1,
-				self.tpf[2].header['CRVAL2P'] - 1 + self.tpf[2].header['NAXIS2'],
-				self.tpf[2].header['CRVAL1P'] - 1,
-				self.tpf[2].header['CRVAL1P'] - 1 + self.tpf[2].header['NAXIS1']
+				self.tpf['APERTURE'].header['CRVAL2P'] - 1,
+				self.tpf['APERTURE'].header['CRVAL2P'] - 1 + self.tpf[2].header['NAXIS2'],
+				self.tpf['APERTURE'].header['CRVAL1P'] - 1,
+				self.tpf['APERTURE'].header['CRVAL1P'] - 1 + self.tpf[2].header['NAXIS1']
 			)
-			self.pixel_offset_row = self.tpf[2].header['CRVAL2P'] - 1
-			self.pixel_offset_col = self.tpf[2].header['CRVAL1P'] - 1
+			self.pixel_offset_row = self.tpf['APERTURE'].header['CRVAL2P'] - 1
+			self.pixel_offset_col = self.tpf['APERTURE'].header['CRVAL1P'] - 1
 
 			logger.debug(
 				'Max stamp size: (%d, %d)',
@@ -344,10 +344,10 @@ class BasePhotometry(object):
 			)
 
 			# Get info for psf fit Gaussian statistic:
-			self.readnoise = self.tpf[1].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
-			self.gain = self.tpf[1].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
-			self.num_frm = self.tpf[1].header.get('NUM_FRM', 60) # Number of frames co-added in each timestamp.
-			self.n_readout = self.tpf[1].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
+			self.readnoise = self.tpf['PIXELS'].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
+			self.gain = self.tpf['PIXELS'].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
+			self.num_frm = self.tpf['PIXELS'].header.get('NUM_FRM', 60) # Number of frames co-added in each timestamp.
+			self.n_readout = self.tpf['PIXELS'].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
 
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
@@ -710,7 +710,7 @@ class BasePhotometry(object):
 			ic2 = self._stamp[3] - self._max_stamp[2]
 			cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
 			for k in range(self.Ntimes):
-				cube[:, :, k] = self.tpf[1].data[tpf_field][k][ir1:ir2, ic1:ic2]
+				cube[:, :, k] = self.tpf['PIXELS'].data[tpf_field][k][ir1:ir2, ic1:ic2]
 
 		return cube
 

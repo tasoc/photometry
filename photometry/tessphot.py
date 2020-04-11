@@ -9,13 +9,13 @@ import traceback
 from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry, HaloPhotometry
 from .utilities import mag2flux
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class _PhotErrorDummy(object):
 	def __init__(self, traceback, *args, **kwargs):
 		self.status = STATUS.ERROR
 		self._details = {'errors': traceback} if traceback else {}
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def _try_photometry(PhotClass, *args, **kwargs):
 	logger = logging.getLogger(__name__)
 	tbcollect = []
@@ -47,7 +47,7 @@ def _try_photometry(PhotClass, *args, **kwargs):
 	except UnboundLocalError:
 		return _PhotErrorDummy(tbcollect, *args, **kwargs)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def tessphot(method=None, *args, **kwargs):
 	"""
 	Run the photometry pipeline on a single star.
@@ -57,7 +57,8 @@ def tessphot(method=None, *args, **kwargs):
 	and if nessacery try another algorithm.
 
 	Parameters:
-		method (string or None): Type of photometry to run. Can be ``'aperture'``, ``'halo'``, ``'psf'``, ``'linpsf'`` or ``None``.
+		method (string or None): Type of photometry to run.
+			Can be ``'aperture'``, ``'halo'``, ``'psf'``, ``'linpsf'`` or ``None``.
 		*args: Arguments passed on to the photometry class init-function.
 		**kwargs: Keyword-arguments passed on to the photometry class init-function.
 
@@ -65,7 +66,8 @@ def tessphot(method=None, *args, **kwargs):
 		ValueError: On invalid method.
 
 	Returns:
-		:py:class:`photometry.BasePhotometry`: Photometry object that inherits from :py:class:`photometry.BasePhotometry`.
+		:py:class:`photometry.BasePhotometry`: Photometry object that inherits
+			from :py:class:`photometry.BasePhotometry`.
 	"""
 
 	logger = logging.getLogger(__name__)
@@ -75,7 +77,7 @@ def tessphot(method=None, *args, **kwargs):
 		pho = _try_photometry(AperturePhotometry, *args, **kwargs)
 
 		# If this is a bright target, and there are several pixels touching
-		# the edge, let's swich to Halo photometry instead:
+		# the edge, let's switch to Halo photometry instead:
 		if not isinstance(pho, _PhotErrorDummy):
 
 			tmag_limit = 6.0 # Maximal Tmag to apply Halo photometry automatically
