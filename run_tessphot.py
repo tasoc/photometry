@@ -34,8 +34,8 @@ import functools
 from timeit import default_timer
 from photometry import tessphot, TaskManager
 
-#------------------------------------------------------------------------------
-if __name__ == '__main__':
+#--------------------------------------------------------------------------------------------------
+def main():
 
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
@@ -130,3 +130,7 @@ if __name__ == '__main__':
 
 			if not args.all:
 				break
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == '__main__':
+	main()

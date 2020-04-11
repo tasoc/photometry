@@ -163,10 +163,6 @@ def main():
 					# Send the result back to the master:
 					comm.send(result, dest=0, tag=tags.DONE)
 
-					# Attempt some cleanup:
-					# TODO: Is this even needed?
-					del pho, task, result
-
 				elif tag == tags.EXIT:
 					# We were told to EXIT, so lets do that
 					break

@@ -727,8 +727,8 @@ class BasePhotometry(object):
 
 		Note:
 			The images has had the large-scale background subtracted. If needed
-			the backgrounds can be added again from :py:func:`backgrounds`
-			or :py:func:`backgrounds_cube`.
+			the backgrounds can be added again from :py:meth:`backgrounds`
+			or :py:meth:`backgrounds_cube`.
 
 		Example:
 
@@ -737,7 +737,7 @@ class BasePhotometry(object):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:func:`images`, :py:func:`backgrounds`, :py:func:`backgrounds_cube`
+			:py:meth:`images`, :py:meth:`backgrounds`, :py:meth:`backgrounds_cube`
 		"""
 		if self._images_cube is None:
 			self._images_cube = self._load_cube(tpf_field='FLUX', hdf_group='images', full_cube=self._images_cube_full)
@@ -761,7 +761,7 @@ class BasePhotometry(object):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:func:`images`, :py:func:`backgrounds`, :py:func:`backgrounds_cube`
+			:py:meth:`images`, :py:meth:`backgrounds`, :py:meth:`backgrounds_cube`
 		"""
 		if self._images_err_cube is None:
 			self._images_err_cube = self._load_cube(tpf_field='FLUX_ERR', hdf_group='images_err', full_cube=self._images_err_cube_full)
@@ -785,7 +785,7 @@ class BasePhotometry(object):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:func:`backgrounds`, :py:func:`images_cube`, :py:func:`images`
+			:py:meth:`backgrounds`, :py:meth:`images_cube`, :py:meth:`images`
 		"""
 		if self._backgrounds_cube is None:
 			self._backgrounds_cube = self._load_cube(tpf_field='FLUX_BKG', hdf_group='backgrounds', full_cube=self._backgrounds_cube_full)
@@ -813,14 +813,12 @@ class BasePhotometry(object):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:func:`backgrounds`, :py:func:`images_cube`, :py:func:`images`
+			:py:meth:`backgrounds`, :py:meth:`images_cube`, :py:meth:`images`
 		"""
 		if self._pixelflags_cube is None:
 			# We can't used the _loac_cube function here, since we always have
 			# to load from the HDF5 file, even though we are running an TPF.
 			if self._pixelflags_cube_full is None:
-				hdf_group = 'pixel_flags'
-
 				ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 				ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 				ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
@@ -829,9 +827,9 @@ class BasePhotometry(object):
 				# We dont have an in-memory version of the full cube, so let us
 				# create the cube by loading the cutouts of each image:
 				cube = np.empty((ir2-ir1, ic2-ic1, len(self.hdf['time'])), dtype='uint8')
-				if hdf_group in self.hdf:
+				if 'pixel_flags' in self.hdf:
 					for k in range(len(self.hdf['time'])):
-						cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+						cube[:, :, k] = self.hdf['pixel_flags/%04d' % k][ir1:ir2, ic1:ic2]
 				else:
 					cube[:, :, :] = 0
 			else:
@@ -854,7 +852,7 @@ class BasePhotometry(object):
 
 		Note:
 			The images has had the large-scale background subtracted. If needed
-			the backgrounds can be added again from :py:func:`backgrounds`.
+			the backgrounds can be added again from :py:meth:`backgrounds`.
 
 		Note:
 			For each image, this function will actually load the necessary
@@ -868,7 +866,7 @@ class BasePhotometry(object):
 			>>> 	print(img)
 
 		See Also:
-			:py:func:`images_cube`, :py:func:`images_err`, :py:func:`backgrounds`
+			:py:meth:`images_cube`, :py:meth:`images_err`, :py:meth:`backgrounds`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		if self.datasource == 'ffi':
@@ -891,7 +889,7 @@ class BasePhotometry(object):
 
 		Note:
 			The images has had the large-scale background subtracted. If needed
-			the backgrounds can be added again from :py:func:`backgrounds`.
+			the backgrounds can be added again from :py:meth:`backgrounds`.
 
 		Note:
 			For each image, this function will actually load the necessary
@@ -905,7 +903,7 @@ class BasePhotometry(object):
 			>>> 	print(img)
 
 		See Also:
-			:py:func:`images_cube`, :py:func:`images_err`, :py:func:`backgrounds`
+			:py:meth:`images_cube`, :py:meth:`images_err`, :py:meth:`backgrounds`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		for k in range(self.Ntimes):
@@ -927,7 +925,7 @@ class BasePhotometry(object):
 			>>> 	print(imgerr)
 
 		See Also:
-			:py:func:`images_err_cube`, :py:func:`images`, :py:func:`images_cube`, :py:func:`backgrounds`
+			:py:meth:`images_err_cube`, :py:meth:`images`, :py:meth:`images_cube`, :py:meth:`backgrounds`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		for k in range(self.Ntimes):
@@ -954,7 +952,7 @@ class BasePhotometry(object):
 			>>> 	print(img)
 
 		See Also:
-			:py:func:`backgrounds_cube`, :py:func:`images`
+			:py:meth:`backgrounds_cube`, :py:meth:`images`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		for k in range(self.Ntimes):
@@ -1016,10 +1014,10 @@ class BasePhotometry(object):
 				self._aperture = np.asarray(np.isfinite(self.sumimage), dtype='int32')
 
 				# Add mapping onto TESS output channels:
-				self._aperture[(45 <= cols) & (cols <= 556)] += 32 # CCD output A
-				self._aperture[(557 <= cols) & (cols <= 1068)] += 64 # CCD output B
-				self._aperture[(1069 <= cols) & (cols <= 1580)] += 128 # CCD output C
-				self._aperture[(1581 <= cols) & (cols <= 2092)] += 256 # CCD output D
+				self._aperture[(45 <= cols) & (cols <= 556)] |= 32 # CCD output A
+				self._aperture[(557 <= cols) & (cols <= 1068)] |= 64 # CCD output B
+				self._aperture[(1069 <= cols) & (cols <= 1580)] |= 128 # CCD output C
+				self._aperture[(1581 <= cols) & (cols <= 2092)] |= 256 # CCD output D
 
 				# Add information about which pixels were used for background calculation:
 				if 'backgrounds_pixels_used' in self.hdf:
