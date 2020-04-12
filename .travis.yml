@@ -7,8 +7,7 @@ dist: xenial
 # we will use environment variables to store the names:
 env:
   global:
-    - PYTHON="python"
-    - PIP="pip"
+    - PYTHON="python" PIP="pip"
 
 # We are specifying the build matrix manually, since there is too little overlap
 # between the different builds:
@@ -32,9 +31,7 @@ jobs:
         - python3 --version
         - git lfs install
         - git lfs pull
-      env:
-        - PYTHON="python3"
-        - PIP="sudo pip3"
+      env: PYTHON="python3" PIP="sudo pip3"
 
     - name: "Python 3.7 on Mac"
       os: osx
@@ -45,9 +42,18 @@ jobs:
         - python3 --version
         - git lfs install
         - git lfs pull
-      env:
-        - PYTHON="python3"
-        - PIP="sudo pip3"
+      env: PYTHON="python3" PIP="sudo pip3"
+
+    - name: "Python 3.8 on Mac"
+      os: osx
+      osx_image: xcode11.2 # Python 3.7.4 running on macOS 10.14.4
+      language: shell
+      before_install:
+        - brew install git-lfs python@3.8
+        - python3 --version  # Actually not running Python 3.8 ???
+        - git lfs install
+        - git lfs pull
+      env: PYTHON="python3" PIP="sudo pip3"
 
     - name: "Python 3.6 on Windows"
       os: windows
@@ -76,6 +82,7 @@ jobs:
         - choco install python --version 3.8.2
         - python --version
         - git lfs pull
+        - pip install Cython  # For some reason this is needed here only
       env:
         - PATH=/c/Python38:/c/Python38/Scripts:$PATH
 
