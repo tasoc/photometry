@@ -9,7 +9,7 @@ PSF Photometry.
 import os.path
 import numpy as np
 import logging
-from copy import deepcopy
+#from copy import deepcopy
 from scipy.optimize import minimize
 from . import BasePhotometry, STATUS
 from .psf import PSF
@@ -114,7 +114,7 @@ class PSFPhotometry(BasePhotometry):
 		params0 = np.empty((len(cat), 3), dtype='float64')
 		for k, target in enumerate(cat):
 			params0[k,:] = [target['row_stamp'], target['column_stamp'], mag2flux(target['tmag'])]
-		params_start = deepcopy(params0) # Save the starting parameters for later
+		#params_start = deepcopy(params0) # Save the starting parameters for later
 		params0 = params0.flatten() # Make the parameters into a 1D array
 
 		# Start looping through the images (time domain):

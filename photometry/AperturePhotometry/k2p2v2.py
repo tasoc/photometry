@@ -76,19 +76,19 @@ def k2p2maks(frame, no_combined_images, threshold=0.5):
 	ver_seg = np.where(mapimg[:,1:] != mapimg[:,:-1])
 	hor_seg = np.where(mapimg[1:,:] != mapimg[:-1,:])
 
-	l = []
+	lines = []
 	for p in zip(*hor_seg):
-		l.append((p[1], p[0]+1))
-		l.append((p[1]+1, p[0]+1))
-		l.append((np.nan,np.nan))
+		lines.append((p[1], p[0]+1))
+		lines.append((p[1]+1, p[0]+1))
+		lines.append((np.nan,np.nan))
 
 	# and the same for vertical segments
 	for p in zip(*ver_seg):
-		l.append((p[1]+1, p[0]))
-		l.append((p[1]+1, p[0]+1))
-		l.append((np.nan, np.nan))
+		lines.append((p[1]+1, p[0]))
+		lines.append((p[1]+1, p[0]+1))
+		lines.append((np.nan, np.nan))
 
-	segments = np.array(l)
+	segments = np.array(lines)
 
 	x0 = -0.5
 	x1 = frame.shape[1]+x0

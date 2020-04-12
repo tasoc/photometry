@@ -233,12 +233,12 @@ class TaskManager(object):
 			constraints.append('todolist.ccd=%d' % ccd)
 		if datasource is not None:
 			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
-		
+
 		if constraints:
 			constraints = " AND " + " AND ".join(constraints)
 		else:
 			constraints = ''
-		
+
 		self.cursor.execute("SELECT COUNT(*) AS num FROM todolist WHERE status IS NULL" + constraints + ";")
 		return int(self.cursor.fetchone()['num'])
 
