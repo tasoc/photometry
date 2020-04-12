@@ -983,10 +983,14 @@ class BasePhotometry(object):
 				Nimg = np.zeros_like(self._sumimage, dtype='int32')
 				for k, img in enumerate(self.images):
 					if TESSQualityFlags.filter(self.lightcurve['quality'][k]):
-						Nimg += np.isfinite(img)
-						replace(img, np.nan, 0)
+						isgood = np.isfinite(img)
+						img[~isgood] = 0
+						Nimg += np.asarray(isgood, dtype='int32')
 						self._sumimage += img
-				self._sumimage /= Nimg
+
+				isgood = (Nimg > 0)
+				self._sumimage[isgood] /= Nimg[indx]
+				self._sumimage[~isgood] = np.NaN
 
 			if self.plot:
 				fig, ax = plt.subplots()
