@@ -989,7 +989,7 @@ class BasePhotometry(object):
 						self._sumimage += img
 
 				isgood = (Nimg > 0)
-				self._sumimage[isgood] /= Nimg[indx]
+				self._sumimage[isgood] /= Nimg[isgood]
 				self._sumimage[~isgood] = np.NaN
 
 			if self.plot:
