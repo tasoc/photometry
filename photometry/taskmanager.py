@@ -19,17 +19,24 @@ class TaskManager(object):
 	A TaskManager which keeps track of which targets to process.
 	"""
 
-	def __init__(self, todo_file, cleanup=False, overwrite=False, summary=None, summary_interval=100):
+	def __init__(self, todo_file, cleanup=False, overwrite=False, cleanup_constraints=None,
+		summary=None, summary_interval=100):
 		"""
 		Initialize the TaskManager which keeps track of which targets to process.
 
 		Parameters:
 			todo_file (string): Path to the TODO-file.
-			cleanup (boolean): Perform cleanup/optimization of TODO-file before
+			cleanup (boolean, optional): Perform cleanup/optimization of TODO-file before
 				during initialization. Default=False.
-			overwrite (boolean): Restart calculation from the beginning, discarding any previous results. Default=False.
-			summary (string): Path to file where to periodically write a progress summary. The output file will be in JSON format. Default=None.
-			summary_interval (int): Interval at which to write summary file. Setting this to 1 will mean writing the file after every tasks completes. Default=100.
+			overwrite (boolean, optional): Restart calculation from the beginning, discarding
+				any previous results. Default=False.
+			cleanup_constraints (dict, optional): Dict of constraint for cleanup of the status of
+				previous correction runs. If not specified, all bad results are cleaned up.
+			summary (string, optional): Path to file where to periodically write a progress summary.
+				The output file will be in JSON format. Default=None.
+			summary_interval (int, optional): Interval at which summary file is updated.
+				Setting this to 1 will mean writing the file after every tasks completes.
+				Default=100.
 
 		Raises:
 			FileNotFoundError: If TODO-file could not be found.
@@ -115,8 +122,25 @@ class TaskManager(object):
 		# Reset calculations with status STARTED, ABORT or ERROR:
 		# We are re-running all with error, in the hope that they will work this time around:
 		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value) + ',' + str(STATUS.ERROR.value)
-		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE status IS NULL OR status IN (" + clear_status + "));")
-		self.cursor.execute("UPDATE todolist SET status=NULL WHERE status IN (" + clear_status + ");")
+		constraints = ['status IN (' + clear_status + ')']
+
+		# Add additional constraints from the user input and build SQL query:
+		if cleanup_constraints:
+			cc = cleanup_constraints.copy()
+			if isinstance(cc, dict):
+				if cc.get('datasource'):
+					constraints.append("datasource='ffi'" if cc.pop('datasource') == 'ffi' else "datasource!='ffi'")
+				for key, val in cc.items():
+					if val is not None:
+						constraints.append(key + ' IN (%s)' % ','.join([str(v) for v in np.atleast_1d(val)]))
+			elif isinstance(cc, list):
+				constraints += cc
+			else:
+				raise ValueError("cleanup_constraints should be dict or list")
+
+		constraints = ' AND '.join(constraints)
+		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE " + constraints + ");")
+		self.cursor.execute("UPDATE todolist SET status=NULL WHERE " + constraints + ";")
 		self.conn.commit()
 
 		# Analyze the tables for better query planning:
@@ -184,18 +208,42 @@ class TaskManager(object):
 		self.close()
 
 	#----------------------------------------------------------------------------------------------
-	def get_number_tasks(self):
+	def get_number_tasks(self, starid=None, camera=None, ccd=None, datasource=None, priority=None):
 		"""
 		Get number of tasks due to be processed.
+
+		Parameters:
+			priority (int, optional): Only return task matching this priority.
+			starid (int, optional): Only return tasks matching this starid.
+			camera (int, optional): Only return tasks matching this camera.
+			ccd (int, optional): Only return tasks matching this CCD.
+			datasource (str, optional): Only return tasks matching this datasource.
 
 		Returns:
 			int: Number of tasks due to be processed.
 		"""
-		self.cursor.execute("SELECT COUNT(*) AS num FROM todolist WHERE status IS NULL;")
+		constraints = []
+		if priority is not None:
+			constraints.append('todolist.priority=%d' % priority)
+		if starid is not None:
+			constraints.append('todolist.starid=%d' % starid)
+		if camera is not None:
+			constraints.append('todolist.camera=%d' % camera)
+		if ccd is not None:
+			constraints.append('todolist.ccd=%d' % ccd)
+		if datasource is not None:
+			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
+		
+		if constraints:
+			constraints = " AND " + " AND ".join(constraints)
+		else:
+			constraints = ''
+		
+		self.cursor.execute("SELECT COUNT(*) AS num FROM todolist WHERE status IS NULL" + constraints + ";")
 		return int(self.cursor.fetchone()['num'])
 
 	#----------------------------------------------------------------------------------------------
-	def get_task(self, starid=None):
+	def get_task(self, starid=None, camera=None, ccd=None, datasource=None, priority=None):
 		"""
 		Get next task to be processed.
 
@@ -203,8 +251,16 @@ class TaskManager(object):
 			dict or None: Dictionary of settings for task.
 		"""
 		constraints = []
+		if priority is not None:
+			constraints.append('todolist.priority=%d' % priority)
 		if starid is not None:
-			constraints.append("starid=%d" % starid)
+			constraints.append('todolist.starid=%d' % starid)
+		if camera is not None:
+			constraints.append('todolist.camera=%d' % camera)
+		if ccd is not None:
+			constraints.append('todolist.ccd=%d' % ccd)
+		if datasource is not None:
+			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
 
 		if constraints:
 			constraints = " AND " + " AND ".join(constraints)

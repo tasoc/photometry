@@ -39,7 +39,10 @@ def main():
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
-	parser.add_argument('-v', '--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
+	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
+	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
+	parser.add_argument('--datasource', type=str, choices=('ffi','tpf'), default=None, help='Data source or cadence. Default is to run all.')
+	parser.add_argument('--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
 	parser.add_argument('input_folder', type=str, help='Input directory. This directory should contain a TODO-file.', nargs='?', default=None)
 	args = parser.parse_args()
 
@@ -70,12 +73,21 @@ def main():
 	if rank == 0:
 		# Master process executes code below
 		try:
-			with photometry.TaskManager(input_folder, cleanup=True, overwrite=args.overwrite, summary=os.path.join(output_folder, 'summary.json')) as tm:
+			# Constraints on which targets to process:
+			constraints = {
+				'camera': args.camera,
+				'ccd': args.ccd,
+				'datasource': args.datasource
+			}
+
+			with photometry.TaskManager(input_folder, cleanup=True, overwrite=args.overwrite,
+				cleanup_constraints=constraints, summary=os.path.join(output_folder, 'summary.json')) as tm:
+
 				# Set level of TaskManager logger:
 				tm.logger.setLevel(logging_level)
 
 				# Get list of tasks:
-				numtasks = tm.get_number_tasks()
+				numtasks = tm.get_number_tasks(**constraints)
 				tm.logger.info("%d tasks to be run", numtasks)
 
 				# Start the master loop that will assign tasks
@@ -96,7 +108,7 @@ def main():
 
 					if tag in (tags.DONE, tags.READY):
 						# Worker is ready, so send it a task
-						task = tm.get_task()
+						task = tm.get_task(**constraints)
 						if task:
 							task_index = task['priority']
 							tm.start_task(task_index)
