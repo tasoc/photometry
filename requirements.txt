@@ -12,6 +12,7 @@ scikit-learn == 0.22.2
 statsmodels == 0.11.1
 opencv-python-headless == 4.2.0.34
 psycopg2-binary
+astroquery >= 0.4 # Needed for halophot
 autograd == 1.3 # Needed for halophot
 future == 0.16.0 # Needed for halophot
 halophot == 0.7.3.2
