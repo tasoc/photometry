@@ -174,9 +174,10 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 				'artist': 'TASOC'
 			}
 
+			# Set up the writer (FFMpeg)
+			# CRF argument: https://trac.ffmpeg.org/wiki/Encode/H.264#crf
 			WriterClass = animation.writers['ffmpeg']
-
-			writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata)
+			writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata, extra_args=['-crf', '18'])
 			with writer.saving(fig, output_file, dpi):
 				for k in trange(numfiles, **tqdm_settings):
 					dset_name = '%04d' % k
@@ -334,8 +335,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 				}
 
 				WriterClass = animation.writers['ffmpeg']
-
-				writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata)
+				writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata, extra_args=['-crf', '18'])
 				with writer.saving(fig, output_file, dpi):
 					for i in trange(numfiles, **tqdm_settings):
 						dset_name = '%04d' % i
