@@ -93,15 +93,8 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 
 	# Open HDF5 file:
 	# We need to have write-privaledges because we are going to updated some attributes
-	with h5py.File(hdf_file, 'r+', libver='latest') as hdf:
-		numfiles = len(hdf['images'])
-		dummy_img = np.full_like(hdf['images/0000'], np.NaN)
-		time = np.asarray(hdf['time'])
-		cadenceno = np.asarray(hdf['cadenceno'])
-		sector = hdf['images'].attrs.get('SECTOR')
-		camera = hdf['images'].attrs.get('CAMERA')
-		ccd = hdf['images'].attrs.get('CCD')
-
+	save_image_scales = False
+	with h5py.File(hdf_file, 'r', libver='latest') as hdf:
 		# Load the image scales if they have already been calculated:
 		vmin = hdf['backgrounds'].attrs.get('movie_vmin')
 		vmax = hdf['backgrounds'].attrs.get('movie_vmax')
@@ -111,6 +104,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 		# Calculate scales to use for plotting the images:
 		if not vmin:
 			logger.info("Calculating image scales...")
+			numfiles = len(hdf['images'])
 			vmax = np.empty(numfiles)
 			vmin = np.empty(numfiles)
 			vmax2 = np.empty(numfiles)
@@ -123,7 +117,11 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			vmax = np.nanpercentile(vmax, 75.0)
 			vmin2 = np.nanpercentile(vmin2, 25.0)
 			vmax2 = np.nanpercentile(vmax2, 75.0)
+			save_image_scales = True
 
+	# If needed, reopen the file for saving the attributes:
+	if save_image_scales:
+		with h5py.File(hdf_file, 'r+', libver='latest') as hdf:
 			# Save image scales to HDF5 file:
 			hdf['backgrounds'].attrs['movie_vmin'] = vmin
 			hdf['backgrounds'].attrs['movie_vmax'] = vmax
@@ -131,15 +129,25 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			hdf['images'].attrs['movie_vmax'] = vmax2
 			hdf.flush()
 
-		logger.info("Creating movie...")
+	# We should now be ready for creating the movie, reopen the file as readonly:
+	logger.info("Creating movie...")
+	with h5py.File(hdf_file, 'r', libver='latest') as hdf:
+		numfiles = len(hdf['images'])
+		dummy_img = np.full_like(hdf['images/0000'], np.NaN)
+		time = np.asarray(hdf['time'])
+		cadenceno = np.asarray(hdf['cadenceno'])
+		sector = hdf['images'].attrs.get('SECTOR')
+		camera = hdf['images'].attrs.get('CAMERA')
+		ccd = hdf['images'].attrs.get('CCD')
+
 		with plt.style.context('dark_background'):
 			plt.rc('axes', titlesize=15)
 
-			fig, ax = plt.subplots(1, 4, figsize=(20, 6.8))
+			fig, ax = plt.subplots(1, 4, figsize=(20, 6.8), dpi=dpi)
 
 			# Colormap to use for FFIs:
 			cmap = plt.get_cmap('viridis')
-			cmap.set_bad('k', 1.0) # FIXME: Does not work with plot_image
+			cmap.set_bad('k', 1.0)
 
 			# Colormap for Flags:
 			viridis = plt.get_cmap('Dark2')
@@ -161,7 +169,14 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			fig.subplots_adjust(left=0.03, right=0.97, top=0.95, bottom=0.03, wspace=0.05)
 			set_copyright(fig)
 
-			writer = animation.FFMpegWriter(fps=fps)
+			metadata = {
+				'title': 'TESS Sector {sector:d}, Camera {camera:d}, CCD {ccd:d}'.format(sector=sector, camera=camera, ccd=ccd),
+				'artist': 'TASOC'
+			}
+
+			WriterClass = animation.writers['ffmpeg']
+
+			writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata)
 			with writer.saving(fig, output_file, dpi):
 				for k in trange(numfiles, **tqdm_settings):
 					dset_name = '%04d' % k
@@ -209,7 +224,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 	Parameters:
 		input_dir (string): Path to the directory with HDF5 files to produce movie from.
 		mode (string): Which images to show.
-			Choices are `'images'`, `'backgrounds'` or `'flags'`.
+			Choices are `'originals'`, `'images'`, `'backgrounds'` or `'flags'`.
 			Default=images.
 		fps (integer): Frames per second of generated movie. Default=15.
 		dpi (integer): DPI of the movie. Default=100.
@@ -219,7 +234,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 	"""
 
 	# Basic input checks:
-	assert mode in ('images', 'backgrounds', 'flags'), "Invalid MODE specified"
+	assert mode in ('originals', 'images', 'backgrounds', 'flags'), "Invalid MODE specified"
 
 	logger = logging.getLogger(__name__)
 	logger.info("Processing '%s'", input_dir)
@@ -270,7 +285,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 					if mode == 'backgrounds':
 						vmin[k] = hdf[k]['backgrounds'].attrs.get('movie_vmin', 0)
 						vmax[k] = hdf[k]['backgrounds'].attrs.get('movie_vmax', 500)
-					elif mode == 'images':
+					elif mode == 'images' or mode == 'originals':
 						vmin[k] = hdf[k]['images'].attrs.get('movie_vmin', 0)
 						vmax[k] = hdf[k]['images'].attrs.get('movie_vmax', 500)
 
@@ -280,7 +295,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 
 			logger.info("Creating combined %s movie...", mode)
 			with plt.style.context('dark_background'):
-				fig, axes = plt.subplots(2, 8, figsize=(25, 6.8))
+				fig, axes = plt.subplots(2, 8, figsize=(25, 6.8), dpi=dpi)
 
 				cmap = plt.get_cmap('viridis')
 				cmap.set_bad('k', 1.0)
@@ -304,7 +319,14 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 				fig.subplots_adjust(left=0.03, right=0.97, top=0.90, bottom=0.05, wspace=0.05, hspace=0.05)
 				set_copyright(fig)
 
-				writer = animation.FFMpegWriter(fps=fps)
+				metadata = {
+					'title': 'TESS Sector {sector:d}, {mode:s}'.format(sector=sector, mode=mode),
+					'artist': 'TASOC'
+				}
+
+				WriterClass = animation.writers['ffmpeg']
+
+				writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata)
 				with writer.saving(fig, output_file, dpi):
 					for i in trange(numfiles):
 						dset_name = '%04d' % i
@@ -320,6 +342,9 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 								img[flags & PixelQualityFlags.NotUsedForBackground != 0] = 1
 								img[flags & PixelQualityFlags.ManualExclude != 0] = 2
 								img[flags & PixelQualityFlags.BackgroundShenanigans != 0] = 3
+							elif mode == 'originals':
+								img = np.asarray(hdf[k]['images/' + dset_name])
+								img += np.asarray(hdf[k]['backgrounds/' + dset_name])
 							else:
 								img = np.asarray(hdf[k][mode + '/' + dset_name])
 
@@ -437,7 +462,7 @@ if __name__ == '__main__':
 			overwrite=args.overwrite
 		)
 
-		for fname in m(make_combined_movie_wrapper, ('backgrounds', 'images', 'flags')):
+		for fname in m(make_combined_movie_wrapper, ('backgrounds', 'originals', 'images', 'flags')):
 			logger.info("Created movie: %s", fname)
 
 	# Close workers again:
