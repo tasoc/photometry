@@ -94,7 +94,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	# Open HDF5 file:
 	# We need to have write-privaledges because we are going to updated some attributes
 	save_image_scales = False
-	with h5py.File(hdf_file, 'r', libver='latest') as hdf:
+	with h5py.File(hdf_file, 'r') as hdf:
 		# Load the image scales if they have already been calculated:
 		vmin = hdf['backgrounds'].attrs.get('movie_vmin')
 		vmax = hdf['backgrounds'].attrs.get('movie_vmax')
@@ -121,7 +121,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 
 	# If needed, reopen the file for saving the attributes:
 	if save_image_scales:
-		with h5py.File(hdf_file, 'r+', libver='latest') as hdf:
+		with h5py.File(hdf_file, 'r+') as hdf:
 			# Save image scales to HDF5 file:
 			hdf['backgrounds'].attrs['movie_vmin'] = vmin
 			hdf['backgrounds'].attrs['movie_vmax'] = vmax
@@ -131,7 +131,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 
 	# We should now be ready for creating the movie, reopen the file as readonly:
 	logger.info("Creating movie...")
-	with h5py.File(hdf_file, 'r', libver='latest') as hdf:
+	with h5py.File(hdf_file, 'r') as hdf:
 		numfiles = len(hdf['images'])
 		dummy_img = np.full_like(hdf['images/0000'], np.NaN)
 		time = np.asarray(hdf['time'])
@@ -237,6 +237,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 	assert mode in ('originals', 'images', 'backgrounds', 'flags'), "Invalid MODE specified"
 
 	logger = logging.getLogger(__name__)
+	tqdm_settings = {'disable': not logger.isEnabledFor(logging.INFO)}
 	logger.info("Processing '%s'", input_dir)
 
 	camccdrot = [
@@ -245,12 +246,20 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 	]
 
 	# Find the sectors that are available:
-	# TODO: Could we change this so we don't have to parse the filenames?
 	sectors = []
 	for fname in find_hdf5_files(input_dir):
-		m = re.match(r'^sector(\d+)_camera\d_ccd\d\.hdf5$', os.path.basename(fname))
-		if int(m.group(1)) not in sectors:
-			sectors.append(int(m.group(1)))
+		# Load the sector number from HDF5 file attributes:
+		with h5py.File(fname, 'r') as hdf:
+			s = hdf['images'].attrs.get('SECTOR')
+
+		if s is not None and int(s) not in sectors:
+			sectors.append(int(s))
+		else:
+			# If the attribute doesn't exist try to find it from
+			# parsing the file name:
+			m = re.match(r'^sector(\d+)_camera\d_ccd\d\.hdf5$', os.path.basename(fname))
+			if int(m.group(1)) not in sectors:
+				sectors.append(int(m.group(1)))
 
 	# Create one movie per found sector:
 	for sector in sectors:
@@ -274,7 +283,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 			for k, (camera, ccd, rot) in enumerate(camccdrot):
 				hdf_file = find_hdf5_files(input_dir, sector=sector, camera=camera, ccd=ccd)
 				if hdf_file:
-					hdf[k] = h5py.File(hdf_file[0], 'r', libver='latest')
+					hdf[k] = h5py.File(hdf_file[0], 'r')
 
 					numfiles = len(hdf[k]['images'])
 					dummy_img = np.full_like(hdf[k]['images/0000'], np.NaN)
@@ -328,7 +337,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 
 				writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata)
 				with writer.saving(fig, output_file, dpi):
-					for i in trange(numfiles):
+					for i in trange(numfiles, **tqdm_settings):
 						dset_name = '%04d' % i
 
 						for k in range(16):
