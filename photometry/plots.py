@@ -9,7 +9,7 @@ Plotting utilities.
 import logging
 import os
 import numpy as np
-from bottleneck import allnan
+from bottleneck import allnan, anynan
 import matplotlib
 from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
@@ -120,15 +120,15 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		elif scale == 'squared':
 			stretch = viz.SquaredStretch()
 
-		# Create ImageNormalize object. Very important to use clip=False here, otherwise
-		# NaN points will not be plotted correctly.
+		# Create ImageNormalize object. Very important to use clip=False if the image contains
+		# NaNs, otherwise NaN points will not be plotted correctly.
 		norm = viz.ImageNormalize(
 			data=image[np.isfinite(image)],
 			interval=interval,
 			vmin=vmin,
 			vmax=vmax,
 			stretch=stretch,
-			clip=False)
+			clip=not anynan(image))
 
 	elif isinstance(scale, (viz.ImageNormalize, matplotlib.colors.Normalize)):
 		norm = scale
@@ -146,7 +146,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 	# Set up the colormap to use. If a bad color is defined,
 	# add it to the colormap:
 	if cmap is None:
-		cmap = plt.get_cmap('Blues')
+		cmap = plt.get_cmap('Blues_r')
 	elif isinstance(cmap, str):
 		cmap = plt.get_cmap(cmap)
 
