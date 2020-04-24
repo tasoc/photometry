@@ -75,6 +75,7 @@ class BasePhotometry(object):
 		sector (integer): TESS observing sector.
 		camera (integer): TESS camera (1-4).
 		ccd (integer): TESS CCD (1-4).
+		data_rel (integer): Data release number.
 		n_readout (integer): Number of frames co-added in each timestamp.
 
 		target_mag (float): TESS magnitude of the main target.
@@ -185,9 +186,13 @@ class BasePhotometry(object):
 			if sector is None or camera is None or ccd is None:
 				raise ValueError("SECTOR, CAMERA and CCD keywords must be provided for FFI targets.")
 
+			# Just a shorthand for the attributes we use as "headers":
+			hdr = self.hdf['images'].attrs
+
 			self.sector = sector # TESS observing sector.
 			self.camera = camera # TESS camera.
 			self.ccd = ccd # TESS CCD.
+			self.data_rel = hdr['DATA_REL'] # Data release number
 
 			logger.debug('SECTOR = %s', self.sector)
 			logger.debug('CAMERA = %s', self.camera)
@@ -232,6 +237,25 @@ class BasePhotometry(object):
 					self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
 				else:
 					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+
+				# Correct timestamp offset that was in early data releases:
+				# TODO: Should the timecorr also be changed?
+				if not hdr.get('TIME_OFFSET_CORRECTED'):
+					# For these troublesome sectors, there were two data releases with the same
+					# data release numbers. The only way of distingushing between them is to use
+					# the PROCVER header keyword, which unfortunately wasn't saved in the HDF5
+					# files in earlier versions of the pipeline. In that case, we have to throw
+					# an error and tell users to re-run prepare:
+					if self.sector in (20, 21) and self.data_rel in (27, 29) and 'PROCVER' not in hdr:
+						raise Exception("")
+
+					# For these data releases, corrections to the timestamps are needed:
+					if (self.sector <= 19 and self.data_rel <= 26) \
+						or (self.sector in (20, 21) and self.data_rel in (27, 29) and hdr['PROCVER'] == 'spoc-4.0.17-20200130'):
+						# Subtract 2s offset and add additional 21ms offset (these are mid-time)
+						self.lightcurve['time'] -= (2.000 - 0.021) / 86400
+						self.lightcurve['timecorr'] += 0
+
 				attrs['lightcurve'] = self.lightcurve
 
 				# World Coordinate System solution:
@@ -246,14 +270,14 @@ class BasePhotometry(object):
 
 				# Get shape of sumimage from hdf5 file:
 				attrs['_max_stamp'] = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
-				attrs['pixel_offset_row'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-				attrs['pixel_offset_col'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
+				attrs['pixel_offset_row'] = hdr.get('PIXEL_OFFSET_ROW', 0)
+				attrs['pixel_offset_col'] = hdr.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
 
 				# Get info for psf fit Gaussian statistic:
-				attrs['readnoise'] = self.hdf['images'].attrs.get('READNOIS', 10)
-				attrs['gain'] = self.hdf['images'].attrs.get('GAIN', 100)
-				attrs['num_frm'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
-				attrs['n_readout'] = self.hdf['images'].attrs.get('NREADOUT', int(attrs['num_frm']*(1-2/self.hdf['images'].attrs.get('CRBLKSZ', np.inf)))) # Number of frames co-added in each timestamp (Default=TESS).
+				attrs['readnoise'] = hdr.get('READNOIS', 10)
+				attrs['gain'] = hdr.get('GAIN', 100)
+				attrs['num_frm'] = hdr.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
+				attrs['n_readout'] = hdr.get('NREADOUT', int(attrs['num_frm']*(1-2/hdr.get('CRBLKSZ', np.inf)))) # Number of frames co-added in each timestamp (Default=TESS).
 
 				# Load MovementKernel into memory:
 				attrs['_MovementKernel'] = self.MovementKernel
@@ -312,6 +336,7 @@ class BasePhotometry(object):
 			self.sector = self.tpf[0].header['SECTOR']
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
+			self.data_rel = self.tpf[0].header['DATA_REL'] # Data release number
 
 			# Fix for timestamps that are not defined. Simply remove them from the table:
 			# This is seen in some file from sector 1.
@@ -355,6 +380,14 @@ class BasePhotometry(object):
 				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
 			filepath_hdf5 = filepath_hdf5[0]
 			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
+
+			# Correct timestamp offset that was in early data releases:
+			# TODO: Should the timecorr also be changed?
+			if (self.sector <= 19 and self.data_rel <= 26) \
+				or (self.sector in (20,21) and self.data_rel in (27,29) and self.tpf[0].header['PROCVER'] == 'spoc-4.0.17-20200130'):
+				# Subtract 2s offset and add additional 21ms offset (these are mid-time)
+				self.lightcurve['time'] -= (2.000 - 0.021) / 86400
+				self.lightcurve['timecorr'] += 0
 
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)
@@ -1400,16 +1433,6 @@ class BasePhotometry(object):
 			'HaloPhotometry': 'halo'
 		}.get(self.__class__.__name__, None)
 
-		# TODO: This really should be done in another way,
-		# but for now it will work...
-		if self.datasource.startswith('tpf'):
-			hdr = self.tpf[0].header
-		else:
-			hdr = self.hdf['images'].attrs
-
-		# Get data release number of original file:
-		data_rel = hdr['DATA_REL']
-
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3 + int(hasattr(self, 'halo_weightmap')), 'number of standard extensions')
@@ -1428,7 +1451,7 @@ class BasePhotometry(object):
 		# Versions:
 		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
 		hdu.header['FILEVER'] = ('1.4', 'File format version')
-		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
+		hdu.header['DATA_REL'] = (self.data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
 		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
 
@@ -1652,7 +1675,7 @@ class BasePhotometry(object):
 			starid=self.starid,
 			sector=self.sector,
 			cadence=cadence,
-			datarel=data_rel,
+			datarel=self.data_rel,
 			version=version
 		)
 
