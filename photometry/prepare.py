@@ -453,12 +453,11 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				# Correct timestamp offset that was in early data releases:
 				fixed_time_offset = False
 				if (sector <= 19 and attributes['DATA_REL'] <= 26)
-					or (sector in (20,21) and attributes['DATA_REL'] in (27,29) and attributes['PROCVER'] == 'spoc-4.0.17-20200130'):
+					or (sector in (20, 21) and attributes['DATA_REL'] in (27, 29) and attributes['PROCVER'] == 'spoc-4.0.17-20200130'):
 					fixed_time_offset = True
 					time_start -= (2.000 - 0.031) / 86400
 					time_stop -= (2.000 - 0.011) / 86400
 					time -= (2.000 - 0.021) / 86400
-					timecorr += ????
 
 				# Single boolean image indicating if the pixel was (on average) used in the background estimation:
 				if 'backgrounds_pixels_used' not in hdf:

@@ -239,7 +239,6 @@ class BasePhotometry(object):
 					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
 
 				# Correct timestamp offset that was in early data releases:
-				# TODO: Should the timecorr also be changed?
 				if not hdr.get('TIME_OFFSET_CORRECTED'):
 					# For these troublesome sectors, there were two data releases with the same
 					# data release numbers. The only way of distingushing between them is to use
@@ -254,7 +253,6 @@ class BasePhotometry(object):
 						or (self.sector in (20, 21) and self.data_rel in (27, 29) and hdr['PROCVER'] == 'spoc-4.0.17-20200130'):
 						# Subtract 2s offset and add additional 21ms offset (these are mid-time)
 						self.lightcurve['time'] -= (2.000 - 0.021) / 86400
-						self.lightcurve['timecorr'] += 0
 
 				attrs['lightcurve'] = self.lightcurve
 
@@ -382,12 +380,10 @@ class BasePhotometry(object):
 			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
 
 			# Correct timestamp offset that was in early data releases:
-			# TODO: Should the timecorr also be changed?
 			if (self.sector <= 19 and self.data_rel <= 26) \
-				or (self.sector in (20,21) and self.data_rel in (27,29) and self.tpf[0].header['PROCVER'] == 'spoc-4.0.17-20200130'):
+				or (self.sector in (20, 21) and self.data_rel in (27, 29) and self.tpf[0].header['PROCVER'] == 'spoc-4.0.17-20200130'):
 				# Subtract 2s offset and add additional 21ms offset (these are mid-time)
 				self.lightcurve['time'] -= (2.000 - 0.021) / 86400
-				self.lightcurve['timecorr'] += 0
 
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)
