@@ -34,6 +34,7 @@ from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
 from .version import get_version
+from . import fixes
 
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -241,7 +242,7 @@ class BasePhotometry(object):
 				# Correct timestamp offset that was in early data releases:
 				if not hdr.get('TIME_OFFSET_CORRECTED'):
 					# For these troublesome sectors, there were two data releases with the same
-					# data release numbers. The only way of distingushing between them is to use
+					# data release numbers. The only way of distinguishing between them is to use
 					# the PROCVER header keyword, which unfortunately wasn't saved in the HDF5
 					# files in earlier versions of the pipeline. In that case, we have to throw
 					# an error and tell users to re-run prepare:
@@ -249,10 +250,9 @@ class BasePhotometry(object):
 						raise Exception("")
 
 					# For these data releases, corrections to the timestamps are needed:
-					if (self.sector <= 19 and self.data_rel <= 26) \
-						or (self.sector in (20, 21) and self.data_rel in (27, 29) and hdr['PROCVER'] == 'spoc-4.0.17-20200130'):
+					if fixes.time_offset_should_be_fixed(self.sector, self.data_rel, hdr['PROCVER']):
 						# Subtract 2s offset and add additional 21ms offset (these are mid-time)
-						self.lightcurve['time'] -= (2.000 - 0.021) / 86400
+						self.lightcurve['time'] = fixes.time_offset_apply(self.lightcurve['time'])
 
 				attrs['lightcurve'] = self.lightcurve
 
@@ -380,10 +380,9 @@ class BasePhotometry(object):
 			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
 
 			# Correct timestamp offset that was in early data releases:
-			if (self.sector <= 19 and self.data_rel <= 26) \
-				or (self.sector in (20, 21) and self.data_rel in (27, 29) and self.tpf[0].header['PROCVER'] == 'spoc-4.0.17-20200130'):
+			if fixes.time_offset_should_be_fixed(self.sector, self.data_rel, self.tpf[0].header['PROCVER']):
 				# Subtract 2s offset and add additional 21ms offset (these are mid-time)
-				self.lightcurve['time'] -= (2.000 - 0.021) / 86400
+				self.lightcurve['time'] = fixes.time_offset_apply(self.lightcurve['time'])
 
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)

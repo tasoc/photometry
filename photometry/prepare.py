@@ -25,7 +25,7 @@ from .catalog import download_catalogs
 from .backgrounds import fit_background
 from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
-from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
+from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes
 #from .plots import plt, plot_image
 
 #------------------------------------------------------------------------------
@@ -451,13 +451,11 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				SumImage /= Nimg
 
 				# Correct timestamp offset that was in early data releases:
-				fixed_time_offset = False
-				if (sector <= 19 and attributes['DATA_REL'] <= 26)
-					or (sector in (20, 21) and attributes['DATA_REL'] in (27, 29) and attributes['PROCVER'] == 'spoc-4.0.17-20200130'):
-					fixed_time_offset = True
-					time_start -= (2.000 - 0.031) / 86400
-					time_stop -= (2.000 - 0.011) / 86400
-					time -= (2.000 - 0.021) / 86400
+				fixed_time_offset = fixes.time_offset_should_be_fixed(sector, attributes['DATA_REL'], attributes['PROCVER'])
+				if fixed_time_offset:
+					time_start = fixes.time_offset_apply(time_start, 'start')
+					time_stop = fixes.time_offset_apply(time_stop, 'end')
+					time = fixes.time_offset_apply(time, 'mid')
 
 				# Single boolean image indicating if the pixel was (on average) used in the background estimation:
 				if 'backgrounds_pixels_used' not in hdf:
