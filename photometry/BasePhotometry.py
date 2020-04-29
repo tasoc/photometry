@@ -67,18 +67,20 @@ class BasePhotometry(object):
 	All other specific photometric algorithms will inherit from this.
 
 	Attributes:
-		starid (integer): TIC number of star being processed.
-		input_folder (string): Root directory where files are loaded from.
-		output_folder (string): Root directory where output files are saved.
-		plot (boolean): Indicates wheter plots should be created as part of the output.
-		plot_folder (string): Directory where plots are saved to.
+		starid (int): TIC number of star being processed.
+		input_folder (str): Root directory where files are loaded from.
+		output_folder (str): Root directory where output files are saved.
+		plot (bool): Indicates wheter plots should be created as part of the output.
+		plot_folder (str): Directory where plots are saved to.
 
-		sector (integer): TESS observing sector.
-		camera (integer): TESS camera (1-4).
-		ccd (integer): TESS CCD (1-4).
-		data_rel (integer): Data release number.
-		n_readout (integer): Number of frames co-added in each timestamp.
+		sector (int): TESS observing sector.
+		camera (int): TESS camera (1-4).
+		ccd (int): TESS CCD (1-4).
+		data_rel (int): Data release number.
+		n_readout (int): Number of frames co-added in each timestamp.
+		header (dict-like): Primary header, either from TPF or HDF5 files.
 
+		target (dict): Dictionary with information about primary target.
 		target_mag (float): TESS magnitude of the main target.
 		target_pos_ra (float): Right ascension of the main target at time of observation.
 		target_pos_dec (float): Declination of the main target at time of observation.
@@ -88,14 +90,14 @@ class BasePhotometry(object):
 		target_pos_row (float): Main target CCD row position.
 		target_pos_column_stamp (float): Main target CCD column position in stamp.
 		target_pos_row_stamp (float): Main target CCD row position in stamp.
-		wcs (``astropy.wcs.WCS`` object): World Coordinate system solution.
+		wcs (:py:class:`astropy.wcs.WCS`): World Coordinate system solution.
 
-		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
+		lightcurve (:class:`astropy.table.Table`): Table to be filled with an extracted lightcurve.
 		pixelflags (numpy.ndarray): Flags for each pixel, as defined by the TESS data product manual.
-		final_phot_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of
-			lightcurve. ``True`` if used, ``False`` otherwise.
-		final_position_mask (numpy.ndarray): Mask indicating which pixels were used in extraction
-			of positions. ``True`` if used, ``False`` otherwise.
+		final_phot_mask (:class:`numpy.ndarray`): Mask indicating which pixels were used in
+			extraction of lightcurve. ``True`` if used, ``False`` otherwise.
+		final_position_mask (:class:`numpy.ndarray`): Mask indicating which pixels were used
+			in extraction of positions. ``True`` if used, ``False`` otherwise.
 		additional_headers (dict): Additional headers to be included in FITS files.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -187,13 +189,9 @@ class BasePhotometry(object):
 			if sector is None or camera is None or ccd is None:
 				raise ValueError("SECTOR, CAMERA and CCD keywords must be provided for FFI targets.")
 
-			# Just a shorthand for the attributes we use as "headers":
-			hdr = self.hdf['images'].attrs
-
 			self.sector = sector # TESS observing sector.
 			self.camera = camera # TESS camera.
 			self.ccd = ccd # TESS CCD.
-			self.data_rel = hdr['DATA_REL'] # Data release number
 
 			logger.debug('SECTOR = %s', self.sector)
 			logger.debug('CAMERA = %s', self.camera)
@@ -209,7 +207,6 @@ class BasePhotometry(object):
 			logger.debug("CACHE = %s", cache)
 			load_into_cache = False
 			if cache == 'none':
-				attrs = {}
 				load_into_cache = True
 			else:
 				global hdf5_cache
@@ -218,16 +215,19 @@ class BasePhotometry(object):
 					load_into_cache = True
 				elif cache == 'full' and hdf5_cache[filepath_hdf5].get('_images_cube_full') is None:
 					load_into_cache = True
-				attrs = hdf5_cache[filepath_hdf5] # Pointer to global variable
 
 			# Open the HDF5 file for reading if we are not holding everything in memory:
 			if load_into_cache or cache != 'full':
-				self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
-				#self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest', driver='mpio', comm=MPI.COMM_WORLD)
-				#self.hdf.atomic = False # Since we are only reading, this should be okay
+				self.hdf = h5py.File(filepath_hdf5, 'r')
 
 			if load_into_cache:
 				logger.debug('Loading basic data into cache...')
+				attrs = {}
+
+				# Just a shorthand for the attributes we use as "headers":
+				hdr = dict(self.hdf['images'].attrs)
+				attrs['header'] = hdr
+				attrs['data_rel'] = hdr['DATA_REL'] # Data release number
 
 				# Start filling out the basic vectors:
 				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
@@ -240,19 +240,11 @@ class BasePhotometry(object):
 					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
 
 				# Correct timestamp offset that was in early data releases:
-				if not hdr.get('TIME_OFFSET_CORRECTED'):
-					# For these troublesome sectors, there were two data releases with the same
-					# data release numbers. The only way of distinguishing between them is to use
-					# the PROCVER header keyword, which unfortunately wasn't saved in the HDF5
-					# files in earlier versions of the pipeline. In that case, we have to throw
-					# an error and tell users to re-run prepare:
-					if self.sector in (20, 21) and self.data_rel in (27, 29) and 'PROCVER' not in hdr:
-						raise Exception("")
-
-					# For these data releases, corrections to the timestamps are needed:
-					if fixes.time_offset_should_be_fixed(self.sector, self.data_rel, hdr['PROCVER']):
-						# Subtract 2s offset and add additional 21ms offset (these are mid-time)
-						self.lightcurve['time'] = fixes.time_offset_apply(self.lightcurve['time'])
+				if fixes.time_offset_should_be_fixed(header=hdr):
+					logger.debug("Fixes: Applying time offset correction")
+					self.lightcurve['time'] = fixes.time_offset_apply(self.lightcurve['time'])
+				else:
+					logger.debug("Fixes: Not applying time offset correction")
 
 				attrs['lightcurve'] = self.lightcurve
 
@@ -283,6 +275,9 @@ class BasePhotometry(object):
 				# The full sum-image:
 				attrs['_sumimage_full'] = np.asarray(self.hdf['sumimage'])
 
+				# Store attr in global variable:
+				hdf5_cache[filepath_hdf5] = deepcopy(attrs)
+
 				# If we are doing a full cache (everything in memory) load the image cubes as well.
 				# Note that this will take up A LOT of memory!
 				if cache == 'full':
@@ -302,9 +297,10 @@ class BasePhotometry(object):
 					self.hdf = None
 			else:
 				logger.debug('Loaded data from cache!')
+				attrs = hdf5_cache[filepath_hdf5] # Pointer to global variable
 
 			# Set all the attributes from the cache:
-			# TODO: Does this create copies of data - if so we should mayde delete "attrs" again?
+			# TODO: Does this create copies of data? - if so we should mayde delete "attrs" again?
 			for key, value in attrs.items():
 				setattr(self, key, value)
 
@@ -331,6 +327,7 @@ class BasePhotometry(object):
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
 
 			# Load sector, camera and CCD from the FITS header:
+			self.header = self.tpf[0].header
 			self.sector = self.tpf[0].header['SECTOR']
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
@@ -380,9 +377,11 @@ class BasePhotometry(object):
 			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
 
 			# Correct timestamp offset that was in early data releases:
-			if fixes.time_offset_should_be_fixed(self.sector, self.data_rel, self.tpf[0].header['PROCVER']):
-				# Subtract 2s offset and add additional 21ms offset (these are mid-time)
+			if fixes.time_offset_should_be_fixed(header=self.tpf[0].header):
+				logger.debug("Fixes: Applying time offset correction")
 				self.lightcurve['time'] = fixes.time_offset_apply(self.lightcurve['time'])
+			else:
+				logger.debug("Fixes: Not applying time offset correction")
 
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)
@@ -1468,9 +1467,9 @@ class BasePhotometry(object):
 		hdu.header['TICVER'] = (self.ticver, 'TESS Input Catalog version')
 
 		# Cosmic ray headers:
-		hdu.header['CRMITEN'] = (hdr['CRMITEN'], 'spacecraft cosmic ray mitigation enabled')
-		hdu.header['CRBLKSZ'] = (hdr['CRBLKSZ'], '[exposures] s/c cosmic ray mitigation block siz')
-		hdu.header['CRSPOC'] = (hdr['CRSPOC'], 'SPOC cosmic ray cleaning enabled')
+		hdu.header['CRMITEN'] = (self.header['CRMITEN'], 'spacecraft cosmic ray mitigation enabled')
+		hdu.header['CRBLKSZ'] = (self.header['CRBLKSZ'], '[exposures] s/c cosmic ray mitigation block siz')
+		hdu.header['CRSPOC'] = (self.header['CRSPOC'], 'SPOC cosmic ray cleaning enabled')
 
 		# Add K2P2 Settings to the header of the file:
 		if self.additional_headers:
@@ -1578,8 +1577,8 @@ class BasePhotometry(object):
 		frametime = 2.0
 		int_time = 1.98
 		readtime = 0.02
-		if hdr['CRMITEN']:
-			deadc = (int_time * 2/hdr['CRBLKSZ']) / frametime
+		if self.header['CRMITEN']:
+			deadc = (int_time * 2/self.header['CRBLKSZ']) / frametime
 		else:
 			deadc = int_time / frametime
 

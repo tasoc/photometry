@@ -16,30 +16,62 @@ from photometry import fixes
 def test_fixes_time_offset():
 
 	# Early releases that should be corrected:
-	assert fixes.time_offset_should_be_fixed(10, 20, 'shouldnt-matter') == True
-	assert fixes.time_offset_should_be_fixed(19, 26, 'shouldnt-matter') == True
+	assert fixes.time_offset_should_be_fixed(datarel=20) == True
+	assert fixes.time_offset_should_be_fixed(datarel=26) == True
+	hdr = {'DATA_REL': 20, 'PROCVER': 'shouldnt-matter'}
+	assert fixes.time_offset_should_be_fixed(header=hdr) == True
+	hdr = {'DATA_REL': 26, 'PROCVER': 'shouldnt-matter'}
+	assert fixes.time_offset_should_be_fixed(header=hdr) == True
 
 	# Sector 20 that should be corrected:
 	for procver in ('spoc-4.0.14-20200108', 'spoc-4.0.15-20200114', 'spoc-4.0.17-20200130'):
-		assert fixes.time_offset_should_be_fixed(20, 27, procver) == True
+		hdr = {'DATA_REL': 27, 'PROCVER': procver}
+		assert fixes.time_offset_should_be_fixed(datarel=27, procver=procver) == True
+		assert fixes.time_offset_should_be_fixed(header=hdr) == True
 
 	# Sector 20 that should NOT be corrected:
 	for procver in ('spoc-4.0.26-20200323', 'spoc-4.0.27-20200326'):
-		assert fixes.time_offset_should_be_fixed(20, 27, procver) == False
+		hdr = {'DATA_REL': 27, 'PROCVER': procver}
+		assert fixes.time_offset_should_be_fixed(datarel=27, procver=procver) == False
+		assert fixes.time_offset_should_be_fixed(header=hdr) == False
 
 	# Sector 20 that should not be corrected (hypothetical future data relase #99):
-	assert fixes.time_offset_should_be_fixed(20, 99, 'shouldnt-matter') == False
+	hdr = {'DATA_REL': 99, 'PROCVER': 'shouldnt-matter'}
+	assert fixes.time_offset_should_be_fixed(header=hdr) == False
+	assert fixes.time_offset_should_be_fixed(datarel=99) == False
 
 	# Sector 21 that should be corrected:
 	for procver in ('spoc-4.0.17-20200130', 'spoc-4.0.20-20200220', 'spoc-4.0.21-20200227'):
-		assert fixes.time_offset_should_be_fixed(21, 29, procver) == True
+		hdr = {'DATA_REL': 29, 'PROCVER': procver}
+		assert fixes.time_offset_should_be_fixed(datarel=29, procver=procver) == True
+		assert fixes.time_offset_should_be_fixed(header=hdr) == True
 
 	# Sector 21 that should NOT be corrected:
 	#for procver in ():
-	#	assert fixes.time_offset_should_be_fixed(21, 29, procver) == False
+	#	hdr = {'DATA_REL': 29, 'PROCVER': procver}
+	#	assert fixes.time_offset_should_be_fixed(datarel=29, procver=procver) == False
+	#	assert fixes.time_offset_should_be_fixed(header=hdr) == False
 
 	# Sector 21 that should not be corrected (hypothetical future data relase #99):
-	assert fixes.time_offset_should_be_fixed(21, 99, 'shouldnt-matter') == False
+	hdr = {'DATA_REL': 99, 'PROCVER': procver}
+	assert fixes.time_offset_should_be_fixed(datarel=99) == False
+	assert fixes.time_offset_should_be_fixed(header=hdr) == False
+
+	# Check basic input:
+	with pytest.raises(ValueError):
+		fixes.time_offset_should_be_fixed()
+
+	with pytest.raises(ValueError):
+		fixes.time_offset_should_be_fixed(procver='shouldnt-matter')
+
+	# These two combination, with no PROCVER, should result in an exception:
+	hdr = {'DATA_REL': 27}
+	with pytest.raises(Exception):
+		fixes.time_offset_should_be_fixed(header=hdr)
+
+	hdr = {'DATA_REL': 29}
+	with pytest.raises(Exception):
+		fixes.time_offset_should_be_fixed(header=hdr)
 
 #---------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_apply():

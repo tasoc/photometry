@@ -451,7 +451,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				SumImage /= Nimg
 
 				# Correct timestamp offset that was in early data releases:
-				fixed_time_offset = fixes.time_offset_should_be_fixed(sector, attributes['DATA_REL'], attributes['PROCVER'])
+				fixed_time_offset = fixes.time_offset_should_be_fixed(datarel=attributes['DATA_REL'], procver=attributes['PROCVER'])
 				if fixed_time_offset:
 					time_start = fixes.time_offset_apply(time_start, 'start')
 					time_stop = fixes.time_offset_apply(time_stop, 'end')
