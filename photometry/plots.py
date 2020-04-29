@@ -18,7 +18,7 @@ import astropy.visualization as viz
 
 # Change to a non-GUI backend since this
 # should be able to run on a cluster:
-plt.switch_backend('Agg')
+set_noninteractive()
 
 # Change the fonts used in plots:
 # TODO: Use stylesheets instead of overwriting defaults here
@@ -146,14 +146,23 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 	# Set up the colormap to use. If a bad color is defined,
 	# add it to the colormap:
 	if cmap is None:
-		cmap = plt.get_cmap('Blues_r')
+		cmap = plt.get_cmap('Blues')
 	elif isinstance(cmap, str):
 		cmap = plt.get_cmap(cmap)
 
 	if color_bad:
 		cmap.set_bad(color_bad, 1.0)
 
-	im = ax.imshow(image, cmap=cmap, norm=norm, origin=origin, extent=extent, interpolation='nearest', **kwargs)
+	# Plotting the image using all the settings set above:
+	im = ax.imshow(
+		image,
+		cmap=cmap,
+		norm=norm,
+		origin=origin,
+		extent=extent,
+		interpolation='nearest',
+		**kwargs)
+
 	if xlabel is not None:
 		ax.set_xlabel(xlabel)
 	if ylabel is not None:
@@ -278,8 +287,8 @@ def save_figure(path, format='png', **kwargs):
 	Write current figure to file. Creates directory to place it in if needed.
 
 	Parameters:
-		path (string): Path where to save figure. If no file extension is provided, the extension of
-			the format is automatically appended.
+		path (string): Path where to save figure. If no file extension is provided, the extension
+			of the format is automatically appended.
 		format (string): Figure file type. Default is ``'png'``.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
 	"""
@@ -292,3 +301,45 @@ def save_figure(path, format='png', **kwargs):
 
 	# Write current figure to file if it doesn't exist:
 	plt.savefig(path, format=format, bbox_inches='tight', **kwargs)
+
+#--------------------------------------------------------------------------------------------------
+def set_interactive(backend=('Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo', 'TkAgg')):
+	"""
+	Change plotting to using an interactive backend.
+
+	Parameters:
+		backend (str or list): Backend to change to. If not provided, will try different
+			interactive backends and use the first one that works.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	logger = logging.getLogger(__name__)
+	logger.debug("Valid interactive backends: %s", matplotlib.rcsetup.interactive_bk)
+
+	if isinstance(backend, str):
+		backend = [backend]
+
+	for bckend in backend:
+		if bckend not in matplotlib.rcsetup.interactive_bk:
+			logger.warning("Interactive backend '%s' is not found")
+			continue
+
+		# Try to change the backend, and catch errors
+		# it it didn't work:
+		try:
+			plt.switch_backend(bckend)
+		except (ModuleNotFoundError, ImportError):
+			pass
+		else:
+			break
+
+#--------------------------------------------------------------------------------------------------
+def set_noninteractive():
+	"""
+	Change plotting to using a non-interactive backend, which can e.g. be used on a cluster.
+	Will set backend to 'Agg'.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+	plt.switch_backend('Agg')
