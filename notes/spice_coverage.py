@@ -12,7 +12,7 @@ import re
 from datetime import datetime
 import matplotlib.pyplot as plt
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from photometry.spice import TESS_SPICE
 
 if __name__ == '__main__':
