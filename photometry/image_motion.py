@@ -44,10 +44,12 @@ class ImageMovementKernel(object):
 		Initialize ImageMovementKernel.
 
 		Parameters:
-			warpmode (string): Options are ``'wcs'``, ``'unchanged'``, ``'translation'``,
+			warpmode (str): Options are ``'wcs'``, ``'unchanged'``, ``'translation'``,
 				``'euclidian'`` and ``'affine'``. Default is ``'euclidian'``.
 			image_ref (2D ndarray): Reference image used.
-			wcs_ref (``astropy.wcs.WCS`` object): Reference WCS when using `warpmode`='wcs'.
+			wcs_ref (:class:`astropy.wcs.WCS`): Reference WCS when using warpmode='wcs'.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
 		if warpmode not in ('wcs', 'unchanged', 'translation', 'euclidian', 'affine'):
@@ -102,7 +104,7 @@ class ImageMovementKernel(object):
 		flux1 = scharr(flux1)
 
 		# Remove potential NaNs in gradient image
-		replace(flux1, np.NaN, 0)
+		flux1[np.isnan(flux1)] = 0
 
 		# Make sure image is in proper units for ECC routine
 		return np.asarray(flux1, dtype='float32')
