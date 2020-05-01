@@ -18,7 +18,7 @@ import astropy.visualization as viz
 
 # Change to a non-GUI backend since this
 # should be able to run on a cluster:
-set_noninteractive()
+plt.switch_backend('Agg')
 
 # Change the fonts used in plots:
 # TODO: Use stylesheets instead of overwriting defaults here

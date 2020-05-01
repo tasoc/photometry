@@ -10,7 +10,7 @@ import pytest
 import sys
 import os.path
 import numpy as np
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import photometry.utilities as u
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')

@@ -13,7 +13,7 @@ import os
 from tempfile import TemporaryDirectory
 from astropy.io import fits
 from astropy.wcs import WCS
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from photometry import BasePhotometry, PixelQualityFlags, CorrectorQualityFlags
 #import photometry.BasePhotometry.hdf5_cache as bf
 
