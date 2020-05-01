@@ -614,7 +614,7 @@ class LoggerWriter(object):
 	Can be useful for wrapping codes which uses normal :py:func:`print` functions for logging.
 
 	.. code-block:: python
-		linenos:
+		:linenos:
 
 		logger = logging.getLogger(__name__)
 		with contextlib.redirect_stdout(LoggerWriter(logger, logging.INFO)):
