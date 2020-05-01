@@ -2,6 +2,10 @@
 ======================================
 
 .. automodule:: make_catalog
-    :members:
-    :undoc-members:
-    :show-inheritance:
+	:no-members:
+	:no-undoc-members:
+
+Command help
+------------
+
+.. program-output:: python ../photometry/make_catalog.py --help

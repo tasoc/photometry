@@ -2,6 +2,10 @@
 ======================================
 
 .. automodule:: run_ffimovie
-	:members:
-	:undoc-members:
-	:show-inheritance:
+	:no-members:
+	:no-undoc-members:
+
+Command help
+------------
+
+.. program-output:: python ../photometry/run_ffimovie.py --help

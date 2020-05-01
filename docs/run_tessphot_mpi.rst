@@ -2,6 +2,6 @@
 =======================================
 
 .. automodule:: run_tessphot_mpi
-    :members:
-    :undoc-members:
-    :show-inheritance:
+	:no-members:
+	:no-undoc-members:
+

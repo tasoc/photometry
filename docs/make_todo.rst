@@ -2,6 +2,10 @@
 ===================================
 
 .. automodule:: make_todo
-    :members:
-    :undoc-members:
-    :show-inheritance:
+	:no-members:
+	:no-undoc-members:
+
+Command help
+------------
+
+.. program-output:: python ../photometry/make_todo.py --help
