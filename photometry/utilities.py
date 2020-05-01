@@ -613,7 +613,7 @@ class LoggerWriter(object):
 	or :py:func:`contextlib.redirect_stderr` to redirect streams to the given logger.
 	Can be useful for wrapping codes which uses normal :py:func:`print` functions for logging.
 
-	... example::
+	.. example::
 		logger = logging.getLogger(__name__)
 		with contextlib.redirect_stdout(LoggerWriter(logger, logging.INFO)):
 			print("This goes into the logger instead of STDOUT")
