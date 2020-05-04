@@ -13,31 +13,35 @@ import sys
 
 if __name__ == '__main__':
 	# Parse command line arguments:
-	parser = argparse.ArgumentParser()
+	parser = argparse.ArgumentParser(description="Merge TODO-files after photometry has be re-run.")
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
-	parser.add_argument('todo', type=str)
-	parser.add_argument('derived', type=str)
+	parser.add_argument('todo', type=str, help="TODO-file from photometry.")
+	parser.add_argument('derived', type=str, help="TODO-file derived from corrections.")
 	parser.add_argument('combined', type=str, nargs='?', default=None)
 	args = parser.parse_args()
 
 	fname_todo = args.todo
 	fname_derived = args.derived
 
+	# Check that the files exists:
 	if not os.path.isfile(fname_todo):
 		parser.error("Not a valid TODO-file")
 	if not os.path.isfile(fname_derived):
 		parser.error("Not a valid derived TODO-file")
 
+	# Decide where the final output file will be placed:
 	fname_final = args.combined
 	if fname_final is None:
 		fname_final = os.path.join(os.path.abspath(os.path.dirname(fname_derived)), 'todo-combined.sqlite')
 
+	# Check if the final output file already exists:
 	if os.path.exists(fname_final):
 		if args.overwrite:
 			os.remove(fname_final)
 		else:
 			parser.error("File already exists")
 
+	# Read the tables that are available from the derived TODO-file:
 	with closing(sqlite3.connect(fname_derived)) as conn:
 		cursor = conn.cursor()
 		cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
@@ -45,7 +49,9 @@ if __name__ == '__main__':
 
 		# TODO: Do checks of they can (or should!) be merged!
 
+	# Start working in a tempoary directory to not risk leaving files lying around:
 	with tempfile.TemporaryDirectory() as tmpdir:
+		# The working copy of the file:
 		fname_combined = os.path.join(tmpdir, 'working.sqlite')
 
 		print("Copying existing file...")
@@ -80,6 +86,9 @@ if __name__ == '__main__':
 			output=tmpfile
 		))
 		subprocess.check_call(cmd, shell=True)
+
+		print("Deleting SQL dump file...")
+		os.remove(tmpfile)
 
 		print("Transferring correction status...")
 		with closing(sqlite3.connect(fname_combined)) as conn:
