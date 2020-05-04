@@ -17,6 +17,7 @@ To calculate the image shifts between the reference image (``ref_image``) and an
 """
 
 import numpy as np
+import logging
 import cv2
 #from skimage.transform import estimate_transform, warp, AffineTransform, EuclideanTransform
 import math
@@ -33,6 +34,7 @@ class ImageMovementKernel(object):
 		'unchanged': 0,
 		'translation': 2,
 		'euclidian': 3,
+		'affine': 6,
 		'wcs': 1
 	}
 
@@ -42,12 +44,15 @@ class ImageMovementKernel(object):
 		Initialize ImageMovementKernel.
 
 		Parameters:
-			warpmode (string): Options are ``'unchanged'``, ``'translation'``, ``'euclidian'`` and ``'wcs'``. Default is ``'euclidian'``.
+			warpmode (str): Options are ``'wcs'``, ``'unchanged'``, ``'translation'``,
+				``'euclidian'`` and ``'affine'``. Default is ``'euclidian'``.
 			image_ref (2D ndarray): Reference image used.
-			wcs_ref (``astropy.wcs.WCS`` object): Reference WCS when using `warpmode`='wcs'.
+			wcs_ref (:class:`astropy.wcs.WCS`): Reference WCS when using warpmode='wcs'.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
-		if warpmode not in ('unchanged', 'translation', 'euclidian', 'wcs'):
+		if warpmode not in ('wcs', 'unchanged', 'translation', 'euclidian', 'affine'):
 			raise ValueError("Invalid warpmode")
 
 		self.warpmode = warpmode
@@ -59,7 +64,8 @@ class ImageMovementKernel(object):
 			self.image_ref = self._prepare_flux(self.image_ref)
 
 		if self.wcs_ref is not None and not isinstance(self.wcs_ref, WCS):
-			if not isinstance(self.wcs_ref, str): self.wcs_ref = self.wcs_ref.decode("utf-8") # For Python 3
+			if not isinstance(self.wcs_ref, str):
+				self.wcs_ref = self.wcs_ref.decode("utf-8") # For Python 3
 			self.wcs_ref = WCS(header=fits.Header().fromstring(self.wcs_ref))
 
 		self._interpolator = None
@@ -98,7 +104,7 @@ class ImageMovementKernel(object):
 		flux1 = scharr(flux1)
 
 		# Remove potential NaNs in gradient image
-		replace(flux1, np.NaN, 0)
+		flux1[np.isnan(flux1)] = 0
 
 		# Make sure image is in proper units for ECC routine
 		return np.asarray(flux1, dtype='float32')
@@ -122,7 +128,23 @@ class ImageMovementKernel(object):
 		xy = np.atleast_2d(xy)
 		delta_pos = np.empty_like(xy)
 
-		if self.warpmode == 'euclidian':
+		if self.warpmode == 'wcs':
+			# Calculate RA and DEC of target in the reference image:
+			radec = self.wcs_ref.all_pix2world(xy, 0, ra_dec_order=True)
+			# Use RA and DEC to find the position in the kernel image:
+			# TODO: Better handling of NoConvergence exception, which is currently silenced
+			delta_pos = kernel.all_world2pix(radec, 0, ra_dec_order=True, maxiter=50, quiet=True)
+			# Calculate the difference in pixel-position:
+			delta_pos -= xy
+
+		elif self.warpmode == 'unchanged':
+			delta_pos.fill(0)
+
+		elif self.warpmode == 'translation':
+			delta_pos[:, 0] = kernel[0]
+			delta_pos[:, 1] = kernel[1]
+
+		elif self.warpmode == 'euclidian':
 			dx = kernel[0]
 			dy = kernel[1]
 			theta = kernel[2]
@@ -141,20 +163,17 @@ class ImageMovementKernel(object):
 			# Subtract the reference positions to return the change in positions:
 			delta_pos -= xy
 
-		elif self.warpmode == 'translation':
-			delta_pos[:, 0] = kernel[0]
-			delta_pos[:, 1] = kernel[1]
+		elif self.warpmode == 'affine':
+			# In the affine case, the kernel is simply the full matrix:
+			warp_matrix = kernel.reshape(2, 3)
 
-		elif self.warpmode == 'unchanged':
-			delta_pos.fill(0)
+			# Apply warp to all positions:
+			for i in range(xy.shape[0]):
+				x = xy[i, 0]
+				y = xy[i, 1]
+				delta_pos[i, :] = np.dot(warp_matrix, [x, y, 1])
 
-		elif self.warpmode == 'wcs':
-			# Calculate RA and DEC of target in the reference image:
-			radec = self.wcs_ref.all_pix2world(xy, 0, ra_dec_order=True)
-			# Use RA and DEC to find the position in the kernel image:
-			# TODO: Better handling of NoConvergence exception, which is currently silenced
-			delta_pos = kernel.all_world2pix(radec, 0, ra_dec_order=True, maxiter=50, quiet=True)
-			# Calculate the difference in pixel-position:
+			# Subtract the reference positions to return the change in positions:
 			delta_pos -= xy
 
 		return delta_pos
@@ -181,6 +200,8 @@ class ImageMovementKernel(object):
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
+		logger = logging.getLogger(__name__)
+
 		if self.warpmode == 'unchanged':
 			return []
 
@@ -193,9 +214,15 @@ class ImageMovementKernel(object):
 			warp_mode = cv2.MOTION_EUCLIDEAN
 		elif self.warpmode == 'translation':
 			warp_mode = cv2.MOTION_TRANSLATION
+		elif self.warpmode == 'affine':
+			warp_mode = cv2.MOTION_AFFINE
 
 		# Prepare comparison image for estimation of motion
 		image = self._prepare_flux(image)
+
+		# Mask of good pixels in input image:
+		mask = np.isfinite(image)
+		mask = np.asarray(mask, dtype='uint8') # For some reason OpenCV doesn't like boolean arrays
 
 		# Define 2x3 warp matrix and initialize the matrix to identity
 		warp_matrix = np.eye(2, 3, dtype='float32')
@@ -205,9 +232,17 @@ class ImageMovementKernel(object):
 
 		# Run the ECC algorithm. The results are stored in warp_matrix.
 		try:
-			cc, warp_matrix = cv2.findTransformECC(self.image_ref, image, warp_matrix, warp_mode, criteria)
+			inputMask = cv2.UMat(mask)
+			cc, warp_matrix = cv2.findTransformECC(self.image_ref, image, warp_matrix, warp_mode, criteria, inputMask, 5)
+			warp_matrix = np.asarray(warp_matrix.get(), dtype='float64')
 		except: # noqa: E722
-			return np.NaN*np.ones(self.n_params)
+			logger.exception("Could not find transform")
+			return np.full(self.n_params, np.NaN)
+
+		# The affine transformation uses six parameters,
+		# so let's just store a flattened version of the matrix:
+		if self.warpmode == 'affine':
+			return warp_matrix.flatten()
 
 		# Extract movement in pixel units in x- and y direction
 		dx = warp_matrix[0,2]

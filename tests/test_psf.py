@@ -9,7 +9,7 @@ Tests of PSF object.
 import sys
 import os.path
 import numpy as np
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from photometry.psf import PSF
 from photometry.plots import plt
 

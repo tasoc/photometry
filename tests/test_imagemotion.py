@@ -8,11 +8,11 @@ import pytest
 import sys
 import os.path
 import numpy as np
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import h5py
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from photometry.image_motion import ImageMovementKernel
 from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
 #from photometry.plots import plt
-import h5py
 
 #--------------------------------------------------------------------------------------------------
 def test_imagemotion_invalid_warpmode():
@@ -22,7 +22,7 @@ def test_imagemotion_invalid_warpmode():
 		ImageMovementKernel(warpmode='invalid')
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian'])
+@pytest.mark.parametrize('warpmode', ['unchanged', 'translation', 'euclidian', 'affine'])
 def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 	"""Test of ImageMovementKernel"""
 

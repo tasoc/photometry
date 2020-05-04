@@ -9,12 +9,12 @@ PSF Photometry.
 import os.path
 import numpy as np
 import logging
-from copy import deepcopy
+#from copy import deepcopy
 from scipy.optimize import minimize
 from . import BasePhotometry, STATUS
 from .psf import PSF
 from .utilities import mag2flux
-from .plots import plt, plot_image, save_figure
+from .plots import plt, plot_image_fit_residuals, save_figure
 
 class PSFPhotometry(BasePhotometry):
 
@@ -114,7 +114,7 @@ class PSFPhotometry(BasePhotometry):
 		params0 = np.empty((len(cat), 3), dtype='float64')
 		for k, target in enumerate(cat):
 			params0[k,:] = [target['row_stamp'], target['column_stamp'], mag2flux(target['tmag'])]
-		params_start = deepcopy(params0) # Save the starting parameters for later
+		#params_start = deepcopy(params0) # Save the starting parameters for later
 		params0 = params0.flatten() # Make the parameters into a 1D array
 
 		# Start looping through the images (time domain):
@@ -130,7 +130,7 @@ class PSFPhotometry(BasePhotometry):
 
 			# Run the fitting routine for this image:
 			res = minimize(self._lhood, params0, args=(img, bkg), method='Nelder-Mead',
-						options={'maxiter': maxiter})
+				options={'maxiter': maxiter})
 			logger.debug(res)
 
 			if res.success:
@@ -141,7 +141,6 @@ class PSFPhotometry(BasePhotometry):
 				# Add the result of the main star to the lightcurve:
 				self.lightcurve['flux'][k] = result[0, 2]
 				self.lightcurve['pos_centroid'][k] = result[0, 0:2]
-				self.lightcurve['quality'][k] = 0
 
 				# TODO: use debug figure toggle to decide if to plot and export
 				if self.plot and logger.isEnabledFor(logging.DEBUG):
@@ -149,17 +148,10 @@ class PSFPhotometry(BasePhotometry):
 					mdl = self.psf.integrate_to_image(result, cutoff_radius=10)
 
 					fig = plt.figure()
-					ax = fig.add_subplot(131)
-					plot_image(img, ax=ax, scale='log', xlabel=None, ylabel=None, title='Image')
-					ax.scatter(params_start[:,1], params_start[:,0], c='b', alpha=0.5)
-					ax.scatter(result[:,1], result[:,0], c='r', alpha=0.5)
-					ax = fig.add_subplot(132)
-					plot_image(mdl, ax=ax, scale='log', xlabel=None, ylabel=None, title='Model')
-					ax = fig.add_subplot(133)
-					plot_image(img - mdl, ax=ax, scale='linear', xlabel=None, ylabel=None, title='Residuals')
+					plot_image_fit_residuals(fig, img, mdl)
 
 					# Export figure to file:
-					fig_name = 'psf_photometry_{sector:02d}_{starid:011d}_{time:05d}'.format(
+					fig_name = 'psf_photometry_s{sector:02d}_{starid:011d}_{time:05d}'.format(
 						sector=self.sector,
 						starid=self.starid,
 						time=k
@@ -174,7 +166,7 @@ class PSFPhotometry(BasePhotometry):
 
 				self.lightcurve['flux'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k] = [np.NaN, np.NaN]
-				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
+				#self.lightcurve['quality'][k] |= 1 # FIXME: Use the real flag!
 
 		# Return whether you think it went well:
 		return STATUS.OK

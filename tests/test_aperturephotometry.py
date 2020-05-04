@@ -14,7 +14,7 @@ import sys
 import os
 from tempfile import TemporaryDirectory
 from astropy.io import fits
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from photometry import AperturePhotometry, STATUS
 from photometry.plots import plot_image, plt
 
@@ -34,8 +34,11 @@ def test_aperturephotometry(SHARED_INPUT_DIR, datasource):
 			# It should set the status to one of these:
 			assert(pho.status in (STATUS.OK, STATUS.WARNING))
 
+			# Check the sumimage:
 			plt.figure()
 			plot_image(pho.sumimage, title=datasource)
+
+			assert not anynan(pho.sumimage), "There are NaNs in the SUMIMAGE"
 
 			# They shouldn't be exactly zero:
 			assert not np.all(pho.lightcurve['flux'] == 0)

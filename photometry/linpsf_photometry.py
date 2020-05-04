@@ -153,17 +153,11 @@ class LinPSFPhotometry(BasePhotometry):
 					ax_list = plot_image_fit_residuals(
 						fig=fig,
 						image=img,
-						fit=self.psf.integrate_to_image(result4plot, cutoff_radius=20),
-						residuals=img - self.psf.integrate_to_image(result4plot, cutoff_radius=20)
+						fit=self.psf.integrate_to_image(result4plot, cutoff_radius=20)
 					)
 
 					# Add star position to the first plot:
 					ax_list[0].scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
-
-					# Add subplot titles:
-					title_list = ['Simulated image', 'Least squares PSF fit', 'Residual image']
-					for ax, title in zip(ax_list, title_list):
-						ax.set_title(title)
 
 					# Save figure to file:
 					fig_name = 'tess_{0:011d}_linpsf_{1:05d}'.format(self.starid, k)

@@ -12,7 +12,7 @@ import logging
 import h5py
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from photometry import prepare
 from photometry.utilities import TqdmLoggingHandler
 

@@ -10,14 +10,15 @@ Halo Photometry.
 
 import logging
 import os.path
+import contextlib
 import numpy as np
 from astropy.table import Table
 import halophot
 from halophot.halo_tools import do_lc
-from ..plots import plt, save_figure
+from ..plots import plt, plot_image, save_figure
 from .. import BasePhotometry, STATUS
 from ..quality import TESSQualityFlags
-from ..utilities import mag2flux
+from ..utilities import mag2flux, LoggerWriter
 
 #--------------------------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
@@ -100,7 +101,9 @@ class HaloPhotometry(BasePhotometry):
 		if self.datasource == 'ffi':
 			self.resize_stamp(width=dist_max+2, height=dist_max+2)
 
-		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
+		logger.info("Target position in stamp: (%f, %f)",
+			self.target_pos_row_stamp,
+			self.target_pos_column_stamp)
 
 		# Initialize
 		logger.info('Formatting data for halo')
@@ -163,28 +166,28 @@ class HaloPhotometry(BasePhotometry):
 
 		# Run the halo photometry core function
 		try:
-			# TODO: Redirect stdout to logger.info
-			pf, ts, weights, weightmap_dict, pixels_sub = do_lc(
-				flux,
-				ts,
-				splits,
-				sub,
-				maxiter=maxiter,
-				split_times=split_times,
-				w_init=w_init,
-				random_init=random_init,
-				thresh=thresh,
-				minflux=minflux,
-				objective=objective,
-				analytic=analytic,
-				sigclip=sigclip,
-				verbose=logger.isEnabledFor(logging.INFO),
-				mission='TESS',
-				bitmask=TESSQualityFlags.DEFAULT_BITMASK
-			)
+			# Redirect stdout to logger.info
+			with contextlib.redirect_stdout(LoggerWriter(logger)):
+				pf, ts, weights, weightmap_dict, pixels_sub = do_lc(
+					flux,
+					ts,
+					splits,
+					sub,
+					maxiter=maxiter,
+					split_times=split_times,
+					w_init=w_init,
+					random_init=random_init,
+					thresh=thresh,
+					minflux=minflux,
+					objective=objective,
+					analytic=analytic,
+					sigclip=sigclip,
+					verbose=logger.isEnabledFor(logging.INFO),
+					mission='TESS',
+					bitmask=TESSQualityFlags.DEFAULT_BITMASK
+				)
 		except: # noqa: E722
 			logger.exception('Halo optimization failed')
-			self.report_details(error='Halo optimization failed')
 			return STATUS.ERROR
 
 		# Fix for halophot sometimes not returning lists:
@@ -205,7 +208,7 @@ class HaloPhotometry(BasePhotometry):
 		for k, imgerr in enumerate(self.images_err):
 			if not indx_goodtimes[k]: continue
 			wm = weightmap_dict['weightmap'][wmindx[k]] # Get the weightmap for this cadence
-			self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( wm**2 * imgerr**2 ))
+			self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.nansum( wm**2 * imgerr**2 ))
 
 		self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
 		self.lightcurve['pos_centroid'][:,1] = row
@@ -217,18 +220,12 @@ class HaloPhotometry(BasePhotometry):
 		# Plotting:
 		if self.plot:
 			logger.info('Plotting weight map')
-			cmap = plt.get_cmap('seismic')
 			norm = np.size(weightmap_dict['weightmap'][0])
-			cmap.set_bad('k', 1.)
 			for k, wm in enumerate(weightmap_dict['weightmap']):
 				im = np.log10(wm*norm)
-				fig = plt.figure()
-				ax = fig.add_subplot(111)
-				plt.imshow(im, cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im),
-					interpolation='None', origin='lower')
-				plt.colorbar()
-				ax.set_title('TV-min Weightmap')
-				#plot_image(im, scale='log', cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), make_cbar=True, title='TV-min Weightmap')
+				fig, ax = plt.subplots()
+				plot_image(im, ax=ax, scale='linear', title='TV-min Weightmap', cmap='seismic',
+					cbar='right', vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), clabel=None)
 				save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)))
 				plt.close(fig)
 

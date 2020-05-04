@@ -12,24 +12,28 @@ import logging
 from .. import BasePhotometry, STATUS
 from . import k2p2v2 as k2p2
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class AperturePhotometry(BasePhotometry):
-	"""Simple Aperture Photometry using K2P2 to define masks.
+	"""
+	Simple Aperture Photometry using K2P2 to define masks.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	#----------------------------------------------------------------------------------------------
 	def __init__(self, *args, **kwargs):
 		# Call the parent initializing:
 		# This will set several default settings
 		super().__init__(*args, **kwargs)
 
+	#----------------------------------------------------------------------------------------------
 	def _minimum_aperture(self):
 		cols, rows = self.get_pixel_grid()
 		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
 					& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
 		return mask_main
 
+	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
 		"""Perform photometry on the given target.
 
@@ -52,7 +56,12 @@ class AperturePhotometry(BasePhotometry):
 			'extend_overflow': True
 		}
 
-		for retries in range(5):
+		# For bright saturated stars we allow for more retries:
+		allow_retries = 5
+		if self.target['tmag'] < 6:
+			allow_retries = 10
+
+		for retries in range(allow_retries):
 			# Delete any plots left over in the plots folder from an earlier iteration:
 			self.delete_plots()
 
@@ -60,22 +69,25 @@ class AperturePhotometry(BasePhotometry):
 			SumImage = self.sumimage
 
 			logger.info(self.stamp)
-			logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
+			logger.info("Target position in stamp: (%f, %f)",
+				self.target_pos_row_stamp, self.target_pos_column_stamp )
 
-			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
+			cat = np.column_stack((
+				self.catalog['column_stamp'],
+				self.catalog['row_stamp'],
+				self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
 			try:
 				masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
 				masks = np.asarray(masks, dtype='bool')
 			except k2p2.K2P2NoStars:
-				self.report_details(error='No flux above threshold.')
+				logger.error('No flux above threshold.')
 				masks = np.asarray(0, dtype='bool')
 
 			using_minimum_mask = False
 			if len(masks.shape) == 0:
-				logger.warning("No masks found")
-				self.report_details(error='No masks found. Using minimum aperture.')
+				logger.warning("No masks found. Using minimum aperture.")
 				mask_main = self._minimum_aperture()
 				using_minimum_mask = True
 
@@ -85,13 +97,11 @@ class AperturePhotometry(BasePhotometry):
 
 				if not np.any(indx_main):
 					logger.warning('No mask found for main target. Using minimum aperture.')
-					self.report_details(error='No mask found for main target. Using minimum aperture.')
 					mask_main = self._minimum_aperture()
 					using_minimum_mask = True
 
 				elif np.sum(indx_main) > 1:
-					logger.error('Too many masks')
-					self.report_details(error='Too many masks')
+					logger.error('Too many masks.')
 					return STATUS.ERROR
 
 				else:
@@ -110,18 +120,18 @@ class AperturePhotometry(BasePhotometry):
 				resize_args['right'] = 10
 
 			if resize_args:
-				logger.warning("Touching the edges! Retrying")
+				logger.warning("Touching the edges! Retrying.")
 				logger.info(resize_args)
 				if not self.resize_stamp(**resize_args):
 					resize_args = {}
-					logger.warning("Could not resize stamp any further")
+					logger.warning("Could not resize stamp any further.")
 					break
 			else:
 				break
 
 		# If we reached the last retry but still needed a resize, give up:
 		if resize_args:
-			self.report_details(error='Too many stamp resizes')
+			logger.error('Too many stamp resizes.')
 			return STATUS.ERROR
 
 		# XY of pixels in frame
@@ -138,7 +148,7 @@ class AperturePhotometry(BasePhotometry):
 				self.lightcurve['flux'][k] = np.NaN
 				self.lightcurve['flux_err'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k, :] = np.NaN
-				#self.lightcurve['quality']
+				#self.lightcurve['quality'][k] |= ?
 			else:
 				self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
 				self.lightcurve['flux_err'][k] = np.sqrt(np.sum(imgerr[mask_main]**2))
@@ -180,8 +190,7 @@ class AperturePhotometry(BasePhotometry):
 
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 0:
-			logger.error("No targets in mask")
-			self.report_details(error='No targets in mask')
+			logger.error("No targets in mask.")
 			contamination = np.nan
 			my_status = STATUS.ERROR
 		elif len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
