@@ -92,12 +92,11 @@ class BasePhotometry(object):
 		target_pos_row_stamp (float): Main target CCD row position in stamp.
 		wcs (:py:class:`astropy.wcs.WCS`): World Coordinate system solution.
 
-		lightcurve (:class:`astropy.table.Table`): Table to be filled with an extracted lightcurve.
-		pixelflags (numpy.ndarray): Flags for each pixel, as defined by the TESS data product manual.
-		final_phot_mask (:class:`numpy.ndarray`): Mask indicating which pixels were used in
-			extraction of lightcurve. ``True`` if used, ``False`` otherwise.
-		final_position_mask (:class:`numpy.ndarray`): Mask indicating which pixels were used
-			in extraction of positions. ``True`` if used, ``False`` otherwise.
+		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
+		final_phot_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of
+			lightcurve. ``True`` if used, ``False`` otherwise.
+		final_position_mask (numpy.ndarray): Mask indicating which pixels were used in extraction
+			of positions. ``True`` if used, ``False`` otherwise.
 		additional_headers (dict): Additional headers to be included in FITS files.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -822,7 +821,7 @@ class BasePhotometry(object):
 	@property
 	def pixelflags_cube(self):
 		"""
-		Cube containing all the pixel flag images as a function of time.
+		Cube containing all pixel flag images as a function of time.
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, ffi_times)``, where
@@ -836,11 +835,11 @@ class BasePhotometry(object):
 		Example:
 
 			>>> pho = BasePhotometry(starid)
-			>>> print(pho.backgrounds_cube.shape):
+			>>> print(pho.pixelflags_cube.shape):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:meth:`backgrounds`, :py:meth:`images_cube`, :py:meth:`images`
+			:py:meth:`pixelflags`, :py:meth:`backgrounds_cube`, :py:meth:`images_cube`.
 		"""
 		if self._pixelflags_cube is None:
 			# We can't used the _loac_cube function here, since we always have
@@ -872,28 +871,19 @@ class BasePhotometry(object):
 	@property
 	def pixelflags(self):
 		"""
-		Iterator that will loop through the image stamps.
+		Iterator that will loop through the pixel flag images.
 
 		Returns:
-			iterator: Iterator which can be used to loop through the image stamps.
-
-		Note:
-			The images has had the large-scale background subtracted. If needed
-			the backgrounds can be added again from :py:meth:`backgrounds`.
-
-		Note:
-			For each image, this function will actually load the necessary
-			data from disk, so don't loop through it more than you absolutely
-			have to to save I/O.
+			iterator: Iterator which can be used to loop through the pixel flags images.
 
 		Example:
 
 			>>> pho = BasePhotometry(starid)
-			>>> for img in pho.images:
+			>>> for img in pho.pixelflags:
 			>>> 	print(img)
 
 		See Also:
-			:py:meth:`images_cube`, :py:meth:`images_err`, :py:meth:`backgrounds`
+			:py:meth:`pixelflags_cube`, :py:meth:`images`, :py:meth:`backgrounds`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		if self.datasource == 'ffi':

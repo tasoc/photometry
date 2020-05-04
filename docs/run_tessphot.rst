@@ -2,6 +2,10 @@
 ======================================
 
 .. automodule:: run_tessphot
-    :members:
-    :undoc-members:
-    :show-inheritance:
+	:no-members:
+	:no-undoc-members:
+
+Command help
+------------
+
+.. program-output:: python ../photometry/run_tessphot.py --help

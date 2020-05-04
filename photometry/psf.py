@@ -25,7 +25,8 @@ class PSF(object):
 		PSFfile (string): Path to PSF file that was interpolated in.
 		ref_column (float): Reference CCD column that PSF is calculated for.
 		ref_row (float): Reference CCD row that PSF is calculated for.
-		splineInterpolation (`scipy.interpolate.RectBivariateSpline` object): Interpolation to evaluate PSF on arbitrery position relative to center of PSF.
+		splineInterpolation (:py:class:`scipy.interpolate.RectBivariateSpline`): 2D Interpolation
+			to evaluate PSF on arbitrary position relative to center of PSF.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -111,7 +112,7 @@ class PSF(object):
 		prf /= (np.nansum(prf) * cdelt1p * cdelt2p)
 
 		# Interpolation function over the PRF:
-		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf) #: 2D-interpolation of PSF (RectBivariateSpline).
+		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf)
 
 	#----------------------------------------------------------------------------------------------
 	def integrate_to_image(self, params, cutoff_radius=5):
