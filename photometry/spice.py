@@ -237,6 +237,7 @@ class TESS_SPICE(object):
 			kernels_folder = os.environ.get('TESSPHOT_SPICE_KERNELS', os.path.join(os.path.dirname(__file__), 'data', 'spice'))
 
 		# Make sure the kernel directory exists:
+		kernels_folder = os.path.abspath(kernels_folder)
 		os.makedirs(kernels_folder, exist_ok=True)
 
 		# Automatically download kernels from TASOC, if they don't already exist?
@@ -252,7 +253,8 @@ class TESS_SPICE(object):
 			download_parallel(downlist)
 
 		# Path where meta-kernel will be saved:
-		fileshash = hashlib.md5(','.join(self.kernel_files).encode()).hexdigest()
+		hashkey = kernels_folder + ',' + ','.join(self.kernel_files)
+		fileshash = hashlib.md5(hashkey.encode()).hexdigest()
 		self.METAKERNEL = os.path.abspath(os.path.join(kernels_folder, 'metakernel-' + fileshash + '.txt'))
 
 		# Write meta-kernel to file:
