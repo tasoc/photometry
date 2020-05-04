@@ -21,7 +21,6 @@ import logging
 import cv2
 #from skimage.transform import estimate_transform, warp, AffineTransform, EuclideanTransform
 import math
-from bottleneck import replace
 from skimage.filters import scharr
 from scipy.interpolate import interp1d
 from astropy.io import fits
