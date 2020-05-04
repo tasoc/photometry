@@ -239,7 +239,7 @@ class BasePhotometry(object):
 					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
 
 				# Correct timestamp offset that was in early data releases:
-				if fixes.time_offset_should_be_fixed(header=hdr):
+				if fixes.time_offset_needed(header=hdr):
 					logger.debug("Fixes: Applying time offset correction")
 					self.lightcurve['time'] = fixes.time_offset_apply(self.lightcurve['time'])
 				else:
@@ -376,7 +376,7 @@ class BasePhotometry(object):
 			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
 
 			# Correct timestamp offset that was in early data releases:
-			if fixes.time_offset_should_be_fixed(header=self.tpf[0].header):
+			if fixes.time_offset_needed(header=self.tpf[0].header):
 				logger.debug("Fixes: Applying time offset correction")
 				self.lightcurve['time'] = fixes.time_offset_apply(self.lightcurve['time'])
 			else:

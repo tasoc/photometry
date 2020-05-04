@@ -47,7 +47,7 @@ to be re-run and HDF5 file re-created..
 """
 
 #--------------------------------------------------------------------------------------------------
-def time_offset_should_be_fixed(header=None, datarel=None, procver=None):
+def time_offset_needed(header=None, datarel=None, procver=None):
 	"""
 	Should time offset correction be applied to this data?
 
