@@ -76,7 +76,7 @@ class BasePhotometry(object):
 		sector (int): TESS observing sector.
 		camera (int): TESS camera (1-4).
 		ccd (int): TESS CCD (1-4).
-        data_rel (int): Data release number.
+		data_rel (int): Data release number.
 		n_readout (int): Number of frames co-added in each timestamp.
 		header (dict-like): Primary header, either from TPF or HDF5 files.
 
