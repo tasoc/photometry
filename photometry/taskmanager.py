@@ -80,6 +80,7 @@ class TaskManager(object):
 			priority INTEGER PRIMARY KEY ASC NOT NULL,
 			starid INTEGER NOT NULL,
 			lightcurve TEXT,
+			method_used TEXT NOT NULL,
 			elaptime REAL NOT NULL,
 			worker_wait_time REAL,
 			mean_flux DOUBLE PRECISION,
@@ -109,14 +110,24 @@ class TaskManager(object):
 		# Add status indicator for corrections to todolist, if it doesn't already exists:
 		# This is only for backwards compatibility.
 		self.cursor.execute("PRAGMA table_info(diagnostics)")
-		existing_tables = [r['name'] for r in self.cursor.fetchall()]
-		if 'edge_flux' not in existing_tables:
+		existing_columns = [r['name'] for r in self.cursor.fetchall()]
+		if 'edge_flux' not in existing_columns:
 			self.logger.debug("Adding edge_flux column to diagnostics")
 			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN edge_flux REAL DEFAULT NULL")
 			self.conn.commit()
-		if 'worker_wait_time' not in existing_tables:
+		if 'worker_wait_time' not in existing_columns:
 			self.logger.debug("Adding worker_wait_time column to diagnostics")
 			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN worker_wait_time REAL DEFAULT NULL")
+			self.conn.commit()
+		if 'method_used' not in existing_columns:
+			# Since this one is NOT NULL, we have to do some magic to fill out the
+			# new column after creation, by finding ketwords in other columns.
+			# This can be a pretty slow process, but it only has to be done once.
+			self.logger.debug("Adding method_used column to diagnostics")
+			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN method_used TEXT NOT NULL DEFAULT 'aperture';")
+			for m in ('aperture', 'halo', 'psf', 'linpsf'):
+				self.cursor.execute("UPDATE diagnostics SET method_used=? WHERE priority IN (SELECT priority FROM todolist WHERE method=?);", [m, m])
+			self.cursor.execute("UPDATE diagnostics SET method_used='halo' WHERE method_used='aperture' AND errors LIKE '%Automatically switched to Halo photometry%';")
 			self.conn.commit()
 
 		# Reset calculations with status STARTED, ABORT or ERROR:
@@ -411,10 +422,11 @@ class TaskManager(object):
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, method_used, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
 			result['starid'],
 			details.get('filepath_lightcurve', None),
+			result['method_used'],
 			result['time'],
 			result.get('worker_wait_time', None),
 			details.get('pos_centroid', (None, None))[0],

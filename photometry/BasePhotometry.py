@@ -71,6 +71,7 @@ class BasePhotometry(object):
 		output_folder (str): Root directory where output files are saved.
 		plot (bool): Indicates wheter plots should be created as part of the output.
 		plot_folder (str): Directory where plots are saved to.
+		method (str): String indication the method of photometry.
 
 		sector (int): TESS observing sector.
 		camera (int): TESS camera (1-4).
@@ -140,7 +141,18 @@ class BasePhotometry(object):
 		self.datasource = datasource
 		self.version = version
 
-		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
+		# Extract which photmetric method that is being used by checking the
+		# name of the class that is running:
+		self.method = {
+			'BasePhotometry': 'base',
+			'AperturePhotometry': 'aperture',
+			'PSFPhotometry': 'psf',
+			'LinPSFPhotometry': 'linpsf',
+			'HaloPhotometry': 'halo'
+		}.get(self.__class__.__name__, None)
+
+		logger.info('STARID = %d, DATASOURCE = %s, METHOD = %s',
+			self.starid, self.datasource, self.method)
 
 		self._status = STATUS.UNKNOWN
 		self._details = {}
@@ -1381,16 +1393,6 @@ class BasePhotometry(object):
 		# Get the current date for the files:
 		now = datetime.datetime.now()
 
-		# Extract which photmetric method is being used by checking the
-		# name of the class that is running:
-		photmethod = {
-			'BasePhotometry': 'base',
-			'AperturePhotometry': 'aperture',
-			'PSFPhotometry': 'psf',
-			'LinPSFPhotometry': 'linpsf',
-			'HaloPhotometry': 'halo'
-		}.get(self.__class__.__name__, None)
-
 		# TODO: This really should be done in another way,
 		# but for now it will work...
 		if self.datasource.startswith('tpf'):
@@ -1421,7 +1423,7 @@ class BasePhotometry(object):
 		hdu.header['FILEVER'] = ('1.4', 'File format version')
 		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
-		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
+		hdu.header['PHOTMET'] = (self.method, 'Photometric method used')
 
 		# Object properties:
 		if self.target['pm_ra'] is None or self.target['pm_decl'] is None:
