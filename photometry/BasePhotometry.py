@@ -66,29 +66,30 @@ class BasePhotometry(object):
 	All other specific photometric algorithms will inherit from this.
 
 	Attributes:
-		starid (integer): TIC number of star being processed.
-		input_folder (string): Root directory where files are loaded from.
-		output_folder (string): Root directory where output files are saved.
-		plot (boolean): Indicates wheter plots should be created as part of the output.
-		plot_folder (string): Directory where plots are saved to.
+		starid (int): TIC number of star being processed.
+		input_folder (str): Root directory where files are loaded from.
+		output_folder (str): Root directory where output files are saved.
+		plot (bool): Indicates wheter plots should be created as part of the output.
+		plot_folder (str): Directory where plots are saved to.
 
-		sector (integer): TESS observing sector.
-		camera (integer): TESS camera (1-4).
-		ccd (integer): TESS CCD (1-4).
-		n_readout (integer): Number of frames co-added in each timestamp.
+		sector (int): TESS observing sector.
+		camera (int): TESS camera (1-4).
+		ccd (int): TESS CCD (1-4).
+		n_readout (int): Number of frames co-added in each timestamp.
 
+		target (dict): Catalog information about the main target.
 		target_mag (float): TESS magnitude of the main target.
 		target_pos_ra (float): Right ascension of the main target at time of observation.
 		target_pos_dec (float): Declination of the main target at time of observation.
 		target_pos_ra_J2000 (float): Right ascension of the main target at J2000.
 		target_pos_dec_J2000 (float): Declination of the main target at J2000.
-		target_pos_column (flat): Main target CCD column position.
+		target_pos_column (float): Main target CCD column position.
 		target_pos_row (float): Main target CCD row position.
 		target_pos_column_stamp (float): Main target CCD column position in stamp.
 		target_pos_row_stamp (float): Main target CCD row position in stamp.
-		wcs (``astropy.wcs.WCS`` object): World Coordinate system solution.
+		wcs (:class:`astropy.wcs.WCS`): World Coordinate system solution.
 
-		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
+		lightcurve (:class:`astropy.table.Table`): Table to be filled with an extracted lightcurve.
 		final_phot_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of
 			lightcurve. ``True`` if used, ``False`` otherwise.
 		final_position_mask (numpy.ndarray): Mask indicating which pixels were used in extraction
@@ -519,8 +520,8 @@ class BasePhotometry(object):
 			17.83731732, 16.5532873, 15.73785092, 15.21999971,
 			14.89113301, 14.68228285, 14.54965042, 14.46542084, 14.0])
 
-		Ncolumns = np.interp(self.target_tmag, tmag, width)
-		Nrows = np.interp(self.target_tmag, tmag, height)
+		Ncolumns = np.interp(self.target['tmag'], tmag, width)
+		Nrows = np.interp(self.target['tmag'], tmag, height)
 
 		# Round off and make sure we have minimum 15 pixels:
 		Nrows = np.maximum(np.ceil(Nrows), 15)
