@@ -61,7 +61,7 @@ def main():
 	args = parser.parse_args()
 
 	# Make sure at least one setting is given:
-	if not args.all and args.starid is None and not args.random:
+	if not args.all and args.starid is None and args.priority is None and not args.random:
 		parser.error("Please select either a specific STARID or RANDOM.")
 
 	# Set logging level:
@@ -94,7 +94,7 @@ def main():
 	if args.output:
 		output_folder = args.output
 	else:
-		output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(input_folder, 'lightcurves'))
+		output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(os.path.dirname(input_folder), 'lightcurves'))
 
 	logger.info("Loading input data from '%s'", input_folder)
 	logger.info("Putting output data in '%s'", output_folder)
