@@ -19,9 +19,11 @@ from spiceypy.utils.support_types import SpiceyError
 import hashlib
 from .utilities import download_parallel
 
+#--------------------------------------------------------------------------------------------------
 class InadequateSpiceException(Exception):
 	pass
 
+#--------------------------------------------------------------------------------------------------
 class TESS_SPICE(object):
 	"""
 	SPICE Kernel object.
@@ -237,6 +239,7 @@ class TESS_SPICE(object):
 			kernels_folder = os.environ.get('TESSPHOT_SPICE_KERNELS', os.path.join(os.path.dirname(__file__), 'data', 'spice'))
 
 		# Make sure the kernel directory exists:
+		kernels_folder = os.path.abspath(kernels_folder)
 		os.makedirs(kernels_folder, exist_ok=True)
 
 		# Automatically download kernels from TASOC, if they don't already exist?
@@ -252,15 +255,16 @@ class TESS_SPICE(object):
 			download_parallel(downlist)
 
 		# Path where meta-kernel will be saved:
-		fileshash = hashlib.md5(','.join(self.kernel_files).encode()).hexdigest()
-		self.METAKERNEL = os.path.abspath(os.path.join(kernels_folder, 'metakernel-' + fileshash + '.txt'))
+		hashkey = kernels_folder + ',' + ','.join(self.kernel_files)
+		fileshash = hashlib.md5(hashkey.encode()).hexdigest()
+		self.METAKERNEL = os.path.join(kernels_folder, 'metakernel-' + fileshash + '.txt')
 
 		# Write meta-kernel to file:
 		if not os.path.exists(self.METAKERNEL):
 			with open(self.METAKERNEL, 'w') as fid:
 				fid.write("KPL/MK\n")
 				fid.write(r"\begindata" + "\n")
-				fid.write("PATH_VALUES = ('" + os.path.abspath(kernels_folder) + "')\n")
+				fid.write("PATH_VALUES = ('" + kernels_folder + "')\n")
 				fid.write("PATH_SYMBOLS = ('KERNELS')\n")
 				fid.write("KERNELS_TO_LOAD = (\n")
 				fid.write(",\n".join(["'$KERNELS/" + fname + "'" for fname in self.kernel_files]))
@@ -296,38 +300,43 @@ class TESS_SPICE(object):
 		# If using astropy 4.0+, we can load the local one directly. Before this,
 		# it needs to be downloaded and cached:
 		# NOTE: https://github.com/astropy/astropy/pull/8767
-		#self.planetary_ephemeris = 'de430'
 		if astropy_major_version >= 4:
-			self.planetary_ephemeris = os.path.abspath(os.path.join(kernels_folder, 'tess2018338154429-41241_de430.bsp'))
+			self.planetary_ephemeris = os.path.join(kernels_folder, 'tess2018338154429-41241_de430.bsp')
 		else:
 			self.planetary_ephemeris = urlbase + 'tess2018338154429-41241_de430.bsp'
 		self._old_solar_system_ephemeris = coord.solar_system_ephemeris.get()
 		coord.solar_system_ephemeris.set(self.planetary_ephemeris)
 
+	#----------------------------------------------------------------------------------------------
 	def unload(self):
 		"""Unload TESS SPICE kernels from memory."""
 		spiceypy.unload(self.METAKERNEL)
 
+	#----------------------------------------------------------------------------------------------
 	def close(self):
 		"""Close SPICE object."""
 		#self.unload() # Uhh, we are being naugthy here!
 		coord.solar_system_ephemeris.set(self._old_solar_system_ephemeris)
 
+	#----------------------------------------------------------------------------------------------
 	def __enter__(self):
 		return self
 
+	#----------------------------------------------------------------------------------------------
 	def __exit__(self, *args, **kwargs):
 		self.close()
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def position(self, jd, of='TESS', relative_to='EARTH'):
 		"""
-		Returns position of TESS for the given timestamps as geocentric XYZ-coordinates in kilometers.
+		Returns position of TESS for the given timestamps as geocentric XYZ-coordinates
+		in kilometers.
 
 		Parameters:
 			jd (ndarray): Time in Julian Days where position of TESS should be calculated.
 			of (string, optional): Object for which to calculate position for. Default='TESS'.
-			relative_to (string, optional): Object for which to calculate position relative to. Default='EARTH'.
+			relative_to (string, optional): Object for which to calculate position relative to.
+				Default='EARTH'.
 
 		Returns:
 			ndarray: Position of TESS as geocentric XYZ-coordinates in kilometers.
@@ -351,17 +360,18 @@ class TESS_SPICE(object):
 
 		return positions
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def EarthLocation(self, jd):
 		"""
 		Returns positions as an EarthLocation object, which can be feed
-		directly into ``astropy.time.Time.light_travel_time``.
+		directly into :func:`astropy.time.Time.light_travel_time`.
 
 		Parameters:
 			jd (ndarray): Time in Julian Days where position of TESS should be calculated.
 
 		Returns:
-			´astropy.coordinates.EarthLocation´ object: EarthLocation object that can be passed directly into ``astropy.time.Time``.
+			:class:`astropy.coordinates.EarthLocation`: EarthLocation object that can be passed
+				directly into :py:class:`astropy.time.Time`.
 
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
@@ -378,15 +388,17 @@ class TESS_SPICE(object):
 		# Create EarthLocation object
 		return coord.EarthLocation.from_geocentric(*itrs.cartesian.xyz, unit=u.km)
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def position_velocity(self, jd, of='TESS', relative_to='EARTH'):
 		"""
-		Returns position and velocity of TESS for the given timestamps as geocentric XYZ-coordinates in kilometers.
+		Returns position and velocity of TESS for the given timestamps as geocentric
+		XYZ-coordinates in kilometers.
 
 		Parameters:
 			jd (ndarray): Time in Julian Days where position of TESS should be calculated.
 			of (string, optional): Object for which to calculate position for. Default='TESS'.
-			relative_to (string, optional): Object for which to calculate position relative to. Default='EARTH'.
+			relative_to (string, optional): Object for which to calculate position relative to.
+				Default='EARTH'.
 
 		Returns:
 			ndarray: Position and velocity of TESS as geocentric XYZ-coordinates in kilometers.
@@ -410,13 +422,14 @@ class TESS_SPICE(object):
 
 		return pos_vel
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def velocity(self, *args, **kwargs):
 		"""
 		Parameters:
 			jd (ndarray): Time in Julian Days where position of TESS should be calculated.
 			of (string, optional): Object for which to calculate position for. Default='TESS'.
-			relative_to (string, optional): Object for which to calculate position relative to. Default='EARTH'.
+			relative_to (string, optional): Object for which to calculate position relative to.
+				Default='EARTH'.
 
 		Returns:
 			ndarray: Velocity of TESS as geocentric XYZ-coordinates in kilometers per seconds.
@@ -425,7 +438,7 @@ class TESS_SPICE(object):
 		"""
 		return self.position_velocity(*args, **kwargs)[:, 3:]
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def sclk2jd(self, sclk):
 		"""
 		Convert spacecraft time to TDB Julian Dates (JD).
@@ -446,7 +459,7 @@ class TESS_SPICE(object):
 
 		return jd
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def barycorr(self, tm, star_coord):
 		"""
 		Barycentric time correction.
@@ -483,7 +496,7 @@ class TESS_SPICE(object):
 
 		return time.jd, timecorr.value
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def barycorr2(self, times, star_coord):
 		"""
 		Barycentric time correction (experimental).

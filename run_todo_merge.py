@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import argparse
+import logging
 import sqlite3
 import os.path
 import tempfile
@@ -9,11 +10,13 @@ from contextlib import closing
 import shutil
 import shlex
 import subprocess
-import sys
 
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description="Merge TODO-files after photometry has be re-run.")
+	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
+	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
 	parser.add_argument('todo', type=str, help="TODO-file from photometry.")
 	parser.add_argument('derived', type=str, help="TODO-file derived from corrections.")
@@ -22,6 +25,21 @@ if __name__ == '__main__':
 
 	fname_todo = args.todo
 	fname_derived = args.derived
+
+	# Set logging level:
+	logging_level = logging.INFO
+	if args.quiet:
+		logging_level = logging.WARNING
+	elif args.debug:
+		logging_level = logging.DEBUG
+
+	# Setup logging:
+	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+	console = logging.StreamHandler()
+	console.setFormatter(formatter)
+	logger = logging.getLogger(__name__)
+	logger.addHandler(console)
+	logger.setLevel(logging_level)
 
 	# Check that the files exists:
 	if not os.path.isfile(fname_todo):
@@ -34,13 +52,6 @@ if __name__ == '__main__':
 	if fname_final is None:
 		fname_final = os.path.join(os.path.abspath(os.path.dirname(fname_derived)), 'todo-combined.sqlite')
 
-	# Check if the final output file already exists:
-	if os.path.exists(fname_final):
-		if args.overwrite:
-			os.remove(fname_final)
-		else:
-			parser.error("File already exists")
-
 	# Read the tables that are available from the derived TODO-file:
 	with closing(sqlite3.connect(fname_derived)) as conn:
 		cursor = conn.cursor()
@@ -49,12 +60,19 @@ if __name__ == '__main__':
 
 		# TODO: Do checks of they can (or should!) be merged!
 
+	# Check if the final output file already exists:
+	if os.path.exists(fname_final):
+		if args.overwrite:
+			os.remove(fname_final)
+		else:
+			parser.error("File already exists")
+
 	# Start working in a tempoary directory to not risk leaving files lying around:
 	with tempfile.TemporaryDirectory() as tmpdir:
 		# The working copy of the file:
 		fname_combined = os.path.join(tmpdir, 'working.sqlite')
 
-		print("Copying existing file...")
+		logger.info("Copying existing file...")
 		shutil.copy(fname_todo, fname_combined)
 
 		# Clean out the list of tables to be dumped:
@@ -78,19 +96,21 @@ if __name__ == '__main__':
 				input=fname_derived,
 				output=tmpfile
 			))
+			logger.debug("Running command: %s", cmd)
 			subprocess.check_call(cmd, shell=True)
 
-		print("Inserting tables...")
+		logger.info("Inserting tables...")
 		cmd = shlex.split('cat "{output:s}" | sqlite3 -bail -batch "{input:s}"'.format(
 			input=fname_combined,
 			output=tmpfile
 		))
+		logger.debug("Running command: %s", cmd)
 		subprocess.check_call(cmd, shell=True)
 
-		print("Deleting SQL dump file...")
+		logger.info("Deleting SQL dump file...")
 		os.remove(tmpfile)
 
-		print("Transferring correction status...")
+		logger.info("Transferring correction status...")
 		with closing(sqlite3.connect(fname_combined)) as conn:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.cursor()
@@ -117,14 +137,14 @@ if __name__ == '__main__':
 			cursor.execute("CREATE INDEX IF NOT EXISTS corr_status_idx ON todolist (corr_status);")
 			conn.commit()
 
-			print("Analyzing database...")
+			logger.info("Analyzing database...")
 			cursor.execute("ANALYZE;")
 			conn.commit()
 
-			print("Vacuuming database...")
+			logger.info("Vacuuming database...")
 			conn.isolation_level = None
 			cursor.execute("VACUUM;")
 
 		# Move the finished file to the final destination:
-		print("Moving file to final destination...")
+		logger.info("Moving file to final destination...")
 		shutil.move(fname_combined, fname_final)
