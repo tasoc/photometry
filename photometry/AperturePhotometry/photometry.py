@@ -199,7 +199,7 @@ class AperturePhotometry(BasePhotometry):
 			# Calculate contamination metric as defined in Lund & Handberg (2014):
 			mags_in_mask = self.catalog[target_in_mask]['tmag']
 			mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
-			contamination = 1.0 - 10**(0.4*(mags_total - self.target_tmag))
+			contamination = 1.0 - 10**(0.4*(mags_total - self.target['tmag']))
 			contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
 
 		logger.info("Contamination: %f", contamination)
