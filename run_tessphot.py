@@ -143,6 +143,7 @@ def main():
 			# Construct result message:
 			result.update({
 				'status': pho.status,
+				'method_used': pho.method,
 				'time': t2 - t1,
 				'details': pho._details
 			})
