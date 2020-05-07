@@ -44,9 +44,12 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 
 	Parameters:
 		rootdir (string): Directory to search recursively for TESS FFI images.
-		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
-		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
-		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
+		sector (integer or None, optional): Only return files from the given sector.
+			If ``None``, files from all sectors are returned.
+		camera (integer or None, optional): Only return files from the given camera number (1-4).
+			If ``None``, files from all cameras are returned.
+		ccd (integer or None, optional): Only return files from the given CCD number (1-4).
+			If ``None``, files from all CCDs are returned.
 
 	Returns:
 		list: List of full paths to FFI FITS files found in directory. The list will
@@ -84,11 +87,16 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 
 	Parameters:
 		rootdir (string): Directory to search recursively for TESS TPF files.
-		starid (integer or None, optional): Only return files from the given TIC number. If ``None``, files from all TIC numbers are returned.
-		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
-		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
-		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
-		findmax (integer or None, optional): Maximum number of files to return. If ``None``, return all files.
+		starid (integer or None, optional): Only return files from the given TIC number.
+			If ``None``, files from all TIC numbers are returned.
+		sector (integer or None, optional): Only return files from the given sector.
+			If ``None``, files from all sectors are returned.
+		camera (integer or None, optional): Only return files from the given camera number (1-4).
+			If ``None``, files from all cameras are returned.
+		ccd (integer or None, optional): Only return files from the given CCD number (1-4).
+			If ``None``, files from all CCDs are returned.
+		findmax (integer or None, optional): Maximum number of files to return.
+			If ``None``, return all files.
 
 	Note:
 		Filtering on camera and/or ccd will cause the program to read the headers
@@ -152,9 +160,12 @@ def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 
 	Parameters:
 		rootdir (string): Directory to search for HDF5 files.
-		sector (integer, list or None, optional): Only return files from the given sectors. If ``None``, files from all TIC numbers are returned.
-		camera (integer, list or None, optional): Only return files from the given camera. If ``None``, files from all cameras are returned.
-		ccd (integer, list or None, optional): Only return files from the given ccd. If ``None``, files from all ccds are returned.
+		sector (integer, list or None, optional): Only return files from the given sectors.
+			If ``None``, files from all TIC numbers are returned.
+		camera (integer, list or None, optional): Only return files from the given camera.
+			If ``None``, files from all cameras are returned.
+		ccd (integer, list or None, optional): Only return files from the given ccd.
+			If ``None``, files from all ccds are returned.
 
 	Returns:
 		list: List of paths to HDF5 files matching constraints.
@@ -181,9 +192,12 @@ def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 
 	Parameters:
 		rootdir (string): Directory to search for CATALOG files.
-		sector (integer, list or None, optional): Only return files from the given sectors. If ``None``, files from all TIC numbers are returned.
-		camera (integer, list or None, optional): Only return files from the given camera. If ``None``, files from all cameras are returned.
-		ccd (integer, list or None, optional): Only return files from the given ccd. If ``None``, files from all ccds are returned.
+		sector (integer, list or None, optional): Only return files from the given sectors.
+			If ``None``, files from all TIC numbers are returned.
+		camera (integer, list or None, optional): Only return files from the given camera.
+			If ``None``, files from all cameras are returned.
+		ccd (integer, list or None, optional): Only return files from the given ccd.
+			If ``None``, files from all ccds are returned.
 
 	Returns:
 		list: List of paths to CATALOG files matching constraints.
@@ -285,7 +299,8 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	decrate = pm_dec/3600000.0  # in degrees/year (assuming original was in mas/year)
 	decindegrees = dec + timeelapsed*decrate
 
-	# Calculate the unprojected rate of RA motion, using the mean declination between the catalog and present epoch:
+	# Calculate the unprojected rate of RA motion, using the mean declination between
+	# the catalog and present epoch.
 	rarate = pm_ra/np.cos((dec + timeelapsed*decrate/2.0)*np.pi/180.0)/3600000.0  # in degress of RA/year (assuming original was in mas/year)
 	raindegrees = ra + timeelapsed*rarate
 
@@ -425,7 +440,8 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	Parameters:
 		time (ndarray): Timestamps in days.
 		flux (ndarray): Flux to calculate RMS for.
-		timescale (float, optional): Timescale to bin timeseries before calculating RMS. Default=1 hour.
+		timescale (float, optional): Timescale to bin timeseries before calculating RMS.
+			Default=1 hour.
 
 	Returns:
 		float: Robust RMS on specified timescale.
@@ -556,6 +572,11 @@ def download_parallel(urls, workers=4):
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
+
+	# Don't overcomplicate things for a singe file:
+	if len(urls) == 1:
+		download_file(urls[0][0], urls[0][1])
+		return
 
 	workers = min(workers, len(urls))
 	position_holders = [False] * workers
