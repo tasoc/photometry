@@ -134,11 +134,15 @@ class BasePhotometry(object):
 
 		# Store the input:
 		self.starid = starid
-		self.input_folder = input_folder
+		self.input_folder = os.path.abspath(os.path.dirname(input_folder))
 		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
 		self.version = version
+
+		# Further checks of inputs:
+		if not os.path.isdir(self.input_folder):
+			raise FileNotFoundError("Not a valid input directory: '%s'" % self.input_folder)
 
 		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
 
@@ -194,7 +198,7 @@ class BasePhotometry(object):
 			logger.debug('CCD = %s', self.ccd)
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+			filepath_hdf5 = find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
 				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
 			filepath_hdf5 = filepath_hdf5[0]
@@ -216,9 +220,7 @@ class BasePhotometry(object):
 
 			# Open the HDF5 file for reading if we are not holding everything in memory:
 			if load_into_cache or cache != 'full':
-				self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
-				#self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest', driver='mpio', comm=MPI.COMM_WORLD)
-				#self.hdf.atomic = False # Since we are only reading, this should be okay
+				self.hdf = h5py.File(filepath_hdf5, 'r')
 
 			if load_into_cache:
 				logger.debug('Loading basic data into cache...')
@@ -253,7 +255,7 @@ class BasePhotometry(object):
 				attrs['readnoise'] = self.hdf['images'].attrs.get('READNOIS', 10)
 				attrs['gain'] = self.hdf['images'].attrs.get('GAIN', 100)
 				attrs['num_frm'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
-				attrs['n_readout'] = self.hdf['images'].attrs.get('NREADOUT', int(attrs['num_frm']*(1-2/self.hdf['images'].attrs.get('CRBLKSZ', np.inf)))) # Number of frames co-added in each timestamp (Default=TESS).
+				attrs['n_readout'] = self.hdf['images'].attrs.get('NREADOUT', int(attrs['num_frm']*(1-2/self.hdf['images'].attrs.get('CRBLKSZ', np.inf)))) # Number of readouts
 
 				# Load MovementKernel into memory:
 				attrs['_MovementKernel'] = self.MovementKernel
@@ -297,7 +299,7 @@ class BasePhotometry(object):
 				starid_to_load = self.starid
 
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(input_folder, sector=sector, starid=starid_to_load)
+			fname = find_tpf_files(self.input_folder, sector=sector, starid=starid_to_load)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
@@ -350,17 +352,17 @@ class BasePhotometry(object):
 			self.n_readout = self.tpf['PIXELS'].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+			filepath_hdf5 = find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
 				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
 			filepath_hdf5 = filepath_hdf5[0]
-			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
+			self.hdf = h5py.File(filepath_hdf5, 'r')
 
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)
 
 		# The file to load the star catalog from:
-		self.catalog_file = find_catalog_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+		self.catalog_file = find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 		self._catalog = None
 		logger.debug('Catalog file: %s', self.catalog_file)
 		if len(self.catalog_file) != 1:
