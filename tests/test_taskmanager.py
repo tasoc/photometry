@@ -125,10 +125,20 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			result = task.copy()
 			result['status'] = STATUS.OK
 			result['time'] = 3.14
+			result['method_used'] = 'aperture'
 
 			# Save the result:
 			tm.save_result(result)
 			tm.write_summary()
+
+			# Check that the diagnostics were updated:
+			tm.cursor.execute("SELECT * FROM diagnostics WHERE priority=?;", [task['priority']])
+			row = tm.cursor.fetchone()
+			print(dict(row))
+			assert row['priority'] == task['priority']
+			assert row['starid'] == task['starid']
+			assert row['elaptime'] == 3.14
+			assert row['method_used'] == 'aperture'
 
 			# Load the summary file after "running the task":
 			with open(summary_file, 'r') as fid:
@@ -155,6 +165,7 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			result = task.copy()
 			result['status'] = STATUS.ERROR
 			result['time'] = 6.14
+			result['method_used'] = 'halo'
 			result['details'] = {
 				'errors': ['dummy error 1', 'dummy error 2']
 			}
@@ -162,6 +173,16 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			# Save the result:
 			tm.save_result(result)
 			tm.write_summary()
+
+			# Check that the diagnostics were updated:
+			tm.cursor.execute("SELECT * FROM diagnostics WHERE priority=?;", [task['priority']])
+			row = tm.cursor.fetchone()
+			print(dict(row))
+			assert row['priority'] == task['priority']
+			assert row['starid'] == task['starid']
+			assert row['elaptime'] == 6.14
+			assert row['method_used'] == 'halo'
+			assert row['errors'] == "dummy error 1\ndummy error 2"
 
 			# Load the summary file after "running the task":
 			with open(summary_file, 'r') as fid:
