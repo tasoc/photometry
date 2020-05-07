@@ -134,13 +134,15 @@ class BasePhotometry(object):
 
 		# Store the input:
 		self.starid = starid
-		self.input_folder = os.path.abspath(os.path.dirname(input_folder))
+		self.input_folder = os.path.abspath(input_folder)
 		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
 		self.version = version
 
 		# Further checks of inputs:
+		if os.path.isfile(self.input_folder):
+			self.input_folder = os.path.dirname(self.input_folder)
 		if not os.path.isdir(self.input_folder):
 			raise FileNotFoundError("Not a valid input directory: '%s'" % self.input_folder)
 

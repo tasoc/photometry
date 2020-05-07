@@ -120,8 +120,10 @@ class PSF(object):
 		Integrate the underlying high-res PSF onto pixels.
 
 		Parameters:
-			params (iterator, numpy.array): List of stars to add to image. Should be an iterator where each element is an numpy array with three elements: row, column and flux.
-			cutoff_radius (float, optional): Maximal radius away from center of star in pixels to integrate PSF model.
+			params (iterator, numpy.array): List of stars to add to image. Should be an iterator
+				where each element is an numpy array with three elements: row, column and flux.
+			cutoff_radius (float, optional): Maximal radius away from center of star in pixels
+				to integrate PSF model.
 
 		Returns:
 			numpy.array: Image
