@@ -234,7 +234,8 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 	"""
 
 	# Basic input checks:
-	assert mode in ('originals', 'images', 'backgrounds', 'flags'), "Invalid MODE specified"
+	if mode not in ('originals', 'images', 'backgrounds', 'flags'):
+		raise ValueError("Invalid MODE specified")
 
 	logger = logging.getLogger(__name__)
 	tqdm_settings = {'disable': not logger.isEnabledFor(logging.INFO)}

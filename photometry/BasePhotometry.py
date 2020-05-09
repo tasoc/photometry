@@ -120,7 +120,7 @@ class BasePhotometry(object):
 			version (integer): Data release number to be added to headers. Default=5.
 
 		Raises:
-			OSError: If starid could not be found in catalog.
+			Exception: If starid could not be found in catalog.
 			FileNotFoundError: If input file (HDF5, TPF, Catalog) could not be found.
 			ValueError: On invalid datasource.
 			ValueError: If ``camera`` and ``ccd`` is not provided together with ``datasource='ffi'``.
@@ -147,7 +147,7 @@ class BasePhotometry(object):
 		if not os.path.isdir(self.input_folder):
 			raise FileNotFoundError("Not a valid input directory: '%s'" % self.input_folder)
 
-		# Extract which photmetric method that is being used by checking the
+		# Extract which photometric method that is being used by checking the
 		# name of the class that is running:
 		self.method = {
 			'BasePhotometry': 'base',
@@ -302,7 +302,7 @@ class BasePhotometry(object):
 			for key, value in attrs.items():
 				setattr(self, key, value)
 
-		elif self.datasource.startswith('tpf'):
+		else:
 			# If the datasource was specified as 'tpf:starid' it means
 			# that we should load from the specified starid instead of
 			# the starid of the current main target.
@@ -372,9 +372,6 @@ class BasePhotometry(object):
 			filepath_hdf5 = filepath_hdf5[0]
 			self.hdf = h5py.File(filepath_hdf5, 'r')
 
-		else:
-			raise ValueError("Invalid datasource: '%s'" % self.datasource)
-
 		# The file to load the star catalog from:
 		self.catalog_file = find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 		self._catalog = None
@@ -390,7 +387,7 @@ class BasePhotometry(object):
 			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
 			target = cursor.fetchone()
 			if target is None:
-				raise OSError("Star could not be found in catalog: {0:d}".format(self.starid))
+				raise Exception("Star could not be found in catalog: {0:d}".format(self.starid))
 			self.target = dict(target) # Dictionary of all main target properties.
 			self.target_tmag = target['tmag'] # TESS magnitude of the main target.
 			self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.

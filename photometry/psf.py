@@ -46,9 +46,14 @@ class PSF(object):
 		"""
 
 		# Simple input checks:
-		assert sector >= 1, "Sector number must be greater than zero"
-		assert camera in (1,2,3,4), "Camera must be 1, 2, 3 or 4."
-		assert ccd in (1,2,3,4), "CCD must be 1, 2, 3 or 4."
+		if sector < 1:
+			raise ValueError("Sector number must be greater than zero")
+		if camera not in (1, 2, 3, 4):
+			raise ValueError("Camera must be 1, 2, 3 or 4.")
+		if ccd not in (1, 2, 3, 4):
+			raise ValueError("CCD must be 1, 2, 3 or 4.")
+		if len(stamp) != 4:
+			raise ValueError("Incorrect stamp provided.")
 
 		# Store information given in call:
 		self.sector = sector
@@ -102,8 +107,7 @@ class PSF(object):
 			prfWeight = np.sqrt((self.ref_column - crval1p)**2 + (self.ref_row - crval2p)**2)
 
 			# Catch too small weights
-			if prfWeight < minimum_prf_weight:
-				prfWeight = minimum_prf_weight
+			prfWeight = max(prfWeight, minimum_prf_weight)
 
 			# Add the weighted values to the PRF array:
 			prf += prfn / prfWeight

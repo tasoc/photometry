@@ -21,6 +21,40 @@ DUMMY_TARGET = 260795451
 DUMMY_KWARG = {'sector': 1, 'camera': 3, 'ccd': 2}
 
 #--------------------------------------------------------------------------------------------------
+def test_basephotometry_invalid_input(SHARED_INPUT_DIR):
+	with TemporaryDirectory() as OUTPUT_DIR:
+
+		# Test invalid datatype:
+		with pytest.raises(ValueError) as e:
+			with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='invalid', **DUMMY_KWARG):
+				pass
+		assert str(e.value) == "Invalid datasource: 'invalid'"
+
+		# Test invalid cache option:
+		with pytest.raises(ValueError) as e:
+			with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', cache='invalid', **DUMMY_KWARG):
+				pass
+		assert str(e.value) == "Invalid cache: 'invalid'"
+
+		# Test an input directory that does not exist:
+		with pytest.raises(FileNotFoundError) as e:
+			with BasePhotometry(DUMMY_TARGET, 'does/not/exist', OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG):
+				pass
+		assert str(e.value).startswith('Not a valid input directory: ')
+
+		# Test asking for FFI target without providing SECTOR, CAMERA and CCD:
+		with pytest.raises(ValueError) as e:
+			with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi'):
+				pass
+		assert str(e.value) == "SECTOR, CAMERA and CCD keywords must be provided for FFI targets."
+
+		# Test target not in the catalog:
+		with pytest.raises(Exception) as e:
+			with BasePhotometry(0, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG):
+				pass
+		assert str(e.value) == "Star could not be found in catalog: 0"
+
+#--------------------------------------------------------------------------------------------------
 def test_stamp(SHARED_INPUT_DIR):
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
@@ -55,6 +89,44 @@ def test_stamp(SHARED_INPUT_DIR):
 			print(cols.shape)
 			assert(rows.shape == (22, 20))
 			assert(cols.shape == (22, 20))
+
+			pho.resize_stamp(down=2)
+			cols, rows = pho.get_pixel_grid()
+			print('Rows:')
+			print(rows)
+			print(rows.shape)
+			print('Cols:')
+			print(cols)
+			print(cols.shape)
+			assert(rows.shape == (24, 20))
+			assert(cols.shape == (24, 20))
+
+			pho.resize_stamp(right=3)
+			cols, rows = pho.get_pixel_grid()
+			print('Rows:')
+			print(rows)
+			print(rows.shape)
+			print('Cols:')
+			print(cols)
+			print(cols.shape)
+			assert(rows.shape == (24, 23))
+			assert(cols.shape == (24, 23))
+
+			pho.resize_stamp(left=3)
+			cols, rows = pho.get_pixel_grid()
+			print('Rows:')
+			print(rows)
+			print(rows.shape)
+			print('Cols:')
+			print(cols)
+			print(cols.shape)
+			assert(rows.shape == (24, 26))
+			assert(cols.shape == (24, 26))
+
+			# Set a stamp that is not going to work:
+			with pytest.raises(ValueError) as e:
+				pho.resize_stamp(left=-100, right=-100)
+			assert str(e.value) == "Invalid stamp selected"
 
 #--------------------------------------------------------------------------------------------------
 def test_stamp_width_height(SHARED_INPUT_DIR):
