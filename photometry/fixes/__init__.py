@@ -6,4 +6,4 @@ This submodule contains auxullary functions for making specific fixes to data ne
 in some specific cases.
 """
 
-from .time_offset import *
+from .time_offset import time_offset

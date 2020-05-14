@@ -451,11 +451,9 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				SumImage /= Nimg
 
 				# Correct timestamp offset that was in early data releases:
-				fixed_time_offset = fixes.time_offset_needed(datarel=attributes['DATA_REL'], procver=attributes['PROCVER'])
-				if fixed_time_offset:
-					time_start = fixes.time_offset_apply(time_start, 'start')
-					time_stop = fixes.time_offset_apply(time_stop, 'end')
-					time = fixes.time_offset_apply(time, 'mid')
+				time_start, fixed_time_offset = fixes.time_offset(time_start, attributes, timepos='start')
+				time_stop, fixed_time_offset = fixes.time_offset(time_stop, attributes, timepos='end')
+				time, fixed_time_offset = fixes.time_offset(time, attributes, timepos='mid')
 
 				# Single boolean image indicating if the pixel was (on average) used in the background estimation:
 				if 'backgrounds_pixels_used' not in hdf:

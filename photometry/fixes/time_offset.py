@@ -35,9 +35,12 @@ For the troublesome sectors 20 and 21, there were two data releases with the sam
 data release numbers. The only way of distinguishing between them is to use
 the PROCVER header keyword, which unfortunately wasn't saved in the HDF5
 files in earlier versions of the pipeline. In that case, the "prepare" stage will have
-to be re-run and HDF5 file re-created..
+to be re-run and HDF5 file re-created.
 
 .. seealso::
+
+	Sector 18 data release notes 25, section 3.3:
+		https://tasoc.dk/docs/release_notes/tess_sector_18_drn25_v02.pdf
 
 	Memos on revisions of TESS data releases 27 and 29
 		https://tasoc.dk/docs/release_notes/tess_s20_dr27_data_product_revision_memo_v01.pdf
@@ -46,73 +49,23 @@ to be re-run and HDF5 file re-created..
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-#--------------------------------------------------------------------------------------------------
-def time_offset_needed(header=None, datarel=None, procver=None):
-	"""
-	Should time offset correction be applied to this data?
-
-	Parameters:
-		header (dict, optional): Header from TPF, FFI or HDF5 file.
-		datarel (int, optional): TESS Data Release number.
-		procver (str, optional): PROCVER header value. Indicates processing pipeline version.
-
-	Returns:
-		bool: Returns True if corrections to timestamps are needed, false otherwise.
-
-	Raises:
-		ValueError: If wrong combination of input parameters.
-
-	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
-	"""
-
-	already_corrected = False
-	if header is not None:
-		datarel = int(header['DATA_REL'])
-		procver = header.get('PROCVER', None)
-		already_corrected = bool(header.get('TIME_OFFSET_CORRECTED', False))
-	elif datarel is None:
-		raise ValueError("Either HEADER or DATAREL must be provided.")
-
-	# If correction already applied or for later data
-	# releases no correction should be applied:
-	if already_corrected or datarel > 29:
-		return False
-
-	# For these early data releases, a correction is needed:
-	if datarel <= 26:
-		return True
-
-	# For these troublesome sectors, there were two data releases with the same
-	# data release numbers. The only way of distinguishing between them is to use
-	# the PROCVER header keyword, which unfortunately wasn't saved in the HDF5
-	# files in earlier versions of the pipeline. In that case, we have to throw
-	# an error and tell users to re-run prepare:
-	if datarel in (27, 29) and procver is None:
-		raise Exception("""The timestamps of these data may need to be corrected,
-			but the PROCVER header is not present. HDF5 files may need to be re-created.""")
-
-	if datarel == 27 \
-		and procver in ('spoc-4.0.14-20200108', 'spoc-4.0.15-20200114', 'spoc-4.0.17-20200130'):
-		return True
-
-	elif datarel == 29 \
-		and procver in ('spoc-4.0.17-20200130', 'spoc-4.0.20-20200220', 'spoc-4.0.21-20200227'):
-		return True
-
-	return False
+import logging
 
 #--------------------------------------------------------------------------------------------------
-def time_offset_apply(time, timepos='mid'):
+def time_offset(time, header, datatype='ffi', timepos='mid'):
 	"""
 	Apply time offset correction to array of timestamps.
 
 	Parameters:
 		time (ndarray): Array of timestamps in days.
+		header (dict, optional): Header from TPF, FFI or HDF5 file.
 		timepos (str, optional): At what time during exposure are times indicating?
 			Choices are ``'mid'``, ``'start'`` and ``'end'``. Default is ``'mid'``.
 
 	Returns:
-		ndarray: Corrected timestamps in days.
+		tuple:
+		- ndarray: Corrected timestamps in days.
+		- bool: True if corrections to timestamps were needed, false otherwise.
 
 	Raises:
 		ValueError: If invalid timepos.
@@ -120,11 +73,70 @@ def time_offset_apply(time, timepos='mid'):
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	if timepos == 'mid':
-		return time - 1.979 / 86400 # 2.000 - 0.021
-	elif timepos == 'start':
-		return time - 1.969 / 86400 # 2.000 - 0.031
-	elif timepos == 'end':
-		return time - 1.989 / 86400 # 2.000 - 0.011
+	logger = logging.getLogger(__name__)
 
-	raise ValueError("Invalid TIMEPOS")
+	camera = int(header['CAMERA'])
+	datarel = int(header['DATA_REL'])
+	#datatype = 'ffi' if ???? else 'tpf'
+	procver = header.get('PROCVER', None)
+	already_corrected = bool(header.get('TIME_OFFSET_CORRECTED', False))
+
+	if timepos not in ('start', 'mid', 'end'):
+		raise ValueError("Invalid TIMEPOS")
+
+	# If correction already applied or for later data
+	# releases no correction should be applied:
+	if already_corrected or datarel > 29:
+		apply_correction = False
+
+	# For these early data releases, a correction is needed:
+	elif datarel <= 26:
+		apply_correction = True
+
+	# For these troublesome sectors, there were two data releases with the same
+	# data release numbers. The only way of distinguishing between them is to use
+	# the PROCVER header keyword, which unfortunately wasn't saved in the HDF5
+	# files in earlier versions of the pipeline. In that case, we have to throw
+	# an error and tell users to re-run prepare:
+	elif datarel in (27, 29) and procver is None:
+		raise Exception("""The timestamps of these data may need to be corrected,
+			but the PROCVER header is not present. HDF5 files may need to be re-created.""")
+
+	elif datarel == 27 \
+		and procver in ('spoc-4.0.14-20200108', 'spoc-4.0.15-20200114', 'spoc-4.0.17-20200130'):
+		apply_correction = True
+
+	elif datarel == 29 \
+		and procver in ('spoc-4.0.17-20200130', 'spoc-4.0.20-20200220', 'spoc-4.0.21-20200227'):
+		apply_correction = True
+
+	else:
+		apply_correction = False
+
+	if apply_correction:
+		logger.debug("Fixes: Applying time offset correction")
+
+		# Early releases of FFIs (sectors 1-19, DR 1-26) suffer from
+		# differences between timestamps depending on camera:
+		staggered_readout = 0
+		if datatype == 'ffi' and datarel <= 26:
+			staggered_readout = {
+				1: 0.0,
+				2: 1.5,
+				3: 0.5,
+				4: 1.0
+			}[camera]
+
+		if timepos == 'mid':
+			time = time + (staggered_readout - 2.000 + 0.021) / 86400
+
+		elif timepos == 'start':
+			time = time + (staggered_readout - 2.000 + 0.031) / 86400
+
+		elif timepos == 'end':
+			time = time + (staggered_readout - 2.000 + 0.011) / 86400
+
+	else:
+		logger.debug("Fixes: Not applying time offset correction")
+
+	return time, apply_correction
