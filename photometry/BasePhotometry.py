@@ -243,7 +243,7 @@ class BasePhotometry(object):
 					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
 
 				# Correct timestamp offset that was in early data releases:
-				self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], hdr)
+				self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], hdr, datatype='ffi')
 
 				attrs['lightcurve'] = self.lightcurve
 
@@ -376,7 +376,7 @@ class BasePhotometry(object):
 			self.hdf = h5py.File(filepath_hdf5, 'r')
 
 			# Correct timestamp offset that was in early data releases:
-			self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], self.header)
+			self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], self.header, datatype='tpf')
 
 		else:
 			raise ValueError("Invalid datasource: '%s'" % self.datasource)
