@@ -72,6 +72,7 @@ class BasePhotometry(object):
 		output_folder (str): Root directory where output files are saved.
 		plot (bool): Indicates wheter plots should be created as part of the output.
 		plot_folder (str): Directory where plots are saved to.
+		method (str): String indication the method of photometry.
 
 		sector (int): TESS observing sector.
 		camera (int): TESS camera (1-4).
@@ -122,7 +123,7 @@ class BasePhotometry(object):
 			version (integer): Data release number to be added to headers. Default=5.
 
 		Raises:
-			OSError: If starid could not be found in catalog.
+			Exception: If starid could not be found in catalog.
 			FileNotFoundError: If input file (HDF5, TPF, Catalog) could not be found.
 			ValueError: On invalid datasource.
 			ValueError: If ``camera`` and ``ccd`` is not provided together with ``datasource='ffi'``.
@@ -137,17 +138,30 @@ class BasePhotometry(object):
 
 		# Store the input:
 		self.starid = starid
-		self.input_folder = os.path.abspath(os.path.dirname(input_folder))
+		self.input_folder = os.path.abspath(input_folder)
 		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
 		self.version = version
 
 		# Further checks of inputs:
+		if os.path.isfile(self.input_folder):
+			self.input_folder = os.path.dirname(self.input_folder)
 		if not os.path.isdir(self.input_folder):
 			raise FileNotFoundError("Not a valid input directory: '%s'" % self.input_folder)
 
-		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
+		# Extract which photometric method that is being used by checking the
+		# name of the class that is running:
+		self.method = {
+			'BasePhotometry': 'base',
+			'AperturePhotometry': 'aperture',
+			'PSFPhotometry': 'psf',
+			'LinPSFPhotometry': 'linpsf',
+			'HaloPhotometry': 'halo'
+		}.get(self.__class__.__name__, None)
+
+		logger.info('STARID = %d, DATASOURCE = %s, METHOD = %s',
+			self.starid, self.datasource, self.method)
 
 		self._status = STATUS.UNKNOWN
 		self._details = {}
@@ -303,7 +317,7 @@ class BasePhotometry(object):
 			for key, value in attrs.items():
 				setattr(self, key, value)
 
-		elif self.datasource.startswith('tpf'):
+		else:
 			# If the datasource was specified as 'tpf:starid' it means
 			# that we should load from the specified starid instead of
 			# the starid of the current main target.
@@ -378,9 +392,6 @@ class BasePhotometry(object):
 			# Correct timestamp offset that was in early data releases:
 			self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], self.header, datatype='tpf')
 
-		else:
-			raise ValueError("Invalid datasource: '%s'" % self.datasource)
-
 		# The file to load the star catalog from:
 		self.catalog_file = find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 		self._catalog = None
@@ -396,7 +407,7 @@ class BasePhotometry(object):
 			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
 			target = cursor.fetchone()
 			if target is None:
-				raise OSError("Star could not be found in catalog: {0:d}".format(self.starid))
+				raise Exception("Star could not be found in catalog: {0:d}".format(self.starid))
 			self.target = dict(target) # Dictionary of all main target properties.
 			self.target_tmag = target['tmag'] # TESS magnitude of the main target.
 			self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
@@ -1403,16 +1414,6 @@ class BasePhotometry(object):
 		# Get the current date for the files:
 		now = datetime.datetime.now()
 
-		# Extract which photmetric method is being used by checking the
-		# name of the class that is running:
-		photmethod = {
-			'BasePhotometry': 'base',
-			'AperturePhotometry': 'aperture',
-			'PSFPhotometry': 'psf',
-			'LinPSFPhotometry': 'linpsf',
-			'HaloPhotometry': 'halo'
-		}.get(self.__class__.__name__, None)
-
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3 + int(hasattr(self, 'halo_weightmap')), 'number of standard extensions')
@@ -1433,7 +1434,7 @@ class BasePhotometry(object):
 		hdu.header['FILEVER'] = ('1.4', 'File format version')
 		hdu.header['DATA_REL'] = (self.data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
-		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
+		hdu.header['PHOTMET'] = (self.method, 'Photometric method used')
 
 		# Object properties:
 		if self.target['pm_ra'] is None or self.target['pm_decl'] is None:
