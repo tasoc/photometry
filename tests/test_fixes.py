@@ -10,7 +10,7 @@ import pytest
 import numpy as np
 import os.path
 import sys
-#from astropy.io import fits
+from astropy.table import Table
 import json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from photometry import fixes
@@ -20,7 +20,6 @@ TOFFDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'input', 'time
 #--------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_invalid_input():
 	time = np.linspace(1000, 2000, 100)
-	hdr = {'DATA_REL': 0, 'CAMERA': 1, 'PROCVER': 'shouldnt-matter'}
 
 	# Check that it raises an KeyError for missing CAMERA:
 	hdr = {'DATA_REL': 1}
@@ -36,6 +35,15 @@ def test_fixes_time_offset_invalid_input():
 	hdr = {'DATA_REL': 27, 'CAMERA': 1}
 	with pytest.raises(ValueError):
 		fixes.time_offset(time, hdr, timepos='invalid-input')
+
+	# The cases of data release 27 and 29 and no PROCVER:
+	hdr = {'DATA_REL': 27, 'CAMERA': 1, 'PROCVER': None}
+	with pytest.raises(Exception):
+		fixes.time_offset(time, hdr)
+
+	hdr = {'DATA_REL': 29, 'CAMERA': 2, 'PROCVER': None}
+	with pytest.raises(Exception):
+		fixes.time_offset(time, hdr)
 
 #--------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_s20():
@@ -60,6 +68,43 @@ def test_fixes_time_offset_s20():
 	time1_corrected, fixed = fixes.time_offset(time1, hdr1, datatype='tpf', timepos='mid', return_flag=True)
 	assert fixed, "S20v1 data should be fixed"
 	np.testing.assert_allclose(time1_corrected, time2, equal_nan=True, rtol=1e-11, atol=1e-11)
+
+#--------------------------------------------------------------------------------------------------
+def test_fixes_time_offset_ffis():
+
+	# Load list of timestamps from FFIs from several sectors and data releases:
+	tab = Table.read(os.path.join(TOFFDIR, 'ffis.ecsv'), format='ascii.ecsv')
+
+	# Loop through the tables, create a fake header of the FFI
+	# and check that we get the same result from the correction
+	# as the updated official data products:
+	for row in tab:
+		hdr = {
+			'DATA_REL': row['data_rel'],
+			'PROCVER': row['procver'],
+			'CAMERA': row['camera'],
+			'CCD': row['ccd']
+		}
+		print(hdr)
+
+		time_mid = 0.5*(row['time_start'] + row['time_stop'])
+
+		time1_start_corrected, fixed = fixes.time_offset(row['time_start'], hdr, datatype='ffi', timepos='start', return_flag=True)
+		assert fixed, "S20v1 data should be fixed"
+
+		time1_mid_corrected, fixed = fixes.time_offset(time_mid, hdr, datatype='ffi', timepos='mid', return_flag=True)
+		assert fixed, "S20v1 data should be fixed"
+
+		time1_stop_corrected, fixed = fixes.time_offset(row['time_stop'], hdr, datatype='ffi', timepos='end', return_flag=True)
+		assert fixed, "S20v1 data should be fixed"
+
+		print( (time1_start_corrected - row['time_start_corrected'])*86400 )
+		print( (time1_mid_corrected - row['time_mid_corrected'])*86400 )
+		print( (time1_stop_corrected - row['time_stop_corrected'])*86400 )
+
+		np.testing.assert_allclose(time1_start_corrected, row['time_start_corrected'], equal_nan=True, rtol=1e-11, atol=1e-11)
+		np.testing.assert_allclose(time1_mid_corrected, row['time_mid_corrected'], equal_nan=True, rtol=1e-11, atol=1e-11)
+		np.testing.assert_allclose(time1_stop_corrected, row['time_stop_corrected'], equal_nan=True, rtol=1e-11, atol=1e-11)
 
 #--------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_s21():
@@ -89,7 +134,7 @@ def test_fixes_time_offset_s21():
 def test_fixes_time_offset():
 
 	time = np.linspace(1000, 2000, 100)
-	hdr = {'DATA_REL': 0, 'CAMERA': 1, 'PROCVER': 'shouldnt-matter'}
+	hdr = {'DATA_REL': 0, 'CAMERA': 1, 'CCD': 3, 'PROCVER': 'shouldnt-matter'}
 
 	# Early releases that should be corrected:
 	for data_rel in range(1, 27):
@@ -130,19 +175,13 @@ def test_fixes_time_offset():
 	print(hdr21)
 	assert fixes.time_offset(time, hdr21, return_flag=True)[1] == False
 
-	# Check basic input:
-
-	hdr = {'DATA_REL': 29}
-	with pytest.raises(Exception):
-		fixes.time_offset(header=hdr)
-
 #--------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_apply():
 
 	time = np.linspace(1000, 2000, 200, dtype='float64')
-	hdr = {'DATA_REL': 27, 'CAMERA': 1, 'PROCVER': 'spoc-4.0.15-20200114'}
+	hdr = {'DATA_REL': 27, 'CAMERA': 1, 'CCD': 3, 'PROCVER': 'spoc-4.0.15-20200114'}
 
-	time_corrected_mid1, fixed1 = fixes.time_offset(time, hdr, return_flag=True)
+	time_corrected_mid1, fixed1 = fixes.time_offset(time, hdr, datatype='tpf', return_flag=True)
 	time_corrected_mid2, fixed2 = fixes.time_offset(time, hdr, datatype='tpf', timepos='mid', return_flag=True)
 
 	# Calling with and without timepos should yield the same result:

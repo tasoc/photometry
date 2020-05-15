@@ -7,6 +7,10 @@ Corrections of time offset present in early data releases of TESS Data (sectors 
   are offset by 0.5 seconds, in the order camera 1, camera 3, camera 4, camera 2.
   This applies to FFIs only.
 
+* The staggered readouts of the four CCDs within a camera: the readouts of the four
+  CCDs are staggered by 0.020 seconds, in the order CCD 1, CCD 2, CCD 3, CCD 4.
+  This applies to FFIs only.
+
 * A correction to an error in calculation the start and end times of 2m and 30m data: these
   values were too high by 2.0 seconds in the original data products.
 
@@ -81,15 +85,14 @@ def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 
 	logger = logging.getLogger(__name__)
 
-	camera = int(header['CAMERA'])
 	datarel = int(header['DATA_REL'])
-	#datatype = 'ffi' if ???? else 'tpf'
 	procver = header.get('PROCVER', None)
 	already_corrected = bool(header.get('TIME_OFFSET_CORRECTED', False))
 
 	if timepos not in ('start', 'mid', 'end'):
 		raise ValueError("Invalid TIMEPOS")
 
+	datarel27_first_release = False
 	# If correction already applied or for later data
 	# releases no correction should be applied:
 	if already_corrected or datarel > 29:
@@ -110,6 +113,7 @@ def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 
 	elif datarel == 27 \
 		and procver in ('spoc-4.0.14-20200108', 'spoc-4.0.15-20200114', 'spoc-4.0.17-20200130'):
+		datarel27_first_release = True
 		apply_correction = True
 
 	elif datarel == 29 \
@@ -122,16 +126,26 @@ def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 	if apply_correction:
 		logger.debug("Fixes: Applying time offset correction")
 
-		# Early releases of FFIs (sectors 1-19, DR 1-26) suffer from
+		# Early releases of FFIs (sectors 1-20, DR 1-27) suffer from
 		# differences between timestamps depending on camera:
 		staggered_readout = 0
-		if datatype == 'ffi' and datarel <= 26:
+		if datatype == 'ffi' and (datarel <= 26 or datarel27_first_release):
+			camera = int(header['CAMERA'])
+			ccd = int(header['CCD'])
+
 			staggered_readout = {
-				1: 0.0,
-				2: 1.5,
-				3: 0.5,
-				4: 1.0
+				1: 0.000,
+				2: 1.500,
+				3: 0.500,
+				4: 1.000
 			}[camera]
+
+			staggered_readout += {
+				1: 0.000,
+				2: 0.020,
+				3: 0.040,
+				4: 0.060
+			}[ccd]
 
 		if timepos == 'mid':
 			time = time + (staggered_readout - 2.000 + 0.021) / 86400
