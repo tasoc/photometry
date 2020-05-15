@@ -3,6 +3,10 @@
 """
 Corrections of time offset present in early data releases of TESS Data (sectors 1-21).
 
+* The staggered readouts of the four cameras: the two-second integrations in the cameras
+  are offset by 0.5 seconds, in the order camera 1, camera 3, camera 4, camera 2.
+  This applies to FFIs only.
+
 * A correction to an error in calculation the start and end times of 2m and 30m data: these
   values were too high by 2.0 seconds in the original data products.
 
@@ -61,7 +65,8 @@ def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 		header (dict, optional): Header from TPF, FFI or HDF5 file.
 		timepos (str, optional): At what time during exposure are times indicating?
 			Choices are ``'mid'``, ``'start'`` and ``'end'``. Default is ``'mid'``.
-		return_flag (bool, optional):
+		return_flag (bool, optional): Also return the flag indication wheter the
+			timestamps were corrected.
 
 	Returns:
 		tuple:
