@@ -76,7 +76,9 @@ class BasePhotometry(object):
 		sector (int): TESS observing sector.
 		camera (int): TESS camera (1-4).
 		ccd (int): TESS CCD (1-4).
+		data_rel (int): Data release number.
 		n_readout (int): Number of frames co-added in each timestamp.
+		header (dict-like): Primary header, either from TPF or HDF5 files.
 
 		target (dict): Catalog information about the main target.
 		target_mag (float): TESS magnitude of the main target.
@@ -221,7 +223,6 @@ class BasePhotometry(object):
 			logger.debug("CACHE = %s", cache)
 			load_into_cache = False
 			if cache == 'none':
-				attrs = {}
 				load_into_cache = True
 			else:
 				global hdf5_cache
@@ -230,7 +231,6 @@ class BasePhotometry(object):
 					load_into_cache = True
 				elif cache == 'full' and hdf5_cache[filepath_hdf5].get('_images_cube_full') is None:
 					load_into_cache = True
-				attrs = hdf5_cache[filepath_hdf5] # Pointer to global variable
 
 			# Open the HDF5 file for reading if we are not holding everything in memory:
 			if load_into_cache or cache != 'full':
@@ -238,6 +238,12 @@ class BasePhotometry(object):
 
 			if load_into_cache:
 				logger.debug('Loading basic data into cache...')
+				attrs = {}
+
+				# Just a shorthand for the attributes we use as "headers":
+				hdr = dict(self.hdf['images'].attrs)
+				attrs['header'] = hdr
+				attrs['data_rel'] = hdr['DATA_REL'] # Data release number
 
 				# Start filling out the basic vectors:
 				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
@@ -262,20 +268,23 @@ class BasePhotometry(object):
 
 				# Get shape of sumimage from hdf5 file:
 				attrs['_max_stamp'] = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
-				attrs['pixel_offset_row'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-				attrs['pixel_offset_col'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
+				attrs['pixel_offset_row'] = hdr.get('PIXEL_OFFSET_ROW', 0)
+				attrs['pixel_offset_col'] = hdr.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
 
 				# Get info for psf fit Gaussian statistic:
-				attrs['readnoise'] = self.hdf['images'].attrs.get('READNOIS', 10)
-				attrs['gain'] = self.hdf['images'].attrs.get('GAIN', 100)
-				attrs['num_frm'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
-				attrs['n_readout'] = self.hdf['images'].attrs.get('NREADOUT', int(attrs['num_frm']*(1-2/self.hdf['images'].attrs.get('CRBLKSZ', np.inf)))) # Number of readouts
+				attrs['readnoise'] = hdr.get('READNOIS', 10)
+				attrs['gain'] = hdr.get('GAIN', 100)
+				attrs['num_frm'] = hdr.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
+				attrs['n_readout'] = hdr.get('NREADOUT', int(attrs['num_frm']*(1-2/hdr.get('CRBLKSZ', np.inf)))) # Number of readouts
 
 				# Load MovementKernel into memory:
 				attrs['_MovementKernel'] = self.MovementKernel
 
 				# The full sum-image:
 				attrs['_sumimage_full'] = np.asarray(self.hdf['sumimage'])
+
+				# Store attr in global variable:
+				hdf5_cache[filepath_hdf5] = deepcopy(attrs)
 
 				# If we are doing a full cache (everything in memory) load the image cubes as well.
 				# Note that this will take up A LOT of memory!
@@ -296,9 +305,10 @@ class BasePhotometry(object):
 					self.hdf = None
 			else:
 				logger.debug('Loaded data from cache!')
+				attrs = hdf5_cache[filepath_hdf5] # Pointer to global variable
 
 			# Set all the attributes from the cache:
-			# TODO: Does this create copies of data - if so we should mayde delete "attrs" again?
+			# TODO: Does this create copies of data? - if so we should mayde delete "attrs" again?
 			for key, value in attrs.items():
 				setattr(self, key, value)
 
@@ -325,9 +335,11 @@ class BasePhotometry(object):
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
 
 			# Load sector, camera and CCD from the FITS header:
+			self.header = self.tpf[0].header
 			self.sector = self.tpf[0].header['SECTOR']
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
+			self.data_rel = self.tpf[0].header['DATA_REL'] # Data release number
 
 			# Fix for timestamps that are not defined. Simply remove them from the table:
 			# This is seen in some file from sector 1.
@@ -1394,16 +1406,6 @@ class BasePhotometry(object):
 		# Get the current date for the files:
 		now = datetime.datetime.now()
 
-		# TODO: This really should be done in another way,
-		# but for now it will work...
-		if self.datasource.startswith('tpf'):
-			hdr = self.tpf[0].header
-		else:
-			hdr = self.hdf['images'].attrs
-
-		# Get data release number of original file:
-		data_rel = hdr['DATA_REL']
-
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3 + int(hasattr(self, 'halo_weightmap')), 'number of standard extensions')
@@ -1422,7 +1424,7 @@ class BasePhotometry(object):
 		# Versions:
 		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
 		hdu.header['FILEVER'] = ('1.4', 'File format version')
-		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
+		hdu.header['DATA_REL'] = (self.data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
 		hdu.header['PHOTMET'] = (self.method, 'Photometric method used')
 
@@ -1444,9 +1446,9 @@ class BasePhotometry(object):
 		hdu.header['TICVER'] = (self.ticver, 'TESS Input Catalog version')
 
 		# Cosmic ray headers:
-		hdu.header['CRMITEN'] = (hdr['CRMITEN'], 'spacecraft cosmic ray mitigation enabled')
-		hdu.header['CRBLKSZ'] = (hdr['CRBLKSZ'], '[exposures] s/c cosmic ray mitigation block siz')
-		hdu.header['CRSPOC'] = (hdr['CRSPOC'], 'SPOC cosmic ray cleaning enabled')
+		hdu.header['CRMITEN'] = (self.header['CRMITEN'], 'spacecraft cosmic ray mitigation enabled')
+		hdu.header['CRBLKSZ'] = (self.header['CRBLKSZ'], '[exposures] s/c cosmic ray mitigation block siz')
+		hdu.header['CRSPOC'] = (self.header['CRSPOC'], 'SPOC cosmic ray cleaning enabled')
 
 		# Add K2P2 Settings to the header of the file:
 		if self.additional_headers:
@@ -1554,8 +1556,8 @@ class BasePhotometry(object):
 		frametime = 2.0
 		int_time = 1.98
 		readtime = 0.02
-		if hdr['CRMITEN']:
-			deadc = (int_time * 2/hdr['CRBLKSZ']) / frametime
+		if self.header['CRMITEN']:
+			deadc = (int_time * 2/self.header['CRBLKSZ']) / frametime
 		else:
 			deadc = int_time / frametime
 
@@ -1585,7 +1587,6 @@ class BasePhotometry(object):
 		tbhdu.header['NREADOUT'] = (self.n_readout, 'number of read per cadence')
 
 		# Make aperture image:
-		# TODO: Pixels used in background calculation (value=4)
 		mask = self.aperture
 		if self.final_phot_mask is not None:
 			mask[self.final_phot_mask] |= 2
@@ -1646,7 +1647,7 @@ class BasePhotometry(object):
 			starid=self.starid,
 			sector=self.sector,
 			cadence=cadence,
-			datarel=data_rel,
+			datarel=self.data_rel,
 			version=version
 		)
 
