@@ -40,7 +40,6 @@ def test_fixes_time_offset_invalid_input():
 #--------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_s20():
 
-
 	#with fits.open(r'E:\time_offset\tess2019357164649-s0020-0000000004164018-0165-s_lc-v01.fits.gz') as hdu:
 	#	hdr1 = hdu[0].header
 	#	time1 = np.atleast_2d(hdu[1].data['TIME']).T
@@ -58,7 +57,8 @@ def test_fixes_time_offset_s20():
 	with open(os.path.join(TOFFDIR, 's20_hdr.json'), 'r') as fid:
 		hdr1 = json.load(fid)
 
-	time1_corrected, fixed = fixes.time_offset(time1, hdr1, datatype='tpf', timepos='mid')
+	time1_corrected, fixed = fixes.time_offset(time1, hdr1, datatype='tpf', timepos='mid', return_flag=True)
+	assert fixed, "S20v1 data should be fixed"
 	np.testing.assert_allclose(time1_corrected, time2, equal_nan=True, rtol=1e-11, atol=1e-11)
 
 #--------------------------------------------------------------------------------------------------
@@ -81,7 +81,8 @@ def test_fixes_time_offset_s21():
 	with open(os.path.join(TOFFDIR, 's21_hdr.json'), 'r') as fid:
 		hdr1 = json.load(fid)
 
-	time1_corrected, fixed = fixes.time_offset(time1, hdr1, datatype='tpf', timepos='mid')
+	time1_corrected, fixed = fixes.time_offset(time1, hdr1, datatype='tpf', timepos='mid', return_flag=True)
+	assert fixed, "S21v1 data should be fixed"
 	np.testing.assert_allclose(time1_corrected, time2, equal_nan=True, rtol=1e-11, atol=1e-11)
 
 #--------------------------------------------------------------------------------------------------
@@ -94,40 +95,40 @@ def test_fixes_time_offset():
 	for data_rel in range(1, 27):
 		hdr20 = dict(hdr, DATA_REL=data_rel)
 		print(hdr20)
-		assert fixes.time_offset(time, hdr20)[1]
+		assert fixes.time_offset(time, hdr20, return_flag=True)[1]
 
 	# Sector 20 that should be corrected:
 	for procver in ('spoc-4.0.14-20200108', 'spoc-4.0.15-20200114', 'spoc-4.0.17-20200130'):
 		hdr20 = dict(hdr, SECTOR=20, DATA_REL=27, PROCVER=procver)
 		print(hdr20)
-		assert fixes.time_offset(time, hdr20)[1]
+		assert fixes.time_offset(time, hdr20, return_flag=True)[1]
 
 	# Sector 20 that should NOT be corrected:
 	for procver in ('spoc-4.0.26-20200323', 'spoc-4.0.27-20200326'):
 		hdr20 = dict(hdr, SECTOR=20, DATA_REL=27, PROCVER=procver)
 		print(hdr20)
-		assert fixes.time_offset(time, hdr20)[1] == False
+		assert fixes.time_offset(time, hdr20, return_flag=True)[1] == False
 
 	# Sector 20 that should not be corrected (hypothetical future data relase #99):
 	hdr20 = dict(hdr, SECTOR=20, DATA_REL=99)
 	print(hdr20)
-	assert fixes.time_offset(time, hdr20)[1] == False
+	assert fixes.time_offset(time, hdr20, return_flag=True)[1] == False
 
 	# Sector 21 that should be corrected:
 	for procver in ('spoc-4.0.17-20200130', 'spoc-4.0.20-20200220', 'spoc-4.0.21-20200227'):
 		hdr21 = dict(hdr, SECTOR=21, DATA_REL=29, PROCVER=procver)
 		print(hdr21)
-		assert fixes.time_offset(time, hdr21)[1]
+		assert fixes.time_offset(time, hdr21, return_flag=True)[1]
 
 	# Sector 21 that should NOT be corrected:
 	hdr21 = dict(hdr, SECTOR=21, DATA_REL=29, PROCVER='spoc-4.0.27-20200326')
 	print(hdr21)
-	assert fixes.time_offset(time, hdr21)[1] == False
+	assert fixes.time_offset(time, hdr21, return_flag=True)[1] == False
 
 	# Sector 21 that should not be corrected (hypothetical future data relase #99):
 	hdr21 = dict(hdr, SECTOR=21, DATA_REL=99)
 	print(hdr21)
-	assert fixes.time_offset(time, hdr21)[1] == False
+	assert fixes.time_offset(time, hdr21, return_flag=True)[1] == False
 
 	# Check basic input:
 
@@ -141,8 +142,8 @@ def test_fixes_time_offset_apply():
 	time = np.linspace(1000, 2000, 200, dtype='float64')
 	hdr = {'DATA_REL': 27, 'CAMERA': 1, 'PROCVER': 'spoc-4.0.15-20200114'}
 
-	time_corrected_mid1, fixed1 = fixes.time_offset(time, hdr)
-	time_corrected_mid2, fixed2 = fixes.time_offset(time, hdr, datatype='tpf', timepos='mid')
+	time_corrected_mid1, fixed1 = fixes.time_offset(time, hdr, return_flag=True)
+	time_corrected_mid2, fixed2 = fixes.time_offset(time, hdr, datatype='tpf', timepos='mid', return_flag=True)
 
 	# Calling with and without timepos should yield the same result:
 	assert fixed1 == fixed2
@@ -153,12 +154,12 @@ def test_fixes_time_offset_apply():
 	np.testing.assert_allclose((time_corrected_mid1 - time)*86400, -1.979)
 
 	# Test start-time correction:
-	time_corrected_start, _ = fixes.time_offset(time, hdr, datatype='tpf', timepos='start')
+	time_corrected_start = fixes.time_offset(time, hdr, datatype='tpf', timepos='start')
 	print( (time - time_corrected_start)*86400 )
 	np.testing.assert_allclose((time_corrected_start - time)*86400, -1.969)
 
 	# Test end-time correction:
-	time_corrected_end, _ = fixes.time_offset(time, hdr, datatype='tpf', timepos='end')
+	time_corrected_end = fixes.time_offset(time, hdr, datatype='tpf', timepos='end')
 	print( (time - time_corrected_end)*86400 )
 	np.testing.assert_allclose((time_corrected_end - time)*86400, -1.989)
 

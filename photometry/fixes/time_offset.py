@@ -52,7 +52,7 @@ to be re-run and HDF5 file re-created.
 import logging
 
 #--------------------------------------------------------------------------------------------------
-def time_offset(time, header, datatype='ffi', timepos='mid'):
+def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 	"""
 	Apply time offset correction to array of timestamps.
 
@@ -61,6 +61,7 @@ def time_offset(time, header, datatype='ffi', timepos='mid'):
 		header (dict, optional): Header from TPF, FFI or HDF5 file.
 		timepos (str, optional): At what time during exposure are times indicating?
 			Choices are ``'mid'``, ``'start'`` and ``'end'``. Default is ``'mid'``.
+		return_flag (bool, optional):
 
 	Returns:
 		tuple:
@@ -139,4 +140,7 @@ def time_offset(time, header, datatype='ffi', timepos='mid'):
 	else:
 		logger.debug("Fixes: Not applying time offset correction")
 
-	return time, apply_correction
+	if return_flag:
+		return time, apply_correction
+	else:
+		return time
