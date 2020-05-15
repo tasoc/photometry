@@ -1595,7 +1595,6 @@ class BasePhotometry(object):
 		tbhdu.header['NREADOUT'] = (self.n_readout, 'number of read per cadence')
 
 		# Make aperture image:
-		# TODO: Pixels used in background calculation (value=4)
 		mask = self.aperture
 		if self.final_phot_mask is not None:
 			mask[self.final_phot_mask] |= 2
