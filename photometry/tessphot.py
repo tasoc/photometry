@@ -13,6 +13,7 @@ from .utilities import mag2flux
 class _PhotErrorDummy(object):
 	def __init__(self, traceback, *args, **kwargs):
 		self.status = STATUS.ERROR
+		self.method = 'error'
 		self._details = {'errors': traceback} if traceback else {}
 
 #--------------------------------------------------------------------------------------------------
