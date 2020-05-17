@@ -22,7 +22,7 @@ if __name__ == '__main__':
 
 	folders = [
 		(20, '/aadc/tasoc/archive/S20_DR27/ffi/', '/aadc/tasoc/archive/S20_DR27v2/ffi/'),
-		#(21, '/aadc/tasoc/archive/S21_DR29/ffi/', '/aadc/tasoc/archive/S21_DR29v2/ffi/'),
+		(21, '/aadc/tasoc/archive/S21_DR29/ffi/', '/aadc/tasoc/archive/S21_DR29v2/ffi/'),
 	]
 	print(folders)
 
