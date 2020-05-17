@@ -12,11 +12,56 @@ import numpy as np
 from astropy.io import fits
 from astropy.table import Table
 import itertools
+import gzip
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from photometry import utilities
 
 #--------------------------------------------------------------------------------------------------
-if __name__ == '__main__':
+def s20_lc():
+
+	with fits.open('/aadc/tasoc/archive/S20_DR27/spoc_lightcurves/tess2019357164649-s0020-0000000004164018-0165-s_lc.fits.gz') as hdu:
+		hdr1 = hdu[0].header
+		time1 = np.atleast_2d(hdu[1].data['TIME']).T
+
+	with fits.open('/aadc/tasoc/archive/S20_DR27v2/spoc_lightcurves/tess2019357164649-s0020-0000000004164018-0165-s_lc.fits.gz') as hdu:
+		time2 = np.atleast_2d(hdu[1].data['TIME']).T
+
+	A = np.concatenate((time1, time2), axis=1)
+	tab = Table(data=A, names=('time1', 'time2'), dtype=('float64', 'float64'))
+	tab.meta = dict(hdr1)
+
+	tab.write('time_offset_s20.ecsv', delimiter=',', format='ascii.ecsv')
+	print(tab)
+
+	with open('time_offset_s20.ecsv', 'rb') as src:
+		with gzip.open('time_offset_s20.ecsv.gz', 'wb') as dst:
+			dst.writelines(src)
+	os.remove('time_offset_s20.ecsv')
+
+#--------------------------------------------------------------------------------------------------
+def s21_lc():
+
+	with fits.open('/aadc/tasoc/archive/S21_DR29/spoc_lightcurves/tess2020020091053-s0021-0000000001096672-0167-s_lc.fits.gz') as hdu:
+		hdr1 = hdu[0].header
+		time1 = np.atleast_2d(hdu[1].data['TIME']).T
+
+	with fits.open('/aadc/tasoc/archive/S21_DR29v2/spoc_lightcurves/tess2020020091053-s0021-0000000001096672-0167-s_lc.fits.gz') as hdu:
+		time2 = np.atleast_2d(hdu[1].data['TIME']).T
+
+	A = np.concatenate((time1, time2), axis=1)
+	tab = Table(data=A, names=('time1', 'time2'), dtype=('float64', 'float64'))
+	tab.meta = dict(hdr1)
+
+	tab.write('time_offset_s21.ecsv', delimiter=',', format='ascii.ecsv')
+	print(tab)
+
+	with open('time_offset_s21.ecsv', 'rb') as src:
+		with gzip.open('time_offset_s21.ecsv.gz', 'wb') as dst:
+			dst.writelines(src)
+	os.remove('time_offset_s21.ecsv')
+
+#--------------------------------------------------------------------------------------------------
+def ffis():
 
 	np.random.seed(42)
 
@@ -64,3 +109,9 @@ if __name__ == '__main__':
 	tab.write('ffis.ecsv', format='ascii.ecsv', delimiter=',', overwrite=True)
 
 	print(tab)
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == '__main__':
+	s20_lc()
+	s21_lc()
+	ffis()

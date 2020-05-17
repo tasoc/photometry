@@ -11,7 +11,6 @@ import numpy as np
 import os.path
 import sys
 from astropy.table import Table
-import json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from photometry import fixes
 
@@ -48,32 +47,34 @@ def test_fixes_time_offset_invalid_input():
 #--------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_s20():
 
-	#with fits.open(r'E:\time_offset\tess2019357164649-s0020-0000000004164018-0165-s_lc-v01.fits.gz') as hdu:
-	#	hdr1 = hdu[0].header
-	#	time1 = np.atleast_2d(hdu[1].data['TIME']).T
+	# Load list of timestamps from light curve from sector 20 and the corresponding
+	# new timestamps delivered by SPOC.
+	# The table meat-data contains the primary FITS header of the timestamps to be corrected.
+	tab = Table.read(os.path.join(TOFFDIR, 'time_offset_s20.ecsv.gz'), format='ascii.ecsv')
+	hdr = tab.meta
 
-	#with fits.open(r'E:\time_offset\tess2019357164649-s0020-0000000004164018-0165-s_lc-v02.fits.gz') as hdu:
-	#	time2 = np.atleast_2d(hdu[1].data['TIME']).T
-
-	#with open(os.path.join(TOFFDIR, 's20_hdr.json'), 'w') as fid:
-	#	json.dump(dict(hdr1), fid)
-
-	#A = np.concatenate((time1, time2), axis=1)
-	#np.savetxt(os.path.join(TOFFDIR, 'time_offset_s20.txt.gz'), A)
-
-	time1, time2 = np.loadtxt(os.path.join(TOFFDIR, 'time_offset_s20.txt.gz'), unpack=True)
-	with open(os.path.join(TOFFDIR, 's20_hdr.json'), 'r') as fid:
-		hdr1 = json.load(fid)
-
-	time1_corrected, fixed = fixes.time_offset(time1, hdr1, datatype='tpf', timepos='mid', return_flag=True)
+	time1_corrected, fixed = fixes.time_offset(tab['time1'], hdr, datatype='tpf', timepos='mid', return_flag=True)
 	assert fixed, "S20v1 data should be fixed"
-	np.testing.assert_allclose(time1_corrected, time2, equal_nan=True, rtol=1e-11, atol=1e-11)
+	np.testing.assert_allclose(time1_corrected, tab['time2'], equal_nan=True, rtol=1e-11, atol=1e-11)
+
+#--------------------------------------------------------------------------------------------------
+def test_fixes_time_offset_s21():
+
+	# Load list of timestamps from light curve from sector 21 and the corresponding
+	# new timestamps delivered by SPOC.
+	# The table meat-data contains the primary FITS header of the timestamps to be corrected.
+	tab = Table.read(os.path.join(TOFFDIR, 'time_offset_s21.ecsv.gz'), format='ascii.ecsv')
+	hdr = tab.meta
+
+	time1_corrected, fixed = fixes.time_offset(tab['time1'], hdr, datatype='tpf', timepos='mid', return_flag=True)
+	assert fixed, "S21v1 data should be fixed"
+	np.testing.assert_allclose(time1_corrected, tab['time2'], equal_nan=True, rtol=1e-11, atol=1e-11)
 
 #--------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_ffis():
 
 	# Load list of timestamps from FFIs from several sectors and data releases:
-	tab = Table.read(os.path.join(TOFFDIR, 'ffis.ecsv'), format='ascii.ecsv')
+	tab = Table.read(os.path.join(TOFFDIR, 'time_offset_ffis.ecsv'), format='ascii.ecsv')
 
 	# Loop through the tables, create a fake header of the FFI
 	# and check that we get the same result from the correction
@@ -107,31 +108,7 @@ def test_fixes_time_offset_ffis():
 		np.testing.assert_allclose(time1_stop_corrected, row['time_stop_corrected'], equal_nan=True, rtol=1e-11, atol=1e-11)
 
 #--------------------------------------------------------------------------------------------------
-def test_fixes_time_offset_s21():
-
-	#with fits.open(r'E:\time_offset\tess2020020091053-s0021-0000000001096672-0167-s_lc-v01.fits.gz') as hdu:
-	#	hdr1 = hdu[0].header
-	#	time1 = np.atleast_2d(hdu[1].data['TIME']).T
-
-	#with fits.open(r'E:\time_offset\tess2020020091053-s0021-0000000001096672-0167-s_lc-v02.fits.gz') as hdu:
-	#	time2 = np.atleast_2d(hdu[1].data['TIME']).T
-
-	#with open('input/time_offset/s21_hdr.json', 'w') as fid:
-	#	json.dump(dict(hdr1), fid)
-
-	#A = np.concatenate((time1, time2), axis=1)
-	#np.savetxt('input/time_offset/time_offset_s21.txt.gz', A)
-
-	time1, time2 = np.loadtxt(os.path.join(TOFFDIR, 'time_offset_s21.txt.gz'), unpack=True)
-	with open(os.path.join(TOFFDIR, 's21_hdr.json'), 'r') as fid:
-		hdr1 = json.load(fid)
-
-	time1_corrected, fixed = fixes.time_offset(time1, hdr1, datatype='tpf', timepos='mid', return_flag=True)
-	assert fixed, "S21v1 data should be fixed"
-	np.testing.assert_allclose(time1_corrected, time2, equal_nan=True, rtol=1e-11, atol=1e-11)
-
-#--------------------------------------------------------------------------------------------------
-def test_fixes_time_offset():
+def test_fixes_time_offset_needed():
 
 	time = np.linspace(1000, 2000, 100)
 	hdr = {'DATA_REL': 0, 'CAMERA': 1, 'CCD': 3, 'PROCVER': 'shouldnt-matter'}
