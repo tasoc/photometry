@@ -82,6 +82,7 @@ jobs:
         - choco install python --version 3.8.2
         - python --version
         - git lfs pull
+        - pip install Cython # Needed for photutils on Windows Python 3.8 only ???
       env:
         - PATH=/c/Python38:/c/Python38/Scripts:$PATH
 
