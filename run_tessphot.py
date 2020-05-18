@@ -91,10 +91,13 @@ def main():
 	else:
 		input_folder = os.environ.get('TESSPHOT_INPUT', test_folder)
 
+	if os.path.isfile(input_folder):
+		input_folder = os.path.dirname(input_folder)
+
 	if args.output:
 		output_folder = args.output
 	else:
-		output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(os.path.dirname(input_folder), 'lightcurves'))
+		output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(input_folder, 'lightcurves'))
 
 	logger.info("Loading input data from '%s'", input_folder)
 	logger.info("Putting output data in '%s'", output_folder)
