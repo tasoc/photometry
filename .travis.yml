@@ -101,8 +101,6 @@ jobs:
   fast_finish: true
   allow_failures:
     - name: "Flake8"
-    - os: windows
-    - os: osx
 
 install:
   - $PYTHON -m pip install --upgrade pip

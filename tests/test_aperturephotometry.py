@@ -52,6 +52,9 @@ def test_aperturephotometry(SHARED_INPUT_DIR, datasource):
 			assert not allnan(pho.lightcurve['pos_centroid'][:,0])
 			assert not allnan(pho.lightcurve['pos_centroid'][:,1])
 
+			assert not np.any(~np.isfinite(pho.lightcurve['time']))
+			assert not np.any(pho.lightcurve['time'] == 0)
+
 			# Test the outputted FITS file:
 			with fits.open(filepath, mode='readonly') as hdu:
 				# Should be the same vectors in FITS as returned in Table:
