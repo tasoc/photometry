@@ -1,3 +1,28 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:8e676592324f02715741b179fd75ebba9a377a3b53b8f3a54bad6fbfe1db4dad
-size 1414
+# Targets to be processed with a specific photometry method.
+#
+# Column 1: TIC identifier
+# Column 2: Sector
+# Column 3: Datasource (ffi/tpf)
+# Column 4: Method (aperture/halo/psf/linpsf)
+# Column 5: Reason
+#---------------------------------------------
+267211065   1   tpf   halo   Bright star spilling outside CCD.
+267211065   1   ffi   halo   Bright star spilling outside CCD.
+300015238   2   tpf   halo   Bright star spilling outside stamp.
+230981971   2   tpf   halo   Bright star spilling outside stamp.
+220393543   3   tpf   halo   Bright star spilling outside stamp.
+220393543   5   tpf   halo   Star spilling outside stamp.
+436103278   6   tpf   halo   Star spilling outside stamp.
+269273552   6   tpf   halo   Star spilling outside stamp.
+269273552   6   ffi   halo   Star spilling outside CCD.
+220393543   6   tpf   halo   Star spilling outside stamp.
+124918771   6   tpf   halo   Star spilling outside stamp.
+124751941   6   tpf   halo   Star spilling outside stamp.
+156934909   6   tpf   halo   Star spilling outside stamp.
+150110391   6   tpf   halo   Star spilling outside stamp.
+80466973    7   tpf   halo   Star spilling outside stamp.
+124751941   7   tpf   halo   Star spilling outside stamp.
+156934909   7   tpf   halo   Star spilling outside stamp.
+269407223   7   tpf   halo   Star spilling outside stamp.
+342884451   8   tpf   halo   Star spilling outside stamp.
+269407223   8   tpf   halo   Star spilling outside stamp.

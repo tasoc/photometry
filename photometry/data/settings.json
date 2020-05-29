@@ -1,3 +1,84 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:ca287721748a1a216d2793069f7ecf605216c3c437d3a6bd27f9f8f7b3e65f8c
-size 1525
+{
+    "sectors": {
+        "-14": {
+            "reference_time": 2458613.287916667,
+            "sector": "-14"
+        },
+        "0": {
+            "reference_time": 2457840.5,
+            "sector": "0"
+        },
+		"1": {
+			"reference_time": 2458351.5,
+			"sector": "1"
+		},
+		"2": {
+			"reference_time": 2458367.5,
+			"sector": "2"
+		},
+		"3": {
+			"reference_time": 2458389.067361,
+			"sector": "3"
+		},
+		"4": {
+			"reference_time": 2458417.020139,
+			"sector": "4"
+		},
+		"5": {
+			"reference_time": 2458444.320139,
+			"sector": "5"
+		},
+		"6": {
+			"reference_time": 2458471.060417,
+			"sector": "6"
+		},
+		"7": {
+			"reference_time": 2458497.374306,
+			"sector": "7"
+		},
+		"8": {
+			"reference_time": 2458523.361806,
+			"sector": "8"
+		},
+		"9": {
+			"reference_time": 2458549.331250,
+			"sector": "9"
+		},
+		"10": {
+			"reference_time": 2458575.831250,
+			"sector": "10"
+		},
+		"11": {
+			"reference_time": 2458603.434028,
+			"sector": "11"
+		},
+		"12": {
+			"reference_time": 2458632.007639,
+			"sector": "12"
+		},
+		"13": {
+			"reference_time": 2458660.914583,
+			"sector": "13"
+		},
+		"14": {
+			"reference_time": 2458689.53403,
+			"sector": 14
+		},
+		"15": {
+			"reference_time": 2458717.42292,
+			"sector": 15
+		},
+		"16": {
+			"reference_time": 2458744.39514,
+			"sector": 16
+		},
+		"17": {
+			"reference_time": 2458770.55208,
+			"sector": 17
+		},
+		"18": {
+			"reference_time": 2458796.23681,
+			"sector": 18
+		}
+    }
+}
