@@ -7,10 +7,8 @@ Tests of PSF object.
 """
 
 import pytest
-import sys
-import os.path
 import numpy as np
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import conftest # noqa: F401
 from photometry.psf import PSF
 from photometry.plots import plt
 

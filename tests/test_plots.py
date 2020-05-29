@@ -7,11 +7,10 @@ Tests of plots
 """
 
 import pytest
-import sys
 import os.path
 import numpy as np
 from scipy.stats import multivariate_normal
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import conftest # noqa: F401
 from photometry.plots import plt, plot_image, plot_image_fit_residuals
 
 kwargs = {

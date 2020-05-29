@@ -7,11 +7,10 @@ Tests of TaskManager.
 """
 
 import pytest
-import sys
 import os.path
 import json
 import tempfile
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import conftest # noqa: F401
 from photometry import TaskManager, STATUS
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')

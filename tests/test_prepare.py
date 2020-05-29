@@ -10,9 +10,8 @@ import pytest
 import tempfile
 import logging
 import h5py
-import os
-import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import os.path
+import conftest # noqa: F401
 from photometry import prepare
 from photometry.utilities import TqdmLoggingHandler
 
