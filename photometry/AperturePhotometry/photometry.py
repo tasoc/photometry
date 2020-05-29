@@ -30,7 +30,7 @@ class AperturePhotometry(BasePhotometry):
 	def _minimum_aperture(self):
 		cols, rows = self.get_pixel_grid()
 		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
-					& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
+			& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
 		return mask_main
 
 	#----------------------------------------------------------------------------------------------
@@ -200,7 +200,7 @@ class AperturePhotometry(BasePhotometry):
 			mags_in_mask = self.catalog[target_in_mask]['tmag']
 			mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
 			contamination = 1.0 - 10**(0.4*(mags_total - self.target['tmag']))
-			contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
+			contamination = np.clip(contamination, 0, None) # Avoid stupid signs due to round-off errors
 
 		logger.info("Contamination: %f", contamination)
 		if not np.isnan(contamination):
