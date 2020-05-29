@@ -9,9 +9,8 @@ Tests of time offset fixes.
 import pytest
 import numpy as np
 import os.path
-import sys
 from astropy.table import Table
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import conftest # noqa: F401
 from photometry import fixes
 
 TOFFDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'input', 'time_offset'))
@@ -129,12 +128,12 @@ def test_fixes_time_offset_needed():
 	for procver in ('spoc-4.0.26-20200323', 'spoc-4.0.27-20200326'):
 		hdr20 = dict(hdr, SECTOR=20, DATA_REL=27, PROCVER=procver)
 		print(hdr20)
-		assert fixes.time_offset(time, hdr20, return_flag=True)[1] == False
+		assert not fixes.time_offset(time, hdr20, return_flag=True)[1]
 
 	# Sector 20 that should not be corrected (hypothetical future data relase #99):
 	hdr20 = dict(hdr, SECTOR=20, DATA_REL=99)
 	print(hdr20)
-	assert fixes.time_offset(time, hdr20, return_flag=True)[1] == False
+	assert not fixes.time_offset(time, hdr20, return_flag=True)[1]
 
 	# Sector 21 that should be corrected:
 	for procver in ('spoc-4.0.17-20200130', 'spoc-4.0.20-20200220', 'spoc-4.0.21-20200227'):
@@ -145,12 +144,12 @@ def test_fixes_time_offset_needed():
 	# Sector 21 that should NOT be corrected:
 	hdr21 = dict(hdr, SECTOR=21, DATA_REL=29, PROCVER='spoc-4.0.27-20200326')
 	print(hdr21)
-	assert fixes.time_offset(time, hdr21, return_flag=True)[1] == False
+	assert not fixes.time_offset(time, hdr21, return_flag=True)[1]
 
 	# Sector 21 that should not be corrected (hypothetical future data relase #99):
 	hdr21 = dict(hdr, SECTOR=21, DATA_REL=99)
 	print(hdr21)
-	assert fixes.time_offset(time, hdr21, return_flag=True)[1] == False
+	assert not fixes.time_offset(time, hdr21, return_flag=True)[1]
 
 #--------------------------------------------------------------------------------------------------
 def test_fixes_time_offset_apply():

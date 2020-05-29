@@ -4,19 +4,19 @@
 Corrections of time offset present in early data releases of TESS Data (sectors 1-21).
 
 * The staggered readouts of the four cameras: the two-second integrations in the cameras
-  are offset by 0.5 seconds, in the order camera 1, camera 3, camera 4, camera 2.
-  This applies to FFIs only.
+	are offset by 0.5 seconds, in the order camera 1, camera 3, camera 4, camera 2.
+	This applies to FFIs only.
 
 * The staggered readouts of the four CCDs within a camera: the readouts of the four
-  CCDs are staggered by 0.020 seconds, in the order CCD 1, CCD 2, CCD 3, CCD 4.
-  This applies to FFIs only.
+	CCDs are staggered by 0.020 seconds, in the order CCD 1, CCD 2, CCD 3, CCD 4.
+	This applies to FFIs only.
 
 * A correction to an error in calculation the start and end times of 2m and 30m data: these
-  values were too high by 2.0 seconds in the original data products.
+	values were too high by 2.0 seconds in the original data products.
 
 * The start times of integrations for every 2 minute and 30 minute cadence were shifted
-  forward by 31 milliseconds, and the end times were shifted forward by 11 milliseconds.
-  These offsets correct for effects in the focal plane electronics.
+	forward by 31 milliseconds, and the end times were shifted forward by 11 milliseconds.
+	These offsets correct for effects in the focal plane electronics.
 
 Assuming :math:`S`, :math:`M` and :math:`E` are the original start, mid and end-timestamps
 respectively and :math:`S'`, :math:`M'` and :math:`E'` are the new (corrected) timestamps:
