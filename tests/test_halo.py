@@ -10,11 +10,9 @@ import pytest
 import logging
 import numpy as np
 from bottleneck import allnan, anynan
-import sys
-import os
 from tempfile import TemporaryDirectory
 from astropy.io import fits
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import conftest # noqa: F401
 from photometry import HaloPhotometry, STATUS
 
 #--------------------------------------------------------------------------------------------------

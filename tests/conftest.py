@@ -10,6 +10,10 @@ import pytest
 import os.path
 import tempfile
 import shutil
+import sys
+
+# Insert photometry package as the first on path:
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 #--------------------------------------------------------------------------------------------------
 @pytest.fixture(scope='session')

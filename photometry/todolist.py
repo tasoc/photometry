@@ -563,8 +563,8 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			method = methods.get((int(row['starid']), int(row['sector']), row['datasource'].strip()), None)
 
 			# For very bright stars, we might as well just use Halo photometry right away:
-			#if method is None and row['tmag'] <= 3.0 and row['datasource'] == 'ffi':
-			#	method = 'halo'
+			if method is None and row['tmag'] <= 2.0 and row['datasource'] == 'ffi':
+				method = 'halo'
 
 			# Add target to TODO-list:
 			cursor.execute("INSERT INTO todolist (priority,starid,sector,camera,ccd,datasource,tmag,cbv_area,method) VALUES (?,?,?,?,?,?,?,?,?);", (

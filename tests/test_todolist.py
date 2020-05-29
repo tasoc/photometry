@@ -7,13 +7,12 @@
 import pytest
 import os
 import numpy as np
-import sys
 import tempfile
 import logging
 import sqlite3
 import contextlib
 #import itertools
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import conftest # noqa: F401
 from photometry import todolist
 from photometry.utilities import TqdmLoggingHandler
 

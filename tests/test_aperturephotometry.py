@@ -10,11 +10,9 @@ import pytest
 import numpy as np
 from bottleneck import allnan, anynan
 import logging
-import sys
-import os
 from tempfile import TemporaryDirectory
 from astropy.io import fits
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import conftest # noqa: F401
 from photometry import AperturePhotometry, STATUS
 from photometry.plots import plot_image, plt
 
@@ -51,6 +49,9 @@ def test_aperturephotometry(SHARED_INPUT_DIR, datasource):
 			assert not allnan(pho.lightcurve['flux_err'])
 			assert not allnan(pho.lightcurve['pos_centroid'][:,0])
 			assert not allnan(pho.lightcurve['pos_centroid'][:,1])
+
+			assert not np.any(~np.isfinite(pho.lightcurve['time']))
+			assert not np.any(pho.lightcurve['time'] == 0)
 
 			# Test the outputted FITS file:
 			with fits.open(filepath, mode='readonly') as hdu:

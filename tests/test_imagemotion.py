@@ -5,11 +5,10 @@
 """
 
 import pytest
-import sys
 import os.path
 import numpy as np
 import h5py
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import conftest # noqa: F401
 from photometry.image_motion import ImageMovementKernel
 from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
 #from photometry.plots import plt

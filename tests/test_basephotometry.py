@@ -8,12 +8,10 @@ Tests of BasePhotometry.
 
 import pytest
 import numpy as np
-import sys
-import os
 from tempfile import TemporaryDirectory
 from astropy.io import fits
 from astropy.wcs import WCS
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import conftest # noqa: F401
 from photometry import BasePhotometry, PixelQualityFlags, CorrectorQualityFlags
 #import photometry.BasePhotometry.hdf5_cache as bf
 

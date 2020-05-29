@@ -41,7 +41,6 @@ class TESS_SPICE(object):
 		'tess2018338154046-41240_naif0012.tls',
 		'tess2018338154429-41241_de430.bsp',
 		'tess2019113195500-41374_sclk.tsc',
-
 		# Predictive kernels of TESS's expected position:
 		#'TESS_EPH_PRE_2YEAR_2018171_01.bsp',
 		#'TESS_EPH_PRE_LONG_2018004_01.bsp', # No informaion on TESS
@@ -50,7 +49,6 @@ class TESS_SPICE(object):
 		'TESS_EPH_PRE_LONG_2018176_01.bsp',
 		'TESS_EPH_PRE_LONG_2019045_01.bsp',
 		'TESS_EPH_PRE_LONG_2019364_21.bsp',
-
 		# Definite kernels of TESS's actual position:
 		#'TESS_EPH_DEF_2018004_01.bsp', # Does not contain any information
 		#'TESS_EPH_DEF_2018080_01.bsp', # Only contains information from before launch of TESS (??)

@@ -5,13 +5,11 @@
 """
 
 import pytest
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import conftest # noqa: F401
 from photometry.backgrounds import fit_background
 from photometry.utilities import find_ffi_files, load_ffi_fits
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_background(SHARED_INPUT_DIR):
 	"""Test of background estimator"""
 
@@ -31,6 +29,6 @@ def test_background(SHARED_INPUT_DIR):
 	assert(bck.shape == img.shape)
 	assert(mask.shape == img.shape)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	pytest.main([__file__])
