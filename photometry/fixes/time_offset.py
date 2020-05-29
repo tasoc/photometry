@@ -2,19 +2,22 @@
 # -*- coding: utf-8 -*-
 """
 Corrections of time offset present in early data releases of TESS Data (sectors 1-21).
+This involved the following corrections to the timestamps:
 
-* The staggered readouts of the four cameras: the two-second integrations in the cameras
-	are offset by 0.5 seconds, in the order camera 1, camera 3, camera 4, camera 2.
-	This applies to FFIs only.
+Staggered readouts of the four cameras:
+	The two-second integrations in the cameras are offset by 0.5 seconds,
+	in the order camera 1, camera 3, camera 4, camera 2. This applies to FFIs only.
 
-* The staggered readouts of the four CCDs within a camera: the readouts of the four
-	CCDs are staggered by 0.020 seconds, in the order CCD 1, CCD 2, CCD 3, CCD 4.
-	This applies to FFIs only.
+Staggered readouts of the four CCDs within a camera:
+	The readouts of the four CCDs are staggered by 0.020 seconds,
+	in the order CCD 1, CCD 2, CCD 3, CCD 4. This applies to FFIs only.
 
-* A correction to an error in calculation the start and end times of 2m and 30m data: these
+Off-by-one error in cadence counting:
+	A correction to an error in calculation the start and end times of 2m and 30m data: these
 	values were too high by 2.0 seconds in the original data products.
 
-* The start times of integrations for every 2 minute and 30 minute cadence were shifted
+Detailed correction to start and end times:
+	The start times of integrations for every 2 minute and 30 minute cadence were shifted
 	forward by 31 milliseconds, and the end times were shifted forward by 11 milliseconds.
 	These offsets correct for effects in the focal plane electronics.
 
@@ -51,8 +54,8 @@ to be re-run and HDF5 file re-created.
 		https://tasoc.dk/docs/release_notes/tess_sector_18_drn25_v02.pdf
 
 	Memos on revisions of TESS data releases 27 and 29
-		https://tasoc.dk/docs/release_notes/tess_s20_dr27_data_product_revision_memo_v01.pdf
-		https://tasoc.dk/docs/release_notes/tess_s21_dr29_data_product_revision_memo_v01.pdf
+		https://tasoc.dk/docs/release_notes/tess_s20_dr27_data_product_revision_memo_v02.pdf
+		https://tasoc.dk/docs/release_notes/tess_s21_dr29_data_product_revision_memo_v02.pdf
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
@@ -66,16 +69,19 @@ def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 
 	Parameters:
 		time (ndarray): Array of timestamps in days.
-		header (dict, optional): Header from TPF, FFI or HDF5 file.
+		header (dict): Header from TPF, FFI or HDF5 file.
+		datatype (str, optional): Data product to correct. Choices are ``'ffi'`` or ``'tpf'``.
+			Default is ``'ffi'``.
 		timepos (str, optional): At what time during exposure are times indicating?
 			Choices are ``'mid'``, ``'start'`` and ``'end'``. Default is ``'mid'``.
-		return_flag (bool, optional): Also return the flag indication wheter the
+		return_flag (bool, optional): Also return the flag indication whether the
 			timestamps were corrected.
 
 	Returns:
 		tuple:
 		- ndarray: Corrected timestamps in days.
 		- bool: True if corrections to timestamps were needed, false otherwise.
+			Only returned if ``return_flag`` parameter is set.
 
 	Raises:
 		ValueError: If invalid timepos.
