@@ -23,13 +23,27 @@ from timeit import default_timer
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
 from .catalog import catalog_sqlite_search_footprint
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
+	"""
+	CBV area that a given target falls within.
+
+	Parameters:
+		catalog_row (dict): Target catalog entry.
+		settings (dict): Catalog settings.
+
+	Returns:
+		int: CBV area that the star falls within.
+	"""
 	# The distance from the camera centre to the corner furthest away:
-	camera_radius = np.sqrt( 12**2 + 12**2 ) # np.max(sphere_distance(a[:,0], a[:,1], settings['camera_centre_ra'], settings['camera_centre_dec']))
+	camera_radius = np.sqrt( 12**2 + 12**2 )
 
 	# Distance to centre of the camera in degrees:
-	camera_centre_dist = sphere_distance(catalog_row['ra'], catalog_row['decl'], settings['camera_centre_ra'], settings['camera_centre_dec'])
+	camera_centre_dist = sphere_distance(
+		catalog_row['ra'],
+		catalog_row['decl'],
+		settings['camera_centre_ra'],
+		settings['camera_centre_dec'])
 
 	cbv_area = settings['camera']*100 + settings['ccd']*10
 
@@ -44,7 +58,7 @@ def calc_cbv_area(catalog_row, settings):
 
 	return cbv_area
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def edge_distance(row, column, aperture=None, image_shape=None):
 	"""
 	Distance to nearest edge.
@@ -52,7 +66,8 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 	Parameters:
 		row (ndarray): Array of row positions to calculate distance of.
 		column (ndarray): Array of column positions to calculate distance of.
-		aperture (ndarray, optional): Boolean array indicating pixels to be considered "holes" (False) and good (True).
+		aperture (ndarray, optional): Boolean array indicating pixels to be
+			considered "holes" (False) and good (True).
 		image_shape (tuple, optional): Shape of aperture image.
 
 	Returns:
@@ -66,7 +81,12 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 		image_shape = aperture.shape
 
 	# Distance from position to outer edges of image:
-	EdgeDistOuter = np.minimum.reduce([column+0.5, row+0.5, image_shape[1]-(column+0.5), image_shape[0]-(row+0.5)])
+	EdgeDistOuter = np.minimum.reduce([
+		column+0.5,
+		row+0.5,
+		image_shape[1]-(column+0.5),
+		image_shape[0]-(row+0.5)
+	])
 
 	# If we have been provided with an aperture and it contains "holes",
 	# we should include the distance to these holes:
@@ -83,7 +103,7 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 
 	return EdgeDistOuter
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def _ffi_todo_wrapper(args):
 	return _ffi_todo(*args)
 
@@ -170,8 +190,9 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
-#------------------------------------------------------------------------------
-def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_targets=True, exclude=[]):
+#--------------------------------------------------------------------------------------------------
+def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
+	find_secondary_targets=True, exclude=[]):
 
 	logger = logging.getLogger(__name__)
 
@@ -288,7 +309,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 	find_secondary_targets=True, output_file=None):
 	"""
@@ -299,11 +320,15 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 	Parameters:
 		input_folder (string, optional): Input folder to create TODO list for.
-			If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
-		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be included.
-		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
+			If ``None``, the input directory in the environment variable
+			``TESSPHOT_INPUT`` is used.
+		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``,
+			all cameras will be included.
+		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``,
+			all cameras will be included.
 		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
-		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
+		find_secondary_targets (boolean): Should secondary targets from TPFs be included?
+			Default=True.
 		output_file (string, optional): The file path where the output file should be saved.
 			If not specified, the file will be saved into the input directory.
 			Should only be used for testing, since the file would (proberly) otherwise end up with
@@ -366,7 +391,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 	if len(tpf_files) > 0:
 		# Open a pool of workers:
 		logger.info("Starting pool of workers for TPFs...")
-		threads = min(threads_max, len(tpf_files)) # No reason to use more than the number of jobs in total
+		threads = min(threads_max, len(tpf_files)) # No reason to use more than the number of jobs
 		logger.info("Using %d processes.", threads)
 
 		if threads > 1:
@@ -377,7 +402,13 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 		# Run the TPF files in parallel:
 		tic = default_timer()
-		_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds, find_secondary_targets=find_secondary_targets, exclude=exclude)
+		_tpf_todo_wrapper = functools.partial(_tpf_todo,
+			input_folder=input_folder,
+			cameras=cameras,
+			ccds=ccds,
+			find_secondary_targets=find_secondary_targets,
+			exclude=exclude)
+
 		for cat2 in m(_tpf_todo_wrapper, tpf_files):
 			cat = vstack([cat, cat2], join_type='exact')
 
@@ -414,7 +445,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 		# Open a pool of workers:
 		logger.info("Starting pool of workers for FFIs...")
-		threads = min(threads_max, len(inputs)) # No reason to use more than the number of jobs in total
+		threads = min(threads_max, len(inputs)) # No reason to use more than the number of jobs
 		logger.info("Using %d processes.", threads)
 
 		if threads > 1:
@@ -530,6 +561,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		for pri, row in enumerate(cat):
 			# Find if there is a specific method defined for this target:
 			method = methods.get((int(row['starid']), int(row['sector']), row['datasource'].strip()), None)
+
+			# For very bright stars, we might as well just use Halo photometry right away:
+			if method is None and row['tmag'] <= 2.0 and row['datasource'] == 'ffi':
+				method = 'halo'
 
 			# Add target to TODO-list:
 			cursor.execute("INSERT INTO todolist (priority,starid,sector,camera,ccd,datasource,tmag,cbv_area,method) VALUES (?,?,?,?,?,?,?,?,?);", (

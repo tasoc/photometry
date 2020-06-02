@@ -7,11 +7,10 @@ Tests of TaskManager.
 """
 
 import pytest
-import sys
 import os.path
 import json
 import tempfile
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import conftest # noqa: F401
 from photometry import TaskManager, STATUS
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
@@ -75,6 +74,78 @@ def test_get_tasks(PRIVATE_TODO_FILE):
 		assert task is None
 
 #--------------------------------------------------------------------------------------------------
+def test_taskmanager_constraints(PRIVATE_TODO_FILE):
+
+	constraints = {'datasource': 'tpf', 'priority': 1}
+	with TaskManager(PRIVATE_TODO_FILE, overwrite=True, cleanup_constraints=constraints) as tm:
+		task = tm.get_task(**constraints)
+		numtasks = tm.get_number_tasks(**constraints)
+		print(task)
+		assert task['starid'] == 267211065, "Task1 should be None"
+		assert numtasks == 1, "Task1 search should give no results"
+
+	constraints = {'datasource': 'tpf', 'priority': 1, 'camera': None}
+	with TaskManager(PRIVATE_TODO_FILE, overwrite=True, cleanup_constraints=constraints) as tm:
+		task2 = tm.get_task(**constraints)
+		numtasks2 = tm.get_number_tasks(**constraints)
+		print(task2)
+		assert task2 == task, "Tasks should be identical"
+		assert numtasks2 == 1, "Task2 search should give no results"
+
+	constraints = {'datasource': 'ffi', 'priority': 2}
+	with TaskManager(PRIVATE_TODO_FILE, overwrite=True, cleanup_constraints=constraints) as tm:
+		task = tm.get_task(**constraints)
+		numtasks = tm.get_number_tasks(**constraints)
+		print(task)
+		assert task['priority'] == 2, "Task2 should be #2"
+		assert task['datasource'] == 'ffi'
+		assert task['camera'] == 3
+		assert task['ccd'] == 2
+		assert numtasks == 1, "Priority search should give one results"
+
+	constraints = {'datasource': 'ffi', 'priority': 2, 'camera': 3, 'ccd': 2}
+	with TaskManager(PRIVATE_TODO_FILE, overwrite=True, cleanup_constraints=constraints) as tm:
+		task3 = tm.get_task(**constraints)
+		numtasks3 = tm.get_number_tasks(**constraints)
+		print(task3)
+		assert task3 == task, "Tasks should be identical"
+		assert numtasks3 == 1, "Task3 search should give one results"
+
+	constraints = ['priority=17']
+	with TaskManager(PRIVATE_TODO_FILE, cleanup_constraints=constraints) as tm:
+		task4 = tm.get_task(priority=17)
+		numtasks4 = tm.get_number_tasks(priority=17)
+		print(task4)
+		assert task4['priority'] == 17, "Task4 should be #17"
+		assert numtasks4 == 1, "Priority search should give one results"
+
+	constraints = {'starid': 267211065}
+	with TaskManager(PRIVATE_TODO_FILE, cleanup_constraints=constraints) as tm:
+		numtasks5 = tm.get_number_tasks(**constraints)
+		assert numtasks5 == 2
+		task5 = tm.get_task(**constraints)
+		assert task5['priority'] == 1
+
+#--------------------------------------------------------------------------------------------------
+def test_taskmanager_constraints_invalid(PRIVATE_TODO_FILE):
+	with pytest.raises(ValueError) as e:
+		with TaskManager(PRIVATE_TODO_FILE, cleanup_constraints='invalid'):
+			pass
+	assert str(e.value) == 'cleanup_constraints should be dict or list'
+
+#--------------------------------------------------------------------------------------------------
+def test_taskmanager_no_more_tasks(PRIVATE_TODO_FILE):
+	with TaskManager(PRIVATE_TODO_FILE) as tm:
+		# Set all the tasks as completed:
+		tm.cursor.execute("UPDATE todolist SET status=1;")
+		tm.conn.commit()
+
+		# When we now ask for a new task, there shouldn't be any:
+		assert tm.get_task() is None
+		assert tm.get_random_task() is None
+		assert tm.get_number_tasks() == 0
+
+#--------------------------------------------------------------------------------------------------
 def test_taskmanager_summary(PRIVATE_TODO_FILE):
 	with tempfile.TemporaryDirectory() as tmpdir:
 		summary_file = os.path.join(tmpdir, 'summary.json')
@@ -125,10 +196,21 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			result = task.copy()
 			result['status'] = STATUS.OK
 			result['time'] = 3.14
+			result['worker_wait_time'] = 1.0
+			result['method_used'] = 'aperture'
 
 			# Save the result:
 			tm.save_result(result)
 			tm.write_summary()
+
+			# Check that the diagnostics were updated:
+			tm.cursor.execute("SELECT * FROM diagnostics WHERE priority=?;", [task['priority']])
+			row = tm.cursor.fetchone()
+			print(dict(row))
+			assert row['priority'] == task['priority']
+			assert row['starid'] == task['starid']
+			assert row['elaptime'] == 3.14
+			assert row['method_used'] == 'aperture'
 
 			# Load the summary file after "running the task":
 			with open(summary_file, 'r') as fid:
@@ -147,6 +229,7 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			assert j['slurm_jobid'] is None
 			assert j['last_error'] is None
 			assert j['mean_elaptime'] == 3.14
+			assert j['mean_worker_waittime'] == 1.0
 
 			task = tm.get_random_task()
 			tm.start_task(task['priority'])
@@ -155,6 +238,8 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			result = task.copy()
 			result['status'] = STATUS.ERROR
 			result['time'] = 6.14
+			result['worker_wait_time'] = 2.0
+			result['method_used'] = 'halo'
 			result['details'] = {
 				'errors': ['dummy error 1', 'dummy error 2']
 			}
@@ -162,6 +247,16 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			# Save the result:
 			tm.save_result(result)
 			tm.write_summary()
+
+			# Check that the diagnostics were updated:
+			tm.cursor.execute("SELECT * FROM diagnostics WHERE priority=?;", [task['priority']])
+			row = tm.cursor.fetchone()
+			print(dict(row))
+			assert row['priority'] == task['priority']
+			assert row['starid'] == task['starid']
+			assert row['elaptime'] == 6.14
+			assert row['method_used'] == 'halo'
+			assert row['errors'] == "dummy error 1\ndummy error 2"
 
 			# Load the summary file after "running the task":
 			with open(summary_file, 'r') as fid:
@@ -180,6 +275,7 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			assert j['slurm_jobid'] is None
 			assert j['last_error'] == "dummy error 1\ndummy error 2"
 			assert j['mean_elaptime'] == 3.44
+			assert j['mean_worker_waittime'] == 1.1
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

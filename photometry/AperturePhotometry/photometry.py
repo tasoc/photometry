@@ -10,6 +10,7 @@ import numpy as np
 from bottleneck import allnan
 import logging
 from .. import BasePhotometry, STATUS
+from ..utilities import mag2flux
 from . import k2p2v2 as k2p2
 
 #--------------------------------------------------------------------------------------------------
@@ -30,7 +31,7 @@ class AperturePhotometry(BasePhotometry):
 	def _minimum_aperture(self):
 		cols, rows = self.get_pixel_grid()
 		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
-					& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
+			& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
 		return mask_main
 
 	#----------------------------------------------------------------------------------------------
@@ -57,6 +58,10 @@ class AperturePhotometry(BasePhotometry):
 		}
 
 		# For bright saturated stars we allow for more retries:
+		ExpectedFlux = mag2flux(self.target['tmag'])
+		haloswitch_tmag_limit = 6.0
+		haloswitch_flux_limit = 0.01
+
 		allow_retries = 5
 		if self.target['tmag'] < 6:
 			allow_retries = 10
@@ -122,10 +127,33 @@ class AperturePhotometry(BasePhotometry):
 			if resize_args:
 				logger.warning("Touching the edges! Retrying.")
 				logger.info(resize_args)
+				stamp_before = self.stamp
+				sumimage_before = self.sumimage
 				if not self.resize_stamp(**resize_args):
 					resize_args = {}
 					logger.warning("Could not resize stamp any further.")
 					break
+
+				# It did resize, but let's just check if it tried
+				# to resize in a direction, but it hit the limit.
+				# In that case, let's check if we are already over the "HaloSwitch" limit
+				if self.target['tmag'] <= haloswitch_tmag_limit:
+					edge = np.zeros_like(mask_main, dtype='bool')
+					if resize_args.get('down') and self.stamp[0] == stamp_before[0]:
+						edge[0, :] = True
+					if resize_args.get('up') and self.stamp[1] == stamp_before[1]:
+						edge[-1, :] = True
+					if resize_args.get('left') and self.stamp[2] == stamp_before[2]:
+						edge[:, 0] = True
+					if resize_args.get('right') and self.stamp[3] == stamp_before[3]:
+						edge[:, -1] = True
+
+					if np.any(edge):
+						EdgeFlux = np.nansum(sumimage_before[mask_main & edge])
+						if EdgeFlux/ExpectedFlux > haloswitch_flux_limit:
+							logger.error('Stamp resize hit limit. Haloswitch quick break.')
+							self._details['edge_flux'] = EdgeFlux
+							return STATUS.ERROR
 			else:
 				break
 
@@ -199,8 +227,8 @@ class AperturePhotometry(BasePhotometry):
 			# Calculate contamination metric as defined in Lund & Handberg (2014):
 			mags_in_mask = self.catalog[target_in_mask]['tmag']
 			mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
-			contamination = 1.0 - 10**(0.4*(mags_total - self.target_tmag))
-			contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
+			contamination = 1.0 - 10**(0.4*(mags_total - self.target['tmag']))
+			contamination = np.clip(contamination, 0, None) # Avoid stupid signs due to round-off errors
 
 		logger.info("Contamination: %f", contamination)
 		if not np.isnan(contamination):

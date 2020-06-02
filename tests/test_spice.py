@@ -5,8 +5,6 @@ Tests of SPICE Kernel module.
 """
 
 import pytest
-import sys
-import os
 import numpy as np
 from scipy.interpolate import interp1d
 import astropy.coordinates as coord
@@ -15,7 +13,7 @@ from astropy.time import Time
 from astropy.io import fits
 import h5py
 from tempfile import TemporaryDirectory
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import conftest # noqa: F401
 from photometry import AperturePhotometry
 from photometry.spice import TESS_SPICE
 from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_motion
@@ -200,7 +198,7 @@ def test_spice(SHARED_INPUT_DIR, starid):
 		# Calculate barycentric correction using our method:
 		time_astropy, timecorr_astropy = knl.barycorr(time_nocorr + 2457000, star_coord)
 
-		# Caluclate barycentric correction uning second method:
+		# Calculate barycentric correction using second method:
 		timecorr_knl = knl.barycorr2(time_nocorr + 2457000, star_coord)
 		print(timecorr_knl)
 

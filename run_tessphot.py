@@ -61,7 +61,7 @@ def main():
 	args = parser.parse_args()
 
 	# Make sure at least one setting is given:
-	if not args.all and args.starid is None and not args.random:
+	if not args.all and args.starid is None and args.priority is None and not args.random:
 		parser.error("Please select either a specific STARID or RANDOM.")
 
 	# Set logging level:
@@ -90,6 +90,9 @@ def main():
 		input_folder = args.input_folder
 	else:
 		input_folder = os.environ.get('TESSPHOT_INPUT', test_folder)
+
+	if os.path.isfile(input_folder):
+		input_folder = os.path.dirname(input_folder)
 
 	if args.output:
 		output_folder = args.output
@@ -143,6 +146,7 @@ def main():
 			# Construct result message:
 			result.update({
 				'status': pho.status,
+				'method_used': pho.method,
 				'time': t2 - t1,
 				'details': pho._details
 			})

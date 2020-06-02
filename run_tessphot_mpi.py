@@ -167,6 +167,7 @@ def main():
 					# Construct result message:
 					result.update({
 						'status': pho.status,
+						'method_used': pho.method,
 						'time': t2 - t1,
 						'worker_wait_time': toc - tic,
 						'details': pho._details
