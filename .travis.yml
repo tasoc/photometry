@@ -22,17 +22,6 @@ jobs:
     - name: "Python 3.8 on Linux"
       python: "3.8"
 
-#    - name: "Python 3.6 on Mac"
-#      os: osx
-#      osx_image: xcode9.4 # Python 3.6.5
-#      language: shell
-#      before_install:
-#        - brew install git-lfs
-#        - python3 --version
-#        - git lfs install
-#        - git lfs pull
-#      env: PYTHON="python3" PIP="sudo pip3"
-
     - name: "Python 3.7 on Mac"
       os: osx
       osx_image: xcode11.2 # Python 3.7.4 running on macOS 10.14.4
@@ -43,17 +32,6 @@ jobs:
         - git lfs install
         - git lfs pull
       env: PYTHON="python3" PIP="sudo pip3"
-
-#    - name: "Python 3.8 on Mac"
-#      os: osx
-#      osx_image: xcode11.2 # Python 3.7.4 running on macOS 10.14.4
-#      language: shell
-#      before_install:
-#        - brew install git-lfs python@3.8
-#        - python3 --version  # Actually not running Python 3.8 ???
-#        - git lfs install
-#        - git lfs pull
-#      env: PYTHON="python3" PIP="sudo pip3"
 
     - name: "Python 3.6 on Windows"
       os: windows
@@ -94,10 +72,9 @@ jobs:
         - pip install flake8
       script:
         - flake8
+      after_success: skip
 
-  # Allow some newer versions of Python to fail for now
-  # This will be changed once the required packages starts
-  # supporting the newer versions of Python:
+  # Allow some jobs to fail without failing the whole build:
   fast_finish: true
   allow_failures:
     - name: "Flake8"
