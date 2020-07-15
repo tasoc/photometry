@@ -11,7 +11,7 @@ import os
 import sqlite3
 import logging
 import json
-from . import STATUS
+from . import STATUS, utilities
 
 #--------------------------------------------------------------------------------------------------
 class TaskManager(object):
@@ -81,7 +81,6 @@ class TaskManager(object):
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
 			priority INTEGER PRIMARY KEY ASC NOT NULL,
-			starid INTEGER NOT NULL,
 			lightcurve TEXT,
 			method_used TEXT NOT NULL,
 			elaptime REAL NOT NULL,
@@ -107,7 +106,8 @@ class TaskManager(object):
 			skipped_by INTEGER NOT NULL,
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE,
 			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
-		);""") # PRIMARY KEY
+		);""")
+		self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS diagnostics_lightcurve_idx ON diagnostics (lightcurve);")
 		self.conn.commit()
 
 		# Add status indicator for corrections to todolist, if it doesn't already exists:
@@ -132,6 +132,11 @@ class TaskManager(object):
 				self.cursor.execute("UPDATE diagnostics SET method_used=? WHERE priority IN (SELECT priority FROM todolist WHERE method=?);", [m, m])
 			self.cursor.execute("UPDATE diagnostics SET method_used='halo' WHERE method_used='aperture' AND errors LIKE '%Automatically switched to Halo photometry%';")
 			self.conn.commit()
+		if 'starid' in existing_columns:
+			# Drop this column from the diagnostics table, since the information is already in
+			# the todolist table. Use utility function for this, since SQLite does not
+			# have a DROP COLUMN mechanism directly.
+			utilities.sqlite_drop_column(self.conn, 'diagnostics', 'starid')
 
 		# Reset calculations with status STARTED, ABORT or ERROR:
 		# We are re-running all with error, in the hope that they will work this time around:
@@ -424,9 +429,8 @@ class TaskManager(object):
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, method_used, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, lightcurve, method_used, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
-			result['starid'],
 			details.get('filepath_lightcurve', None),
 			result['method_used'],
 			result['time'],

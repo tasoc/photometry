@@ -18,6 +18,7 @@ import json
 import os.path
 import fnmatch
 import glob
+import re
 import itertools
 import requests
 from concurrent.futures import ThreadPoolExecutor
@@ -653,3 +654,71 @@ class LoggerWriter(object):
 	def write(self, message):
 		if message.strip() != '':
 			self.logger.log(self.level, message)
+
+
+#--------------------------------------------------------------------------------------------------
+def sqlite_drop_column(conn, table, col):
+	"""
+	Drop table column from SQLite table.
+
+	Since SQLite does not have functionality for dropping/deleting columns
+	in existing tables, this function can provide this functionality.
+	This is done by temporarily copying the entire table, so this can be
+	quite an expensive operation.
+
+	Parameters:
+		conn (:class:`sqlite3.Connection`): Connection to SQLite database.
+		table (str): Table to drop column from.
+		col (str): Column to be dropped from table.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	# Get a list of columns in the existing table:
+	cursor = conn.cursor()
+	cursor.execute("PRAGMA table_info({table:s})".format(table=table))
+	columns = [col['name'] for col in cursor.fetchall()]
+	if col not in columns:
+		raise ValueError("Column '%s' not found in table '%s'" % (col, table))
+	columns.remove(col)
+	columns = ','.join(columns)
+
+	# Get list of index associated with the table:
+	cursor.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name=?", [table])
+	index = cursor.fetchall()
+	index_names = [row['name'] for row in index]
+	index_sql = [row['sql'] for row in index]
+
+	# Warn if any index exist with the column to be removed:
+	regex_index = re.compile(r'^CREATE( UNIQUE)? INDEX (.+) ON ' + re.escape(table) + '\s*\((.+)\).*$', re.IGNORECASE)
+	for sql in index_sql:
+		m = regex_index.match(sql)
+		if not m:
+			raise Exception("COULD NOT UNDERSTAND SQL")
+		index_columns = [i.strip() for i in m.group(3).split(',')]
+		if col in index_columns:
+			raise Exception("Column is used in INDEX %s." % m.group(2))
+
+	#BEGIN TRANSACTION;
+	#cursor.execute('BEGIN')
+	try:
+		cursor.execute("PRAGMA foreign_keys=off;")
+
+		# Drop all indexes associated with table:
+		for name in index_names:
+			cursor.execute("DROP INDEX {0:s};".format(name))
+
+		cursor.execute("ALTER TABLE {table:s} RENAME TO {table:s}_backup;".format(table=table))
+		cursor.execute("CREATE TABLE {table:s} AS SELECT {columns:s} FROM {table:s}_backup;".format(table=table, columns=columns))
+		cursor.execute("DROP TABLE {table:s}_backup;".format(table=table))
+
+		# Recreate all index associated with table:
+		for sql in index_sql:
+			cursor.execute(sql)
+
+		conn.commit()
+	except:
+		conn.rollback()
+		raise
+	finally:
+		cursor.execute("PRAGMA foreign_keys=on;")
