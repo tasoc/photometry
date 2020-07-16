@@ -580,7 +580,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			))
 
 		conn.commit()
-		cursor.execute("CREATE INDEX starid_datasource_idx ON todolist (starid, datasource);") # FIXME: Should be "UNIQUE", but something is weird in ETE-6?!
+		cursor.execute("CREATE UNIQUE INDEX unique_target_idx ON todolist (starid, datasource, sector, camera, ccd);")
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
