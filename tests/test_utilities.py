@@ -9,6 +9,7 @@ Tests of photometry.utilities.
 import pytest
 import os.path
 import numpy as np
+import sqlite3
 import conftest # noqa: F401
 import photometry.utilities as u
 
@@ -209,6 +210,72 @@ def test_mag2flux():
 	assert np.all(np.isfinite(flux)), "MAG2FLUX should give finite fluxes on finite mags"
 	assert np.all(np.diff(flux) < 0), "MAG2FLUX should give montomical decreasing values"
 	assert np.isnan(u.mag2flux(np.NaN)), "MAG2FLUX should return NaN on NaN input"
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('factory', [None, sqlite3.Row])
+@pytest.mark.parametrize('foreign_keys', [1, 0])
+def test_sqlite_drop_column(factory, foreign_keys):
+
+	with sqlite3.connect(':memory:') as conn:
+		conn.row_factory = factory
+		cursor = conn.cursor()
+
+		cursor.execute("PRAGMA foreign_keys=%s;" % foreign_keys)
+
+		# Make sure the foreign key is set as we want it:
+		cursor.execute("PRAGMA foreign_keys;")
+		assert cursor.fetchone()[0] == foreign_keys
+
+		# Create test-table:
+		cursor.execute("""CREATE TABLE tbl (
+			col_a INTEGER,
+			col_b REAL,
+			col_c REAL NOT NULL,
+			col_d REAL,
+			col_e REAL
+		);""")
+		for k in range(1000):
+			cursor.execute("INSERT INTO tbl VALUES (%d,RANDOM(),RANDOM(),RANDOM(),RANDOM());" % k)
+		cursor.execute("CREATE UNIQUE INDEX col_a_idx ON tbl (col_a);")
+		cursor.execute("CREATE INDEX col_c_idx ON tbl (col_c);")
+		cursor.execute("CREATE INDEX col_de_idx ON tbl (col_d, col_e);")
+		conn.commit()
+
+		# Check names of columns before we remove anything:
+		cursor.execute("PRAGMA table_info(tbl);")
+		s = set([row[1] for row in cursor.fetchall()])
+		assert s == set(['col_a', 'col_b', 'col_c', 'col_d', 'col_e'])
+
+		# Remove col_b:
+		u.sqlite_drop_column(conn, 'tbl', 'col_b');
+
+		# Check names of columns after we removed col_b:
+		cursor.execute("PRAGMA table_info(tbl);")
+		s = set([row[1] for row in cursor.fetchall()])
+		assert s == set(['col_a', 'col_c', 'col_d', 'col_e'])
+
+		# Make sure the number of rows has not changed:
+		cursor.execute("SELECT COUNT(*) FROM tbl;")
+		assert cursor.fetchone()[0] == 1000
+
+		# Make sure the foreign_keys setting has not changed:
+		cursor.execute("PRAGMA foreign_keys;")
+		assert cursor.fetchone()[0] == foreign_keys
+
+		# Wrong table or column name should give a ValueError:
+		with pytest.raises(ValueError):
+			u.sqlite_drop_column(conn, 'tbl_wrong', 'col_e');
+
+		with pytest.raises(ValueError):
+			u.sqlite_drop_column(conn, 'tbl', 'col_wrong');
+
+		# Attempting to drop a column associated with an index should
+		# cause an Exception:
+		with pytest.raises(Exception):
+			u.sqlite_drop_column(conn, 'tbl', 'col_c');
+
+		with pytest.raises(Exception):
+			u.sqlite_drop_column(conn, 'tbl', 'col_e');
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

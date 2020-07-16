@@ -677,7 +677,7 @@ def sqlite_drop_column(conn, table, col):
 	# Get a list of columns in the existing table:
 	cursor = conn.cursor()
 	cursor.execute("PRAGMA table_info({table:s})".format(table=table))
-	columns = [col['name'] for col in cursor.fetchall()]
+	columns = [col[1] for col in cursor.fetchall()]
 	if col not in columns:
 		raise ValueError("Column '%s' not found in table '%s'" % (col, table))
 	columns.remove(col)
@@ -686,8 +686,8 @@ def sqlite_drop_column(conn, table, col):
 	# Get list of index associated with the table:
 	cursor.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name=?", [table])
 	index = cursor.fetchall()
-	index_names = [row['name'] for row in index]
-	index_sql = [row['sql'] for row in index]
+	index_names = [row[0] for row in index]
+	index_sql = [row[1] for row in index]
 
 	# Warn if any index exist with the column to be removed:
 	regex_index = re.compile(r'^CREATE( UNIQUE)? INDEX (.+) ON ' + re.escape(table) + '\s*\((.+)\).*$', re.IGNORECASE)
@@ -698,6 +698,10 @@ def sqlite_drop_column(conn, table, col):
 		index_columns = [i.strip() for i in m.group(3).split(',')]
 		if col in index_columns:
 			raise Exception("Column is used in INDEX %s." % m.group(2))
+
+	# Store the current foreign_key setting:
+	cursor.execute("PRAGMA foreign_keys;")
+	current_foreign_keys = cursor.fetchone()[0]
 
 	#BEGIN TRANSACTION;
 	#cursor.execute('BEGIN')
@@ -721,4 +725,4 @@ def sqlite_drop_column(conn, table, col):
 		conn.rollback()
 		raise
 	finally:
-		cursor.execute("PRAGMA foreign_keys=on;")
+		cursor.execute("PRAGMA foreign_keys=%s;" % current_foreign_keys)
