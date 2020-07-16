@@ -124,7 +124,7 @@ class TaskManager(object):
 			self.conn.commit()
 		if 'method_used' not in existing_columns:
 			# Since this one is NOT NULL, we have to do some magic to fill out the
-			# new column after creation, by finding ketwords in other columns.
+			# new column after creation, by finding keywords in other columns.
 			# This can be a pretty slow process, but it only has to be done once.
 			self.logger.debug("Adding method_used column to diagnostics")
 			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN method_used TEXT NOT NULL DEFAULT 'aperture';")
