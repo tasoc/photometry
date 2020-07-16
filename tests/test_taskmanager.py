@@ -208,7 +208,7 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			row = tm.cursor.fetchone()
 			print(dict(row))
 			assert row['priority'] == task['priority']
-			assert row['starid'] == task['starid']
+			assert 'starid' not in row # It should no longer be there (after version 4.6)
 			assert row['elaptime'] == 3.14
 			assert row['method_used'] == 'aperture'
 
@@ -253,7 +253,7 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			row = tm.cursor.fetchone()
 			print(dict(row))
 			assert row['priority'] == task['priority']
-			assert row['starid'] == task['starid']
+			assert 'starid' not in row # It should no longer be there (after version 4.6)
 			assert row['elaptime'] == 6.14
 			assert row['method_used'] == 'halo'
 			assert row['errors'] == "dummy error 1\ndummy error 2"
