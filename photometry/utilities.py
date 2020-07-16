@@ -690,7 +690,7 @@ def sqlite_drop_column(conn, table, col):
 	index_sql = [row[1] for row in index]
 
 	# Warn if any index exist with the column to be removed:
-	regex_index = re.compile(r'^CREATE( UNIQUE)? INDEX (.+) ON ' + re.escape(table) + '\s*\((.+)\).*$', re.IGNORECASE)
+	regex_index = re.compile(r'^CREATE( UNIQUE)? INDEX (.+) ON ' + re.escape(table) + r'\s*\((.+)\).*$', re.IGNORECASE)
 	for sql in index_sql:
 		m = regex_index.match(sql)
 		if not m:
@@ -721,7 +721,7 @@ def sqlite_drop_column(conn, table, col):
 			cursor.execute(sql)
 
 		conn.commit()
-	except:
+	except: # noqa: E722, pragma: nocover
 		conn.rollback()
 		raise
 	finally:

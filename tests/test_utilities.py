@@ -247,7 +247,7 @@ def test_sqlite_drop_column(factory, foreign_keys):
 		assert s == set(['col_a', 'col_b', 'col_c', 'col_d', 'col_e'])
 
 		# Remove col_b:
-		u.sqlite_drop_column(conn, 'tbl', 'col_b');
+		u.sqlite_drop_column(conn, 'tbl', 'col_b')
 
 		# Check names of columns after we removed col_b:
 		cursor.execute("PRAGMA table_info(tbl);")
@@ -264,18 +264,18 @@ def test_sqlite_drop_column(factory, foreign_keys):
 
 		# Wrong table or column name should give a ValueError:
 		with pytest.raises(ValueError):
-			u.sqlite_drop_column(conn, 'tbl_wrong', 'col_e');
+			u.sqlite_drop_column(conn, 'tbl_wrong', 'col_e')
 
 		with pytest.raises(ValueError):
-			u.sqlite_drop_column(conn, 'tbl', 'col_wrong');
+			u.sqlite_drop_column(conn, 'tbl', 'col_wrong')
 
 		# Attempting to drop a column associated with an index should
 		# cause an Exception:
 		with pytest.raises(Exception):
-			u.sqlite_drop_column(conn, 'tbl', 'col_c');
+			u.sqlite_drop_column(conn, 'tbl', 'col_c')
 
 		with pytest.raises(Exception):
-			u.sqlite_drop_column(conn, 'tbl', 'col_e');
+			u.sqlite_drop_column(conn, 'tbl', 'col_e')
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
