@@ -338,7 +338,12 @@ class TaskManager(object):
 				# We never want to return a lightcurve for a secondary target over
 				# a primary target, so we are going to mark this one as SKIPPED.
 				primary_tpf_target_starid = int(result['datasource'][4:])
-				self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=?;", (primary_tpf_target_starid, result['sector']))
+				self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=? AND camera=? AND ccd=?;", (
+					primary_tpf_target_starid,
+					result['sector'],
+					result['camera'],
+					result['ccd']
+				))
 				primary_tpf_target_priority = self.cursor.fetchone()
 				# Mark the current star as SKIPPED and that it was caused by the primary:
 				self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target TIC %d", result['priority'], primary_tpf_target_starid)
@@ -350,7 +355,7 @@ class TaskManager(object):
 					))
 				else:
 					self.logger.warning("Could not find primary TPF target (TIC %d) for priority=%d", primary_tpf_target_starid, result['priority'])
-					error_msg.append("Could not find primary TPF target (TIC %d)" % primary_tpf_target_starid)
+					error_msg.append("TargetNotFoundError: Could not find primary TPF target (TIC %d)" % primary_tpf_target_starid)
 			else:
 				# Create unique list of starids to be masked as skipped:
 				skip_starids = ','.join([str(starid) for starid in skip_targets])
@@ -362,7 +367,11 @@ class TaskManager(object):
 				else:
 					skip_datasources = "'" + result['datasource'] + "'"
 
-				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=?;", (result['sector'],))
+				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=? AND camera=? AND ccd=?;", (
+					result['sector'],
+					result['camera'],
+					result['ccd']
+				))
 				skip_rows = self.cursor.fetchall()
 				if len(skip_rows) > 0:
 					skip_tmags = np.array([row['tmag'] for row in skip_rows])
