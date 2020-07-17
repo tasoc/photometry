@@ -157,6 +157,21 @@ def test_rms_timescale():
 	print(rms)
 	np.testing.assert_allclose(rms, 0)
 
+	# Time with infinity should give ValueError:
+	time[1] = np.Inf
+	with pytest.raises(ValueError):
+		u.rms_timescale(time, flux)
+
+	# Time with negative infinity should give ValueError:
+	time[1] = np.NINF
+	with pytest.raises(ValueError):
+		u.rms_timescale(time, flux)
+
+	# All timestamps being the same should give ValueError:
+	time[:] = 1.2
+	with pytest.raises(ValueError):
+		u.rms_timescale(time, flux)
+
 #--------------------------------------------------------------------------------------------------
 def test_find_nearest():
 
