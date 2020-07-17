@@ -282,7 +282,7 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			assert j['mean_worker_waittime'] == 1.1
 
 #--------------------------------------------------------------------------------------------------
-def test_taskmanager_skip_targets(PRIVATE_TODO_FILE):
+def test_taskmanager_skip_targets1(PRIVATE_TODO_FILE):
 	with TaskManager(PRIVATE_TODO_FILE, overwrite=True, cleanup=True) as tm:
 
 		# Start task with a random task:
@@ -333,13 +333,9 @@ def test_taskmanager_skip_targets(PRIVATE_TODO_FILE):
 		assert row['priority'] == row2['priority']
 		assert row['skipped_by'] == task['priority']
 
-		#================================================================
-		# RESET THE TODO-FILE:
-		tm.cursor.execute("UPDATE todolist SET status=NULL;")
-		tm.cursor.execute("DELETE FROM diagnostics;")
-		tm.cursor.execute("DELETE FROM photometry_skipped;")
-		tm.conn.commit()
-		#================================================================
+#--------------------------------------------------------------------------------------------------
+def test_taskmanager_skip_targets2(PRIVATE_TODO_FILE):
+	with TaskManager(PRIVATE_TODO_FILE) as tm:
 
 		# Start task with a random task:
 		task = tm.get_task(starid=261522674, datasource='ffi') # Tmag = 14.574
