@@ -391,5 +391,96 @@ def test_taskmanager_skip_targets(PRIVATE_TODO_FILE):
 		assert row['skipped_by'] == row3['priority']
 
 #--------------------------------------------------------------------------------------------------
+def test_taskmanager_skip_targets_secondary1(PRIVATE_TODO_FILE):
+	with TaskManager(PRIVATE_TODO_FILE) as tm:
+
+		# Start task with a random task:
+		task = tm.get_task(starid=261522674, datasource='ffi') # Tmag = 14.574
+		print(task)
+
+		# Make a fake result we can save;
+		tm.start_task(task['priority'])
+		result = task.copy()
+		result['datasource'] = 'tpf:267211065'
+		result['status'] = STATUS.OK
+		result['time'] = 6.14
+		result['worker_wait_time'] = 2.0
+		result['method_used'] = 'aperture'
+		result['details'] = {
+			'skip_targets': [267211065] # Tmag = 2.216
+		}
+
+		tm.save_result(result)
+
+		# For a secondary target with the primary in skipped_targets, the secondary should
+		# end up marked as skipped with a warning in the errors column:
+		tm.cursor.execute("SELECT * FROM todolist LEFT JOIN diagnostics ON todolist.priority=diagnostics.priority WHERE todolist.priority=?;", [task['priority']])
+		row = tm.cursor.fetchall()
+		assert len(row) == 1
+		row = row[0]
+		print(dict(row))
+		assert row['priority'] == task['priority']
+		assert row['starid'] == task['starid']
+		assert row['sector'] == task['sector']
+		assert row['camera'] == task['camera']
+		assert row['ccd'] == task['ccd']
+		assert row['elaptime'] == 6.14
+		assert row['method_used'] == 'aperture'
+		assert row['status'] == STATUS.SKIPPED.value
+
+		# There should now be exactly one entry in the photometry_skipped table:
+		tm.cursor.execute("SELECT * FROM photometry_skipped;")
+		row = tm.cursor.fetchall()
+		assert len(row) == 1
+		row = row[0]
+		print(dict(row))
+		assert row['priority'] == task['priority']
+		assert row['skipped_by'] == 1
+
+#--------------------------------------------------------------------------------------------------
+def test_taskmanager_skip_targets_secondary2(PRIVATE_TODO_FILE):
+	with TaskManager(PRIVATE_TODO_FILE) as tm:
+
+		# Start task with a random task:
+		task = tm.get_task(starid=261522674, datasource='ffi') # Tmag = 14.574
+		print(task)
+
+		# Make a fake result we can save;
+		tm.start_task(task['priority'])
+		result = task.copy()
+		result['datasource'] = 'tpf:999999999'
+		result['status'] = STATUS.OK
+		result['time'] = 6.14
+		result['worker_wait_time'] = 2.0
+		result['method_used'] = 'aperture'
+		result['details'] = {
+			'skip_targets': [999999999] # Tmag = 2.216
+		}
+
+		tm.save_result(result)
+
+		# For a secondary target with the primary in skipped_targets, the secondary should
+		# end up marked as skipped with a warning in the errors column:
+		tm.cursor.execute("SELECT * FROM todolist LEFT JOIN diagnostics ON todolist.priority=diagnostics.priority WHERE todolist.priority=?;", [task['priority']])
+		row = tm.cursor.fetchall()
+		assert len(row) == 1
+		row = row[0]
+		print(dict(row))
+		assert row['priority'] == task['priority']
+		assert row['starid'] == task['starid']
+		assert row['sector'] == task['sector']
+		assert row['camera'] == task['camera']
+		assert row['ccd'] == task['ccd']
+		assert row['elaptime'] == 6.14
+		assert row['method_used'] == 'aperture'
+		assert row['status'] == STATUS.SKIPPED.value
+		assert 'TargetNotFoundError: ' in row['errors']
+
+		# The photometry_skipped table should still be empty because of the warning:
+		tm.cursor.execute("SELECT * FROM photometry_skipped;")
+		row = tm.cursor.fetchall()
+		assert len(row) == 0
+
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	pytest.main([__file__])
