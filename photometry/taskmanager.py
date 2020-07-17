@@ -45,6 +45,7 @@ class TaskManager(object):
 		self.overwrite = overwrite
 		self.summary_file = summary
 		self.summary_interval = summary_interval
+		self.summary_counter = 0
 
 		if os.path.isdir(todo_file):
 			todo_file = os.path.join(todo_file, 'todo.sqlite')
@@ -60,7 +61,8 @@ class TaskManager(object):
 		console = logging.StreamHandler()
 		console.setFormatter(formatter)
 		self.logger = logging.getLogger(__name__)
-		self.logger.addHandler(console)
+		if not self.logger.hasHandlers():
+			self.logger.addHandler(console)
 		self.logger.setLevel(logging.INFO)
 
 		# Load the SQLite file:
@@ -462,7 +464,9 @@ class TaskManager(object):
 		self.conn.commit()
 
 		# Write summary file:
-		if self.summary_file and self.summary['tasks_run'] % self.summary_interval == 0:
+		self.summary_counter += 1
+		if self.summary_file and self.summary_counter % self.summary_interval == 0:
+			self.summary_counter = 0
 			self.write_summary()
 
 	#----------------------------------------------------------------------------------------------
@@ -472,5 +476,5 @@ class TaskManager(object):
 			try:
 				with open(self.summary_file, 'w') as fid:
 					json.dump(self.summary, fid)
-			except: # noqa: E722
+			except: # noqa: E722, pragma: no cover
 				self.logger.exception("Could not write summary file")
