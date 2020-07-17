@@ -390,8 +390,6 @@ def test_taskmanager_skip_targets(PRIVATE_TODO_FILE):
 		assert row['priority'] == task['priority']
 		assert row['skipped_by'] == row3['priority']
 
-	assert False
-
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	pytest.main([__file__])
