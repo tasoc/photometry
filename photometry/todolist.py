@@ -547,7 +547,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		# Create TODO-list table:
 		cursor.execute("""CREATE TABLE todolist (
 			priority INTEGER PRIMARY KEY ASC NOT NULL,
-			starid BIGINT NOT NULL,
+			starid INTEGER NOT NULL,
 			sector INTEGER NOT NULL,
 			datasource TEXT NOT NULL DEFAULT 'ffi',
 			camera INTEGER NOT NULL,

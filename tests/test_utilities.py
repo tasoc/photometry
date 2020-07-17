@@ -238,7 +238,7 @@ def test_sqlite_drop_column(factory, foreign_keys):
 			cursor.execute("INSERT INTO tbl VALUES (%d,RANDOM(),RANDOM(),RANDOM(),RANDOM());" % k)
 		cursor.execute("CREATE UNIQUE INDEX col_a_idx ON tbl (col_a);")
 		cursor.execute("CREATE INDEX col_c_idx ON tbl (col_c);")
-		cursor.execute("CREATE INDEX col_de_idx ON tbl (col_d, col_e);")
+		cursor.execute("CREATE\t INDEX  col_de_idx ON tbl (col_d, col_e);") # with strange whitespace
 		conn.commit()
 
 		# Check names of columns before we remove anything:

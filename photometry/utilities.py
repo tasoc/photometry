@@ -694,7 +694,7 @@ def sqlite_drop_column(conn, table, col):
 	for sql in index_sql:
 		m = regex_index.match(sql)
 		if not m:
-			raise Exception("COULD NOT UNDERSTAND SQL")
+			raise Exception("COULD NOT UNDERSTAND SQL") # pragma: no cover
 		index_columns = [i.strip() for i in m.group(3).split(',')]
 		if col in index_columns:
 			raise Exception("Column is used in INDEX %s." % m.group(2))
@@ -721,7 +721,7 @@ def sqlite_drop_column(conn, table, col):
 			cursor.execute(sql)
 
 		conn.commit()
-	except: # noqa: E722, pragma: nocover
+	except: # noqa: E722, pragma: no cover
 		conn.rollback()
 		raise
 	finally:
