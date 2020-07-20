@@ -68,6 +68,9 @@ def ffis():
 	folders = [
 		(20, '/aadc/tasoc/archive/S20_DR27/ffi/', '/aadc/tasoc/archive/S20_DR27v2/ffi/'),
 		(21, '/aadc/tasoc/archive/S21_DR29/ffi/', '/aadc/tasoc/archive/S21_DR29v2/ffi/'),
+		(14, '/aadc/tasoc/archive/S14_DR19/ffi/', '/aadc/tasoc/archive/S14_DR30/ffi/'),
+		(15, '/aadc/tasoc/archive/S15_DR21/ffi/', '/aadc/tasoc/archive/S15_DR30/ffi/'),
+		(16, '/aadc/tasoc/archive/S16_DR22/ffi/', '/aadc/tasoc/archive/S16_DR30/ffi/')
 	]
 	print(folders)
 
