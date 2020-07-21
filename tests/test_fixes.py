@@ -12,6 +12,7 @@ import os.path
 from astropy.table import Table
 import conftest # noqa: F401
 from photometry import fixes
+from photometry.utilities import load_settings
 
 TOFFDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'input', 'time_offset'))
 
@@ -177,6 +178,28 @@ def test_fixes_time_offset_apply():
 	time_corrected_end = fixes.time_offset(time, hdr, datatype='tpf', timepos='end')
 	print( (time - time_corrected_end)*86400 )
 	np.testing.assert_allclose((time_corrected_end - time)*86400, -1.989)
+
+#--------------------------------------------------------------------------------------------------
+def test_fixes_time_offset_settings():
+
+	# Early releases that should be corrected:
+	hdr = {'DATA_REL': 1, 'CAMERA': 1, 'CCD': 3, 'PROCVER': 'shouldnt-matter'}
+	time = np.linspace(1000, 2000, 200, dtype='float64')
+
+	time2, applied = fixes.time_offset(time, hdr, datatype='tpf', timepos='mid', return_flag=True)
+	print(applied)
+	assert applied
+
+	# Change the settings in-memory:
+	# This also relies on the caching to work!
+	settings = load_settings()
+	settings['fixes']['time_offset'] = 'False'
+
+	# When calling the function now, it shouldn't do anything:
+	time3, applied = fixes.time_offset(time, hdr, datatype='tpf', timepos='mid', return_flag=True)
+	print(applied)
+	assert not applied
+	np.testing.assert_allclose(time3, time)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

@@ -134,7 +134,7 @@ def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 	if apply_correction:
 		settings = load_settings()
 		if not settings.getboolean('fixes', 'time_offset', fallback=True):
-			logger.debug("Fixes: Time offset fix has been turned off in settings.")
+			logger.warning("SettingsWarning: Time offset fix has been turned off in settings.")
 			apply_correction = False
 
 	# Apply the correction - or don't:
