@@ -13,7 +13,7 @@ import logging
 import itertools
 import contextlib
 from .tasoc_db import TASOC_DB
-from .utilities import (add_proper_motion, load_settings, # find_catalog_files
+from .utilities import (add_proper_motion, load_sector_settings, # find_catalog_files
 	radec_to_cartesian, cartesian_to_radec, download_file)
 
 #------------------------------------------------------------------------------
@@ -135,7 +135,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
 	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
 
-	settings = load_settings(sector=sector)
+	settings = load_sector_settings(sector=sector)
 	sector_reference_time = settings['reference_time']
 	epoch = (sector_reference_time - 2451544.5)/365.25
 

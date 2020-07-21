@@ -14,12 +14,14 @@ import logging
 import tqdm
 from scipy.special import erf
 from scipy.stats import binned_statistic
+import configparser
 import json
 import os.path
 import fnmatch
 import glob
 import re
 import itertools
+from functools import lru_cache
 import requests
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -28,9 +30,24 @@ from threading import Lock
 mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)
 
 #--------------------------------------------------------------------------------------------------
-def load_settings(sector=None):
+@lru_cache(maxsize=1)
+def load_settings():
+	"""
+	Load settings.
 
-	with open(os.path.join(os.path.dirname(__file__), 'data', 'settings.json'), 'r') as fid:
+	Returns:
+		:class:`configparser.ConfigParser`:
+	"""
+
+	settings = configparser.ConfigParser()
+	settings.read(os.path.join(os.path.dirname(__file__), 'data', 'settings.ini'))
+	return settings
+
+#--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=10)
+def load_sector_settings(sector=None):
+
+	with open(os.path.join(os.path.dirname(__file__), 'data', 'sectors.json'), 'r') as fid:
 		settings = json.load(fid)
 
 	if sector is not None:
