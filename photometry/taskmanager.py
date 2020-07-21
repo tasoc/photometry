@@ -11,7 +11,7 @@ import os
 import sqlite3
 import logging
 import json
-from . import STATUS
+from . import STATUS, utilities
 
 #--------------------------------------------------------------------------------------------------
 class TaskManager(object):
@@ -45,6 +45,7 @@ class TaskManager(object):
 		self.overwrite = overwrite
 		self.summary_file = summary
 		self.summary_interval = summary_interval
+		self.summary_counter = 0
 
 		if os.path.isdir(todo_file):
 			todo_file = os.path.join(todo_file, 'todo.sqlite')
@@ -60,7 +61,8 @@ class TaskManager(object):
 		console = logging.StreamHandler()
 		console.setFormatter(formatter)
 		self.logger = logging.getLogger(__name__)
-		self.logger.addHandler(console)
+		if not self.logger.hasHandlers():
+			self.logger.addHandler(console)
 		self.logger.setLevel(logging.INFO)
 
 		# Load the SQLite file:
@@ -81,7 +83,6 @@ class TaskManager(object):
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
 			priority INTEGER PRIMARY KEY ASC NOT NULL,
-			starid INTEGER NOT NULL,
 			lightcurve TEXT,
 			method_used TEXT NOT NULL,
 			elaptime REAL NOT NULL,
@@ -107,7 +108,8 @@ class TaskManager(object):
 			skipped_by INTEGER NOT NULL,
 			FOREIGN KEY (priority) REFERENCES todolist(priority) ON DELETE CASCADE ON UPDATE CASCADE,
 			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
-		);""") # PRIMARY KEY
+		);""")
+		self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS diagnostics_lightcurve_idx ON diagnostics (lightcurve);")
 		self.conn.commit()
 
 		# Add status indicator for corrections to todolist, if it doesn't already exists:
@@ -124,7 +126,7 @@ class TaskManager(object):
 			self.conn.commit()
 		if 'method_used' not in existing_columns:
 			# Since this one is NOT NULL, we have to do some magic to fill out the
-			# new column after creation, by finding ketwords in other columns.
+			# new column after creation, by finding keywords in other columns.
 			# This can be a pretty slow process, but it only has to be done once.
 			self.logger.debug("Adding method_used column to diagnostics")
 			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN method_used TEXT NOT NULL DEFAULT 'aperture';")
@@ -132,6 +134,11 @@ class TaskManager(object):
 				self.cursor.execute("UPDATE diagnostics SET method_used=? WHERE priority IN (SELECT priority FROM todolist WHERE method=?);", [m, m])
 			self.cursor.execute("UPDATE diagnostics SET method_used='halo' WHERE method_used='aperture' AND errors LIKE '%Automatically switched to Halo photometry%';")
 			self.conn.commit()
+		if 'starid' in existing_columns:
+			# Drop this column from the diagnostics table, since the information is already in
+			# the todolist table. Use utility function for this, since SQLite does not
+			# have a DROP COLUMN mechanism directly.
+			utilities.sqlite_drop_column(self.conn, 'diagnostics', 'starid')
 
 		# Reset calculations with status STARTED, ABORT or ERROR:
 		# We are re-running all with error, in the hope that they will work this time around:
@@ -333,7 +340,12 @@ class TaskManager(object):
 				# We never want to return a lightcurve for a secondary target over
 				# a primary target, so we are going to mark this one as SKIPPED.
 				primary_tpf_target_starid = int(result['datasource'][4:])
-				self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=?;", (primary_tpf_target_starid, result['sector']))
+				self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=? AND camera=? AND ccd=?;", (
+					primary_tpf_target_starid,
+					result['sector'],
+					result['camera'],
+					result['ccd']
+				))
 				primary_tpf_target_priority = self.cursor.fetchone()
 				# Mark the current star as SKIPPED and that it was caused by the primary:
 				self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target TIC %d", result['priority'], primary_tpf_target_starid)
@@ -345,7 +357,7 @@ class TaskManager(object):
 					))
 				else:
 					self.logger.warning("Could not find primary TPF target (TIC %d) for priority=%d", primary_tpf_target_starid, result['priority'])
-					error_msg.append("Could not find primary TPF target (TIC %d)" % primary_tpf_target_starid)
+					error_msg.append("TargetNotFoundError: Could not find primary TPF target (TIC %d)" % primary_tpf_target_starid)
 			else:
 				# Create unique list of starids to be masked as skipped:
 				skip_starids = ','.join([str(starid) for starid in skip_targets])
@@ -357,7 +369,11 @@ class TaskManager(object):
 				else:
 					skip_datasources = "'" + result['datasource'] + "'"
 
-				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=?;", (result['sector'],))
+				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=? AND camera=? AND ccd=?;", (
+					result['sector'],
+					result['camera'],
+					result['ccd']
+				))
 				skip_rows = self.cursor.fetchall()
 				if len(skip_rows) > 0:
 					skip_tmags = np.array([row['tmag'] for row in skip_rows])
@@ -424,9 +440,8 @@ class TaskManager(object):
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, starid, lightcurve, method_used, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, lightcurve, method_used, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
 			result['priority'],
-			result['starid'],
 			details.get('filepath_lightcurve', None),
 			result['method_used'],
 			result['time'],
@@ -449,7 +464,9 @@ class TaskManager(object):
 		self.conn.commit()
 
 		# Write summary file:
-		if self.summary_file and self.summary['tasks_run'] % self.summary_interval == 0:
+		self.summary_counter += 1
+		if self.summary_file and self.summary_counter % self.summary_interval == 0:
+			self.summary_counter = 0
 			self.write_summary()
 
 	#----------------------------------------------------------------------------------------------
@@ -459,5 +476,5 @@ class TaskManager(object):
 			try:
 				with open(self.summary_file, 'w') as fid:
 					json.dump(self.summary, fid)
-			except: # noqa: E722
+			except: # noqa: E722, pragma: no cover
 				self.logger.exception("Could not write summary file")
