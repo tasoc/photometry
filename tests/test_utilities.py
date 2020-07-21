@@ -9,10 +9,42 @@ Tests of photometry.utilities.
 import pytest
 import os.path
 import numpy as np
+import configparser
 import conftest # noqa: F401
 import photometry.utilities as u
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
+#--------------------------------------------------------------------------------------------------
+def test_load_settings():
+
+	settings = u.load_settings()
+	assert isinstance(settings, configparser.ConfigParser)
+	assert settings.getboolean('fixes', 'time_offset', fallback=True) # Actually checking value
+
+#--------------------------------------------------------------------------------------------------
+def test_load_sector_settings():
+
+	settings = u.load_sector_settings(2)
+	print(settings)
+	assert isinstance(settings, dict)
+	assert int(settings['sector']) == 2
+
+	settings = u.load_sector_settings()
+	print(settings)
+	assert isinstance(settings, dict)
+	assert 'sectors' in settings
+
+	sectors = []
+	for key, value in settings['sectors'].items():
+		# Make sure they contain what they should:
+		assert isinstance(value, dict)
+		assert 'sector' in value
+		assert 'reference_time' in value
+
+		# Ensure that sector numbers are unique:
+		assert value['sector'] not in sectors
+		sectors.append(value['sector'])
 
 #--------------------------------------------------------------------------------------------------
 def test_move_median_central():
