@@ -201,6 +201,9 @@ def test_fixes_time_offset_settings():
 	assert not applied
 	np.testing.assert_allclose(time3, time)
 
+	# Change the settings back to original:
+	settings['fixes']['time_offset'] = 'True'
+
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	pytest.main([__file__])
