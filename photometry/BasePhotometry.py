@@ -34,6 +34,7 @@ from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
 from .version import get_version
+from . import fixes
 
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -254,6 +255,10 @@ class BasePhotometry(object):
 					self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
 				else:
 					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+
+				# Correct timestamp offset that was in early data releases:
+				self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], hdr, datatype='ffi')
+
 				attrs['lightcurve'] = self.lightcurve
 
 				# World Coordinate System solution:
@@ -383,6 +388,9 @@ class BasePhotometry(object):
 				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
 			filepath_hdf5 = filepath_hdf5[0]
 			self.hdf = h5py.File(filepath_hdf5, 'r')
+
+			# Correct timestamp offset that was in early data releases:
+			self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], self.header, datatype='tpf')
 
 		# The file to load the star catalog from:
 		self.catalog_file = find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
@@ -1643,9 +1651,11 @@ class BasePhotometry(object):
 			hdus.append(wm)
 
 		# File name to save the lightcurve under:
-		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits.gz'.format(
+		filename = 'tess{starid:011d}-s{sector:03d}-{camera:d}-{ccd:d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits.gz'.format(
 			starid=self.starid,
 			sector=self.sector,
+			camera=self.camera,
+			ccd=self.ccd,
 			cadence=cadence,
 			datarel=self.data_rel,
 			version=version

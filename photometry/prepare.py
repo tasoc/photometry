@@ -25,7 +25,7 @@ from .catalog import download_catalogs
 from .backgrounds import fit_background
 from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
-from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
+from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes
 #from .plots import plt, plot_image
 
 #------------------------------------------------------------------------------
@@ -340,6 +340,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					'CAMERA': None,
 					'CCD': None,
 					'DATA_REL': None,
+					'PROCVER': None,  # Used to distinguish bad timestamps in sectors 20 and 21
 					'NUM_FRM': None,
 					'NREADOUT': None,
 					'CRMITEN': None,
@@ -449,6 +450,11 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				# Normalize sumimage
 				SumImage /= Nimg
 
+				# Correct timestamp offset that was in early data releases:
+				time_start = fixes.time_offset(time_start, attributes, datatype='ffi', timepos='start')
+				time_stop = fixes.time_offset(time_stop, attributes, datatype='ffi', timepos='end')
+				time, fixed_time_offset = fixes.time_offset(time, attributes, datatype='ffi', timepos='mid', return_flag=True)
+
 				# Single boolean image indicating if the pixel was (on average) used in the background estimation:
 				if 'backgrounds_pixels_used' not in hdf:
 					UsedInBackgrounds = (UsedInBackgrounds/numfiles > backgrounds_pixels_threshold)
@@ -457,6 +463,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
+				images.attrs['TIME_OFFSET_CORRECTED'] = fixed_time_offset
 				for key, value in attributes.items():
 					logger.debug("Saving attribute %s = %s", key, value)
 					images.attrs[key] = value

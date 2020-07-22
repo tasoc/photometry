@@ -33,6 +33,7 @@ Helper classes and utilities
 	photometry.image_motion
 	photometry.quality
 	photometry.taskmanager
+	photometry.fixes
 	photometry.utilities
 	
    
