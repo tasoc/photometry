@@ -7,9 +7,9 @@ The TASOC Photometry module
     :target: https://travis-ci.org/tasoc/photometry
 .. image:: https://img.shields.io/codecov/c/github/tasoc/photometry
     :target: https://codecov.io/github/tasoc/photometry
-.. image:: https://hitsofcode.com/github/tasoc/photometry
+.. image:: https://hitsofcode.com/github/tasoc/photometry?branch=devel
     :alt: Hits-of-Code
-    :target: https://hitsofcode.com/view/github/tasoc/photometry
+    :target: https://hitsofcode.com/view/github/tasoc/photometry?branch=devel
 .. image:: https://img.shields.io/github/license/tasoc/photometry.svg
     :alt: license
     :target: https://github.com/tasoc/photometry/blob/devel/LICENSE
