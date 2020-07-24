@@ -11,6 +11,7 @@ import logging
 import sqlite3
 import h5py
 import re
+import itertools
 import functools
 import contextlib
 import multiprocessing
@@ -21,7 +22,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from timeit import default_timer
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
-from .catalog import catalog_sqlite_search_footprint
+from .catalog import catalog_sqlite_search_footprint, download_catalogs
 
 #--------------------------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
@@ -383,11 +384,36 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
 		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
+	sectors = set()
 
 	# Load list of all Target Pixel files in the directory:
 	tpf_files = find_tpf_files(input_folder)
 	logger.info("Number of TPF files: %d", len(tpf_files))
 
+	# TODO: Could we change this so we dont have to parse the filename?
+	regex_tpf = re.compile(r'-s(\d+)[-_]')
+	for fname in tpf_files:
+		m = regex_tpf.search(os.path.basename(fname))
+		sectors.add(int(m.group(1)))
+
+	# Find list of all HDF5 files:
+	hdf_files = find_hdf5_files(input_folder, camera=cameras, ccd=ccds)
+	logger.info("Number of HDF5 files: %d", len(hdf_files))
+
+	# TODO: Could we change this so we dont have to parse the filename?
+	hdf_inputs = []
+	regex_hdf = re.compile(r'^sector(\d+)_camera(\d)_ccd(\d)\.hdf5$')
+	for fname in hdf_files:
+		m = regex_hdf.match(os.path.basename(fname))
+		sectors.add(int(m.group(1)))
+		hdf_inputs.append( (input_folder, int(m.group(1)), int(m.group(2)), int(m.group(3))) )
+
+	# Make sure that catalog files are available in the input directory.
+	# If they are not already, they will be downloaded from the cache:
+	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
+		download_catalogs(input_folder, sector, camera=camera, ccd=ccd)
+
+	# Add the target pixel files to the TODO list:
 	if len(tpf_files) > 0:
 		# Open a pool of workers:
 		logger.info("Starting pool of workers for TPFs...")
@@ -432,20 +458,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		logger.info("Removing %d secondary TPF files as they are also primary", np.sum(indx_remove))
 		cat = cat[~indx_remove]
 
-	# Find list of all HDF5 files:
-	hdf_files = find_hdf5_files(input_folder, camera=cameras, ccd=ccds)
-	logger.info("Number of HDF5 files: %d", len(hdf_files))
-
 	if len(hdf_files) > 0:
-		# TODO: Could we change this so we dont have to parse the filename?
-		inputs = []
-		for fname in hdf_files:
-			m = re.match(r'sector(\d+)_camera(\d)_ccd(\d)\.hdf5', os.path.basename(fname))
-			inputs.append( (input_folder, int(m.group(1)), int(m.group(2)), int(m.group(3))) )
-
 		# Open a pool of workers:
 		logger.info("Starting pool of workers for FFIs...")
-		threads = min(threads_max, len(inputs)) # No reason to use more than the number of jobs
+		threads = min(threads_max, len(hdf_inputs)) # No reason to use more than the number of jobs
 		logger.info("Using %d processes.", threads)
 
 		if threads > 1:
@@ -456,14 +472,14 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 		tic = default_timer()
 		ccds_done = 0
-		for cat2 in m(_ffi_todo_wrapper, inputs):
+		for cat2 in m(_ffi_todo_wrapper, hdf_inputs):
 			cat = vstack([cat, cat2], join_type='exact')
 			ccds_done += 1
-			logger.info("CCDs done: %d/%d", ccds_done, len(inputs))
+			logger.info("CCDs done: %d/%d", ccds_done, len(hdf_inputs))
 
 		# Amount of time it took to process TPF files:
 		toc = default_timer()
-		logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(inputs))
+		logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(hdf_inputs))
 
 		if threads > 1:
 			pool.close()

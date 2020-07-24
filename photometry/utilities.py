@@ -521,13 +521,14 @@ def find_nearest(array, value):
 	#	return idx
 
 #--------------------------------------------------------------------------------------------------
-def download_file(url, destination, position_holders=None, position_lock=None):
+def download_file(url, destination, desc=None, position_holders=None, position_lock=None):
 	"""
 	Download file from URL and place into specified destination.
 
 	Parameters:
-		url (string): URL to file to be downloaded.
-		destination (string): Path where to save file.
+		url (str): URL to file to be downloaded.
+		destination (str): Path where to save file.
+		desc (str, optional): Description to write next to progress-bar.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -538,7 +539,8 @@ def download_file(url, destination, position_holders=None, position_lock=None):
 		'unit_scale': True,
 		'position': None,
 		'leave': True,
-		'disable': not logger.isEnabledFor(logging.INFO)
+		'disable': not logger.isEnabledFor(logging.INFO),
+		'desc': desc
 	}
 
 	if position_holders is not None:
@@ -586,7 +588,7 @@ def download_parallel(urls, workers=4):
 		urls (iterable): List of files to download. Each element should consist of a list or tuple,
 			containing two elements: The URL to download, and the path to the destination where the
 			file should be saved.
-		workers (integer, optional): Number of threads to use for downloading. Default=4.
+		workers (int, optional): Number of threads to use for downloading. Default=4.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""

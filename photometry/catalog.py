@@ -369,4 +369,7 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 		)
 
 		# Download the file using the utilities function:
-		download_file(url, fpath)
+		download_file(url, fpath, desc='Catalog S{sector:d}-{camera:d}-{ccd:d}'.format(
+			sector=sector,
+			camera=camera,
+			ccd=ccd))
