@@ -24,7 +24,7 @@ jobs:
 
     - name: "Python 3.7 on Mac"
       os: osx
-      osx_image: xcode11.2 # Python 3.7.4 running on macOS 10.14.4
+      osx_image: xcode11.2 # Python 3.7.7 running on macOS 10.14.6
       language: shell
       before_install:
         - brew install git-lfs
