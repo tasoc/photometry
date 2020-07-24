@@ -137,7 +137,8 @@ class AperturePhotometry(BasePhotometry):
 				# It did resize, but let's just check if it tried
 				# to resize in a direction, but it hit the limit.
 				# In that case, let's check if we are already over the "HaloSwitch" limit
-				if self.target['tmag'] <= haloswitch_tmag_limit:
+				# Don't do this for secondary targets though.
+				if self.target['tmag'] <= haloswitch_tmag_limit and not self.datasource.startswith('tpf:'):
 					edge = np.zeros_like(mask_main, dtype='bool')
 					if resize_args.get('down') and self.stamp[0] == stamp_before[0]:
 						edge[0, :] = True

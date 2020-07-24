@@ -240,5 +240,15 @@ class HaloPhotometry(BasePhotometry):
 		# Return mask used for photometry:
 		self.final_phot_mask = pixel_mask
 
+		# Check if there are other targets in the mask that could then be skipped from
+		# processing, and report this back to the TaskManager. The TaskManager will decide
+		# if this means that this target or the other targets should be skipped in the end.
+		cols, rows = self.get_pixel_grid()
+		skip_targets = [t['starid'] for t in self.catalog if t['starid'] != self.starid
+			and np.any(pixel_mask & (rows == np.round(t['row'])+1) & (cols == np.round(t['column'])+1))]
+		if skip_targets:
+			logger.info("These stars could be skipped: %s", skip_targets)
+			self.report_details(skip_targets=skip_targets)
+
 		# Return whether you think it went well:
 		return STATUS.OK

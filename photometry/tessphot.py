@@ -83,7 +83,8 @@ def tessphot(method=None, *args, **kwargs):
 		haloswitch_tmag_limit = 6.0 # Maximal Tmag to apply Halo photometry automatically
 		haloswitch_flux_limit = 0.01
 
-		if not isinstance(pho, _PhotErrorDummy) and pho.target['tmag'] <= haloswitch_tmag_limit:
+		if not isinstance(pho, _PhotErrorDummy) and pho.target['tmag'] <= haloswitch_tmag_limit \
+			and not pho.datasource.startswith('tpf:'):
 			EdgeFlux = pho._details.get('edge_flux')
 			errors = pho._details.get('errors', [])
 
