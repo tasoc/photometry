@@ -78,6 +78,7 @@ jobs:
   fast_finish: true
   allow_failures:
     - name: "Flake8"
+    - os: osx # Just because it's unstable on Travis CI!
 
 install:
   - $PYTHON -m pip install --upgrade pip
