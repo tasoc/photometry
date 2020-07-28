@@ -12,6 +12,7 @@ import sqlite3
 import logging
 import itertools
 import contextlib
+from tqdm import tqdm
 from .tasoc_db import TASOC_DB
 from .utilities import (add_proper_motion, load_sector_settings, # find_catalog_files
 	radec_to_cartesian, cartesian_to_radec, download_file)
@@ -254,36 +255,41 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				))
 				conn.commit()
 
-				# Query the TESS Input Catalog table for all stars in the footprint.
-				# This is a MASSIVE table, so this query may take a while.
-				tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '%s'::polygon) AND disposition IS NULL;" % (
-					footprint,
-				))
-
 				# We need a list of when the sectors are in time:
 				logger.info('Projecting catalog {0:.3f} years relative to 2000'.format(epoch))
 
-				for row in tasocdb.cursor.fetchall():
-					# Add the proper motion to each coordinate:
-					if row['pm_ra'] and row['pm_decl']:
-						ra, dec = add_proper_motion(row['ra'], row['decl'], row['pm_ra'], row['pm_decl'], sector_reference_time, epoch=2000.0)
-						logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
-					else:
-						ra = row['ra']
-						dec = row['decl']
-
-					# Save the coordinates in SQLite database:
-					cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff) VALUES (?,?,?,?,?,?,?,?,?);", (
-						int(row['starid']),
-						ra,
-						dec,
-						row['ra'],
-						row['decl'],
-						row['pm_ra'],
-						row['pm_decl'],
-						row['Tmag'],
-						row['Teff']
+				# Query the TESS Input Catalog table for all stars in the footprint.
+				# This is a MASSIVE table, so this query may take a while.
+				with tasocdb.named_cursor() as cursor_named:
+					cursor_named.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '%s'::polygon) AND disposition IS NULL;" % (
+						footprint,
 					))
+
+					tqdm_settings = {
+						'disable': not logger.isEnabledFor(logging.INFO)
+					}
+
+					for row in tqdm(cursor_named, **tqdm_settings):
+						# Add the proper motion to each coordinate:
+						if row['pm_ra'] and row['pm_decl']:
+							ra, dec = add_proper_motion(row['ra'], row['decl'], row['pm_ra'], row['pm_decl'], sector_reference_time, epoch=2000.0)
+							logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
+						else:
+							ra = row['ra']
+							dec = row['decl']
+
+						# Save the coordinates in SQLite database:
+						cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff) VALUES (?,?,?,?,?,?,?,?,?);", (
+							int(row['starid']),
+							ra,
+							dec,
+							row['ra'],
+							row['decl'],
+							row['pm_ra'],
+							row['pm_decl'],
+							row['Tmag'],
+							row['Teff']
+						))
 
 				cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
 				conn.commit()
