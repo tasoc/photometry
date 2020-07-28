@@ -59,8 +59,8 @@ class AperturePhotometry(BasePhotometry):
 
 		# For bright saturated stars we allow for more retries:
 		ExpectedFlux = mag2flux(self.target['tmag'])
-		haloswitch_tmag_limit = 6.0
-		haloswitch_flux_limit = 0.01
+		haloswitch_tmag_limit = self.settings.getfloat('haloswitch', 'tmag_limit')
+		haloswitch_flux_limit = self.settings.getfloat('haloswitch', 'flux_limit')
 
 		allow_retries = 5
 		if self.target['tmag'] < 6:

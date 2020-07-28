@@ -29,7 +29,7 @@ from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale,
-	find_nearest, ListHandler)
+	find_nearest, ListHandler, load_settings)
 from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
@@ -121,6 +121,8 @@ class BasePhotometry(object):
 			cache (string, optional): Optional values are ``'none'``, ``'full'``
 				or ``'basic'`` (Default).
 			version (integer): Data release number to be added to headers. Default=5.
+			settings (:class:`configparser.ConfigParser`): Pipeline settings, loaded from
+				settings file.
 
 		Raises:
 			Exception: If starid could not be found in catalog.
@@ -1070,6 +1072,22 @@ class BasePhotometry(object):
 				self._aperture[(self._aperture & 8) != 0] -= 8
 
 		return self._aperture
+
+	#----------------------------------------------------------------------------------------------
+	@property
+	def settings(self):
+		"""
+		Pipeline settings and constants.
+
+		Returns:
+			:class:`configparser.ConfigParser`: Pipeline settings, loaded from settings file.
+
+		See also:
+			:func:`load_settings`.
+		"""
+		if not hasattr(self, '_settings') or self._settings is None:
+			self._settings = load_settings()
+		return self._settings
 
 	#----------------------------------------------------------------------------------------------
 	@property
