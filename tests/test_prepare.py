@@ -91,8 +91,9 @@ def test_run_prepare_photometry(PRIVATE_INPUT_DIR):
 	hdf5file = os.path.join(PRIVATE_INPUT_DIR, 'sector001_camera3_ccd2.hdf5')
 	os.remove(hdf5file)
 
-	capture_cli('run_prepare_photometry.py', params=['--camera=3', '--ccd=2', '"{0:s}"'.format(PRIVATE_INPUT_DIR)])
+	out, err, exitcode = capture_cli('run_prepare_photometry.py', params=['--camera=3', '--ccd=2', PRIVATE_INPUT_DIR])
 
+	assert exitcode == 0
 	assert os.path.isfile(hdf5file), "HDF5 was not created"
 
 	hdf5_file_valid(hdf5file)
