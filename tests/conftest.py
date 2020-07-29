@@ -22,9 +22,9 @@ if sys.path[0] != os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 def capture_cli(script, params=''):
 
 	if isinstance(params, (list, tuple)):
-		params = ' '.join(params)
+		params = ' '.join([shlex.quote(p) for p in params])
 
-	command = '"%s" %s %s' % (sys.executable, script.strip(), params.strip())
+	command = '%s %s %s' % (shlex.quote(sys.executable), shlex.quote(script.strip()), params.strip())
 	print(command)
 
 	cmd = shlex.split(command)
