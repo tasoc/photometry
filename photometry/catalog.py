@@ -17,7 +17,7 @@ from .tasoc_db import TASOC_DB
 from .utilities import (add_proper_motion, load_sector_settings, # find_catalog_files
 	radec_to_cartesian, cartesian_to_radec, download_file)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None,
 	buffer_size=5, pixel_scale=21.0):
 	"""
@@ -27,10 +27,10 @@ def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=
 	are handled correctly.
 
 	Parameters:
-		cursor (``sqlite3.Cursor`` object): Cursor to catalog SQLite file.
+		cursor (:class:`sqlite3.Cursor`): Cursor to catalog SQLite file.
 		footprint (ndarray): 2D ndarray of RA and DEC coordinates of the corners of footprint.
-		columns (string): Default is to return all columns.
-		constraints (string): Additional constraints on the query in addition to the footprint.
+		columns (str): Default is to return all columns.
+		constraints (str): Additional constraints on the query in addition to the footprint.
 		buffer_size (float): Buffer to add around stamp in pixels. Default=5.
 		pixel_scale (float): Size of single pixel in arcsecs. Default=21.0 (TESS).
 
@@ -104,19 +104,23 @@ def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=
 
 	return cursor.fetchall()
 
-#------------------------------------------------------------------------------
-def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False): # pragma: no cover
+#--------------------------------------------------------------------------------------------------
+def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2,
+	overwrite=False): # pragma: no cover
 	"""
 	Create catalogs of stars in a given TESS observing sector.
 
 	Parameters:
-		sector (integer): TESS observing sector.
-		input_folder (string or None, optional):  Input folder to create catalog file in.
+		sector (int): TESS observing sector.
+		input_folder (str or None, optional): Input folder to create catalog file in.
 			If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
-		cameras (iterable or None, optional): TESS cameras (1-4) to create catalogs for. If ``None`` all cameras are created.
-		ccds (iterable or None, optional): TESS ccds (1-4) to create catalogs for. If ``None`` all ccds are created.
-		coord_buffer (float, optional): Buffer in degrees around each CCD to include in catalogs. Default=0.1.
-		overwrite (boolean, optional): Overwrite existing catalogs. Default=``False``.
+		cameras (iterable or None, optional): TESS cameras (1-4) to create catalogs for.
+			If ``None`` all cameras are created.
+		ccds (iterable or None, optional): TESS ccds (1-4) to create catalogs for.
+			If ``None`` all ccds are created.
+		coord_buffer (float, optional): Buffer in degrees around each CCD to include in catalogs.
+			Default=0.1.
+		overwrite (bool, optional): Overwrite existing catalogs. Default=``False``.
 
 	Note:
 		This function requires the user to be connected to the TASOC network
@@ -318,7 +322,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 	logger.info("All catalogs done.")
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	"""
 	Download catalog SQLite files from TASOC cache into input_folder.
@@ -326,16 +330,16 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	This enables users to circumvent the creation of catalog files directly using
 	:py:func:`make_catalog`, which requires the user to be connected to the TASOC internal
 	networks at Aarhus University.
-	This does require that the TASOC personel have made catalogs available in the cache for
+	This does require that the TASOC personnel have made catalogs available in the cache for
 	the given sector, otherwise this function will throw an error.
 
 	Parameters:
-		input_folder (string): Target directory to download files into.
+		input_folder (str): Target directory to download files into.
 			Should be a TESSPHOT input directory.
-		sector (integer): Sector to download catalogs for.
-		camera (integer, optional): Camera to download catalogs for.
+		sector (int): Sector to download catalogs for.
+		camera (int, optional): Camera to download catalogs for.
 			If not specified, all cameras will be downloaded.
-		ccd (integer, optional): CCD to download catalogs for.
+		ccd (int, optional): CCD to download catalogs for.
 			If not specified, all CCDs will be downloaded.
 
 	Raises:
