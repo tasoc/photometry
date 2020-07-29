@@ -9,7 +9,7 @@ Tests of FFI Movies.
 import pytest
 import os.path
 from conftest import capture_cli
-from photometry.plots import matplotlib
+import photometry.plots # noqa: F401
 from matplotlib import animation
 
 HAS_FFMPEG = ('ffmpeg' in animation.writers)
