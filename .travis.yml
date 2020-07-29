@@ -64,12 +64,19 @@ jobs:
       env:
         - PATH=/c/Python38:/c/Python38/Scripts:$PATH
 
+    - name: "Python 3.6 on Linux, FFIMovies"
+      python: "3.6"
+      before_install:
+        - sudo apt-get install -y ffmpeg
+      script:
+        - $PYTHON -m pytest -m ffmpeg --cov=./
+
     - name: "Flake8"
       python: "3.6"
       git:
         lfs_skip_smudge: true
       install:
-        - pip install flake8
+        - $PIP install flake8
       script:
         - flake8
       after_success: skip

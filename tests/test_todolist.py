@@ -65,49 +65,8 @@ def test_exclude_file():
 #		assert(cbv_area == 131)
 
 #--------------------------------------------------------------------------------------------------
-def test_make_todolist(SHARED_INPUT_DIR):
-	with tempfile.NamedTemporaryFile() as tmpfile:
-		# Run make_todo and save output to temp-file:
-		todolist.make_todo(SHARED_INPUT_DIR, cameras=3, ccds=2, output_file=tmpfile.name)
-
-		tmpfile.flush()
-		assert os.path.isfile(tmpfile.name + '.sqlite'), "TODO-file was not created"
-
-		with contextlib.closing(sqlite3.connect("file:" + tmpfile.name + '.sqlite?mode=ro', uri=True)) as conn:
-			conn.row_factory = sqlite3.Row
-			cursor = conn.cursor()
-
-			cursor.execute("SELECT * FROM todolist LIMIT 1;")
-			row = cursor.fetchone()
-			print(dict(row))
-			assert row['camera'] == 3, "Wrong camera returned"
-			assert row['ccd'] == 2, "Wrong CCD returned"
-
-			cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='tpf';")
-			assert cursor.fetchone()[0] == 2, "Expected 2 TPFs in todolist"
-
-			cursor.close()
-
-#--------------------------------------------------------------------------------------------------
-def test_make_todolist_cli(PRIVATE_INPUT_DIR):
-
-	# Path to the TODO-file:
-	todofile = os.path.join(PRIVATE_INPUT_DIR, 'todo.sqlite')
-
-	# Delete existing todo-file:
-	os.remove(todofile)
-
-	# Run make_todo CLI script:
-	out, err, exitcode = capture_cli('make_todo.py', params=['--camera=3', '--ccd=2', '"{0:s}"'.format(PRIVATE_INPUT_DIR)])
-
-	assert exitcode == 0
-	assert '- ERROR -' not in out
-	assert '- ERROR -' not in err
-	assert '- INFO - TODO done.' in err
-
-	assert os.path.isfile(todofile), "TODO-file was not created"
-
-	with contextlib.closing(sqlite3.connect("file:" + todofile + '?mode=ro', uri=True)) as conn:
+def todo_file_valid(fpath):
+	with contextlib.closing(sqlite3.connect("file:" + fpath + '?mode=ro', uri=True)) as conn:
 		conn.row_factory = sqlite3.Row
 		cursor = conn.cursor()
 
@@ -121,6 +80,36 @@ def test_make_todolist_cli(PRIVATE_INPUT_DIR):
 		assert cursor.fetchone()[0] == 2, "Expected 2 TPFs in todolist"
 
 		cursor.close()
+
+#--------------------------------------------------------------------------------------------------
+def test_make_todolist(SHARED_INPUT_DIR):
+	with tempfile.NamedTemporaryFile() as tmpfile:
+		# Run make_todo and save output to temp-file:
+		todolist.make_todo(SHARED_INPUT_DIR, cameras=3, ccds=2, output_file=tmpfile.name)
+
+		tmpfile.flush()
+		assert os.path.isfile(tmpfile.name + '.sqlite'), "TODO-file was not created"
+		todo_file_valid(tmpfile.name + '.sqlite')
+
+#--------------------------------------------------------------------------------------------------
+def test_make_todolist_cli(PRIVATE_INPUT_DIR):
+
+	# Path to the TODO-file:
+	todofile = os.path.join(PRIVATE_INPUT_DIR, 'todo.sqlite')
+
+	# Delete existing todo-file:
+	os.remove(todofile)
+
+	# Run make_todo CLI script:
+	out, err, exitcode = capture_cli('make_todo.py', params=['--camera=3', '--ccd=2', PRIVATE_INPUT_DIR])
+
+	assert exitcode == 0
+	assert '- ERROR -' not in out
+	assert '- ERROR -' not in err
+	assert '- INFO - TODO done.' in err
+
+	assert os.path.isfile(todofile), "TODO-file was not created"
+	todo_file_valid(todofile)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
