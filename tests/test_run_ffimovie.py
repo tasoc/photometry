@@ -9,9 +9,14 @@ Tests of FFI Movies.
 import pytest
 import os.path
 from conftest import capture_cli
+from photometry.plots import matplotlib
+from matplotlib import animation
+
+HAS_FFMPEG = ('ffmpeg' in animation.writers)
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.ffmpeg
+@pytest.mark.skipif(not HAS_FFMPEG, reason="FFMpeg not available")
 def test_run_ffimovie(SHARED_INPUT_DIR):
 
 	out, err, exitcode = capture_cli('run_ffimovie.py', params=[SHARED_INPUT_DIR])

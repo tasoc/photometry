@@ -8,7 +8,6 @@ Tests of Prepare Photometry.
 
 import pytest
 import tempfile
-import logging
 import h5py
 import os.path
 from conftest import capture_cli
