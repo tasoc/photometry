@@ -9,6 +9,12 @@ env:
   global:
     - PYTHON="python" PIP="pip"
 
+addons:
+  apt:
+    packages: ffmpeg
+  homebrew:
+    packages: ffmpeg
+
 # We are specifying the build matrix manually, since there is too little overlap
 # between the different builds:
 jobs:
@@ -63,13 +69,6 @@ jobs:
         - pip install Cython # Needed for photutils on Windows Python 3.8 only ???
       env:
         - PATH=/c/Python38:/c/Python38/Scripts:$PATH
-
-    - name: "Python 3.6 on Linux, FFIMovies"
-      python: "3.6"
-      before_install:
-        - sudo apt-get install -y ffmpeg
-      script:
-        - $PYTHON -m pytest -m ffmpeg --cov=./
 
     - name: "Python 3.6 on Linux, OpenMPI"
       python: "3.6"
