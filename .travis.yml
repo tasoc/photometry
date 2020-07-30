@@ -1,7 +1,9 @@
 language: python
-cache: pip
 os: linux
 dist: xenial
+cache:
+  - apt: true
+  - pip: true
 
 # Since the different OS can't agree what the executables are called,
 # we will use environment variables to store the names:
