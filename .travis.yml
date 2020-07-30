@@ -11,11 +11,16 @@ env:
   global:
     - PYTHON="python" PIP="pip"
 
+# Dependencies to install on Linux and Mac OSX.
+# Windows builds needs to specify dependencies directly in jobs below.
 addons:
   apt:
-    packages: ffmpeg
+    packages:
+      - ffmpeg
   homebrew:
-    packages: ffmpeg
+    packages:
+      - git-lfs
+      - ffmpeg
 
 # We are specifying the build matrix manually, since there is too little overlap
 # between the different builds:
@@ -35,7 +40,6 @@ jobs:
       osx_image: xcode11.2 # Python 3.7.7 running on macOS 10.14.6
       language: shell
       before_install:
-        - brew install git-lfs
         - python3 --version
         - git lfs install
         - git lfs pull
@@ -45,8 +49,8 @@ jobs:
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install ffmpeg
-        - choco install python --version 3.6.8
+        - choco install ffmpeg --version=4.2.3
+        - choco install python --version=3.6.8
         - python --version
         - git lfs pull
       env:
