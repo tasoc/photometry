@@ -71,6 +71,15 @@ jobs:
       script:
         - $PYTHON -m pytest -m ffmpeg --cov=./
 
+    - name: "Python 3.6 on Linux, OpenMPI"
+      python: "3.6"
+      before_install:
+        - sudo apt-get install -y openmpi-bin libopenmpi-dev
+      before_script:
+        - $PIP install mpi4py
+      script:
+        - $PYTHON -m pytest -m mpi --cov=./
+
     - name: "Flake8"
       python: "3.6"
       git:
