@@ -54,7 +54,7 @@ jobs:
         - python --version
         - git lfs pull
       env:
-        - PATH=/c/Python36:/c/Python36/Scripts:$PATH
+        - PATH=/c/Python36:/c/Python36/Scripts:/c/ProgramData/chocolatey/lib/ffmpeg/tools:$PATH
 
     - name: "Python 3.7 on Windows"
       os: windows
