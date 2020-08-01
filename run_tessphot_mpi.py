@@ -122,7 +122,7 @@ def main():
 						tm.logger.info("Worker %d exited.", source)
 						closed_workers += 1
 
-					else:
+					else: # pragma: no cover
 						# This should never happen, but just to
 						# make sure we don't run into an infinite loop:
 						raise Exception("Master received an unknown tag: '{0}'".format(tag))
@@ -180,12 +180,12 @@ def main():
 					# We were told to EXIT, so lets do that
 					break
 
-				else:
+				else: # pragma: no cover
 					# This should never happen, but just to
 					# make sure we don't run into an infinite loop:
 					raise Exception("Worker received an unknown tag: '{0}'".format(tag))
 
-		except: # noqa: E722
+		except: # noqa: E722, pragma: no cover
 			logger.exception("Something failed in worker")
 
 		finally:

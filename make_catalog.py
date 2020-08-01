@@ -25,7 +25,7 @@ import argparse
 import logging
 from photometry.catalog import make_catalog
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 
 	# Parse command line arguments:
@@ -55,4 +55,8 @@ if __name__ == '__main__':
 	logger.addHandler(console)
 
 	# Run the program:
-	make_catalog(args.sector, input_folder=args.input_folder, cameras=args.camera, ccds=args.ccd, overwrite=args.overwrite)
+	make_catalog(args.sector,
+		input_folder=args.input_folder,
+		cameras=args.camera,
+		ccds=args.ccd,
+		overwrite=args.overwrite)

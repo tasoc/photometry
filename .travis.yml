@@ -1,13 +1,26 @@
 language: python
-cache: pip
 os: linux
 dist: xenial
+cache:
+  - apt: true
+  - pip: true
 
 # Since the different OS can't agree what the executables are called,
 # we will use environment variables to store the names:
 env:
   global:
     - PYTHON="python" PIP="pip"
+
+# Dependencies to install on Linux and Mac OSX.
+# Windows builds needs to specify dependencies directly in jobs below.
+addons:
+  apt:
+    packages:
+      - ffmpeg
+  homebrew:
+    packages:
+      - git-lfs
+      - ffmpeg
 
 # We are specifying the build matrix manually, since there is too little overlap
 # between the different builds:
@@ -27,7 +40,6 @@ jobs:
       osx_image: xcode11.2 # Python 3.7.7 running on macOS 10.14.6
       language: shell
       before_install:
-        - brew install git-lfs
         - python3 --version
         - git lfs install
         - git lfs pull
@@ -37,7 +49,7 @@ jobs:
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install python --version 3.6.8
+        - choco install python --version=3.6.8
         - python --version
         - git lfs pull
       env:
@@ -47,7 +59,7 @@ jobs:
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install python --version 3.7.4
+        - choco install python --version=3.7.4
         - python --version
         - git lfs pull
       env:
@@ -57,19 +69,28 @@ jobs:
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install python --version 3.8.2
+        - choco install python --version=3.8.2
         - python --version
         - git lfs pull
         - pip install Cython # Needed for photutils on Windows Python 3.8 only ???
       env:
         - PATH=/c/Python38:/c/Python38/Scripts:$PATH
 
+    - name: "Python 3.6 on Linux, OpenMPI"
+      python: "3.6"
+      before_install:
+        - sudo apt-get install -y openmpi-bin libopenmpi-dev
+      before_script:
+        - $PIP install mpi4py
+      script:
+        - $PYTHON -m pytest -m mpi --cov=./
+
     - name: "Flake8"
       python: "3.6"
       git:
         lfs_skip_smudge: true
       install:
-        - pip install flake8
+        - $PIP install flake8
       script:
         - flake8
       after_success: skip
@@ -86,7 +107,7 @@ install:
   - $PIP install codecov pytest-cov
   - travis_wait $PYTHON run_download_cache.py -q
 script:
-  - $PYTHON -m pytest --cov=photometry/
+  - $PYTHON -m pytest --cov=./
 after_success:
   - $PYTHON -m codecov
 
