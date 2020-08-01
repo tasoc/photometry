@@ -49,18 +49,16 @@ jobs:
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install ffmpeg --version=4.3.1
         - choco install python --version=3.6.8
         - python --version
         - git lfs pull
       env:
-        - PATH=/c/Python36:/c/Python36/Scripts:/c/ProgramData/chocolatey/lib/ffmpeg/tools:$PATH
+        - PATH=/c/Python36:/c/Python36/Scripts:$PATH
 
     - name: "Python 3.7 on Windows"
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install ffmpeg --version=4.1.4
         - choco install python --version=3.7.4
         - python --version
         - git lfs pull
@@ -71,7 +69,6 @@ jobs:
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install ffmpeg
         - choco install python --version=3.8.2
         - python --version
         - git lfs pull
