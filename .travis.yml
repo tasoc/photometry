@@ -49,7 +49,7 @@ jobs:
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install ffmpeg --version=4.2.3
+        - choco install ffmpeg --version=4.3.1
         - choco install python --version=3.6.8
         - python --version
         - git lfs pull
@@ -60,8 +60,8 @@ jobs:
       os: windows
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
-        - choco install ffmpeg
-        - choco install python --version 3.7.4
+        - choco install ffmpeg --version=4.1.4
+        - choco install python --version=3.7.4
         - python --version
         - git lfs pull
       env:
@@ -72,7 +72,7 @@ jobs:
       language: shell  # 'language: python' is an error on Travis CI Windows
       before_install:
         - choco install ffmpeg
-        - choco install python --version 3.8.2
+        - choco install python --version=3.8.2
         - python --version
         - git lfs pull
         - pip install Cython # Needed for photutils on Windows Python 3.8 only ???
