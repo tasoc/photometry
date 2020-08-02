@@ -14,6 +14,8 @@ Note:
 import psycopg2 as psql
 from psycopg2.extras import DictCursor
 import getpass
+import contextlib
+import random
 
 #------------------------------------------------------------------------------
 class TASOC_DB(object): # pragma: no cover
@@ -58,3 +60,8 @@ class TASOC_DB(object): # pragma: no cover
 
 	def __exit__(self, *args, **kwargs):
 		self.close()
+
+	def named_cursor(self, name=None):
+		if name is None:
+			name = 'tasocdb-{0:06d}'.format(random.randint(1, 100000))
+		return contextlib.closing(self.conn.cursor(name=name, cursor_factory=DictCursor))

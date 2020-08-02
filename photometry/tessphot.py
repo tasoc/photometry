@@ -7,7 +7,7 @@
 import logging
 import traceback
 from . import STATUS, AperturePhotometry, PSFPhotometry, LinPSFPhotometry, HaloPhotometry
-from .utilities import mag2flux
+from .utilities import mag2flux, load_settings
 
 #--------------------------------------------------------------------------------------------------
 class _PhotErrorDummy(object):
@@ -79,11 +79,12 @@ def tessphot(method=None, *args, **kwargs):
 
 		# If this is a bright target, and there are several pixels touching
 		# the edge, let's switch to Halo photometry instead:
+		settings = load_settings()
+		haloswitch_tmag_limit = settings.getfloat('haloswitch', 'tmag_limit')
+		haloswitch_flux_limit = settings.getfloat('haloswitch', 'flux_limit')
 
-		haloswitch_tmag_limit = 6.0 # Maximal Tmag to apply Halo photometry automatically
-		haloswitch_flux_limit = 0.01
-
-		if not isinstance(pho, _PhotErrorDummy) and pho.target['tmag'] <= haloswitch_tmag_limit:
+		if not isinstance(pho, _PhotErrorDummy) and pho.target['tmag'] <= haloswitch_tmag_limit \
+			and not pho.datasource.startswith('tpf:'):
 			EdgeFlux = pho._details.get('edge_flux')
 			errors = pho._details.get('errors', [])
 

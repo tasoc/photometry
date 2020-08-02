@@ -11,10 +11,38 @@ import os.path
 import tempfile
 import shutil
 import sys
+import subprocess
+import shlex
 
 # Insert photometry package as the first on path:
 if sys.path[0] != os.path.abspath(os.path.join(os.path.dirname(__file__), '..')):
 	sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+#--------------------------------------------------------------------------------------------------
+def capture_cli(script, params=[], mpiexec=False):
+
+	if isinstance(params, str):
+		params = shlex.split(params)
+
+	cmd = [sys.executable, script.strip()] + list(params)
+	if mpiexec:
+		cmd = ['mpiexec', '-n', '2'] + cmd
+	print(cmd)
+
+	proc = subprocess.Popen(cmd,
+		cwd=os.path.join(os.path.dirname(__file__), '..'),
+		stdout=subprocess.PIPE,
+		stderr=subprocess.PIPE,
+		universal_newlines=True
+	)
+	out, err = proc.communicate()
+	exitcode = proc.returncode
+	proc.kill()
+
+	print("ExitCode: %d" % exitcode)
+	print("StdOut:\n%s" % out.strip())
+	print("StdErr:\n%s" % err.strip())
+	return out, err, exitcode
 
 #--------------------------------------------------------------------------------------------------
 @pytest.fixture(scope='session')

@@ -389,7 +389,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 	return output_file
 
 #--------------------------------------------------------------------------------------------------
-if __name__ == '__main__':
+def main():
 	multiprocessing.freeze_support() # for Windows support
 
 	# Parse command line arguments:
@@ -479,3 +479,7 @@ if __name__ == '__main__':
 	if threads > 1:
 		pool.close()
 		pool.join()
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == '__main__':
+	main()

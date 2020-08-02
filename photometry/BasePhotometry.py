@@ -29,7 +29,7 @@ from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale,
-	find_nearest, ListHandler)
+	find_nearest, ListHandler, load_settings)
 from .catalog import catalog_sqlite_search_footprint
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
@@ -121,6 +121,8 @@ class BasePhotometry(object):
 			cache (string, optional): Optional values are ``'none'``, ``'full'``
 				or ``'basic'`` (Default).
 			version (integer): Data release number to be added to headers. Default=5.
+			settings (:class:`configparser.ConfigParser`): Pipeline settings, loaded from
+				settings file.
 
 		Raises:
 			Exception: If starid could not be found in catalog.
@@ -1073,6 +1075,22 @@ class BasePhotometry(object):
 
 	#----------------------------------------------------------------------------------------------
 	@property
+	def settings(self):
+		"""
+		Pipeline settings and constants.
+
+		Returns:
+			:class:`configparser.ConfigParser`: Pipeline settings, loaded from settings file.
+
+		See also:
+			:func:`load_settings`.
+		"""
+		if not hasattr(self, '_settings') or self._settings is None:
+			self._settings = load_settings()
+		return self._settings
+
+	#----------------------------------------------------------------------------------------------
+	@property
 	def catalog(self):
 		"""
 		Catalog of stars in the current stamp.
@@ -1309,7 +1327,9 @@ class BasePhotometry(object):
 		if self._status in (STATUS.OK, STATUS.WARNING):
 			# Simple check that entire lightcurve is not NaN:
 			if allnan(self.lightcurve['flux']):
-				raise Exception("Final lightcurve is all NaNs")
+				raise Exception("Final lightcurve fluxes are all NaNs")
+			if allnan(self.lightcurve['flux_err']):
+				raise Exception("Final lightcurve errors are all NaNs")
 
 			# Pick out the part of the lightcurve that has a good quality
 			# and only use this subset to calculate the diagnostic metrics:

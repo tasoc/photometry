@@ -185,6 +185,9 @@ class TaskManager(object):
 				self.summary['numtasks'] += row['cnt']
 				if row['status'] is not None:
 					self.summary[STATUS(row['status']).name] = row['cnt']
+			# Make sure the containing directory exists:
+			if not os.path.isdir(os.path.dirname(self.summary_file)):
+				os.makedirs(os.path.dirname(self.summary_file))
 			# Write summary to file:
 			self.write_summary()
 

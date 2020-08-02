@@ -36,7 +36,6 @@ from photometry import tessphot, TaskManager
 
 #--------------------------------------------------------------------------------------------------
 def main():
-
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')

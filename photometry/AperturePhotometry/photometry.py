@@ -29,10 +29,16 @@ class AperturePhotometry(BasePhotometry):
 
 	#----------------------------------------------------------------------------------------------
 	def _minimum_aperture(self):
+		# Map of valid pixels that can be included:
+		collected_pixels = (self.aperture & 1 != 0)
+
+		# Create minimum 2x2 mask around target position:
 		cols, rows = self.get_pixel_grid()
 		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
 			& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
-		return mask_main
+
+		# Return the 2x2 mask, but only the pixels that are actually collected:
+		return mask_main & collected_pixels
 
 	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
@@ -59,8 +65,8 @@ class AperturePhotometry(BasePhotometry):
 
 		# For bright saturated stars we allow for more retries:
 		ExpectedFlux = mag2flux(self.target['tmag'])
-		haloswitch_tmag_limit = 6.0
-		haloswitch_flux_limit = 0.01
+		haloswitch_tmag_limit = self.settings.getfloat('haloswitch', 'tmag_limit')
+		haloswitch_flux_limit = self.settings.getfloat('haloswitch', 'flux_limit')
 
 		allow_retries = 5
 		if self.target['tmag'] < 6:
@@ -137,7 +143,8 @@ class AperturePhotometry(BasePhotometry):
 				# It did resize, but let's just check if it tried
 				# to resize in a direction, but it hit the limit.
 				# In that case, let's check if we are already over the "HaloSwitch" limit
-				if self.target['tmag'] <= haloswitch_tmag_limit:
+				# Don't do this for secondary targets though.
+				if self.target['tmag'] <= haloswitch_tmag_limit and not self.datasource.startswith('tpf:'):
 					edge = np.zeros_like(mask_main, dtype='bool')
 					if resize_args.get('down') and self.stamp[0] == stamp_before[0]:
 						edge[0, :] = True
