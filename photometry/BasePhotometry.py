@@ -1327,7 +1327,9 @@ class BasePhotometry(object):
 		if self._status in (STATUS.OK, STATUS.WARNING):
 			# Simple check that entire lightcurve is not NaN:
 			if allnan(self.lightcurve['flux']):
-				raise Exception("Final lightcurve is all NaNs")
+				raise Exception("Final lightcurve fluxes are all NaNs")
+			if allnan(self.lightcurve['flux_err']):
+				raise Exception("Final lightcurve errors are all NaNs")
 
 			# Pick out the part of the lightcurve that has a good quality
 			# and only use this subset to calculate the diagnostic metrics:

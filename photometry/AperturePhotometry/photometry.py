@@ -29,10 +29,16 @@ class AperturePhotometry(BasePhotometry):
 
 	#----------------------------------------------------------------------------------------------
 	def _minimum_aperture(self):
+		# Map of valid pixels that can be included:
+		collected_pixels = (self.aperture & 1 != 0)
+
+		# Create minimum 2x2 mask around target position:
 		cols, rows = self.get_pixel_grid()
 		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
 			& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
-		return mask_main
+
+		# Return the 2x2 mask, but only the pixels that are actually collected:
+		return mask_main & collected_pixels
 
 	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
