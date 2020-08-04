@@ -340,13 +340,6 @@ class TaskManager(object):
 		stamp_width = None if stamp is None else stamp[3] - stamp[2]
 		stamp_height = None if stamp is None else stamp[1] - stamp[0]
 
-		# Error messages to save to database:
-		if error_msg:
-			error_msg = '\n'.join(error_msg)
-			self.summary['last_error'] = error_msg
-		else:
-			error_msg = None
-
 		# Make changes to database:
 		additional_skipped = 0
 		try:
@@ -424,6 +417,9 @@ class TaskManager(object):
 								skip_rows[np.argmin(skip_tmags)]['priority']
 							))
 
+			# Convert error messages from list to string or None:
+			error_msg = None if not error_msg else '\n'.join(error_msg)
+
 			# Update the status in the TODO list:
 			self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
 				my_status.value,
@@ -461,6 +457,10 @@ class TaskManager(object):
 		self.summary[my_status.name] += 1
 		self.summary['STARTED'] -= 1
 		self.summary['SKIPPED'] += additional_skipped
+
+		# Store the last error message in summary:
+		if error_msg:
+			self.summary['last_error'] = error_msg
 
 		# Calculate mean elapsed time using "streaming weighted mean" with (alpha=0.1):
 		# https://dev.to/nestedsoftware/exponential-moving-average-on-streaming-data-4hhl
