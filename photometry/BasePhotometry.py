@@ -1483,6 +1483,9 @@ class BasePhotometry(object):
 			for key, value in self.additional_headers.items():
 				hdu.header[key] = value
 
+		# Add Data Validation header, which will be filled later on:
+		hdu.header['DATAVAL'] = (0, 'Data validation flags')
+
 		# Make binary table:
 		# Define table columns:
 		c1 = fits.Column(name='TIME', format='D', disp='D14.7', unit='BJD - 2457000, days', array=self.lightcurve['time'])
