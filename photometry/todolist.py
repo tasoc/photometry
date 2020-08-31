@@ -332,7 +332,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			Default=True.
 		output_file (string, optional): The file path where the output file should be saved.
 			If not specified, the file will be saved into the input directory.
-			Should only be used for testing, since the file would (proberly) otherwise end up with
+			Should only be used for testing, since the file would (properly) otherwise end up with
 			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
@@ -390,7 +390,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 	tpf_files = find_tpf_files(input_folder)
 	logger.info("Number of TPF files: %d", len(tpf_files))
 
-	# TODO: Could we change this so we dont have to parse the filename?
+	# TODO: Could we change this so we don't have to parse the filename?
 	regex_tpf = re.compile(r'-s(\d+)[-_]')
 	for fname in tpf_files:
 		m = regex_tpf.search(os.path.basename(fname))
@@ -608,7 +608,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		# Run a VACUUM of the table which will force a recreation of the
 		# underlying "pages" of the file.
 		# Please note that we are changing the "isolation_level" of the connection here,
-		# but since we closing the conmnection just after, we are not changing it back
+		# but since we closing the connection just after, we are not changing it back
 		conn.isolation_level = None
 		cursor.execute("VACUUM;")
 

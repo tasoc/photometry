@@ -131,8 +131,8 @@ class AperturePhotometry(BasePhotometry):
 				resize_args['right'] = 10
 
 			if resize_args:
-				logger.warning("Touching the edges! Retrying.")
-				logger.info(resize_args)
+				logger.info("Touching the edges! Retrying.")
+				logger.debug(resize_args)
 				stamp_before = self.stamp
 				sumimage_before = self.sumimage
 				if not self.resize_stamp(**resize_args):
