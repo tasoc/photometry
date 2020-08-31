@@ -23,7 +23,7 @@ from astropy.table import Table, Column
 from astropy import units
 import astropy.coordinates as coord
 from astropy.time import Time
-from astropy.wcs import WCS
+from astropy.wcs import WCS, FITSFixedWarning
 import enum
 from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
@@ -39,6 +39,7 @@ from . import fixes
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
+warnings.filterwarnings('ignore', category=FITSFixedWarning, module="astropy")
 
 __version__ = get_version()
 

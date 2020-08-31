@@ -14,15 +14,19 @@ import re
 import itertools
 import functools
 import contextlib
+import warnings
 import multiprocessing
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import RectBivariateSpline
 from astropy.table import Table, vstack, Column
 from astropy.io import fits
-from astropy.wcs import WCS
+from astropy.wcs import WCS, FITSFixedWarning
 from timeit import default_timer
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
 from .catalog import catalog_sqlite_search_footprint, download_catalogs
+
+# Filter out annoying warnings:
+warnings.filterwarnings('ignore', category=FITSFixedWarning, module="astropy")
 
 #--------------------------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
