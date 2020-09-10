@@ -23,7 +23,7 @@ from astropy.table import Table, Column
 from astropy import units
 import astropy.coordinates as coord
 from astropy.time import Time
-from astropy.wcs import WCS
+from astropy.wcs import WCS, FITSFixedWarning
 import enum
 from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
@@ -39,6 +39,7 @@ from . import fixes
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
+warnings.filterwarnings('ignore', category=FITSFixedWarning, module="astropy")
 
 __version__ = get_version()
 
@@ -1482,6 +1483,9 @@ class BasePhotometry(object):
 		if self.additional_headers:
 			for key, value in self.additional_headers.items():
 				hdu.header[key] = value
+
+		# Add Data Validation header, which will be filled later on:
+		hdu.header['DATAVAL'] = (0, 'Data validation flags')
 
 		# Make binary table:
 		# Define table columns:

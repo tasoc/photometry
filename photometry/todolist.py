@@ -14,15 +14,19 @@ import re
 import itertools
 import functools
 import contextlib
+import warnings
 import multiprocessing
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import RectBivariateSpline
 from astropy.table import Table, vstack, Column
 from astropy.io import fits
-from astropy.wcs import WCS
+from astropy.wcs import WCS, FITSFixedWarning
 from timeit import default_timer
 from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
 from .catalog import catalog_sqlite_search_footprint, download_catalogs
+
+# Filter out annoying warnings:
+warnings.filterwarnings('ignore', category=FITSFixedWarning, module="astropy")
 
 #--------------------------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
@@ -105,23 +109,18 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 	return EdgeDistOuter
 
 #--------------------------------------------------------------------------------------------------
-def _ffi_todo_wrapper(args):
-	return _ffi_todo(*args)
-
-def _ffi_todo(input_folder, sector, camera, ccd):
+def _ffi_todo(hdf5_file, exclude=[]):
 
 	logger = logging.getLogger(__name__)
 
 	cat_tmp = []
 
-	# See if there are any FFIs for this camera and ccd.
-	# We just check if an HDF5 file exist.
-	hdf5_file = find_hdf5_files(input_folder, sector=sector, camera=camera, ccd=ccd)
-	if len(hdf5_file) != 1:
-		raise FileNotFoundError("Could not find HDF5 file")
-
 	# Load the relevant information from the HDF5 file for this camera and ccd:
-	with h5py.File(hdf5_file[0], 'r') as hdf:
+	with h5py.File(hdf5_file, 'r') as hdf:
+		sector = int(hdf['images'].attrs['SECTOR'])
+		camera = int(hdf['images'].attrs['CAMERA'])
+		ccd = int(hdf['images'].attrs['CCD'])
+		datarel = int(hdf['images'].attrs['DATA_REL'])
 		if isinstance(hdf['wcs'], h5py.Group):
 			refindx = hdf['wcs'].attrs['ref_frame']
 			hdr_string = hdf['wcs']['%04d' % refindx][0]
@@ -134,6 +133,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 		image_shape = hdf['images']['0000'].shape
 
 	# Load the corresponding catalog:
+	input_folder = os.path.dirname(hdf5_file)
 	catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 	if len(catalog_file) != 1:
 		raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
@@ -143,13 +143,20 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 		cursor = conn.cursor()
 
 		# Load the settings:
-		cursor.execute("SELECT * FROM settings WHERE camera=? AND ccd=? LIMIT 1;", (camera, ccd))
+		cursor.execute("SELECT * FROM settings WHERE sector=? AND camera=? AND ccd=? LIMIT 1;", (sector, camera, ccd))
 		settings = cursor.fetchone()
+		if settings is None:
+			raise Exception("Settings not found in catalog (SECTOR=%d, CAMERA=%d, CCD=%d)" % (sector, camera, ccd))
 
 		# Find all the stars in the catalog brigher than a certain limit:
 		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < 15 ORDER BY tmag;")
 		for row in cursor.fetchall():
 			logger.debug("%011d - %.3f", row['starid'], row['tmag'])
+
+			# Exclude targets from exclude list:
+			if (row['starid'], sector, 'ffi', datarel) in exclude:
+				logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=ffi, DATAREL=%d", row['starid'], sector, datarel)
+				continue
 
 			# Calculate the position of this star on the CCD using the WCS:
 			ra_dec = np.atleast_2d([row['ra'], row['decl']])
@@ -167,7 +174,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 			# Calculate distance from target to edge of image:
 			EdgeDist = edge_distance(y, x, image_shape=image_shape)
 
-			# Calculate the Cotrending Basis Vector area the star falls in:
+			# Calculate the Co-trending Basis Vector area the star falls in:
 			cbv_area = calc_cbv_area(row, settings)
 
 			# The targets is on silicon, so add it to the todo list:
@@ -210,10 +217,11 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 		sector = hdu[0].header['SECTOR']
 		camera = hdu[0].header['CAMERA']
 		ccd = hdu[0].header['CCD']
+		datarel = hdu[0].header['DATA_REL']
 		aperture_observed_pixels = (hdu['APERTURE'].data & 1 != 0)
 
-		if (starid, sector, 'tpf') in exclude or (starid, sector, 'all') in exclude:
-			logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf", starid, sector)
+		if (starid, sector, 'tpf', datarel) in exclude:
+			logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf, DATAREL=%d", starid, sector, datarel)
 			return empty_table
 
 		if camera in cameras and ccd in ccds:
@@ -332,7 +340,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			Default=True.
 		output_file (string, optional): The file path where the output file should be saved.
 			If not specified, the file will be saved into the input directory.
-			Should only be used for testing, since the file would (proberly) otherwise end up with
+			Should only be used for testing, since the file would (properly) otherwise end up with
 			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
@@ -376,7 +384,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 	# Load file with targets to be excluded from processing for some reason:
 	exclude_file = os.path.join(os.path.dirname(__file__), 'data', 'todolist-exclude.dat')
-	exclude = np.genfromtxt(exclude_file, usecols=(0,1,2), dtype=None, encoding='utf-8')
+	exclude = np.genfromtxt(exclude_file, usecols=(0,1,2,3), dtype=None, encoding='utf-8')
 	exclude = set([tuple(e) for e in exclude])
 
 	# Create the TODO list as a table which we will fill with targets:
@@ -390,7 +398,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 	tpf_files = find_tpf_files(input_folder)
 	logger.info("Number of TPF files: %d", len(tpf_files))
 
-	# TODO: Could we change this so we dont have to parse the filename?
+	# TODO: Could we change this so we don't have to parse the filename?
 	regex_tpf = re.compile(r'-s(\d+)[-_]')
 	for fname in tpf_files:
 		m = regex_tpf.search(os.path.basename(fname))
@@ -400,13 +408,11 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 	hdf_files = find_hdf5_files(input_folder, camera=cameras, ccd=ccds)
 	logger.info("Number of HDF5 files: %d", len(hdf_files))
 
-	# TODO: Could we change this so we dont have to parse the filename?
-	hdf_inputs = []
+	# TODO: Could we change this so we don't have to parse the filename?
 	regex_hdf = re.compile(r'^sector(\d+)_camera(\d)_ccd(\d)\.hdf5$')
 	for fname in hdf_files:
 		m = regex_hdf.match(os.path.basename(fname))
 		sectors.add(int(m.group(1)))
-		hdf_inputs.append( (input_folder, int(m.group(1)), int(m.group(2)), int(m.group(3))) )
 
 	# Make sure that catalog files are available in the input directory.
 	# If they are not already, they will be downloaded from the cache:
@@ -461,7 +467,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 	if len(hdf_files) > 0:
 		# Open a pool of workers:
 		logger.info("Starting pool of workers for FFIs...")
-		threads = min(threads_max, len(hdf_inputs)) # No reason to use more than the number of jobs
+		threads = min(threads_max, len(hdf_files)) # No reason to use more than the number of jobs
 		logger.info("Using %d processes.", threads)
 
 		if threads > 1:
@@ -470,16 +476,18 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		else:
 			m = map
 
+		_ffi_todo_wrapper = functools.partial(_ffi_todo, exclude=exclude)
+
 		tic = default_timer()
 		ccds_done = 0
-		for cat2 in m(_ffi_todo_wrapper, hdf_inputs):
+		for cat2 in m(_ffi_todo_wrapper, hdf_files):
 			cat = vstack([cat, cat2], join_type='exact')
 			ccds_done += 1
-			logger.info("CCDs done: %d/%d", ccds_done, len(hdf_inputs))
+			logger.info("CCDs done: %d/%d", ccds_done, len(hdf_files))
 
 		# Amount of time it took to process TPF files:
 		toc = default_timer()
-		logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(hdf_inputs))
+		logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(hdf_files))
 
 		if threads > 1:
 			pool.close()
@@ -522,22 +530,6 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		logger.info("Removing %d secondary targets as duplicates.", len(remove_indx))
 		logger.debug(remove_indx)
 		cat.remove_rows(remove_indx)
-
-	# Exclude targets from exclude list:
-	# Add an index and use that to search for starid, and then further check sector and datasource:
-	cat.add_index('starid')
-	remove_indx = []
-	for ex in exclude:
-		try:
-			indx = np.atleast_1d(cat.loc_indices['starid', ex[0]])
-		except KeyError:
-			indx = []
-		for i in indx:
-			if cat[i]['sector'] == ex[1] and cat[i]['datasource'] == ex[2]:
-				remove_indx.append(i)
-	if remove_indx:
-		del cat[remove_indx]
-	cat.remove_indices('starid')
 
 	# Load file with specific method settings and create lookup-table of them:
 	methods_file = os.path.join(os.path.dirname(__file__), 'data', 'todolist-methods.dat')
@@ -608,7 +600,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		# Run a VACUUM of the table which will force a recreation of the
 		# underlying "pages" of the file.
 		# Please note that we are changing the "isolation_level" of the connection here,
-		# but since we closing the conmnection just after, we are not changing it back
+		# but since we closing the connection just after, we are not changing it back
 		conn.isolation_level = None
 		cursor.execute("VACUUM;")
 

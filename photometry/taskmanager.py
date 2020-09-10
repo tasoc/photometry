@@ -335,95 +335,132 @@ class TaskManager(object):
 		# The status of this target returned by the photometry:
 		my_status = result['status']
 
-		# Also set status of targets that were marked as "SKIPPED" by this target:
-		if 'skip_targets' in details and len(details['skip_targets']) > 0:
-			skip_targets = set(details['skip_targets'])
-			if result['datasource'].startswith('tpf:') and int(result['datasource'][4:]) in skip_targets:
-				# This secondary target is in the mask of the primary target.
-				# We never want to return a lightcurve for a secondary target over
-				# a primary target, so we are going to mark this one as SKIPPED.
-				primary_tpf_target_starid = int(result['datasource'][4:])
-				self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=? AND camera=? AND ccd=?;", (
-					primary_tpf_target_starid,
-					result['sector'],
-					result['camera'],
-					result['ccd']
-				))
-				primary_tpf_target_priority = self.cursor.fetchone()
-				# Mark the current star as SKIPPED and that it was caused by the primary:
-				self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target TIC %d", result['priority'], primary_tpf_target_starid)
-				my_status = STATUS.SKIPPED
-				if primary_tpf_target_priority is not None:
-					self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
-						result['priority'],
-						primary_tpf_target_priority[0]
+		# Extract stamp width and height:
+		stamp = details.get('stamp', None)
+		stamp_width = None if stamp is None else stamp[3] - stamp[2]
+		stamp_height = None if stamp is None else stamp[1] - stamp[0]
+
+		# Make changes to database:
+		additional_skipped = 0
+		try:
+			# Also set status of targets that were marked as "SKIPPED" by this target:
+			if 'skip_targets' in details and len(details['skip_targets']) > 0:
+				skip_targets = set(details['skip_targets'])
+				if result['datasource'].startswith('tpf:') and int(result['datasource'][4:]) in skip_targets:
+					# This secondary target is in the mask of the primary target.
+					# We never want to return a lightcurve for a secondary target over
+					# a primary target, so we are going to mark this one as SKIPPED.
+					primary_tpf_target_starid = int(result['datasource'][4:])
+					self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=? AND camera=? AND ccd=?;", (
+						primary_tpf_target_starid,
+						result['sector'],
+						result['camera'],
+						result['ccd']
 					))
-				else:
-					self.logger.warning("Could not find primary TPF target (TIC %d) for priority=%d", primary_tpf_target_starid, result['priority'])
-					error_msg.append("TargetNotFoundError: Could not find primary TPF target (TIC %d)" % primary_tpf_target_starid)
-			else:
-				# Create unique list of starids to be masked as skipped:
-				skip_starids = ','.join([str(starid) for starid in skip_targets])
-
-				# Ask the todolist if there are any stars that are brighter than this
-				# one among the other targets in the mask:
-				if result['datasource'] == 'tpf':
-					skip_datasources = "'tpf','tpf:%d'" % result['starid']
-				else:
-					skip_datasources = "'" + result['datasource'] + "'"
-
-				self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=? AND camera=? AND ccd=?;", (
-					result['sector'],
-					result['camera'],
-					result['ccd']
-				))
-				skip_rows = self.cursor.fetchall()
-				if len(skip_rows) > 0:
-					skip_tmags = np.array([row['tmag'] for row in skip_rows])
-					if np.all(result['tmag'] < skip_tmags):
-						# This target was the brightest star in the mask,
-						# so let's keep it and simply mark all the other targets
-						# as SKIPPED:
-						self.cursor.execute("DELETE FROM photometry_skipped WHERE skipped_by=?;", (result['priority'],))
-						for row in skip_rows:
-							self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
-								STATUS.SKIPPED.value,
-								row['priority']
-							))
-							self.summary['SKIPPED'] += self.cursor.rowcount
-							self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
-								row['priority'],
-								result['priority']
-							))
-					else:
-						# This target was not the brightest star in the mask,
-						# and a brighter target is going to be processed,
-						# so let's change this one to SKIPPED and let the other
-						# one run later on
-						self.logger.info("Changing status to SKIPPED for priority %s", result['priority'])
-						my_status = STATUS.SKIPPED
-						# Mark that the brightest star among the skip-list is the reason for
-						# for skipping this target:
+					primary_tpf_target_priority = self.cursor.fetchone()
+					# Mark the current star as SKIPPED and that it was caused by the primary:
+					self.logger.info("Changing status to SKIPPED for priority %s because it overlaps with primary target TIC %d", result['priority'], primary_tpf_target_starid)
+					my_status = STATUS.SKIPPED
+					if primary_tpf_target_priority is not None:
 						self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
 							result['priority'],
-							skip_rows[np.argmin(skip_tmags)]['priority']
+							primary_tpf_target_priority[0]
 						))
+					else:
+						self.logger.warning("Could not find primary TPF target (TIC %d) for priority=%d", primary_tpf_target_starid, result['priority'])
+						error_msg.append("TargetNotFoundError: Could not find primary TPF target (TIC %d)" % primary_tpf_target_starid)
+				else:
+					# Create unique list of starids to be masked as skipped:
+					skip_starids = ','.join([str(starid) for starid in skip_targets])
 
-		# Update the status in the TODO list:
-		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
-			my_status.value,
-			result['priority']
-		))
+					# Ask the todolist if there are any stars that are brighter than this
+					# one among the other targets in the mask:
+					if result['datasource'] == 'tpf':
+						skip_datasources = "'tpf','tpf:%d'" % result['starid']
+					else:
+						skip_datasources = "'" + result['datasource'] + "'"
+
+					self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=? AND camera=? AND ccd=?;", (
+						result['sector'],
+						result['camera'],
+						result['ccd']
+					))
+					skip_rows = self.cursor.fetchall()
+					if len(skip_rows) > 0:
+						skip_tmags = np.array([row['tmag'] for row in skip_rows])
+						if np.all(result['tmag'] < skip_tmags):
+							# This target was the brightest star in the mask,
+							# so let's keep it and simply mark all the other targets
+							# as SKIPPED:
+							self.cursor.execute("DELETE FROM photometry_skipped WHERE skipped_by=?;", (result['priority'],))
+							for row in skip_rows:
+								self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
+									STATUS.SKIPPED.value,
+									row['priority']
+								))
+								additional_skipped += self.cursor.rowcount
+								self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
+									row['priority'],
+									result['priority']
+								))
+						else:
+							# This target was not the brightest star in the mask,
+							# and a brighter target is going to be processed,
+							# so let's change this one to SKIPPED and let the other
+							# one run later on
+							self.logger.info("Changing status to SKIPPED for priority %s", result['priority'])
+							my_status = STATUS.SKIPPED
+							# Mark that the brightest star among the skip-list is the reason for
+							# for skipping this target:
+							self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
+								result['priority'],
+								skip_rows[np.argmin(skip_tmags)]['priority']
+							))
+
+			# Convert error messages from list to string or None:
+			error_msg = None if not error_msg else '\n'.join(error_msg)
+
+			# Update the status in the TODO list:
+			self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
+				my_status.value,
+				result['priority']
+			))
+
+			self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, lightcurve, method_used, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
+				result['priority'],
+				details.get('filepath_lightcurve', None),
+				result['method_used'],
+				result['time'],
+				result.get('worker_wait_time', None),
+				details.get('pos_centroid', (None, None))[0],
+				details.get('pos_centroid', (None, None))[1],
+				details.get('mean_flux', None),
+				details.get('variance', None),
+				details.get('variability', None),
+				details.get('rms_hour', None),
+				details.get('ptp', None),
+				details.get('mask_size', None),
+				details.get('edge_flux', None),
+				details.get('contamination', None),
+				stamp_width,
+				stamp_height,
+				details.get('stamp_resizes', 0),
+				error_msg
+			))
+			self.conn.commit()
+		except: # noqa: E722, pragma: no cover
+			self.conn.rollback()
+			raise
+
+		# Update the summary dictionary with the status:
 		self.summary['tasks_run'] += 1
 		self.summary[my_status.name] += 1
 		self.summary['STARTED'] -= 1
+		self.summary['SKIPPED'] += additional_skipped
 
-		# Save additional diagnostics:
+		# Store the last error message in summary:
 		if error_msg:
-			error_msg = '\n'.join(error_msg)
 			self.summary['last_error'] = error_msg
-		else:
-			error_msg = None
 
 		# Calculate mean elapsed time using "streaming weighted mean" with (alpha=0.1):
 		# https://dev.to/nestedsoftware/exponential-moving-average-on-streaming-data-4hhl
@@ -438,33 +475,6 @@ class TaskManager(object):
 			self.summary['mean_worker_waittime'] = result['worker_wait_time']
 		elif result.get('worker_wait_time') is not None:
 			self.summary['mean_worker_waittime'] += 0.1 * (result['worker_wait_time'] - self.summary['mean_worker_waittime'])
-
-		stamp = details.get('stamp', None)
-		stamp_width = None if stamp is None else stamp[3] - stamp[2]
-		stamp_height = None if stamp is None else stamp[1] - stamp[0]
-
-		self.cursor.execute("INSERT OR REPLACE INTO diagnostics (priority, lightcurve, method_used, elaptime, worker_wait_time, pos_column, pos_row, mean_flux, variance, variability, rms_hour, ptp, mask_size, edge_flux, contamination, stamp_width, stamp_height, stamp_resizes, errors) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?);", (
-			result['priority'],
-			details.get('filepath_lightcurve', None),
-			result['method_used'],
-			result['time'],
-			result.get('worker_wait_time', None),
-			details.get('pos_centroid', (None, None))[0],
-			details.get('pos_centroid', (None, None))[1],
-			details.get('mean_flux', None),
-			details.get('variance', None),
-			details.get('variability', None),
-			details.get('rms_hour', None),
-			details.get('ptp', None),
-			details.get('mask_size', None),
-			details.get('edge_flux', None),
-			details.get('contamination', None),
-			stamp_width,
-			stamp_height,
-			details.get('stamp_resizes', 0),
-			error_msg
-		))
-		self.conn.commit()
 
 		# Write summary file:
 		self.summary_counter += 1
