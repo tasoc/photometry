@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Visualize the time coverage of the loaded SPICE kernels.
@@ -71,7 +71,7 @@ if __name__ == '__main__':
 	with TESS_SPICE() as ts:
 		# This requires the "brief" utility tool
 		# https://naif.jpl.nasa.gov/naif/utilities.html
-		# TODO: There is proberly a way to do this with SpiceyPy
+		# TODO: There is properly a way to do this with SpiceyPy
 		proc = subprocess.Popen('brief --95 -utc "' + ts.METAKERNEL + '"', shell=True, stdout=subprocess.PIPE, universal_newlines=True)
 		stdout, stderr = proc.communicate()
 		lines = stdout.split("\n")
@@ -86,7 +86,7 @@ if __name__ == '__main__':
 				k += 1
 				continue
 
-			m = re.match('^(\d{4}-.{3}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+)\s+(\d{4}-.{3}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+)$', line)
+			m = re.match(r'^(\d{4}-.{3}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+)\s+(\d{4}-.{3}-\d{2} \d{2}:\d{2}:\d{2})\.(\d+)$', line)
 			if m is not None:
 				dt_start = datetime.strptime(m.group(1) + '.{:0<6}'.format(m.group(2)), "%Y-%b-%d %H:%M:%S.%f")
 				dt_end = datetime.strptime(m.group(3) + '.{:0<6}'.format(m.group(4)), "%Y-%b-%d %H:%M:%S.%f")
@@ -131,4 +131,4 @@ if __name__ == '__main__':
 	ax.set_xlabel('Time (UTC)')
 	fig.savefig('spice_coverage.png', bbox_inches='tight')
 
-	plt.show(block=True)
+	plt.show()
