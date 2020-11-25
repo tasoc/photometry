@@ -120,7 +120,7 @@ class PSFPhotometry(BasePhotometry):
 		# Start looping through the images (time domain):
 		for k, (img, bkg) in enumerate(zip(self.images, self.backgrounds)):
 			# Print timestep index to logger:
-			logger.info('Current timestep: %s' % k)
+			logger.debug('Current timestep: %d', k)
 
 			# Set the maximum number of iterations for the minimize routine:
 			if k > 0:
