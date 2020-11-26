@@ -18,6 +18,9 @@ This module provides the basic photometry setup for the TESS Asteroseismic Scien
 
 The code is available through our GitHub organisation (https://github.com/tasoc/photometry) and full documentation for this code can be found on https://tasoc.dk/code/.
 
+.. note::
+    Even though the full code and documentation are freely available, we highly encourage users to not attempt to use the code to generate their own photometry from TESS. Instead we encourage you to use the fully processed data products from the full TASOC pipeline, which are available from `TASOC <https://tasoc.dk>`_ and `MAST <https://archive.stsci.edu/hlsp/tasoc>`_. If you are interested in working on details in the processing, we welcome you to join the T'DA working group.
+
 Installation instructions
 =========================
 * Start by making sure that you have `Git Large File Storage (LFS) <https://git-lfs.github.com/>`_ installed. You can verify that is installed by running the command:
