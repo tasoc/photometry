@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 The basic photometry class for the TASOC Photometry pipeline.
@@ -1626,7 +1626,15 @@ class BasePhotometry(object):
 			mask[self.final_position_mask] |= 8
 
 		# Construct FITS header for image extensions:
-		wcs = self.wcs[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+		if self.datasource == 'ffi':
+			ir1, ir2, ic1, ic2 = self._stamp
+		else:
+			ir1 = self._stamp[0] - self._max_stamp[0]
+			ir2 = self._stamp[1] - self._max_stamp[0]
+			ic1 = self._stamp[2] - self._max_stamp[2]
+			ic2 = self._stamp[3] - self._max_stamp[2]
+
+		wcs = self.wcs[ir1:ir2, ic1:ic2]
 		header = wcs.to_header(relax=True)
 		header.set('INHERIT', True, 'inherit the primary header', before=0) # Add inherit header
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of BasePhotometry.
@@ -7,10 +7,13 @@ Tests of BasePhotometry.
 """
 
 import pytest
+import warnings
+import os.path
 import numpy as np
+import h5py
 from tempfile import TemporaryDirectory
 from astropy.io import fits
-from astropy.wcs import WCS
+from astropy import wcs
 import conftest # noqa: F401
 from photometry import BasePhotometry, PixelQualityFlags, CorrectorQualityFlags
 #import photometry.BasePhotometry.hdf5_cache as bf
@@ -309,80 +312,134 @@ def test_pixelflags(SHARED_INPUT_DIR, datasource):
 					assert quality[i] & CorrectorQualityFlags.BackgroundShenanigans != 0, "BackgroundShenanigans flag not correctly propergated"
 
 #--------------------------------------------------------------------------------------------------
-def test_wcs(SHARED_INPUT_DIR):
-	with TemporaryDirectory() as OUTPUT_DIR:
-		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='tpf', **DUMMY_KWARG) as pho:
-			cols_tpf, rows_tpf = pho.get_pixel_grid()
-			wcs_tpf = pho.wcs
-			filepath = pho.save_lightcurve()
-			print(pho.target['ra'])
-			print(pho.target['decl'])
+@pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
+def test_wcs(SHARED_INPUT_DIR, datasource):
 
-		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG) as pho:
-			cols, rows = pho.get_pixel_grid()
-			wcs_ffi = pho.wcs
-			filepath = pho.save_lightcurve()
-			print(pho.target['ra'])
-			print(pho.target['decl'])
+	# The coordinates of the object according to MAST (TIC 8.1):
+	radec_mast = [347.420628950546, -67.7328226172799]
 
-		with fits.open(filepath, mode='readonly', memmap=True) as hdu:
-			wcs_fits_aperture = WCS(header=hdu['APERTURE'].header, relax=True)
-			wcs_fits_sumimage = WCS(header=hdu['SUMIMAGE'].header, relax=True)
+	# Open original data products from SPOC to compare against:
+	if datasource == 'ffi':
+		# Use the HDF5 files to find out which FFI the final WCS is taken from:
+		with h5py.File(os.path.join(SHARED_INPUT_DIR, 'sector001_camera3_ccd2.hdf5'), 'r') as hdf:
+			refindx = hdf['wcs'].attrs['ref_frame']
+			imgpaths = np.asarray(hdf['imagespaths'])
+			ref_fname = imgpaths[refindx].decode('utf-8')
+			print("FFI file: %s" % ref_fname)
 
-	target_col = 592
-	target_row = 155
+		# We are actually going back to the original FITS header, to make sure
+		# that nothing has changed when extracting this and saving it in the HDF5 files:
+		hdr = fits.getheader(os.path.join(SHARED_INPUT_DIR, 'images', ref_fname + '.gz'), ext=1)
+	else:
+		hdr = fits.getheader(os.path.join(SHARED_INPUT_DIR, 'images', 'tess2018206045859-s0001-0000000260795451-0120-s_tp.fits.gz'), extname='APERTURE')
 
-	print(wcs_tpf)
-	print(wcs_ffi)
-	print(wcs_fits_aperture)
-	print(wcs_fits_sumimage)
-	print("------------------------------------")
+	# Create the "correct" WCS from the extracted FITS header:
+	wcs_spoc = wcs.WCS(header=hdr, relax=True)
 
-	test_pixels_ffi = [[target_col, target_row]]
-	radec_ffi = wcs_ffi.all_pix2world(test_pixels_ffi, 1, ra_dec_order=True)
-	print('FFI: %s' % radec_ffi)
+	# Run the photometry, and load the WCS from the resulting FITS file:
+	with TemporaryDirectory() as tmpdir:
+		with warnings.catch_warnings():
+			warnings.filterwarnings('ignore', category=wcs.FITSFixedWarning)
 
-	test_pixels_tpf = np.where((rows_tpf == target_row) & (cols_tpf == target_col))
-	test_pixels_tpf = [[test_pixels_tpf[1][0], test_pixels_tpf[0][0]]]
-	radec_tpf = wcs_tpf.all_pix2world(test_pixels_tpf, 1, ra_dec_order=True)
-	print("TPF: %s " % radec_tpf)
+			with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, tmpdir, datasource=datasource, **DUMMY_KWARG) as pho:
+				#pho.photometry() # Only needed for e.g. checking the output apertures - If enabled, also need to change to an actual photometry
+				cols, rows = pho.get_pixel_grid()
+				wcs_obj = pho.wcs
+				filepath = pho.save_lightcurve()
+				radec_target = [pho.target['ra'], pho.target['decl']]
 
-	test_pixels = np.where((rows == target_row) & (cols == target_col))
-	test_pixels = [[test_pixels[1][0], test_pixels[0][0]]]
-	radec_fits_aperture = wcs_fits_aperture.all_pix2world(test_pixels, 0, ra_dec_order=True)
-	radec_fits_sumimage = wcs_fits_sumimage.all_pix2world(test_pixels, 0, ra_dec_order=True)
+			#report = wcs.validate(filepath)
+			#print(report)
 
-	print("APERTURE: %s" % radec_fits_aperture)
-	print("SUMIMAGE: %s" % radec_fits_sumimage)
+			with fits.open(filepath, mode='readonly', memmap=True) as hdu:
+				radec_target_fits = [hdu[0].header['RA_OBJ'], hdu[0].header['DEC_OBJ']]
+				wcs_aperture = wcs.WCS(header=hdu['APERTURE'].header, relax=True)
+				wcs_sumimage = wcs.WCS(header=hdu['SUMIMAGE'].header, relax=True)
 
-	#np.testing.assert_allclose(radec_tpf, radec_ffi)
-	np.testing.assert_allclose(radec_fits_aperture, radec_ffi)
-	np.testing.assert_allclose(radec_fits_sumimage, radec_ffi)
+	# Check target position:
+	# This actually doesn't involve the WCS directly, but is a good sanity check
+	# before we go futher
+	print("RA/DEC TARGET: %s" % radec_target)
+	np.testing.assert_allclose(radec_target, radec_mast, rtol=0.01)
+	np.testing.assert_allclose(radec_target_fits, radec_mast, rtol=0.01)
 
-	# Test the pixels in the corners of the stamp:
+	print("------------------------------------------------------")
+	print("OBJECT WCS:")
+	wcs_obj.printwcs()
+	print("------------------------------------------------------")
+	print("APERTURE WCS:")
+	wcs_aperture.printwcs()
+	print("------------------------------------------------------")
+	print("SUMIMAGE WCS:")
+	wcs_sumimage.printwcs()
+	print("------------------------------------------------------")
+	print("SPOC WCS:")
+	wcs_spoc.printwcs()
+	print("------------------------------------------------------")
+
+	# Test the pixels in the corners and the centre of the stamp:
 	Nr, Nc = cols.shape
-	test_pixels = np.array([[0, 0], [Nc-1, Nr-1], [0, Nr-1], [Nc-1, 0]])
+	test_pixels = np.array([[0, 0], [Nc-1, Nr-1], [0, Nr-1], [Nc-1, 0], [(Nc-1)//2, (Nr-1)//2]])
 	print(test_pixels)
 
-	# Corresponding pixels in the FFI:
-	# Remember that cols and rows are 1-based.
-	test_pixels_ffi = np.array([[cols[r, c]-1, rows[r, c]-1] for c, r in test_pixels])
-	print(test_pixels_ffi)
+	radec_aperture = wcs_aperture.all_pix2world(test_pixels, 0, ra_dec_order=True)
+	radec_sumimage = wcs_sumimage.all_pix2world(test_pixels, 0, ra_dec_order=True)
 
-	# Calculate sky-coordinates using both WCS:
-	radec_ffi = wcs_ffi.all_pix2world(test_pixels_ffi, 0, ra_dec_order=True)
-	radec_fits_aperture = wcs_fits_aperture.all_pix2world(test_pixels, 0, ra_dec_order=True)
-	radec_fits_sumimage = wcs_fits_sumimage.all_pix2world(test_pixels, 0, ra_dec_order=True)
+	# Check if the target corrdinates fall within the stamp:
+	pix_aperture = wcs_aperture.all_world2pix([radec_mast], 0, ra_dec_order=True).squeeze()
+	pix_sumimage = wcs_sumimage.all_world2pix([radec_mast], 0, ra_dec_order=True).squeeze()
 
-	# Check that the two WCS from the FITS file is the same:
-	print(radec_fits_aperture - radec_fits_sumimage)
-	np.testing.assert_allclose(radec_fits_aperture, radec_fits_sumimage)
+	# The pixels coordinates in FFIs are in REAL pixels (the number they have on the detector)
+	# and not in the small stamp. Therefore, we have to convert them to the
+	# corresponding values in the stamp. For TPFs, we dont have to do that conversion:
+	if datasource == 'tpf':
+		radec_obj = wcs_obj.all_pix2world(test_pixels, 0, ra_dec_order=True)
+		radec_spoc = wcs_spoc.all_pix2world(test_pixels, 0, ra_dec_order=True)
 
-	# Check that the sky-coordinates are the same:
-	print(radec_ffi - radec_fits_aperture)
-	np.testing.assert_allclose(radec_fits_aperture, radec_ffi)
-	print(radec_ffi - radec_fits_sumimage)
-	np.testing.assert_allclose(radec_fits_sumimage, radec_ffi)
+		pix_obj = wcs_obj.all_world2pix([radec_mast], 0, ra_dec_order=True).squeeze()
+		pix_spoc = wcs_spoc.all_world2pix([radec_mast], 0, ra_dec_order=True).squeeze()
+	else:
+		# Corresponding pixels in the FFI:
+		# Remember that cols and rows are 1-based.
+		test_pixels_ffi = np.array([[cols[r, c]-1, rows[r, c]-1] for c, r in test_pixels])
+		print(test_pixels_ffi)
+
+		radec_obj = wcs_obj.all_pix2world(test_pixels_ffi, 0, ra_dec_order=True)
+		radec_spoc = wcs_spoc.all_pix2world(test_pixels_ffi, 0, ra_dec_order=True)
+
+		pix_obj = wcs_obj.all_world2pix([radec_mast], 0, ra_dec_order=True).squeeze()
+		pix_spoc = wcs_spoc.all_world2pix([radec_mast], 0, ra_dec_order=True).squeeze()
+
+		# Subtract the (real) pixel number of the (0,0) pixel:
+		pix_spoc[0] -= test_pixels_ffi[0,0]
+		pix_spoc[1] -= test_pixels_ffi[0,1]
+		pix_obj[0] -= test_pixels_ffi[0,0]
+		pix_obj[1] -= test_pixels_ffi[0,1]
+
+	# Print out extracted values for debugging:
+	print("RA/DEC SPOC:     %s" % radec_spoc)
+	print("RA/DEC OBJECT:   %s" % radec_obj)
+	print("RA/DEC APERTURE: %s" % radec_aperture)
+	print("RA/DEC SUMIMAGE: %s" % radec_sumimage)
+
+	print("PIXELS SPOC:     %s" % pix_spoc)
+	print("PIXELS OBJECT:   %s" % pix_obj)
+	print("PIXELS APERTURE: %s" % pix_aperture)
+	print("PIXELS SUMIMAGE: %s" % pix_sumimage)
+
+	# Check that everything agrees with SPOC and each other:
+	np.testing.assert_allclose(radec_obj, radec_spoc)
+	np.testing.assert_allclose(radec_aperture, radec_spoc)
+	np.testing.assert_allclose(radec_sumimage, radec_spoc)
+
+	# Check that everything agrees with SPOC and each other:
+	np.testing.assert_allclose(pix_obj, pix_spoc)
+	np.testing.assert_allclose(pix_aperture, pix_spoc)
+	np.testing.assert_allclose(pix_sumimage, pix_spoc)
+
+	# Check if the target corrdinates fall within the stamp:
+	assert -0.5 <= pix_obj[0] <= Nc-0.5
+	assert -0.5 <= pix_obj[1] <= Nr-0.5
 
 #--------------------------------------------------------------------------------------------------
 """
