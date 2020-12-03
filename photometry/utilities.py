@@ -123,7 +123,7 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
-			be sorted accoriding to the filename of the files, e.g. primarily by time.
+			be sorted according to the filename of the files, e.g. primarily by time.
 	"""
 
 	logger = logging.getLogger(__name__)
