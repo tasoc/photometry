@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Preparation for Photometry extraction.
@@ -463,6 +463,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
+				images.attrs['CADENCE'] = 1800 if sector < 27 else 600
 				images.attrs['TIME_OFFSET_CORRECTED'] = fixed_time_offset
 				for key, value in attributes.items():
 					logger.debug("Saving attribute %s = %s", key, value)

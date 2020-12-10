@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests that run run_tessphot with several different inputs.
@@ -66,6 +66,12 @@ def test_run_tessphot_invalid_ccd():
 	out, err, exitcode = capture_run_tessphot("-t --ccd=14")
 	assert exitcode == 2
 	assert 'error: argument --ccd: invalid choice: 14 (choose from 1, 2, 3, 4)' in err
+
+#--------------------------------------------------------------------------------------------------
+def test_run_tessphot_invalid_cadence():
+	out, err, exitcode = capture_run_tessphot("-t --cadence=121")
+	assert exitcode == 2
+	assert 'error: argument --cadence: invalid choice: 121 (choose from 20, 120, 600, 1800)' in err
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('method,starid,datasource', STAR_LIST)

@@ -106,7 +106,7 @@ class BasePhotometry(object):
 
 	#----------------------------------------------------------------------------------------------
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		sector=None, camera=None, ccd=None, plot=False, cache='basic', version=5):
+		sector=None, camera=None, ccd=None, cadence=None, plot=False, cache='basic', version=6):
 		"""
 		Initialize the photometry object.
 
@@ -119,6 +119,7 @@ class BasePhotometry(object):
 			plot (boolean, optional): Create plots as part of the output. Default is ``False``.
 			camera (integer, optional): TESS camera (1-4) to load target from (Only used for FFIs).
 			ccd (integer, optional): TESS CCD (1-4) to load target from (Only used for FFIs).
+			cadence (int, optional): Not used for ``datasource='ffi'``.
 			cache (string, optional): Optional values are ``'none'``, ``'full'``
 				or ``'basic'`` (Default).
 			version (integer): Data release number to be added to headers. Default=5.
@@ -248,6 +249,7 @@ class BasePhotometry(object):
 				hdr = dict(self.hdf['images'].attrs)
 				attrs['header'] = hdr
 				attrs['data_rel'] = hdr['DATA_REL'] # Data release number
+				attrs['cadence'] = hdr.get('CADENCE', 1800)
 
 				# Start filling out the basic vectors:
 				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
@@ -331,7 +333,7 @@ class BasePhotometry(object):
 				starid_to_load = self.starid
 
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(self.input_folder, sector=sector, starid=starid_to_load)
+			fname = find_tpf_files(self.input_folder, starid=starid_to_load, sector=sector, cadence=cadence)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
@@ -348,6 +350,7 @@ class BasePhotometry(object):
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
 			self.data_rel = self.tpf[0].header['DATA_REL'] # Data release number
+			self.cadence = cadence if cadence is not None else int(np.round(self.tpf[1].header['TIMEDEL']*86400))
 
 			# Fix for timestamps that are not defined. Simply remove them from the table:
 			# This is seen in some file from sector 1.
@@ -1577,8 +1580,7 @@ class BasePhotometry(object):
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
 		# Timestamps of start and end of timeseries:
-		cadence = 120 if self.datasource.startswith('tpf') else 1800
-		tdel = cadence/86400
+		tdel = self.cadence/86400
 		tstart = self.lightcurve['time'][0] - tdel/2
 		tstop = self.lightcurve['time'][-1] + tdel/2
 		tstart_tm = Time(tstart, 2457000, format='jd', scale='tdb')
@@ -1688,7 +1690,7 @@ class BasePhotometry(object):
 			sector=self.sector,
 			camera=self.camera,
 			ccd=self.ccd,
-			cadence=cadence,
+			cadence=self.cadence,
 			datarel=self.data_rel,
 			version=version
 		)

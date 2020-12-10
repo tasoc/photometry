@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create the TODO list which is used by the pipeline to keep track of the
@@ -120,13 +120,15 @@ def _ffi_todo(hdf5_file, exclude=[]):
 		sector = int(hdf['images'].attrs['SECTOR'])
 		camera = int(hdf['images'].attrs['CAMERA'])
 		ccd = int(hdf['images'].attrs['CCD'])
+		cadence = int(hdf['images'].attrs.get('CADENCE', 1800))
 		datarel = int(hdf['images'].attrs['DATA_REL'])
 		if isinstance(hdf['wcs'], h5py.Group):
 			refindx = hdf['wcs'].attrs['ref_frame']
 			hdr_string = hdf['wcs']['%04d' % refindx][0]
 		else:
 			hdr_string = hdf['wcs'][0]
-		if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
+		if not isinstance(hdr_string, str):
+			hdr_string = hdr_string.decode("utf-8") # For Python 3
 		wcs = WCS(header=fits.Header().fromstring(hdr_string))
 		offset_rows = hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 		offset_cols = hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 0)
@@ -183,6 +185,7 @@ def _ffi_todo(hdf5_file, exclude=[]):
 				'sector': sector,
 				'camera': camera,
 				'ccd': ccd,
+				'cadence': cadence,
 				'datasource': 'ffi',
 				'tmag': row['tmag'],
 				'cbv_area': cbv_area,
@@ -194,8 +197,8 @@ def _ffi_todo(hdf5_file, exclude=[]):
 	# Create the TODO list as a table which we will fill with targets:
 	return Table(
 		rows=cat_tmp,
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 #--------------------------------------------------------------------------------------------------
@@ -207,8 +210,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 	# Create the TODO list as a table which we will fill with targets:
 	cat_tmp = []
 	empty_table = Table(
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 	logger.debug("Processing TPF file: '%s'", fname)
@@ -219,6 +222,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 		ccd = hdu[0].header['CCD']
 		datarel = hdu[0].header['DATA_REL']
 		aperture_observed_pixels = (hdu['APERTURE'].data & 1 != 0)
+		cadence = int(np.round(hdu[1].header['TIMEDEL']*86400))
 
 		if (starid, sector, 'tpf', datarel) in exclude:
 			logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf, DATAREL=%d", starid, sector, datarel)
@@ -256,6 +260,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 					'sector': sector,
 					'camera': camera,
 					'ccd': ccd,
+					'cadence': cadence,
 					'datasource': 'tpf',
 					'tmag': row['tmag'],
 					'cbv_area': cbv_area,
@@ -299,6 +304,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 							'sector': sector,
 							'camera': camera,
 							'ccd': ccd,
+							'cadence': cadence,
 							'datasource': 'tpf:' + str(starid),
 							'tmag': row['tmag'],
 							'cbv_area': cbv_area,
@@ -314,8 +320,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 	# TODO: Could we avoid fixed-size strings in datasource column?
 	return Table(
 		rows=cat_tmp,
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 #--------------------------------------------------------------------------------------------------
@@ -389,8 +395,8 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 	sectors = set()
 
@@ -560,6 +566,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			datasource TEXT NOT NULL DEFAULT 'ffi',
 			camera INTEGER NOT NULL,
 			ccd INTEGER NOT NULL,
+			cadence INTEGER NOT NULL,
 			method TEXT DEFAULT NULL,
 			tmag REAL,
 			status INTEGER DEFAULT NULL,
@@ -575,12 +582,13 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 				method = 'halo'
 
 			# Add target to TODO-list:
-			cursor.execute("INSERT INTO todolist (priority,starid,sector,camera,ccd,datasource,tmag,cbv_area,method) VALUES (?,?,?,?,?,?,?,?,?);", (
+			cursor.execute("INSERT INTO todolist (priority,starid,sector,camera,ccd,cadence,datasource,tmag,cbv_area,method) VALUES (?,?,?,?,?,?,?,?,?,?);", (
 				pri+1,
 				int(row['starid']),
 				int(row['sector']),
 				int(row['camera']),
 				int(row['ccd']),
+				int(row['cadence']),
 				row['datasource'].strip(),
 				float(row['tmag']),
 				int(row['cbv_area']),
@@ -588,7 +596,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			))
 
 		conn.commit()
-		cursor.execute("CREATE UNIQUE INDEX unique_target_idx ON todolist (starid, datasource, sector, camera, ccd);")
+		cursor.execute("CREATE UNIQUE INDEX unique_target_idx ON todolist (starid, datasource, sector, camera, ccd, cadence);")
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
