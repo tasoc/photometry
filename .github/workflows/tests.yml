@@ -12,17 +12,13 @@ jobs:
 
   # Run unit tests on Linux, OSX and Windows
   pytest:
-    runs-on: [ubuntu-latest, macos-latest, windows-latest]
     strategy:
+      fail-fast: false
       matrix:
-        include:
-          - name: Python 3.6
-            python-version: 3.6
-          - name: Python 3.7
-            python-version: 3.7
-          - name: Python 3.8
-            python-version: 3.8
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: [3.6, 3.7, 3.8]
 
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -35,9 +31,9 @@ jobs:
         # errors especially on GitHub-hosted macos machines.
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Setup MPI
-      #if:
-      run: sudo apt-get install -y openmpi-bin libopenmpi-dev
+    #- name: Setup MPI
+    #  #if:
+    #  run: sudo apt-get install -y openmpi-bin libopenmpi-dev
 
     - name: Create LFS file list
       run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
@@ -75,11 +71,12 @@ jobs:
 
   # Use the `flake8` tool to check for syntax errors
   flake8:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
+        os: [ubuntu-latest]
         python-version: [3.6]
 
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
