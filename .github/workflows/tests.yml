@@ -31,10 +31,6 @@ jobs:
         # errors especially on GitHub-hosted macos machines.
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    #- name: Setup MPI
-    #  #if:
-    #  run: sudo apt-get install -y openmpi-bin libopenmpi-dev
-
     - name: Create LFS file list
       run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
 
@@ -60,11 +56,21 @@ jobs:
         pip install -r requirements.txt
         pip install codecov pytest-cov
 
+    - name: Setup MPI
+      if: ${{ matrix.os }} == 'ubuntu-latest'
+      run: |
+        sudo apt-get install -y openmpi-bin libopenmpi-dev
+        pip install mpi4py
+
     - name: Download cache
       run: python run_download_cache.py -q
 
     - name: Testing
       run: python -m pytest --cov=./
+
+    - name: Testing MPI
+      if: ${{ matrix.os }} == 'ubuntu-latest'
+      run: python -m pytest -m mpi --cov=./
 
     - name: Coverage
       run: python -m codecov
@@ -96,6 +102,7 @@ jobs:
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
-        flake8 --select=E9,F63,F7,F82 --count --show-source --statistics
+        # For some reason we have to specifically ignore G001 as well
+        flake8 --select=E9,F63,F7,F82 --ignore=G001 --count --show-source --statistics
         # exit-zero treats all errors as warnings.
         flake8 --count --statistics --exit-zero
