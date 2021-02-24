@@ -1,12 +1,12 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import argparse
 import logging
 import photometry
 
-if __name__ == '__main__':
-
+#--------------------------------------------------------------------------------------------------
+def main():
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Download all auxiliary data for pipeline.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
@@ -33,3 +33,7 @@ if __name__ == '__main__':
 
 	# Download all data:
 	photometry.download_cache()
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == '__main__':
+	main()
