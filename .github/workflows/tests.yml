@@ -66,14 +66,16 @@ jobs:
       run: coverage run run_download_cache.py -q
 
     - name: Testing
-      run: python -m pytest --cov=./
+      run: python -m pytest --cov=./ --cov-append
 
     - name: Testing MPI
       if: matrix.os == 'ubuntu-latest'
-      run: python -m pytest -m mpi --cov=./
+      run: python -m pytest -m mpi --cov=./ --cov-append
 
     - name: Coverage
-      run: python -m codecov
+      run: |
+        coverage report
+        python -m codecov
 
 
   # Use the `flake8` tool to check for syntax errors
