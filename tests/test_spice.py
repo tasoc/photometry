@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of SPICE Kernel module.
@@ -15,9 +15,9 @@ import h5py
 from tempfile import TemporaryDirectory
 import conftest # noqa: F401
 from photometry import AperturePhotometry
-from photometry.spice import TESS_SPICE
+from photometry.spice import TESS_SPICE, InadequateSpiceException
 from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_motion
-from photometry.plots import plt
+from photometry.plots import plt, plots_interactive
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
 #--------------------------------------------------------------------------------------------------
@@ -59,6 +59,21 @@ def test_position_velocity():
 			pass
 
 		time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
+
+		# We should fail with a timestamp that are outside the TESS SPICE coverage:
+		# The timestamp used here is well before TESS was launched
+		time_nocoverage = 1000 + 2457000
+		with pytest.raises(InadequateSpiceException) as e:
+			knl.position(time_nocoverage)
+		assert str(e.value) == 'Inadequate SPICE kernels available'
+
+		with pytest.raises(InadequateSpiceException) as e:
+			knl.velocity(time_nocoverage)
+		assert str(e.value) == 'Inadequate SPICE kernels available'
+
+		with pytest.raises(InadequateSpiceException) as e:
+			knl.position_velocity(time_nocoverage)
+		assert str(e.value) == 'Inadequate SPICE kernels available'
 
 		# Get the location of TESS as a function of time relative to Earth in kilometers:
 		pos = knl.position(time_nocorr + 2457000)
@@ -239,6 +254,6 @@ def test_spice(SHARED_INPUT_DIR, starid):
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	plt.switch_backend('Qt5Agg')
+	plots_interactive()
 	pytest.main([__file__])
 	plt.show()

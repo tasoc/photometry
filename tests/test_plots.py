@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of plots
@@ -11,7 +11,7 @@ import os.path
 import numpy as np
 from scipy.stats import multivariate_normal
 import conftest # noqa: F401
-from photometry.plots import plt, plot_image, plot_image_fit_residuals
+from photometry.plots import plt, plot_image, plot_image_fit_residuals, plots_interactive
 
 kwargs = {
 	'baseline_dir': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'correct_plots'),
@@ -158,6 +158,6 @@ if __name__ == '__main__':
 	print("To generate new correct images:")
 	print('pytest --mpl-generate-path="' + kwargs['baseline_dir'] + '" "' + __file__ + '"')
 
-	plt.switch_backend('Qt5Agg')
+	plots_interactive()
 	pytest.main([__file__])
 	plt.show()

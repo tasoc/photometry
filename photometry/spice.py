@@ -49,7 +49,7 @@ class TESS_SPICE(object):
 		'TESS_EPH_PRE_LONG_2018176_01.bsp',
 		'TESS_EPH_PRE_LONG_2019045_01.bsp',
 		'TESS_EPH_PRE_LONG_2019364_21.bsp',
-		'TESS_EPH_PRE_LONG_2020300_21.bsp',
+		'TESS_EPH_PRE_LONG_2021028_21.bsp',
 		# Definite kernels of TESS's actual position:
 		#'TESS_EPH_DEF_2018004_01.bsp', # Does not contain any information
 		#'TESS_EPH_DEF_2018080_01.bsp', # Only contains information from before launch of TESS (??)
@@ -280,6 +280,22 @@ class TESS_SPICE(object):
 		'TESS_EPH_DEF_2020286_21.bsp',
 		'TESS_EPH_DEF_2020293_21.bsp',
 		'TESS_EPH_DEF_2020300_21.bsp',
+		# New batch (2021-02-08):
+		#'TESS_EPH_DEF_2020307_21.bsp', # Surpassed by never version below
+		'TESS_EPH_DEF_2020307_22.bsp',
+		'TESS_EPH_DEF_2020314_22.bsp',
+		'TESS_EPH_DEF_2020321_21.bsp',
+		'TESS_EPH_DEF_2020328_21.bsp',
+		'TESS_EPH_DEF_2020335_21.bsp',
+		'TESS_EPH_DEF_2020342_21.bsp',
+		'TESS_EPH_DEF_2020349_21.bsp',
+		'TESS_EPH_DEF_2020356_21.bsp',
+		'TESS_EPH_DEF_2020363_21.bsp',
+		'TESS_EPH_DEF_2021004_21.bsp',
+		'TESS_EPH_DEF_2021011_21.bsp',
+		'TESS_EPH_DEF_2021018_21.bsp',
+		'TESS_EPH_DEF_2021021_21.bsp',
+		'TESS_EPH_DEF_2021028_21.bsp',
 	)
 
 	def __init__(self, kernels_folder=None):
@@ -413,8 +429,7 @@ class TESS_SPICE(object):
 		except SpiceyError as e:
 			if 'SPICE(SPKINSUFFDATA)' in e.value:
 				raise InadequateSpiceException("Inadequate SPICE kernels available")
-			else:
-				raise
+			raise # pragma: no cover
 
 		return positions
 
@@ -470,13 +485,12 @@ class TESS_SPICE(object):
 
 		# Get state of spacecraft (position and velocity):
 		try:
-			pos_vel, lt = spiceypy.spkezr(of, times, 'J2000', 'NONE', relative_to)
+			pos_vel, _ = spiceypy.spkezr(of, times, 'J2000', 'NONE', relative_to)
 			pos_vel = np.asarray(pos_vel)
 		except SpiceyError as e:
 			if 'SPICE(SPKINSUFFDATA)' in e.value:
 				raise InadequateSpiceException("Inadequate SPICE kernels available")
-			else:
-				raise
+			raise # pragma: no cover
 
 		return pos_vel
 
