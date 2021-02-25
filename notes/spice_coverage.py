@@ -63,6 +63,22 @@ if __name__ == '__main__':
 		[37, datetime.strptime('04/02/21', '%m/%d/%y'), datetime.strptime('04/28/21', '%m/%d/%y')],
 		[38, datetime.strptime('04/28/21', '%m/%d/%y'), datetime.strptime('05/26/21', '%m/%d/%y')],
 		[39, datetime.strptime('05/26/21', '%m/%d/%y'), datetime.strptime('06/24/21', '%m/%d/%y')],
+		[40, datetime.strptime('06/24/21', '%m/%d/%y'), datetime.strptime('07/23/21', '%m/%d/%y')],
+		[41, datetime.strptime('07/23/21', '%m/%d/%y'), datetime.strptime('08/20/21', '%m/%d/%y')],
+		[42, datetime.strptime('08/20/21', '%m/%d/%y'), datetime.strptime('09/16/21', '%m/%d/%y')],
+		[43, datetime.strptime('09/16/21', '%m/%d/%y'), datetime.strptime('10/12/21', '%m/%d/%y')],
+		[44, datetime.strptime('10/12/21', '%m/%d/%y'), datetime.strptime('11/06/21', '%m/%d/%y')],
+		[45, datetime.strptime('11/06/21', '%m/%d/%y'), datetime.strptime('12/02/21', '%m/%d/%y')],
+		[46, datetime.strptime('12/02/21', '%m/%d/%y'), datetime.strptime('12/30/21', '%m/%d/%y')],
+		[47, datetime.strptime('12/30/21', '%m/%d/%y'), datetime.strptime('01/28/22', '%m/%d/%y')],
+		[48, datetime.strptime('01/28/22', '%m/%d/%y'), datetime.strptime('02/26/22', '%m/%d/%y')],
+		[49, datetime.strptime('02/26/22', '%m/%d/%y'), datetime.strptime('03/26/22', '%m/%d/%y')],
+		[50, datetime.strptime('03/26/22', '%m/%d/%y'), datetime.strptime('04/22/22', '%m/%d/%y')],
+		[51, datetime.strptime('04/22/22', '%m/%d/%y'), datetime.strptime('05/18/22', '%m/%d/%y')],
+		[52, datetime.strptime('05/18/22', '%m/%d/%y'), datetime.strptime('06/13/22', '%m/%d/%y')],
+		[53, datetime.strptime('06/13/22', '%m/%d/%y'), datetime.strptime('07/09/22', '%m/%d/%y')],
+		[54, datetime.strptime('07/09/22', '%m/%d/%y'), datetime.strptime('08/05/22', '%m/%d/%y')],
+		[55, datetime.strptime('08/05/22', '%m/%d/%y'), datetime.strptime('09/01/22', '%m/%d/%y')],
 	]
 
 	fig = plt.figure(figsize=(15,6), dpi=100)
@@ -127,7 +143,7 @@ if __name__ == '__main__':
 	#ax.set_xlim(right=datetime(2018, 8, 15))
 	#ax.set_ylim(top=45)
 
-	ax.set_ylabel('Kernel number')
+	ax.set_ylabel('Kernel number (importance)')
 	ax.set_xlabel('Time (UTC)')
 	fig.savefig('spice_coverage.png', bbox_inches='tight')
 
