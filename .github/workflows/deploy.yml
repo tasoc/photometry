@@ -1,4 +1,4 @@
-# GitHub Actions workflow for photometry's continuous integration.
+# GitHub Actions workflow for photometry's deployment.
 
 name: Deploy
 
@@ -33,9 +33,19 @@ jobs:
     - name: Git LFS Pull
       run: git lfs pull
 
-    - name: Update VERSION file
+    - name: Setup Python 3.6
+      uses: actions/setup-python@v2
+      with:
+        python-version: 3.6
+
+    - name: Install dependencies
       run: |
-        python -c "from photometry import version; version.update_release_version();"
+        python -m pip install --upgrade pip
+        grep "numpy" requirements.txt | xargs -I {} pip install "{}"
+        pip install -r requirements.txt
+
+    - name: Update VERSION file
+      run: python -c "from photometry import version; version.update_release_version();"
 
     - name: Create Release
       id: create_release
@@ -46,7 +56,7 @@ jobs:
         tag_name: ${{ github.ref }}
         release_name: Version ${{ github.ref }}
         body: |
-          Changes in this Release
+          Version ${{ github.ref }}
           - First Change
           - Second Change
         draft: true
