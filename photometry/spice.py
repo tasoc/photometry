@@ -15,7 +15,6 @@ from astropy.time import Time
 import astropy.units as u
 from astropy.version import major as astropy_major_version
 import spiceypy
-from spiceypy.utils.support_types import SpiceyError
 import hashlib
 from .utilities import download_parallel
 
@@ -360,7 +359,7 @@ class TESS_SPICE(object):
 		# Define TESS object if it doesn't already exist:
 		try:
 			spiceypy.bodn2c('TESS')
-		except SpiceyError:
+		except spiceypy.utils.exceptions.NotFoundError:
 			logger.debug("Defining TESS name in SPICE")
 			spiceypy.boddef('TESS', -95)
 
@@ -424,12 +423,10 @@ class TESS_SPICE(object):
 
 		# Get positions as a 2D array of (x,y,z) coordinates in km:
 		try:
-			positions, lt = spiceypy.spkpos(of, times, 'J2000', 'NONE', relative_to)
+			positions, _ = spiceypy.spkpos(of, times, 'J2000', 'NONE', relative_to)
 			positions = np.atleast_2d(positions)
-		except SpiceyError as e:
-			if 'SPICE(SPKINSUFFDATA)' in e.value:
-				raise InadequateSpiceException("Inadequate SPICE kernels available")
-			raise # pragma: no cover
+		except spiceypy.utils.exceptions.SpiceSPKINSUFFDATA:
+			raise InadequateSpiceException("Inadequate SPICE kernels available")
 
 		return positions
 
@@ -487,10 +484,8 @@ class TESS_SPICE(object):
 		try:
 			pos_vel, _ = spiceypy.spkezr(of, times, 'J2000', 'NONE', relative_to)
 			pos_vel = np.asarray(pos_vel)
-		except SpiceyError as e:
-			if 'SPICE(SPKINSUFFDATA)' in e.value:
-				raise InadequateSpiceException("Inadequate SPICE kernels available")
-			raise # pragma: no cover
+		except spiceypy.utils.exceptions.SpiceSPKINSUFFDATA:
+			raise InadequateSpiceException("Inadequate SPICE kernels available")
 
 		return pos_vel
 
