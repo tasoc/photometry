@@ -3,8 +3,8 @@ The TASOC Photometry module
 ===========================
 .. image:: https://zenodo.org/badge/103402174.svg
     :target: https://zenodo.org/badge/latestdoi/103402174
-.. image:: https://travis-ci.org/tasoc/photometry.svg?branch=devel
-    :target: https://travis-ci.org/tasoc/photometry
+.. image:: https://github.com/tasoc/photometry/actions/workflows/tests.yml/badge.svg?branch=devel
+    :target: https://github.com/tasoc/photometry/actions/workflows/tests.yml
 .. image:: https://img.shields.io/codecov/c/github/tasoc/photometry
     :target: https://codecov.io/github/tasoc/photometry
 .. image:: https://hitsofcode.com/github/tasoc/photometry?branch=devel
