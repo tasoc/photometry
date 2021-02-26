@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 r"""K2 Pixel Photometry (K2P\ :sup:`2`)
