@@ -161,7 +161,7 @@ class LinPSFPhotometry(BasePhotometry):
 
 					# Save figure to file:
 					fig_name = 'tess_{0:011d}_linpsf_{1:05d}'.format(self.starid, k)
-					save_figure(os.path.join(self.plot_folder, fig_name))
+					save_figure(os.path.join(self.plot_folder, fig_name), fig=fig)
 					plt.close(fig)
 
 		# Set contamination to NaN if all flux values are NaN:

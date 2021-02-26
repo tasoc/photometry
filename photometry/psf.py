@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Point Spread Function (PSF).
@@ -18,8 +18,8 @@ class PSF(object):
 	Point Spread Function (PSF).
 
 	Attributes:
-		camera (integer): TESS camera (1-4).
-		ccd (integer): TESS CCD (1-4).
+		camera (int): TESS camera (1-4).
+		ccd (int): TESS CCD (1-4).
 		stamp (tuple): The pixel sub-stamp used to generate PSF.
 		shape (tuple): Shape of pixel sub-stamp.
 		PSFfile (string): Path to PSF file that was interpolated in.
@@ -37,9 +37,9 @@ class PSF(object):
 		Point Spread Function (PSF).
 
 		Parameters:
-			sector (integer): TESS Observation sector.
-			camera (integer): TESS camera number (1-4).
-			ccd (integer): TESS CCD number (1-4).
+			sector (int): TESS Observation sector.
+			camera (int): TESS camera number (1-4).
+			ccd (int): TESS CCD number (1-4).
 			stamp (4-tuple): Sub-stamp on CCD to load PSF for.
 
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -67,7 +67,7 @@ class PSF(object):
 		# Get path to corresponding TESS PRF file:
 		PSFdir = os.path.join(os.path.dirname(__file__), 'data', 'psf')
 		SectorDir = 'start_s0004' if sector >= 4 else 'start_s0001'
-		PSFglob = os.path.join(PSFdir, SectorDir, 'tess*-{camera:d}-{ccd:d}-characterized-prf.mat'.format(camera=camera, ccd=ccd))
+		PSFglob = os.path.join(PSFdir, SectorDir, f'tess*-{camera:d}-{ccd:d}-characterized-prf.mat')
 		self.PSFfile = glob.glob(PSFglob)[0]
 
 		# Set minimum PRF weight to avoid dividing by almost 0 somewhere:

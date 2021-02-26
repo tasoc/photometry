@@ -19,6 +19,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Create LFS file list
       run: git lfs ls-files -l | cut -d' ' -f1 | sort > .lfs-assets-id
@@ -53,10 +55,10 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Version ${{ github.ref }}
+        tag_name: ${{ github.event.release.tag_name }}
+        release_name: Version ${{ github.event.release.tag_name }}
         body: |
-          Version ${{ github.ref }}
+          Version ${{ github.event.release.tag_name }}
           - First Change
           - Second Change
         draft: true

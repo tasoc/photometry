@@ -156,7 +156,7 @@ class PSFPhotometry(BasePhotometry):
 						starid=self.starid,
 						time=k
 					)
-					save_figure(os.path.join(self.plot_folder, fig_name))
+					save_figure(os.path.join(self.plot_folder, fig_name), fig=fig)
 					plt.close(fig)
 
 				# In the next iteration, start from the current solution:
