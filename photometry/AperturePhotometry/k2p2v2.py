@@ -325,7 +325,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 				ax.set_yticklabels([])
 
 			figname = 'seperated_cluster_%d' % i
-			save_figure(os.path.join(output_folder, figname))
+			save_figure(os.path.join(output_folder, figname), fig=fig)
 			plt.close(fig)
 
 	return labels_new, unique_labels, NoCluster
@@ -475,7 +475,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 		ax.axvline(CUT, color='r')
 		ax.set_xlabel('Flux')
 		ax.set_ylabel('Distribution')
-		save_figure(os.path.join(plot_folder, 'flux_distribution'))
+		save_figure(os.path.join(plot_folder, 'flux_distribution'), fig=fig)
 		plt.close(fig)
 
 	#==========================================================================
@@ -609,7 +609,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 					ax.add_patch(mpl.patches.Rectangle(cen, 1, 1, color='k', lw=2, fill=False, hatch='//'))
 
 				#fig.savefig(os.path.join(plot_folder, 'mask_filled_holes.png'), format='png', bbox_inches='tight')
-				save_figure(os.path.join(plot_folder, 'mask_filled_holes'))
+				save_figure(os.path.join(plot_folder, 'mask_filled_holes'), fig=fig)
 				plt.close(fig)
 
 		#==========================================================================
@@ -786,7 +786,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 			ax4.plot(outline[:, 0], outline[:, 1], color='k', zorder=10, lw=1.5)
 
 		# Save the figure and close it:
-		save_figure(os.path.join(plot_folder, 'masks_'+ws_alg))
+		save_figure(os.path.join(plot_folder, 'masks_'+ws_alg), fig=fig)
 		if show_plot:
 			plt.show()
 		else:

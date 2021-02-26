@@ -226,7 +226,7 @@ class HaloPhotometry(BasePhotometry):
 				fig, ax = plt.subplots()
 				plot_image(im, ax=ax, scale='linear', title='TV-min Weightmap', cmap='seismic',
 					cbar='right', vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), clabel=None)
-				save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)))
+				save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)), fig=fig)
 				plt.close(fig)
 
 		# Add additional headers specific to this method:

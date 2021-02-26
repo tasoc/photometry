@@ -326,22 +326,28 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 	return [ax1, ax2, ax3]
 
 #--------------------------------------------------------------------------------------------------
-def save_figure(path, format='png', **kwargs):
+def save_figure(path, fig=None, fmt='png', **kwargs):
 	"""
 	Write current figure to file. Creates directory to place it in if needed.
+
+	Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
 
 	Parameters:
 		path (str): Path where to save figure. If no file extension is provided, the extension
 			of the format is automatically appended.
-		format (str): Figure file type. Default is ``'png'``.
-		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
+		fig (:class:`matplotlib.pyplot.Figure`): Figure to save. Default is to save current figure.
+		fmt (str): Figure file type. Default is ``'png'``.
 	"""
 
 	logger = logging.getLogger(__name__)
 	logger.debug("Saving figure '%s' to '%s'.", os.path.basename(path), os.path.dirname(path))
 
-	if not path.endswith('.' + format):
-		path += '.' + format
+	if not path.endswith('.' + fmt):
+		path += '.' + fmt
+
+	os.makedirs(os.path.dirname(path), exist_ok=True)
 
 	# Write current figure to file if it doesn't exist:
-	plt.savefig(path, format=format, bbox_inches='tight', **kwargs)
+	if fig is None:
+		fig = plt.gcf()
+	fig.savefig(path, format=fmt, bbox_inches='tight', **kwargs)
