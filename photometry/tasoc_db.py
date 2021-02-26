@@ -64,7 +64,10 @@ class TASOC_DB(object): # pragma: no cover
 	def __exit__(self, *args, **kwargs):
 		self.close()
 
-	def named_cursor(self, name=None):
+	#----------------------------------------------------------------------------------------------
+	def named_cursor(self, name=None, itersize=2000):
 		if name is None:
-			name = 'tasocdb-{0:06d}'.format(random.randint(1, 100000))
-		return contextlib.closing(self.conn.cursor(name=name, cursor_factory=DictCursor))
+			name = 'tasocdb-{0:06d}'.format(random.randint(0, 999999))
+		named_cursor = contextlib.closing(self.conn.cursor(name=name, cursor_factory=DictCursor))
+		named_cursor.itersize = itersize
+		return named_cursor

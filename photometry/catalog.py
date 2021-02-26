@@ -262,16 +262,22 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				# We need a list of when the sectors are in time:
 				logger.info('Projecting catalog %.3f years relative to 2000', epoch)
 
+				# Count number of stars in the footprint:
+				logger.info("Querying for number of targets within footprint...")
+				tasocdb.cursor.execute(f"SELECT COUNT(*) AS num FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '{footprint:s}'::polygon) AND (disposition IS NULL OR disposition=3);")
+				total_count = tasocdb.cursor.fetchone()['num']
+
+				# Settings for tqdm progress bar:
+				tqdm_settings = {
+					'disable': None if logger.isEnabledFor(logging.INFO) else True,
+					'total': total_count
+				}
+
 				# Query the TESS Input Catalog table for all stars in the footprint.
 				# This is a MASSIVE table, so this query may take a while.
-				with tasocdb.named_cursor() as cursor_named:
-					cursor_named.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '%s'::polygon) AND (disposition IS NULL OR disposition=3);" % (
-						footprint,
-					))
-
-					tqdm_settings = {
-						'disable': not logger.isEnabledFor(logging.INFO)
-					}
+				logger.info("Building catalog table with %d rows...", total_count)
+				with tasocdb.named_cursor(itersize=20000) as cursor_named:
+					cursor_named.execute(f"SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '{footprint:s}'::polygon) AND (disposition IS NULL OR disposition=3);")
 
 					for row in tqdm(cursor_named, **tqdm_settings):
 						# Add the proper motion to each coordinate:

@@ -331,9 +331,9 @@ def save_figure(path, format='png', **kwargs):
 	Write current figure to file. Creates directory to place it in if needed.
 
 	Parameters:
-		path (string): Path where to save figure. If no file extension is provided, the extension
+		path (str): Path where to save figure. If no file extension is provided, the extension
 			of the format is automatically appended.
-		format (string): Figure file type. Default is ``'png'``.
+		format (str): Figure file type. Default is ``'png'``.
 		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
 	"""
 
