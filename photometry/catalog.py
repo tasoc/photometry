@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create catalogs of stars in a given TESS observing sector.
@@ -154,7 +154,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 		# Loop through the cameras and CCDs that should have catalogs created:
 		for camera, ccd in itertools.product(cameras, ccds):
 
-			logger.info("Running SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
+			logger.info("Running SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 
 			# Create SQLite file:
 			# TODO: Could we use "find_catalog_files" instead?
@@ -260,7 +260,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				conn.commit()
 
 				# We need a list of when the sectors are in time:
-				logger.info('Projecting catalog {0:.3f} years relative to 2000'.format(epoch))
+				logger.info('Projecting catalog %.3f years relative to 2000', epoch)
 
 				# Query the TESS Input Catalog table for all stars in the footprint.
 				# This is a MASSIVE table, so this query may take a while.
