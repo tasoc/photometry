@@ -67,29 +67,22 @@ jobs:
     - name: Testing
       run: python -m pytest --cov=./ --cov-append
 
-    - name: Coverage
-      run: |
-        coverage report
-        python -m codecov
+    - name: Upload coverage
+      uses: codecov/codecov-action@v1
 
 
   # Use the `flake8` tool to check for syntax errors
   flake8:
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
-        python-version: [3.6]
-
     name: Flake8
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
 
-    - name: Setup Python ${{ matrix.python-version }}
+    - name: Setup Python 3.6
       uses: actions/setup-python@v2
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: 3.6
 
     - name: Install dependencies
       run: |

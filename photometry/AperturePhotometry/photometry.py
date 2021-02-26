@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Simple Aperture Photometry using K2P2 to define masks.
@@ -34,8 +34,8 @@ class AperturePhotometry(BasePhotometry):
 
 		# Create minimum 2x2 mask around target position:
 		cols, rows = self.get_pixel_grid()
-		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
-			& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
+		mask_main = (( np.abs(cols - self.target_pos_column - 1) <= 1 )
+			& ( np.abs(rows - self.target_pos_row - 1) <= 1 ))
 
 		# Return the 2x2 mask, but only the pixels that are actually collected:
 		return mask_main & collected_pixels

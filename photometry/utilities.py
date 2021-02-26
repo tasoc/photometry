@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Collection of utility functions that can be used throughout
@@ -354,10 +354,10 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		[ 0.92564571,  1.46631496,  0.92564571],
 		[ 0.58433556,  0.92564571,  0.58433556]])
 	"""
-	return (flux / 4 * ((erf((x - x_0 + 0.5) / (np.sqrt(2) * sigma))
-		- erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma)))
-		* (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma))
-		- erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
+	denom = np.sqrt(2) * sigma
+	return (flux / 4 * ((erf((x - x_0 + 0.5) / denom)
+		- erf((x - x_0 - 0.5) / denom)) * (erf((y - y_0 + 0.5) / denom)
+		- erf((y - y_0 - 0.5) / denom)))) # noqa: ET126
 
 #--------------------------------------------------------------------------------------------------
 def mag2flux(mag, zp=20.60654144):
@@ -539,7 +539,7 @@ def download_file(url, destination, desc=None, position_holders=None, position_l
 		'unit_scale': True,
 		'position': None,
 		'leave': True,
-		'disable': not logger.isEnabledFor(logging.INFO),
+		'disable': None if logger.isEnabledFor(logging.INFO) else True,
 		'desc': desc
 	}
 
@@ -567,7 +567,7 @@ def download_file(url, destination, desc=None, position_holders=None, position_l
 		if os.path.getsize(destination) != total_size:
 			raise Exception("File not downloaded correctly")
 
-	except: # noqa: E722
+	except: # noqa: E722, pragma: no cover
 		logger.exception("Could not download file")
 		if os.path.exists(destination):
 			os.remove(destination)
@@ -618,9 +618,9 @@ class TqdmLoggingHandler(logging.Handler):
 			msg = self.format(record)
 			tqdm.tqdm.write(msg)
 			self.flush()
-		except (KeyboardInterrupt, SystemExit):
+		except (KeyboardInterrupt, SystemExit): # pragma: no cover
 			raise
-		except: # noqa: E722
+		except: # noqa: E722, pragma: no cover
 			self.handleError(record)
 
 #--------------------------------------------------------------------------------------------------
