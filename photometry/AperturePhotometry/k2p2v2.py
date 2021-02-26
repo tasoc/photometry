@@ -40,7 +40,7 @@ from statsmodels.nonparametric.bandwidths import select_bandwidth
 import os
 from sklearn.cluster import DBSCAN
 from skimage.feature import peak_local_max
-from skimage.morphology import watershed
+from skimage.segmentation import watershed
 from bottleneck import nanmedian
 import logging
 
