@@ -17,7 +17,7 @@ import getpass
 import contextlib
 import random
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class TASOC_DB(object): # pragma: no cover
 	"""
 	Connection to the central TASOC database.
@@ -51,13 +51,16 @@ class TASOC_DB(object): # pragma: no cover
 		self.conn = psql.connect('host=10.28.0.127 user=' + username + ' password=' + password + ' dbname=db_aadc')
 		self.cursor = self.conn.cursor(cursor_factory=DictCursor)
 
+	#----------------------------------------------------------------------------------------------
 	def close(self):
 		self.cursor.close()
 		self.conn.close()
 
+	#----------------------------------------------------------------------------------------------
 	def __enter__(self):
 		return self
 
+	#----------------------------------------------------------------------------------------------
 	def __exit__(self, *args, **kwargs):
 		self.close()
 

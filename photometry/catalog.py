@@ -158,7 +158,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 			# Create SQLite file:
 			# TODO: Could we use "find_catalog_files" instead?
-			catalog_file = os.path.join(input_folder, 'catalog_sector{0:03d}_camera{1:d}_ccd{2:d}.sqlite'.format(sector, camera, ccd))
+			catalog_file = os.path.join(input_folder, f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite')
 			if os.path.exists(catalog_file):
 				if overwrite:
 					os.remove(catalog_file)
@@ -360,11 +360,7 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	# Loop through all combinations of cameras and ccds:
 	for camera, ccd in itertools.product(cameras, ccds):
 		# File name and path for catalog file:
-		fname = 'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'.format(
-			sector=sector,
-			camera=camera,
-			ccd=ccd
-		)
+		fname = f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'
 		fpath = os.path.join(input_folder, fname)
 
 		# If the file already exists, skip the download:
@@ -373,13 +369,7 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 			continue
 
 		# URL for the missing catalog file:
-		url = 'https://tasoc.dk/pipeline/catalogs/tic8/sector{sector:03d}/{fname:s}'.format(
-			sector=sector,
-			fname=fname
-		)
+		url = f'https://tasoc.dk/pipeline/catalogs/tic8/sector{sector:03d}/{fname:s}'
 
 		# Download the file using the utilities function:
-		download_file(url, fpath, desc='Catalog S{sector:d}-{camera:d}-{ccd:d}'.format(
-			sector=sector,
-			camera=camera,
-			ccd=ccd))
+		download_file(url, fpath, desc=f'Catalog S{sector:d}-{camera:d}-{ccd:d}')
