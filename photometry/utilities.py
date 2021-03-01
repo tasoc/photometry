@@ -521,7 +521,8 @@ def find_nearest(array, value):
 	#	return idx
 
 #--------------------------------------------------------------------------------------------------
-def download_file(url, destination, desc=None, position_holders=None, position_lock=None):
+def download_file(url, destination, desc=None, timeout=60,
+	position_holders=None, position_lock=None):
 	"""
 	Download file from URL and place into specified destination.
 
@@ -529,6 +530,7 @@ def download_file(url, destination, desc=None, position_holders=None, position_l
 		url (str): URL to file to be downloaded.
 		destination (str): Path where to save file.
 		desc (str, optional): Description to write next to progress-bar.
+		timeout (float): Time to wait for server response in seconds. Default=60.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -552,7 +554,7 @@ def download_file(url, destination, desc=None, position_holders=None, position_l
 
 	try:
 		# Start stream from URL and throw an error for bad status codes:
-		response = requests.get(url, stream=True, allow_redirects=True)
+		response = requests.get(url, stream=True, allow_redirects=True, timeout=timeout)
 		response.raise_for_status()
 
 		total_size = int(response.headers.get('content-length', 0))
@@ -590,13 +592,14 @@ def download_parallel(urls, workers=4, timeout=60):
 			containing two elements: The URL to download, and the path to the destination where the
 			file should be saved.
 		workers (int, optional): Number of threads to use for downloading. Default=4.
+		timeout (float): Time to wait for server response in seconds. Default=60.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
 	# Don't overcomplicate things for a singe file:
 	if len(urls) == 1:
-		download_file(urls[0][0], urls[0][1])
+		download_file(urls[0][0], urls[0][1], timeout=timeout)
 		return
 
 	workers = min(workers, len(urls))
@@ -604,13 +607,16 @@ def download_parallel(urls, workers=4, timeout=60):
 	plock = Lock()
 
 	def _wrapper(arg):
-		download_file(arg[0], arg[1], position_holders=position_holders, position_lock=plock)
+		download_file(arg[0], arg[1],
+			timeout=timeout,
+			position_holders=position_holders,
+			position_lock=plock)
 
 	errors = []
 	with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
 		# Start the load operations and mark each future with its URL
 		future_to_url = {executor.submit(_wrapper, url): url for url in urls}
-		for future in concurrent.futures.as_completed(future_to_url, timeout=timeout):
+		for future in concurrent.futures.as_completed(future_to_url):
 			url = future_to_url[future]
 			try:
 				future.result()
