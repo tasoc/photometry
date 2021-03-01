@@ -20,6 +20,10 @@ jobs:
 
     name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      OS: ${{ matrix.os }}
+      PYTHON: ${{ matrix.python-version }}
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -64,13 +68,15 @@ jobs:
         pip install mpi4py
 
     - name: Download cache
-      run: coverage run run_download_cache.py -q
+      run: python run_download_cache.py -q # coverage run
 
     - name: Testing
-      run: python -m pytest --cov=./ --cov-append
+      run: python -m pytest --cov=./ # --cov-append
 
     - name: Upload coverage
       uses: codecov/codecov-action@v1
+      with:
+        env_vars: OS,PYTHON
 
 
   # Use the `flake8` tool to check for syntax errors
