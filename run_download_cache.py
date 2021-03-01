@@ -22,7 +22,7 @@ def main():
 
 	# Setup logging:
 	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-	console = logging.StreamHandler()
+	console = photometry.utilities.TqdmLoggingHandler()
 	console.setFormatter(formatter)
 	logger = logging.getLogger(__name__)
 	logger.addHandler(console)

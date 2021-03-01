@@ -23,7 +23,7 @@ import re
 import itertools
 from functools import lru_cache
 import requests
-from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 from threading import Lock
 
 # Constants:
@@ -573,14 +573,15 @@ def download_file(url, destination, desc=None, position_holders=None, position_l
 			os.remove(destination)
 		raise
 
-	# Pause before returning to give progress bar time to write.
-	if position_holders is not None:
-		position_lock.acquire()
-		position_holders[tqdm_settings['position']] = False
-		position_lock.release()
+	finally:
+		# Pause before returning to give progress bar time to write.
+		if position_holders is not None:
+			position_lock.acquire()
+			position_holders[tqdm_settings['position']] = False
+			position_lock.release()
 
 #--------------------------------------------------------------------------------------------------
-def download_parallel(urls, workers=4):
+def download_parallel(urls, workers=4, timeout=60):
 	"""
 	Download several files in parallel using multiple threads.
 
@@ -605,8 +606,19 @@ def download_parallel(urls, workers=4):
 	def _wrapper(arg):
 		download_file(arg[0], arg[1], position_holders=position_holders, position_lock=plock)
 
-	with ThreadPoolExecutor(max_workers=workers) as executor:
-		executor.map(_wrapper, urls)
+	errors = []
+	with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+		# Start the load operations and mark each future with its URL
+		future_to_url = {executor.submit(_wrapper, url): url for url in urls}
+		for future in concurrent.futures.as_completed(future_to_url, timeout=timeout):
+			url = future_to_url[future]
+			try:
+				future.result()
+			except: # noqa: E722, pragma: no cover
+				errors.append(url[0])
+
+	if errors:
+		raise Exception("Errors encountered during download of the following URLs:\n%s" % '\n'.join(errors))
 
 #--------------------------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):
