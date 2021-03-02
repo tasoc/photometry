@@ -80,11 +80,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
-	filename_pattern = 'tess*-s{sector:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(
-		sector=sector_str,
-		camera=camera,
-		ccd=ccd
-	)
+	filename_pattern = f'tess*-s{sector_str:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'
 	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
@@ -131,18 +127,12 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 	# Create the filename pattern to search for:
 	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
 	starid_str = '*' if starid is None else '{0:016d}'.format(starid)
-	filename_pattern = 'tess*-s{sector:s}-{starid:s}-????-[xsab]_tp.fits*'.format(
-		sector=sector_str,
-		starid=starid_str
-	)
+	filename_pattern = f'tess*-s{sector_str:s}-{starid_str:s}-????-[xsab]_tp.fits*'
 
 	# Pattern used for TESS Alert data:
 	sector_str = '??' if sector is None else '{0:02d}'.format(sector)
 	starid_str = '*' if starid is None else '{0:011d}'.format(starid)
-	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s{sector:s}_tess_v?_tp.fits*'.format(
-		sector=sector_str,
-		starid=starid_str
-	)
+	filename_pattern2 = f'hlsp_tess-data-alerts_tess_phot_{starid_str:s}-s{sector_str:s}_tess_v?_tp.fits*'
 
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern2)
@@ -172,6 +162,7 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 	return matches
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for HDF5 files matching constraints.
@@ -195,26 +186,24 @@ def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 
 	filelst = []
 	for sector, camera, ccd in itertools.product(sector, camera, ccd):
-		filelst += glob.glob(os.path.join(rootdir, 'sector{0:s}_camera{1:d}_ccd{2:d}.hdf5'.format(
-			'???' if sector is None else '%03d' % sector,
-			camera,
-			ccd
-		)))
+		sector_str = '???' if sector is None else f'{sector:03d}'
+		filelst += glob.glob(os.path.join(rootdir, f'sector{sector_str:s}_camera{camera:d}_ccd{ccd:d}.hdf5'))
 
 	return filelst
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for CATALOG (sqlite) files matching constraints.
 
 	Parameters:
-		rootdir (string): Directory to search for CATALOG files.
-		sector (integer, list or None, optional): Only return files from the given sectors.
+		rootdir (str): Directory to search for CATALOG files.
+		sector (int, list or None, optional): Only return files from the given sectors.
 			If ``None``, files from all TIC numbers are returned.
-		camera (integer, list or None, optional): Only return files from the given camera.
+		camera (int, list or None, optional): Only return files from the given camera.
 			If ``None``, files from all cameras are returned.
-		ccd (integer, list or None, optional): Only return files from the given ccd.
+		ccd (int, list or None, optional): Only return files from the given ccd.
 			If ``None``, files from all ccds are returned.
 
 	Returns:
@@ -227,11 +216,8 @@ def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 
 	filelst = []
 	for sector, camera, ccd in itertools.product(sector, camera, ccd):
-		filelst += glob.glob(os.path.join(rootdir, 'catalog_sector{0:s}_camera{1:d}_ccd{2:d}.sqlite'.format(
-			'???' if sector is None else '%03d' % sector,
-			camera,
-			ccd
-		)))
+		sector_str = '???' if sector is None else f'{sector:03d}'
+		filelst += glob.glob(os.path.join(rootdir, f'catalog_sector{sector_str:s}_camera{camera:d}_ccd{ccd:d}.sqlite'))
 
 	return filelst
 

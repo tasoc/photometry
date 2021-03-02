@@ -26,20 +26,19 @@ def _reduce_mode(x):
 	return kde.support[np.argmax(kde.density)]
 
 #------------------------------------------------------------------------------
-def _mode(data):
-	modes = np.zeros([data.shape[0]])
-	for i in range(data.shape[0]):
-		kde = KDE(data[i,:])
-		kde.fit(gridsize=2000)
-		modes[i] = kde.support[np.argmax(kde.density)]
-	return modes
-
-#------------------------------------------------------------------------------
 class ModeBackground(BackgroundBase):
+	def _mode(self, data):
+		modes = np.zeros([data.shape[0]])
+		for i in range(data.shape[0]):
+			kde = KDE(data[i,:])
+			kde.fit(gridsize=2000)
+			modes[i] = kde.support[np.argmax(kde.density)]
+		return modes
+
 	def calc_background(self, data, axis=None):
 		if self.sigma_clip is not None:
 			data = self.sigma_clip(data, axis=axis)
-		bkg = np.atleast_1d(_mode(np.asarray(data, dtype=np.float64)))
+		bkg = np.atleast_1d(self._mode(np.asarray(data, dtype='float64')))
 		return bkg
 
 #------------------------------------------------------------------------------
