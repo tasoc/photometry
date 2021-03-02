@@ -23,6 +23,12 @@ def test_load_settings():
 	assert isinstance(settings, configparser.ConfigParser)
 	assert settings.getboolean('fixes', 'time_offset', fallback=True) # Actually checking value
 
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.load_settings.cache_info().hits
+	settings2 = u.load_settings()
+	assert settings2 == settings
+	assert u.load_settings.cache_info().hits == hits_before+1
+
 #--------------------------------------------------------------------------------------------------
 def test_load_sector_settings():
 
@@ -30,6 +36,12 @@ def test_load_sector_settings():
 	print(settings)
 	assert isinstance(settings, dict)
 	assert int(settings['sector']) == 2
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.load_sector_settings.cache_info().hits
+	settings2 = u.load_sector_settings(2)
+	assert settings2 == settings
+	assert u.load_sector_settings.cache_info().hits == hits_before+1
 
 	settings = u.load_sector_settings()
 	print(settings)
@@ -96,6 +108,15 @@ def test_find_hdf5_files(SHARED_INPUT_DIR):
 	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3)
 	assert(len(files) == 1)
 
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert(len(files) == 1)
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.find_hdf5_files.cache_info().hits
+	files2 = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert files2 == files
+	assert u.find_hdf5_files.cache_info().hits == hits_before+1
+
 #--------------------------------------------------------------------------------------------------
 def test_find_catalog_files(SHARED_INPUT_DIR):
 
@@ -110,6 +131,12 @@ def test_find_catalog_files(SHARED_INPUT_DIR):
 
 	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
 	assert(len(files) == 1)
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.find_catalog_files.cache_info().hits
+	files2 = u.find_catalog_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert files2 == files
+	assert u.find_catalog_files.cache_info().hits == hits_before+1
 
 #--------------------------------------------------------------------------------------------------
 def test_load_ffi_files(SHARED_INPUT_DIR):
