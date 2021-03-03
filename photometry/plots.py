@@ -326,6 +326,52 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 	return [ax1, ax2, ax3]
 
 #--------------------------------------------------------------------------------------------------
+def plot_outline(img, threshold=0.5, ax=None, **kwargs):
+	"""
+	Mask outline.
+	"""
+
+	# Special treatment for boolean arrays:
+	if isinstance(img, np.ndarray) and img.dtype == 'bool':
+		mapimg = img
+	else:
+		mapimg = (img > threshold)
+
+	ver_seg = np.where(mapimg[:,1:] != mapimg[:,:-1])
+	hor_seg = np.where(mapimg[1:,:] != mapimg[:-1,:])
+
+	lines = []
+	for p in zip(*hor_seg):
+		lines.append((p[1], p[0]+1))
+		lines.append((p[1]+1, p[0]+1))
+		lines.append((np.nan,np.nan))
+
+	# and the same for vertical segments
+	for p in zip(*ver_seg):
+		lines.append((p[1]+1, p[0]))
+		lines.append((p[1]+1, p[0]+1))
+		lines.append((np.nan, np.nan))
+
+	segments = np.array(lines, dtype='float64')
+
+	x0 = -0.5
+	x1 = img.shape[1]+x0
+	y0 = -0.5
+	y1 = img.shape[0]+y0
+
+	# now we need to know something about the image which is shown
+	#   at this point let's assume it has extents (x0, y0)..(x1,y1) on the axis
+	#   drawn with origin='lower'
+	# with this information we can rescale our points
+	segments[:,0] = x0 + (x1-x0) * segments[:,0] / mapimg.shape[1]
+	segments[:,1] = y0 + (y1-y0) * segments[:,1] / mapimg.shape[0]
+
+	if ax is None:
+		return segments
+
+	return ax.plot(segments[:,0], segments[:,1], **kwargs)
+
+#--------------------------------------------------------------------------------------------------
 def save_figure(path, fig=None, fmt='png', **kwargs):
 	"""
 	Write current figure to file. Creates directory to place it in if needed.

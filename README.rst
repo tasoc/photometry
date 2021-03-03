@@ -61,10 +61,10 @@ The directory defined in ``TESSPHOT_INPUT`` should contain all the data in FITS 
 
 Make star catalogs
 ------------------
-The first program to be run is the ``make_catalog.py`` program, which will create full catalogs of all stars known to fall on or near the TESS detectors during a given observing sector. These catalogs are created directly from the TESS Input Catalog (TIC), and since this is such a huge table this program relies on internal databases running at TASOC at Aarhus University. You therefore need to be connected to the network at TASOC at Aarhus Univsity to run this program.
+The first program to be run is the ``run_make_catalog.py`` program, which will create full catalogs of all stars known to fall on or near the TESS detectors during a given observing sector. These catalogs are created directly from the TESS Input Catalog (TIC), and since this is such a huge table this program relies on internal databases running at TASOC at Aarhus University. You therefore need to be connected to the network at TASOC at Aarhus Univsity to run this program.
 The program is simply run as shown here for sector #14 (see full documentation for more options):
 
->>> python make_catalog.py 14
+>>> python run_make_catalog.py 14
 
 Prepare photometry
 ------------------

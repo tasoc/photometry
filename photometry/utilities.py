@@ -23,7 +23,7 @@ import re
 import itertools
 from functools import lru_cache
 import requests
-from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 from threading import Lock
 
 # Constants:
@@ -80,11 +80,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
-	filename_pattern = 'tess*-s{sector:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(
-		sector=sector_str,
-		camera=camera,
-		ccd=ccd
-	)
+	filename_pattern = f'tess*-s{sector_str:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'
 	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
@@ -131,18 +127,12 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 	# Create the filename pattern to search for:
 	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
 	starid_str = '*' if starid is None else '{0:016d}'.format(starid)
-	filename_pattern = 'tess*-s{sector:s}-{starid:s}-????-[xsab]_tp.fits*'.format(
-		sector=sector_str,
-		starid=starid_str
-	)
+	filename_pattern = f'tess*-s{sector_str:s}-{starid_str:s}-????-[xsab]_tp.fits*'
 
 	# Pattern used for TESS Alert data:
 	sector_str = '??' if sector is None else '{0:02d}'.format(sector)
 	starid_str = '*' if starid is None else '{0:011d}'.format(starid)
-	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s{sector:s}_tess_v?_tp.fits*'.format(
-		sector=sector_str,
-		starid=starid_str
-	)
+	filename_pattern2 = f'hlsp_tess-data-alerts_tess_phot_{starid_str:s}-s{sector_str:s}_tess_v?_tp.fits*'
 
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern2)
@@ -172,6 +162,7 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 	return matches
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for HDF5 files matching constraints.
@@ -195,26 +186,24 @@ def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 
 	filelst = []
 	for sector, camera, ccd in itertools.product(sector, camera, ccd):
-		filelst += glob.glob(os.path.join(rootdir, 'sector{0:s}_camera{1:d}_ccd{2:d}.hdf5'.format(
-			'???' if sector is None else '%03d' % sector,
-			camera,
-			ccd
-		)))
+		sector_str = '???' if sector is None else f'{sector:03d}'
+		filelst += glob.glob(os.path.join(rootdir, f'sector{sector_str:s}_camera{camera:d}_ccd{ccd:d}.hdf5'))
 
 	return filelst
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for CATALOG (sqlite) files matching constraints.
 
 	Parameters:
-		rootdir (string): Directory to search for CATALOG files.
-		sector (integer, list or None, optional): Only return files from the given sectors.
+		rootdir (str): Directory to search for CATALOG files.
+		sector (int, list or None, optional): Only return files from the given sectors.
 			If ``None``, files from all TIC numbers are returned.
-		camera (integer, list or None, optional): Only return files from the given camera.
+		camera (int, list or None, optional): Only return files from the given camera.
 			If ``None``, files from all cameras are returned.
-		ccd (integer, list or None, optional): Only return files from the given ccd.
+		ccd (int, list or None, optional): Only return files from the given ccd.
 			If ``None``, files from all ccds are returned.
 
 	Returns:
@@ -227,11 +216,8 @@ def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 
 	filelst = []
 	for sector, camera, ccd in itertools.product(sector, camera, ccd):
-		filelst += glob.glob(os.path.join(rootdir, 'catalog_sector{0:s}_camera{1:d}_ccd{2:d}.sqlite'.format(
-			'???' if sector is None else '%03d' % sector,
-			camera,
-			ccd
-		)))
+		sector_str = '???' if sector is None else f'{sector:03d}'
+		filelst += glob.glob(os.path.join(rootdir, f'catalog_sector{sector_str:s}_camera{camera:d}_ccd{ccd:d}.sqlite'))
 
 	return filelst
 
@@ -521,7 +507,8 @@ def find_nearest(array, value):
 	#	return idx
 
 #--------------------------------------------------------------------------------------------------
-def download_file(url, destination, desc=None, position_holders=None, position_lock=None):
+def download_file(url, destination, desc=None, timeout=60,
+	position_holders=None, position_lock=None):
 	"""
 	Download file from URL and place into specified destination.
 
@@ -529,6 +516,7 @@ def download_file(url, destination, desc=None, position_holders=None, position_l
 		url (str): URL to file to be downloaded.
 		destination (str): Path where to save file.
 		desc (str, optional): Description to write next to progress-bar.
+		timeout (float): Time to wait for server response in seconds. Default=60.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -552,7 +540,7 @@ def download_file(url, destination, desc=None, position_holders=None, position_l
 
 	try:
 		# Start stream from URL and throw an error for bad status codes:
-		response = requests.get(url, stream=True, allow_redirects=True)
+		response = requests.get(url, stream=True, allow_redirects=True, timeout=timeout)
 		response.raise_for_status()
 
 		total_size = int(response.headers.get('content-length', 0))
@@ -573,14 +561,15 @@ def download_file(url, destination, desc=None, position_holders=None, position_l
 			os.remove(destination)
 		raise
 
-	# Pause before returning to give progress bar time to write.
-	if position_holders is not None:
-		position_lock.acquire()
-		position_holders[tqdm_settings['position']] = False
-		position_lock.release()
+	finally:
+		# Pause before returning to give progress bar time to write.
+		if position_holders is not None:
+			position_lock.acquire()
+			position_holders[tqdm_settings['position']] = False
+			position_lock.release()
 
 #--------------------------------------------------------------------------------------------------
-def download_parallel(urls, workers=4):
+def download_parallel(urls, workers=4, timeout=60):
 	"""
 	Download several files in parallel using multiple threads.
 
@@ -589,13 +578,14 @@ def download_parallel(urls, workers=4):
 			containing two elements: The URL to download, and the path to the destination where the
 			file should be saved.
 		workers (int, optional): Number of threads to use for downloading. Default=4.
+		timeout (float): Time to wait for server response in seconds. Default=60.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
 	# Don't overcomplicate things for a singe file:
 	if len(urls) == 1:
-		download_file(urls[0][0], urls[0][1])
+		download_file(urls[0][0], urls[0][1], timeout=timeout)
 		return
 
 	workers = min(workers, len(urls))
@@ -603,10 +593,24 @@ def download_parallel(urls, workers=4):
 	plock = Lock()
 
 	def _wrapper(arg):
-		download_file(arg[0], arg[1], position_holders=position_holders, position_lock=plock)
+		download_file(arg[0], arg[1],
+			timeout=timeout,
+			position_holders=position_holders,
+			position_lock=plock)
 
-	with ThreadPoolExecutor(max_workers=workers) as executor:
-		executor.map(_wrapper, urls)
+	errors = []
+	with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+		# Start the load operations and mark each future with its URL
+		future_to_url = {executor.submit(_wrapper, url): url for url in urls}
+		for future in concurrent.futures.as_completed(future_to_url):
+			url = future_to_url[future]
+			try:
+				future.result()
+			except: # noqa: E722, pragma: no cover
+				errors.append(url[0])
+
+	if errors:
+		raise Exception("Errors encountered during download of the following URLs:\n%s" % '\n'.join(errors))
 
 #--------------------------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):

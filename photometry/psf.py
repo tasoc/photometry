@@ -139,7 +139,7 @@ class PSF(object):
 				for star in params:
 					star_row = star[0]
 					star_column = star[1]
-					if np.sqrt((j-star_column)**2 + (i-star_row)**2) < cutoff_radius:
+					if cutoff_radius is None or np.sqrt((j-star_column)**2 + (i-star_row)**2) < cutoff_radius:
 						star_flux = star[2]
 						column_cen = j - star_column
 						row_cen = i - star_row

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Download any missing data files to cache.
@@ -7,7 +7,7 @@ Download any missing data files to cache.
 """
 
 import logging
-from astropy.utils.iers import IERS_Auto
+from astropy.utils import iers
 from .spice import TESS_SPICE
 
 def download_cache():
@@ -27,8 +27,14 @@ def download_cache():
 
 	# This will download IERS data needed for astropy.Time transformations:
 	# https://docs.astropy.org/en/stable/utils/iers.html
+	# Ensure that the auto_download config is enabled, otherwise nothing will be downloaded
 	logger.info("Downloading IERS data...")
-	IERS_Auto().open()
+	oldval = iers.conf.auto_download
+	try:
+		iers.conf.auto_download = True
+		iers.IERS_Auto().open()
+	finally:
+		iers.conf.auto_download = oldval
 
 	# The TESS SPICE kernels should be downloaded, if they
 	# are not already.
