@@ -314,7 +314,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 
 	# Make the common colorbar for image and fit subplots:
 	cbar_ax12 = fig.add_axes([0.125, 0.2, 0.494, 0.03])
-	fig.colorbar(im1, norm=norm, cax=cbar_ax12, orientation='horizontal')
+	fig.colorbar(im1, cax=cbar_ax12, orientation='horizontal')
 
 	# Make the colorbar for the residuals subplot:
 	cbar_ax3 = fig.add_axes([0.7, 0.2, 0.205, 0.03])

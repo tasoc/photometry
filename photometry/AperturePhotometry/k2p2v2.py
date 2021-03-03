@@ -34,7 +34,7 @@ from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from statsmodels.nonparametric.bandwidths import select_bandwidth
 from sklearn.cluster import DBSCAN
 from skimage.feature import peak_local_max
-from skimage.morphology import watershed
+from skimage.segmentation import watershed
 from ..plots import plt, plot_image, save_figure
 import matplotlib as mpl
 from matplotlib.backends.backend_pdf import PdfPages
