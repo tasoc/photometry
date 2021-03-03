@@ -31,6 +31,7 @@ from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale,
 	find_nearest, ListHandler, load_settings)
 from .catalog import catalog_sqlite_search_footprint
+from .psf import PSF
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
 from .version import get_version
@@ -83,11 +84,6 @@ class BasePhotometry(object):
 		header (dict-like): Primary header, either from TPF or HDF5 files.
 
 		target (dict): Catalog information about the main target.
-		target_mag (float): TESS magnitude of the main target.
-		target_pos_ra (float): Right ascension of the main target at time of observation.
-		target_pos_dec (float): Declination of the main target at time of observation.
-		target_pos_ra_J2000 (float): Right ascension of the main target at J2000.
-		target_pos_dec_J2000 (float): Declination of the main target at J2000.
 		target_pos_column (float): Main target CCD column position.
 		target_pos_row (float): Main target CCD row position.
 		target_pos_column_stamp (float): Main target CCD column position in stamp.
@@ -112,18 +108,16 @@ class BasePhotometry(object):
 
 		Parameters:
 			starid (int): TIC number of star to be processed.
-			input_folder (string): Root directory where files are loaded from.
-			output_folder (string): Root directory where output files are saved.
-			datasource (string, optional): Source of the data. Options are ``'ffi'`` or ``'tpf'``.
+			input_folder (str): Root directory where files are loaded from.
+			output_folder (str): Root directory where output files are saved.
+			datasource (str): Source of the data. Options are ``'ffi'`` or ``'tpf'``.
 				Default is ``'ffi'``.
-			plot (boolean, optional): Create plots as part of the output. Default is ``False``.
-			camera (integer, optional): TESS camera (1-4) to load target from (Only used for FFIs).
-			ccd (integer, optional): TESS CCD (1-4) to load target from (Only used for FFIs).
-			cache (string, optional): Optional values are ``'none'``, ``'full'``
+			plot (bool): Create plots as part of the output. Default is ``False``.
+			camera (int): TESS camera (1-4) to load target from (Only used for FFIs).
+			ccd (int): TESS CCD (1-4) to load target from (Only used for FFIs).
+			cache (str): Optional values are ``'none'``, ``'full'``
 				or ``'basic'`` (Default).
-			version (integer): Data release number to be added to headers. Default=5.
-			settings (:class:`configparser.ConfigParser`): Pipeline settings, loaded from
-				settings file.
+			version (int): Data release number to be added to headers. Default=5.
 
 		Raises:
 			Exception: If starid could not be found in catalog.
@@ -135,9 +129,9 @@ class BasePhotometry(object):
 		logger = logging.getLogger(__name__)
 
 		if datasource != 'ffi' and not datasource.startswith('tpf'):
-			raise ValueError("Invalid datasource: '%s'" % datasource)
+			raise ValueError(f"Invalid datasource: '{datasource:s}'")
 		if cache not in ('basic', 'none', 'full'):
-			raise ValueError("Invalid cache: '%s'" % cache)
+			raise ValueError(f"Invalid cache: '{cache:s}'")
 
 		# Store the input:
 		self.starid = starid
@@ -151,7 +145,7 @@ class BasePhotometry(object):
 		if os.path.isfile(self.input_folder):
 			self.input_folder = os.path.dirname(self.input_folder)
 		if not os.path.isdir(self.input_folder):
-			raise FileNotFoundError("Not a valid input directory: '%s'" % self.input_folder)
+			raise FileNotFoundError(f"Not a valid input directory: '{self.input_folder:s}'")
 
 		# Extract which photometric method that is being used by checking the
 		# name of the class that is running:
@@ -177,8 +171,8 @@ class BasePhotometry(object):
 		self._pixelflags_cube_full = None
 		self._sumimage_full = None
 
-		# Add a ListHandler to the logging of the corrections module.
-		# This is needed to catch any errors and warnings made by the correctors
+		# Add a ListHandler to the logging of the photometry module.
+		# This is needed to catch any errors and warnings made by the photometries
 		# for ultimately storing them in the TODO-file.
 		# https://stackoverflow.com/questions/36408496/python-logging-handler-to-append-to-list
 		self.message_queue = []
@@ -197,7 +191,7 @@ class BasePhotometry(object):
 		# Set directory where diagnostics plots should be saved to:
 		self.plot_folder = None
 		if self.plot:
-			self.plot_folder = os.path.join(self.output_folder, 'plots', '{0:011d}'.format(self.starid))
+			self.plot_folder = os.path.join(self.output_folder, 'plots', f'{self.starid:011d}')
 			os.makedirs(self.plot_folder, exist_ok=True)
 
 		# Init table that will be filled with lightcurve stuff:
@@ -220,7 +214,7 @@ class BasePhotometry(object):
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
-				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+				raise FileNotFoundError(f"HDF5 File not found. SECTOR={self.sector:d}, CAMERA={self.camera:d}, CCD={self.ccd:d}")
 			filepath_hdf5 = filepath_hdf5[0]
 			self.filepath_hdf5 = filepath_hdf5
 
@@ -267,7 +261,7 @@ class BasePhotometry(object):
 				# World Coordinate System solution:
 				if isinstance(self.hdf['wcs'], h5py.Group):
 					refindx = self.hdf['wcs'].attrs['ref_frame']
-					hdr_string = self.hdf['wcs']['%04d' % refindx][0]
+					hdr_string = self.hdf['wcs'][f'{refindx:04d}'][0]
 				else:
 					hdr_string = self.hdf['wcs'][0]
 				if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
@@ -388,8 +382,9 @@ class BasePhotometry(object):
 			# Load stuff from the common HDF5 file:
 			filepath_hdf5 = find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
-				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+				raise FileNotFoundError(f"HDF5 File not found. SECTOR={self.sector:d}, CAMERA={self.camera:d}, CCD={self.ccd:d}")
 			filepath_hdf5 = filepath_hdf5[0]
+			self.filepath_hdf5 = filepath_hdf5
 			self.hdf = h5py.File(filepath_hdf5, 'r')
 
 			# Correct timestamp offset that was in early data releases:
@@ -400,7 +395,7 @@ class BasePhotometry(object):
 		self._catalog = None
 		logger.debug('Catalog file: %s', self.catalog_file)
 		if len(self.catalog_file) != 1:
-			raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (self.sector, self.camera, self.ccd))
+			raise FileNotFoundError(f"Catalog file not found: SECTOR={self.sector:d}, CAMERA={self.camera:d}, CCD={self.ccd:d}")
 		self.catalog_file = self.catalog_file[0]
 
 		# Load information about main target:
@@ -412,11 +407,6 @@ class BasePhotometry(object):
 			if target is None:
 				raise Exception("Star could not be found in catalog: {0:d}".format(self.starid))
 			self.target = dict(target) # Dictionary of all main target properties.
-			self.target_tmag = target['tmag'] # TESS magnitude of the main target.
-			self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
-			self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
-			self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
-			self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
 			cursor.execute("SELECT sector,reference_time,ticver FROM settings LIMIT 1;")
 			target = cursor.fetchone()
 			if target is not None:
@@ -485,6 +475,7 @@ class BasePhotometry(object):
 		self._backgrounds_cube = None
 		self._pixelflags_cube = None
 		self._aperture = None
+		self._psf = None
 
 	#----------------------------------------------------------------------------------------------
 	def __enter__(self):
@@ -690,6 +681,7 @@ class BasePhotometry(object):
 		self._backgrounds_cube = None
 		self._pixelflags_cube = None
 		self._aperture = None
+		self._psf = None
 		return True
 
 	#----------------------------------------------------------------------------------------------
@@ -1259,6 +1251,22 @@ class BasePhotometry(object):
 		return cat
 
 	#----------------------------------------------------------------------------------------------
+	@property
+	def psf(self):
+		"""
+		Point Spread Function.
+
+		Returns:
+			:class:`psf.PSF`: PSF object for the given target position.
+
+		See Also:
+			:class:`psf.PSF`
+		"""
+		if self._psf is None:
+			self._psf = PSF(self.sector, self.camera, self.ccd, self.stamp)
+		return self._psf
+
+	#----------------------------------------------------------------------------------------------
 	def delete_plots(self):
 		"""
 		Delete all files in :py:attr:`plot_folder`.
@@ -1316,6 +1324,7 @@ class BasePhotometry(object):
 		See Also:
 			:py:meth:`do_photometry`
 		"""
+		logger = logging.getLogger(__name__)
 
 		# Run the photometry:
 		self._status = self.do_photometry(*args, **kwargs)
@@ -1357,16 +1366,23 @@ class BasePhotometry(object):
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
 			# This happens in the test-data because there are so few points.
-			with warnings.catch_warnings():
-				warnings.filterwarnings('error', category=np.RankWarning)
-				try:
-					p = np.polyfit(goodlc['time'][indx], flux[indx], 3, w=1/flux_err[indx])
-				except np.RankWarning:
-					p = [0]
+			if np.any(indx):
+				mintime = np.nanmin(goodlc['time'][indx])
+				with warnings.catch_warnings():
+					warnings.filterwarnings('error', category=np.RankWarning)
+					try:
+						p = np.polyfit(goodlc['time'][indx] - mintime, flux[indx], 3, w=1/flux_err[indx])
+						detrend = np.polyval(p, goodlc['time'] - mintime)
+					except np.RankWarning: # pragma: no cover
+						logger.warning("Could not detrend lightcurve for variability calculation.")
+						detrend = 0
+			else:
+				logger.warning("Could not detrend lightcurve for variability calculation.")
+				detrend = 0
 
 			# Calculate the variability as the standard deviation of the
 			# polynomial-subtracted lightcurve devided by the median error:
-			self._details['variability'] = nanstd(flux - np.polyval(p, goodlc['time'])) / nanmedian(flux_err)
+			self._details['variability'] = nanstd(flux - detrend) / nanmedian(flux_err)
 
 			if self.final_phot_mask is not None:
 				# Calculate the total number of pixels in the mask:
@@ -1465,8 +1481,8 @@ class BasePhotometry(object):
 
 		hdu.header['RADESYS'] = ('ICRS', 'reference frame of celestial coordinates')
 		hdu.header['EQUINOX'] = (2000.0, 'equinox of celestial coordinate system')
-		hdu.header['RA_OBJ'] = (self.target_pos_ra_J2000, '[deg] Right ascension')
-		hdu.header['DEC_OBJ'] = (self.target_pos_dec_J2000, '[deg] Declination')
+		hdu.header['RA_OBJ'] = (self.target['ra_J2000'], '[deg] Right ascension')
+		hdu.header['DEC_OBJ'] = (self.target['decl_J2000'], '[deg] Declination')
 		hdu.header['PMRA'] = (fits.card.Undefined() if not self.target['pm_ra'] else self.target['pm_ra'], '[mas/yr] RA proper motion')
 		hdu.header['PMDEC'] = (fits.card.Undefined() if not self.target['pm_decl'] else self.target['pm_decl'], '[mas/yr] Dec proper motion')
 		hdu.header['PMTOTAL'] = (pmtotal, '[mas/yr] total proper motion')
