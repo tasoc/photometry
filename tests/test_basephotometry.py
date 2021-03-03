@@ -202,10 +202,10 @@ def test_catalog(SHARED_INPUT_DIR, datasource):
 			print(pho.catalog)
 			assert(DUMMY_TARGET in pho.catalog['starid'])
 
-			assert(pho.target_pos_ra >= np.min(pho.catalog['ra']))
-			assert(pho.target_pos_ra <= np.max(pho.catalog['ra']))
-			assert(pho.target_pos_dec >= np.min(pho.catalog['dec']))
-			assert(pho.target_pos_dec <= np.max(pho.catalog['dec']))
+			assert(pho.target['ra'] >= np.min(pho.catalog['ra']))
+			assert(pho.target['ra'] <= np.max(pho.catalog['ra']))
+			assert(pho.target['decl'] >= np.min(pho.catalog['dec']))
+			assert(pho.target['decl'] <= np.max(pho.catalog['dec']))
 
 			indx_main = (pho.catalog['starid'] == DUMMY_TARGET)
 

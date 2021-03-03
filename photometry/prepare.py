@@ -179,7 +179,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 	# Loop over each combination of camera and CCD:
 	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
-		logger.info("Running SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
+		logger.info("Running SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 		tic_total = default_timer()
 
 		# Find all the FFI files associated with this camera and CCD:
@@ -192,7 +192,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		# Catalog file:
 		catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 		if len(catalog_file) != 1:
-			logger.error("Catalog file could not be found: SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
+			logger.error("Catalog file could not be found: SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 			continue
 		logger.debug("Catalog File: %s", catalog_file[0])
 
@@ -210,7 +210,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 		# HDF5 file to be created/modified:
 		if output_file is None:
-			hdf_file = os.path.join(input_folder, 'sector{0:03d}_camera{1:d}_ccd{2:d}.hdf5'.format(sector, camera, ccd))
+			hdf_file = os.path.join(input_folder, f'sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.hdf5')
 		else:
 			output_file = os.path.abspath(output_file)
 			if not output_file.endswith('.hdf5'):

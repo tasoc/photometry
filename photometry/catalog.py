@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create catalogs of stars in a given TESS observing sector.
@@ -154,11 +154,11 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 		# Loop through the cameras and CCDs that should have catalogs created:
 		for camera, ccd in itertools.product(cameras, ccds):
 
-			logger.info("Running SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
+			logger.info("Running SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 
 			# Create SQLite file:
 			# TODO: Could we use "find_catalog_files" instead?
-			catalog_file = os.path.join(input_folder, 'catalog_sector{0:03d}_camera{1:d}_ccd{2:d}.sqlite'.format(sector, camera, ccd))
+			catalog_file = os.path.join(input_folder, f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite')
 			if os.path.exists(catalog_file):
 				if overwrite:
 					os.remove(catalog_file)
@@ -260,18 +260,24 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				conn.commit()
 
 				# We need a list of when the sectors are in time:
-				logger.info('Projecting catalog {0:.3f} years relative to 2000'.format(epoch))
+				logger.info('Projecting catalog %.3f years relative to 2000', epoch)
+
+				# Count number of stars in the footprint:
+				logger.info("Querying for number of targets within footprint...")
+				tasocdb.cursor.execute(f"SELECT COUNT(*) AS num FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '{footprint:s}'::polygon) AND (disposition IS NULL OR disposition=3);")
+				total_count = tasocdb.cursor.fetchone()['num']
+
+				# Settings for tqdm progress bar:
+				tqdm_settings = {
+					'disable': None if logger.isEnabledFor(logging.INFO) else True,
+					'total': total_count
+				}
 
 				# Query the TESS Input Catalog table for all stars in the footprint.
 				# This is a MASSIVE table, so this query may take a while.
-				with tasocdb.named_cursor() as cursor_named:
-					cursor_named.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '%s'::polygon) AND (disposition IS NULL OR disposition=3);" % (
-						footprint,
-					))
-
-					tqdm_settings = {
-						'disable': not logger.isEnabledFor(logging.INFO)
-					}
+				logger.info("Building catalog table with %d rows...", total_count)
+				with tasocdb.named_cursor(itersize=20000) as cursor_named:
+					cursor_named.execute(f"SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '{footprint:s}'::polygon) AND (disposition IS NULL OR disposition=3);")
 
 					for row in tqdm(cursor_named, **tqdm_settings):
 						# Add the proper motion to each coordinate:
@@ -360,11 +366,7 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	# Loop through all combinations of cameras and ccds:
 	for camera, ccd in itertools.product(cameras, ccds):
 		# File name and path for catalog file:
-		fname = 'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'.format(
-			sector=sector,
-			camera=camera,
-			ccd=ccd
-		)
+		fname = f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'
 		fpath = os.path.join(input_folder, fname)
 
 		# If the file already exists, skip the download:
@@ -373,13 +375,7 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 			continue
 
 		# URL for the missing catalog file:
-		url = 'https://tasoc.dk/pipeline/catalogs/tic8/sector{sector:03d}/{fname:s}'.format(
-			sector=sector,
-			fname=fname
-		)
+		url = f'https://tasoc.dk/pipeline/catalogs/tic8/sector{sector:03d}/{fname:s}'
 
 		# Download the file using the utilities function:
-		download_file(url, fpath, desc='Catalog S{sector:d}-{camera:d}-{ccd:d}'.format(
-			sector=sector,
-			camera=camera,
-			ccd=ccd))
+		download_file(url, fpath, desc=f'Catalog S{sector:d}-{camera:d}-{ccd:d}')

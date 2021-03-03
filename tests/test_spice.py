@@ -29,10 +29,11 @@ def test_timestamps(SHARED_INPUT_DIR, starid):
 
 		tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 		with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
-			time_tpf = hdu[1].data['TIME']
-			timecorr_tpf = hdu[1].data['TIMECORR'] * 86400 * 1000
+			time_tpf = np.asarray(hdu[1].data['TIME'])
+			timecorr_tpf = np.asarray(hdu[1].data['TIMECORR']) * 86400 * 1000
 
-		intp_timecorr = interp1d(time_tpf, timecorr_tpf, kind='linear')
+		indx = np.isfinite(time_tpf) & np.isfinite(timecorr_tpf)
+		intp_timecorr = interp1d(time_tpf[indx], timecorr_tpf[indx], kind='linear')
 
 		with AperturePhotometry(starid, SHARED_INPUT_DIR, OUTPUT_DIR,
 			plot=False, datasource='ffi', sector=1, camera=3, ccd=2) as pho:
@@ -159,8 +160,8 @@ def test_spice(SHARED_INPUT_DIR, starid):
 
 		tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 		with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
-			time_tpf = hdu[1].data['TIME']
-			timecorr_tpf = hdu[1].data['TIMECORR']
+			time_tpf = np.asarray(hdu[1].data['TIME'])
+			timecorr_tpf = np.asarray(hdu[1].data['TIMECORR'])
 			camera = hdu[0].header['CAMERA']
 			ccd = hdu[0].header['CCD']
 
@@ -175,6 +176,11 @@ def test_spice(SHARED_INPUT_DIR, starid):
 				pm_dec=hdu[0].header['PMDEC']*u.mas/u.yr,
 				radial_velocity=0*u.km/u.s
 			)
+
+		# Remove bad timestamps from TPF file:
+		indx = np.isfinite(time_tpf) & np.isfinite(timecorr_tpf)
+		time_tpf = time_tpf[indx]
+		timecorr_tpf = timecorr_tpf[indx]
 
 		# Load the original timestamps from FFIs:
 		hdf_file = find_hdf5_files(SHARED_INPUT_DIR, camera=camera, ccd=ccd)[0]

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -15,8 +15,7 @@ from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
 
 #--------------------------------------------------------------------------------------------------
 def test_imagemotion_invalid_warpmode():
-	"""Test ImageMovementKernel with ínvalid warpmode."""
-
+	"""Test ImageMovementKernel with invalid warpmode."""
 	with pytest.raises(ValueError):
 		ImageMovementKernel(warpmode='invalid')
 
@@ -33,6 +32,16 @@ def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 
 	# Load the image:
 	img = load_ffi_fits(fname)
+
+	# Trying to calculate kernel with no reference image should give error:
+	if warpmode == 'unchanged':
+		imk = ImageMovementKernel(image_ref=None, warpmode=warpmode).calc_kernel(img)
+		assert len(imk) == 0, "Kernel should be an empty array for 'unchanged'"
+	else:
+		# Trying to calculate kernel with no reference image should give error:
+		with pytest.raises(Exception) as e:
+			ImageMovementKernel(image_ref=None, warpmode=warpmode).calc_kernel(img)
+		assert str(e.value) == "Reference image not defined"
 
 	# Create new image, moved down by one pixel:
 	#img2 = np.roll(img, 1, axis=0)
@@ -61,14 +70,14 @@ def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 	kernel = imk.calc_kernel(img)
 	print("Kernel:")
 	print(kernel)
-	assert(len(kernel) == imk.n_params)
+	assert len(kernel) == imk.n_params
 
 	# Calculate the new positions based on the kernel:
 	delta_pos = imk(xy, kernel)
 	print("Extracted movements:")
 	print(delta_pos)
 
-	assert(delta_pos.shape == xy.shape)
+	assert delta_pos.shape == xy.shape
 
 	# The movements should all be very close to zero,
 	# since we used the same image as the reference:

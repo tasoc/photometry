@@ -27,14 +27,14 @@ def _try_photometry(PhotClass, *args, **kwargs):
 			if pho.status in (STATUS.OK, STATUS.WARNING):
 				pho.save_lightcurve()
 
-	except (KeyboardInterrupt, SystemExit):
+	except (KeyboardInterrupt, SystemExit): # pragma: no cover
 		logger.info("Stopped by user or system")
 		try:
 			pho._status = STATUS.ABORT
 		except: # noqa: E722
 			pass
 
-	except: # noqa: E722
+	except: # noqa: E722, pragma: no cover
 		logger.exception("Something happened")
 		tb = traceback.format_exc().strip()
 		try:
@@ -45,7 +45,7 @@ def _try_photometry(PhotClass, *args, **kwargs):
 
 	try:
 		return pho
-	except UnboundLocalError:
+	except UnboundLocalError: # pragma: no cover
 		return _PhotErrorDummy(tbcollect, *args, **kwargs)
 
 #--------------------------------------------------------------------------------------------------
@@ -58,7 +58,7 @@ def tessphot(method=None, *args, **kwargs):
 	and if nessacery try another algorithm.
 
 	Parameters:
-		method (string or None): Type of photometry to run.
+		method (str or None): Type of photometry to run.
 			Can be ``'aperture'``, ``'halo'``, ``'psf'``, ``'linpsf'`` or ``None``.
 		*args: Arguments passed on to the photometry class init-function.
 		**kwargs: Keyword-arguments passed on to the photometry class init-function.
@@ -115,20 +115,21 @@ def tessphot(method=None, *args, **kwargs):
 		if pho.status == STATUS.WARNING:
 			logger.warning("Do something else?")
 
-	elif method == 'aperture':
-		pho = _try_photometry(AperturePhotometry, *args, **kwargs)
-
-	elif method == 'psf':
-		pho = _try_photometry(PSFPhotometry, *args, **kwargs)
-
-	elif method == 'linpsf':
-		pho = _try_photometry(LinPSFPhotometry, *args, **kwargs)
-
-	elif method == 'halo':
-		pho = _try_photometry(HaloPhotometry, *args, **kwargs)
-
 	else:
-		raise ValueError("Invalid method: '{0}'".format(method))
+		# We have been asked to do a specific photometic method.
+		# Translate method keyword into the class to be used:
+		try:
+			PhotClass = {
+				'aperture': AperturePhotometry,
+				'psf': PSFPhotometry,
+				'linpsf': LinPSFPhotometry,
+				'halo': HaloPhotometry
+			}[method]
+		except KeyError:
+			raise ValueError(f"Invalid method: '{method:s}'")
+
+		# Attempt the photometry with the selected class:
+		pho = _try_photometry(PhotClass, *args, **kwargs)
 
 	logger.info("Done")
 	return pho

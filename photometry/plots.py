@@ -314,7 +314,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 
 	# Make the common colorbar for image and fit subplots:
 	cbar_ax12 = fig.add_axes([0.125, 0.2, 0.494, 0.03])
-	fig.colorbar(im1, norm=norm, cax=cbar_ax12, orientation='horizontal')
+	fig.colorbar(im1, cax=cbar_ax12, orientation='horizontal')
 
 	# Make the colorbar for the residuals subplot:
 	cbar_ax3 = fig.add_axes([0.7, 0.2, 0.205, 0.03])
@@ -326,22 +326,74 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 	return [ax1, ax2, ax3]
 
 #--------------------------------------------------------------------------------------------------
-def save_figure(path, format='png', **kwargs):
+def plot_outline(img, threshold=0.5, ax=None, **kwargs):
+	"""
+	Mask outline.
+	"""
+
+	# Special treatment for boolean arrays:
+	if isinstance(img, np.ndarray) and img.dtype == 'bool':
+		mapimg = img
+	else:
+		mapimg = (img > threshold)
+
+	ver_seg = np.where(mapimg[:,1:] != mapimg[:,:-1])
+	hor_seg = np.where(mapimg[1:,:] != mapimg[:-1,:])
+
+	lines = []
+	for p in zip(*hor_seg):
+		lines.append((p[1], p[0]+1))
+		lines.append((p[1]+1, p[0]+1))
+		lines.append((np.nan,np.nan))
+
+	# and the same for vertical segments
+	for p in zip(*ver_seg):
+		lines.append((p[1]+1, p[0]))
+		lines.append((p[1]+1, p[0]+1))
+		lines.append((np.nan, np.nan))
+
+	segments = np.array(lines, dtype='float64')
+
+	x0 = -0.5
+	x1 = img.shape[1]+x0
+	y0 = -0.5
+	y1 = img.shape[0]+y0
+
+	# now we need to know something about the image which is shown
+	#   at this point let's assume it has extents (x0, y0)..(x1,y1) on the axis
+	#   drawn with origin='lower'
+	# with this information we can rescale our points
+	segments[:,0] = x0 + (x1-x0) * segments[:,0] / mapimg.shape[1]
+	segments[:,1] = y0 + (y1-y0) * segments[:,1] / mapimg.shape[0]
+
+	if ax is None:
+		return segments
+
+	return ax.plot(segments[:,0], segments[:,1], **kwargs)
+
+#--------------------------------------------------------------------------------------------------
+def save_figure(path, fig=None, fmt='png', **kwargs):
 	"""
 	Write current figure to file. Creates directory to place it in if needed.
 
+	Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
+
 	Parameters:
-		path (string): Path where to save figure. If no file extension is provided, the extension
+		path (str): Path where to save figure. If no file extension is provided, the extension
 			of the format is automatically appended.
-		format (string): Figure file type. Default is ``'png'``.
-		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
+		fig (:class:`matplotlib.pyplot.Figure`): Figure to save. Default is to save current figure.
+		fmt (str): Figure file type. Default is ``'png'``.
 	"""
 
 	logger = logging.getLogger(__name__)
 	logger.debug("Saving figure '%s' to '%s'.", os.path.basename(path), os.path.dirname(path))
 
-	if not path.endswith('.' + format):
-		path += '.' + format
+	if not path.endswith('.' + fmt):
+		path += '.' + fmt
+
+	os.makedirs(os.path.dirname(path), exist_ok=True)
 
 	# Write current figure to file if it doesn't exist:
-	plt.savefig(path, format=format, bbox_inches='tight', **kwargs)
+	if fig is None:
+		fig = plt.gcf()
+	fig.savefig(path, format=fmt, bbox_inches='tight', **kwargs)

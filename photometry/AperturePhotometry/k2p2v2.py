@@ -1,7 +1,7 @@
-#!/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-r"""K2 Pixel Photometry (K2P\ :sup:`2`)
+r"""
+K2 Pixel Photometry (K2P\ :sup:`2`)
 
 Create pixel masks and extract light curves from Kepler and K2 pixel data
 using clustering algorithms.
@@ -11,53 +11,46 @@ To read more about the methods used, please see the following papers:
 * Lund et al. (2015): K2P\ :sup:`2` - A photometric pipeline for the K2 mission `<https://doi.org/10.1088/0004-637X/806/1/30>`_
 * Handberg & Lund (2017): K2P\ :sup:`2`: Reduced data from campaigns 0-4 of the K2 mission `<https://doi.org/10.1051/0004-6361/201527753>`_
 
+TODO:
+* If number of clusters > max_cluster then only save max_cluster largest
+* What to do if more clusters associate with same known star?
+* more use of quality flags when they arrive
+* uniqueness of pixel-cluster-membership when extending overflow columns
+* wcs routine
+* estimate magnitude of other stars
+
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 .. codeauthor:: Mikkel Lund <mnl@phys.au.dk>
 """
 
-#==============================================================================
-# TODO
-#==============================================================================
-# * If number of clusters > max_cluster then only save max_cluster largest
-# * What to do if more clusters associate with same known star?
-# * more use of quality flags when they arrive
-# * uniqueness of pixel-cluster-membership when extending overflow columns
-# * wcs routine
-# * estimate magnitude of other stars
-
-#==============================================================================
-# Packages
-#==============================================================================
-
+import os
+import logging
+import copy
 import numpy as np
-from ..plots import plot_image, save_figure, plt
-import matplotlib as mpl
-from matplotlib.backends.backend_pdf import PdfPages
+from bottleneck import nanmedian
 from scipy import stats, ndimage
 from scipy.optimize import minimize
 from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from statsmodels.nonparametric.bandwidths import select_bandwidth
-import os
 from sklearn.cluster import DBSCAN
 from skimage.feature import peak_local_max
-from skimage.morphology import watershed
-from bottleneck import nanmedian
-import logging
+from skimage.segmentation import watershed
+from ..plots import plt, plot_image, save_figure
+import matplotlib as mpl
+from matplotlib.backends.backend_pdf import PdfPages
+from ..utilities import mad_to_sigma
 
-#==============================================================================
+#--------------------------------------------------------------------------------------------------
 # Constants and settings
-#==============================================================================
-
-# Constants:
-mad_to_sigma = 1.482602218505602 # Constant is 1/norm.ppf(3/4)
+#--------------------------------------------------------------------------------------------------
 
 # Saturation limit (magnitudes) above which we allow targets
 # to extend their overflow columns:
 saturation_limit = 7.0
 
-#==============================================================================
+#--------------------------------------------------------------------------------------------------
 # Exceptions
-#==============================================================================
+#--------------------------------------------------------------------------------------------------
 
 # Custom exceptions we may raise:
 class K2P2NoFlux(Exception):
@@ -66,10 +59,11 @@ class K2P2NoFlux(Exception):
 class K2P2NoStars(Exception):
 	pass
 
-#==============================================================================
-# Mask outline
-#==============================================================================
+#--------------------------------------------------------------------------------------------------
 def k2p2maks(frame, no_combined_images, threshold=0.5):
+	"""
+	Mask outline.
+	"""
 
 	thres_val = no_combined_images * threshold
 	mapimg = (frame > thres_val)
@@ -104,16 +98,14 @@ def k2p2maks(frame, no_combined_images, threshold=0.5):
 
 	return segments
 
-#==============================================================================
-# DBSCAN subroutine
-#==============================================================================
+#--------------------------------------------------------------------------------------------------
 def run_DBSCAN(X2, Y2, cluster_radius, min_for_cluster):
 	"""
 	Run the DBSCAN clustering algorithm.
 
 	Parameters:
 		cluster_radius (float): Radius from each point to consider inside cluster.
-		min_for_cluster (integer): Minimum number of points to consider a cluster.
+		min_for_cluster (int): Minimum number of points to consider a cluster.
 
 	Returns:
 		ndarray: Coordinates of points.
@@ -132,10 +124,9 @@ def run_DBSCAN(X2, Y2, cluster_radius, min_for_cluster):
 
 	return XX, labels, core_samples_mask
 
-#==============================================================================
-# Segment clusters using watershed
-#==============================================================================
-def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=None, ws_thres=0.1, ws_footprint=3, ws_blur=0.5, ws_alg='flux', output_folder=None, catalog=None):
+#--------------------------------------------------------------------------------------------------
+def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=None, ws_thres=0.1,
+	ws_footprint=3, ws_blur=0.5, ws_alg='flux', output_folder=None, catalog=None):
 	"""
 	Segment clusters using Watershed.
 	"""
@@ -188,7 +179,8 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			local_maxi = np.zeros_like(flux0, dtype='bool')
 
 			# Find maxima in the basin image to use for markers:
-			local_maxi_loc = peak_local_max(distance, indices=True, exclude_border=False, threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
+			local_maxi_loc = peak_local_max(distance, indices=True, exclude_border=False,
+				threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
 
 			for c in catalog:
 				d = np.sqrt( (local_maxi_loc[:,1] - c[0])**2 + (local_maxi_loc[:,0] - c[1])**2 )
@@ -228,7 +220,8 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			distance = ndimage.gaussian_filter(distance0, ws_blur)
 
 			# Find maxima in the basin image to use for markers:
-			local_maxi = peak_local_max(distance, indices=False, exclude_border=False, threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
+			local_maxi = peak_local_max(distance, indices=False, exclude_border=False,
+				threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
 
 		# If masks of saturated pixels are provided, clean out in the
 		# found local maxima to make sure only one is found within
@@ -325,14 +318,12 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 				ax.set_yticklabels([])
 
 			figname = 'seperated_cluster_%d' % i
-			save_figure(os.path.join(output_folder, figname))
+			save_figure(os.path.join(output_folder, figname), fig=fig)
 			plt.close(fig)
 
 	return labels_new, unique_labels, NoCluster
 
-#==============================================================================
-#
-#==============================================================================
+#--------------------------------------------------------------------------------------------------
 def k2p2_saturated(SumImage, MASKS, idx):
 
 	# Get logger for printing messages:
@@ -475,7 +466,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 		ax.axvline(CUT, color='r')
 		ax.set_xlabel('Flux')
 		ax.set_ylabel('Distribution')
-		save_figure(os.path.join(plot_folder, 'flux_distribution'))
+		save_figure(os.path.join(plot_folder, 'flux_distribution'), fig=fig)
 		plt.close(fig)
 
 	#==========================================================================
@@ -609,7 +600,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 					ax.add_patch(mpl.patches.Rectangle(cen, 1, 1, color='k', lw=2, fill=False, hatch='//'))
 
 				#fig.savefig(os.path.join(plot_folder, 'mask_filled_holes.png'), format='png', bbox_inches='tight')
-				save_figure(os.path.join(plot_folder, 'mask_filled_holes'))
+				save_figure(os.path.join(plot_folder, 'mask_filled_holes'), fig=fig)
 				plt.close(fig)
 
 		#==========================================================================
@@ -709,19 +700,11 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 	#==============================================================================
 	if plot_folder is not None:
 		# Colors to use for each cluster label:
-		colors = plt.cm.gist_rainbow(np.linspace(0, 1, len(unique_labels)))
-
-		# Colormap to use for clusters:
-		# https://stackoverflow.com/questions/9707676/defining-a-discrete-colormap-for-imshow-in-matplotlib/9708079#9708079
-		#cmap = mpl.colors.ListedColormap(np.append([[1, 1, 1, 1]], colors, axis=0))
-		#cmap_norm = mpl.colors.BoundaryNorm(np.arange(-1, len(unique_labels)-1)+0.5, cmap.N)
+		cmap_rainbow = copy.copy(plt.get_cmap('gist_rainbow'))
+		colors = cmap_rainbow(np.linspace(0, 1, len(unique_labels)))
 
 		# Set up figure to hold subplots:
-		if NY/NX > 5:
-			aspect = 0.5
-		else:
-			aspect = 0.2
-
+		aspect = 0.5 if NY/NX > 5 else 0.2
 		fig0 = plt.figure(figsize=(2*plt.figaspect(aspect)))
 		fig0.subplots_adjust(wspace=0.12)
 
@@ -786,7 +769,7 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 			ax4.plot(outline[:, 0], outline[:, 1], color='k', zorder=10, lw=1.5)
 
 		# Save the figure and close it:
-		save_figure(os.path.join(plot_folder, 'masks_'+ws_alg))
+		save_figure(os.path.join(plot_folder, 'masks_' + ws_alg), fig=fig0)
 		if show_plot:
 			plt.show()
 		else:
