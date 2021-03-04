@@ -77,7 +77,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
-	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
+	sector_str = '????' if sector is None else f'{sector:04d}'
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
 	filename_pattern = f'tess*-s{sector_str:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'
@@ -128,15 +128,15 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, cad
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
-	sector_str = r'\d{4}' if sector is None else '{0:04d}'.format(sector)
-	starid_str = r'\d+' if starid is None else '{0:016d}'.format(starid)
+	sector_str = r'\d{4}' if sector is None else f'{sector:04d}'
+	starid_str = r'\d+' if starid is None else f'{starid:016d}'
 	suffix = {None: 'tp(-fast)?', 120: 'tp', 20: 'tp-fast'}[cadence]
 	re_pattern = r'^tess\d+-s' + sector_str + '-' + starid_str + r'-\d{4}-[xsab]_' + suffix + r'\.fits(\.gz)?$'
 	regex = re.compile(re_pattern)
 
 	# Pattern used for TESS Alert data:
-	sector_str = '??' if sector is None else '{0:02d}'.format(sector)
-	starid_str = '*' if starid is None else '{0:011d}'.format(starid)
+	sector_str = '??' if sector is None else f'{sector:02d}'
+	starid_str = '*' if starid is None else f'{starid:011d}'
 	filename_pattern2 = f'hlsp_tess-data-alerts_tess_phot_{starid_str:s}-s{sector_str:s}_tess_v?_tp.fits*'
 
 	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, re_pattern)
@@ -683,7 +683,6 @@ class LoggerWriter(object):
 	def write(self, message):
 		if message.strip() != '':
 			self.logger.log(self.level, message)
-
 
 #--------------------------------------------------------------------------------------------------
 def sqlite_drop_column(conn, table, col):

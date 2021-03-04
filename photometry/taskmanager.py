@@ -245,7 +245,8 @@ class TaskManager(object):
 		self.close()
 
 	#----------------------------------------------------------------------------------------------
-	def get_number_tasks(self, starid=None, camera=None, ccd=None, datasource=None, priority=None):
+	def get_number_tasks(self, starid=None, camera=None, ccd=None, cadence=None, datasource=None,
+		priority=None):
 		"""
 		Get number of tasks due to be processed.
 
@@ -261,13 +262,15 @@ class TaskManager(object):
 		"""
 		constraints = []
 		if priority is not None:
-			constraints.append('todolist.priority=%d' % priority)
+			constraints.append(f'todolist.priority={priority:d}')
 		if starid is not None:
-			constraints.append('todolist.starid=%d' % starid)
+			constraints.append(f'todolist.starid={starid:d}')
 		if camera is not None:
-			constraints.append('todolist.camera=%d' % camera)
+			constraints.append(f'todolist.camera={camera:d}')
 		if ccd is not None:
-			constraints.append('todolist.ccd=%d' % ccd)
+			constraints.append(f'todolist.ccd={ccd:d}')
+		if cadence is not None:
+			constraints.append(f'todolist.cadence={cadence:d}')
 		if datasource is not None:
 			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
 
@@ -290,15 +293,15 @@ class TaskManager(object):
 		"""
 		constraints = []
 		if priority is not None:
-			constraints.append('todolist.priority=%d' % priority)
+			constraints.append(f'todolist.priority={priority:d}')
 		if starid is not None:
-			constraints.append('todolist.starid=%d' % starid)
+			constraints.append(f'todolist.starid={starid:d}')
 		if camera is not None:
-			constraints.append('todolist.camera=%d' % camera)
+			constraints.append(f'todolist.camera={camera:d}')
 		if ccd is not None:
-			constraints.append('todolist.ccd=%d' % ccd)
+			constraints.append(f'todolist.ccd={ccd:d}')
 		if cadence is not None:
-			constraints.append('todolist.cadence=%d' % cadence)
+			constraints.append(f'todolist.cadence={cadence:d}')
 		if datasource is not None:
 			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
 
@@ -321,7 +324,7 @@ class TaskManager(object):
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,cadence,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task:
 			return dict(task)
