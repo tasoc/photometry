@@ -25,6 +25,7 @@ from functools import lru_cache
 import requests
 import concurrent.futures
 from threading import Lock
+from collections import defaultdict
 
 # Constants:
 mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)
@@ -95,10 +96,53 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	return matches
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=10)
+def _find_tpf_files(rootdir, sector=None, cadence=None):
+
+	logger = logging.getLogger(__name__)
+
+	# Create the filename pattern to search for:
+	sector_str = r'\d{4}' if sector is None else f'{sector:04d}'
+	suffix = {None: '(fast-)?tp', 120: 'tp', 20: 'fast-tp'}[cadence]
+	re_pattern = r'^tess\d+-s(?P<sector>' + sector_str + r')-(?P<starid>\d+)-\d{4}-[xsab]_' + suffix + r'\.fits(\.gz)?$'
+	regexps = [re.compile(re_pattern)]
+	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, re_pattern)
+
+	# Pattern used for TESS Alert data:
+	if cadence is None or cadence == 120:
+		sector_str = r'\d{2}' if sector is None else f'{sector:02d}'
+		re_pattern2 = r'^hlsp_tess-data-alerts_tess_phot_(?P<starid>\d+)-s(?P<sector>' + sector_str + r')_tess_v\d+_tp\.fits(\.gz)?$'
+		regexps.append(re.compile(re_pattern2))
+		logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, re_pattern2)
+
+	# Do a recursive search in the directory, finding all files that match the pattern:
+	filedict = defaultdict(list)
+	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
+		for filename in filenames:
+			for regex in regexps:
+				m = regex.match(filename)
+				if m:
+					starid = int(m.group('starid'))
+					filedict[starid].append(os.path.join(root, filename))
+					break
+
+	# Ensure that each list is sorted by itself. We do this once here
+	# so we don't have to do it each time a specific starid is requested:
+	for key in filedict.keys():
+		filedict[key].sort(key=lambda x: os.path.basename(x))
+
+	return filedict
+
+#--------------------------------------------------------------------------------------------------
 def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, cadence=None,
 	findmax=None):
 	"""
 	Search directory recursively for TESS Target Pixel Files.
+
+	The function is cached, meaning the first time it is run on a particular ``rootdir``
+	the list of files in that directory will be read and cached to memory and used in
+	subsequent calls to the function. This means that any changes to files on disk after
+	the first call of the function will not be picked up in subsequent calls to this function.
 
 	Parameters:
 		rootdir (str): Directory to search recursively for TESS TPF files.
@@ -122,50 +166,48 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, cad
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
-			be sorted according to the filename of the files, e.g. primarily by time.
+			be sorted according to the filename of the files, i.e. primarily by time.
 	"""
 
-	logger = logging.getLogger(__name__)
+	if cadence is not None and cadence not in (120, 20):
+		raise ValueError("Invalid cadence. Must be either 20 or 120.")
 
-	# Create the filename pattern to search for:
-	sector_str = r'\d{4}' if sector is None else f'{sector:04d}'
-	starid_str = r'\d+' if starid is None else f'{starid:016d}'
-	suffix = {None: 'tp(-fast)?', 120: 'tp', 20: 'tp-fast'}[cadence]
-	re_pattern = r'^tess\d+-s' + sector_str + '-' + starid_str + r'-\d{4}-[xsab]_' + suffix + r'\.fits(\.gz)?$'
-	regex = re.compile(re_pattern)
+	# Call cached function which searches for files on disk:
+	filedict = _find_tpf_files(rootdir, sector=sector, cadence=cadence)
 
-	# Pattern used for TESS Alert data:
-	sector_str = '??' if sector is None else f'{sector:02d}'
-	starid_str = '*' if starid is None else f'{starid:011d}'
-	filename_pattern2 = f'hlsp_tess-data-alerts_tess_phot_{starid_str:s}-s{sector_str:s}_tess_v?_tp.fits*'
+	if starid is not None:
+		files = filedict.get(starid, [])
+	else:
+		# If we are not searching for a particilar starid,
+		# simply flatten the dict to a list of all found files
+		# and sort the list of files by thir filename:
+		files = list(itertools.chain(*filedict.values()))
+		files.sort(key=lambda x: os.path.basename(x))
 
-	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, re_pattern)
-	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern2)
+	# Expensive check which involve opening the files and reading headers:
+	# We are only removing elements, and preserving the ordering, so there
+	# is no need for re-sorting the list afterwards.
+	if camera is not None or ccd is not None:
+		matches = []
+		for fpath in files:
+			if camera is not None and fits.getval(fpath, 'CAMERA', ext=0) != camera:
+				continue
+			if ccd is not None and fits.getval(fpath, 'CCD', ext=0) != ccd:
+				continue
 
-	# Do a recursive search in the directory, finding all files that match the pattern:
-	breakout = False
-	matches = []
-	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
-		for filename in filenames:
-			if regex.match(filename) or fnmatch.fnmatch(filename, filename_pattern2):
-				fpath = os.path.join(root, filename)
-				if camera is not None and fits.getval(fpath, 'CAMERA', ext=0) != camera:
-					continue
+			# Add the file to the list, but stop if we have already
+			# reached the number of files we need to find:
+			matches.append(fpath)
+			if findmax is not None and len(matches) >= findmax:
+				break
 
-				if ccd is not None and fits.getval(fpath, 'CCD', ext=0) != ccd:
-					continue
+		files = matches
 
-				matches.append(fpath)
-				if findmax is not None and len(matches) >= findmax:
-					breakout = True
-					break
-		if breakout:
-			break
+	# Just to ensure that we are not returning more than we should:
+	if findmax is not None and len(files) > findmax:
+		files = files[:findmax]
 
-	# Sort the list of files by thir filename:
-	matches.sort(key=lambda x: os.path.basename(x))
-
-	return matches
+	return files
 
 #--------------------------------------------------------------------------------------------------
 @lru_cache(maxsize=32)

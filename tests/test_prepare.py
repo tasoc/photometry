@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of Prepare Photometry.
@@ -10,6 +10,7 @@ import pytest
 import tempfile
 import h5py
 import os.path
+import numpy as np
 from conftest import capture_cli
 from photometry import prepare
 
@@ -29,7 +30,7 @@ def test_prepare_photometry_invalid_input_dir():
 		prepare.prepare_photometry(not_a_directory)
 
 #--------------------------------------------------------------------------------------------------
-def hdf5_file_valid(fname):
+def hdf5_file_valid(fname, sector=None, camera=None, ccd=None):
 
 	# The known sizes for input-data:
 	Ntimes = 4
@@ -72,6 +73,18 @@ def hdf5_file_valid(fname):
 			assert hdf['backgrounds/' + dset].shape == img_size, "BACKGROUNDS dset=" + dset + " does not have the correct size"
 			assert hdf['pixel_flags/' + dset].shape == img_size, "PIXEL_FLAGS dset=" + dset + " does not have the correct size"
 
+		# Check headers:
+		timestamps = np.asarray(hdf['time']) - np.asarray(hdf['timecorr'])
+
+		if sector is not None:
+			assert hdf['images'].attrs['SECTOR'] == sector
+		if camera is not None:
+			assert hdf['images'].attrs['CAMERA'] == camera
+		if ccd is not None:
+			assert hdf['images'].attrs['CCD'] == ccd
+
+		assert int(hdf['images'].attrs['CADENCE']) == np.round(86400*np.median(np.diff(timestamps)))
+
 #--------------------------------------------------------------------------------------------------
 def test_prepare_photometry(SHARED_INPUT_DIR):
 
@@ -82,7 +95,7 @@ def test_prepare_photometry(SHARED_INPUT_DIR):
 		tmpfile.flush()
 		assert os.path.isfile(tmpfile.name + '.hdf5'), "HDF5 was not created"
 
-		hdf5_file_valid(tmpfile.name + '.hdf5')
+		hdf5_file_valid(tmpfile.name + '.hdf5', sector=1, camera=3, ccd=2)
 
 #--------------------------------------------------------------------------------------------------
 def test_run_prepare_photometry(PRIVATE_INPUT_DIR):
@@ -95,7 +108,7 @@ def test_run_prepare_photometry(PRIVATE_INPUT_DIR):
 	assert exitcode == 0
 	assert os.path.isfile(hdf5file), "HDF5 was not created"
 
-	hdf5_file_valid(hdf5file)
+	hdf5_file_valid(hdf5file, sector=1, camera=3, ccd=2)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
