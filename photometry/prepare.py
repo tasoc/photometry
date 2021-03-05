@@ -9,26 +9,25 @@ Preparation for Photometry extraction.
 import os
 import numpy as np
 import h5py
-from astropy.io import fits
 import sqlite3
 import logging
 import re
 import multiprocessing
-from astropy.wcs import WCS, NoConvergence
-from bottleneck import replace, nanmean, nanmedian
-from timeit import default_timer
 import itertools
 import functools
 import contextlib
+from astropy.io import fits
+from astropy.wcs import WCS, NoConvergence
+from bottleneck import replace, nanmean, nanmedian
+from timeit import default_timer
 from tqdm import tqdm, trange
 from .catalog import download_catalogs
 from .backgrounds import fit_background
 from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
 from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes
-#from .plots import plt, plot_image
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def quality_from_tpf(tpffile, time_start, time_end):
 	"""
 	Transfer quality flags from Target Pixel File to FFIs.
@@ -71,12 +70,12 @@ def quality_from_tpf(tpffile, time_start, time_end):
 
 	return quality
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def _iterate_hdf_group(dset, start=0, stop=None):
 	for d in range(start, stop if stop is not None else len(dset)):
 		yield np.asarray(dset['%04d' % d])
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		calc_movement_kernel=False, backgrounds_pixels_threshold=0.5, output_file=None):
 	"""
@@ -85,15 +84,20 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 	pipeline.
 
 	In this process the background flux in each FFI is
-	estimated using the `backgrounds.fit_background` function.
+	estimated using the :func:`backgrounds.fit_background` function.
 
 	Parameters:
-		input_folder (string): Input folder to create TODO list for. If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
-		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be processed.
-		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be processed.
-		calc_movement_kernel (boolean, optional): Should Image Movement Kernels be calculated for each image?
-			If it is not calculated, only the default WCS movement kernel will be available when doing the folllowing photometry. Default=False.
-		backgrounds_pixels_threshold (float): Percentage of times a pixel has to use used in background calculation in order to be included in the
+		input_folder (string): Input folder to create TODO list for. If ``None``, the input
+			directory in the environment variable ``TESSPHOT_INPUT`` is used.
+		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``,
+			all cameras will be processed.
+		ccds (iterable of integers, optional): TESS CCD number (1-4).
+			If ``None``, all cameras will be processed.
+		calc_movement_kernel (boolean, optional): Should Image Movement Kernels be
+			calculated for each image? If it is not calculated, only the default WCS
+			movement kernel will be available when doing the folllowing photometry. Default=False.
+		backgrounds_pixels_threshold (float): Percentage of times a pixel has to use used in
+			background calculation in order to be included in the
 			final list of contributing pixels. Default=0.5.
 		output_file (string, optional): The file path where the output file should be saved.
 			If not specified, the file will be saved into the input directory.
@@ -101,7 +105,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
-		NotADirectoryError: If the specified ``input_folder`` is not an existing directory or if settings table could not be loaded from the catalog SQLite file.
+		NotADirectoryError: If the specified ``input_folder`` is not an existing directory
+			or if settings table could not be loaded from the catalog SQLite file.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
