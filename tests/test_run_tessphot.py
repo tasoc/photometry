@@ -7,7 +7,6 @@ Tests that run run_tessphot with several different inputs.
 """
 
 import pytest
-import os.path
 import tempfile
 from conftest import capture_cli
 

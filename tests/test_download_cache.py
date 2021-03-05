@@ -8,7 +8,6 @@ Test download_cache and the corresponding CLI program.
 
 import pytest
 import os
-import tempfile
 from conftest import capture_cli
 import photometry
 
