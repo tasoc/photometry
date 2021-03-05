@@ -90,6 +90,6 @@ def PRIVATE_SPICE_DIR(monkeypatch):
 	SPICE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'photometry', 'data', 'spice'))
 	with tempfile.TemporaryDirectory(prefix='pytest-private-spice-') as tmpdir:
 		tmp = os.path.join(tmpdir, 'spice')
-		shutil.copytree(SPICE_DIR, tmp)
+		shutil.copytree(SPICE_DIR, tmp, ignore=shutil.ignore_patterns('metakernel-*.txt'))
 		monkeypatch.setenv('TESSPHOT_SPICE_KERNELS', tmp)
 		yield tmp
