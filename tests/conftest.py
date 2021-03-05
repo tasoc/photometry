@@ -79,3 +79,14 @@ def PRIVATE_TODO_FILE():
 		tmp = os.path.join(my_tmpdir, 'todo.sqlite')
 		shutil.copy2(TODO_FILE, tmp)
 		yield tmp
+
+#--------------------------------------------------------------------------------------------------
+@pytest.fixture(scope='function')
+def PRIVATE_SPICE_DIR(monkeypatch):
+
+	SPICE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'photometry', 'data', 'spice'))
+	with tempfile.TemporaryDirectory(prefix='pytest-private-spice-') as tmpdir:
+		tmp = os.path.join(tmpdir, 'spice')
+		shutil.copytree(SPICE_DIR, tmp)
+		monkeypatch.setenv('TESSPHOT_SPICE_KERNELS', tmp)
+		yield tmp

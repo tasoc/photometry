@@ -36,8 +36,7 @@ def download_cache():
 	finally:
 		iers.conf.auto_download = oldval
 
-	# The TESS SPICE kernels should be downloaded, if they
-	# are not already.
+	# The TESS SPICE kernels should be downloaded, if they are not already.
 	# We also make sure to unload any loaded kernels again,
 	# to ensure that this function has zero effect.
 	logger.info("Downloading SPICE kernels...")
