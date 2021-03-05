@@ -326,9 +326,21 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 	return [ax1, ax2, ax3]
 
 #--------------------------------------------------------------------------------------------------
-def plot_outline(img, threshold=0.5, ax=None, **kwargs):
+def plot_outline(img, ax=None, threshold=0.5, **kwargs):
 	"""
-	Mask outline.
+	Plot outline of pixel mask.
+
+	Parameters:
+		img (ndarray):
+		ax (:class:`matplotlib.pyplot.Axes`): Axes to plot outline into.
+		threshold (float): If ``img`` is not a boolean array, this is used for defining
+			the pixels which should be outlined. Ignored if ``img`` is boolean.
+		**kwargs: Additional keywords are passed to :func:`matplotlib.pyplot.plot`.
+
+	Returns:
+		narray or :class:`matplotlib.pyplot.Axes`:
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
 	# Special treatment for boolean arrays:
@@ -344,7 +356,7 @@ def plot_outline(img, threshold=0.5, ax=None, **kwargs):
 	for p in zip(*hor_seg):
 		lines.append((p[1], p[0]+1))
 		lines.append((p[1]+1, p[0]+1))
-		lines.append((np.nan,np.nan))
+		lines.append((np.nan, np.nan))
 
 	# and the same for vertical segments
 	for p in zip(*ver_seg):
@@ -355,9 +367,9 @@ def plot_outline(img, threshold=0.5, ax=None, **kwargs):
 	segments = np.array(lines, dtype='float64')
 
 	x0 = -0.5
-	x1 = img.shape[1]+x0
+	x1 = img.shape[1] + x0
 	y0 = -0.5
-	y1 = img.shape[0]+y0
+	y1 = img.shape[0] + y0
 
 	# now we need to know something about the image which is shown
 	#   at this point let's assume it has extents (x0, y0)..(x1,y1) on the axis
