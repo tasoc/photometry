@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create input data for tests of time offset of FFIs.

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -101,7 +101,7 @@ def test_make_todolist_cli(PRIVATE_INPUT_DIR):
 	os.remove(todofile)
 
 	# Run make_todo CLI script:
-	out, err, exitcode = capture_cli('make_todo.py', params=['--camera=3', '--ccd=2', PRIVATE_INPUT_DIR])
+	out, err, exitcode = capture_cli('run_make_todo.py', params=['--camera=3', '--ccd=2', PRIVATE_INPUT_DIR])
 
 	assert exitcode == 0
 	assert '- ERROR -' not in out

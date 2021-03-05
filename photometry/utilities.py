@@ -216,12 +216,12 @@ def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 	Search the input directory for HDF5 files matching constraints.
 
 	Parameters:
-		rootdir (string): Directory to search for HDF5 files.
-		sector (integer, list or None, optional): Only return files from the given sectors.
+		rootdir (str): Directory to search for HDF5 files.
+		sector (int, list or None, optional): Only return files from the given sectors.
 			If ``None``, files from all TIC numbers are returned.
-		camera (integer, list or None, optional): Only return files from the given camera.
+		camera (int, list or None, optional): Only return files from the given camera.
 			If ``None``, files from all cameras are returned.
-		ccd (integer, list or None, optional): Only return files from the given ccd.
+		ccd (int, list or None, optional): Only return files from the given ccd.
 			If ``None``, files from all ccds are returned.
 
 	Returns:

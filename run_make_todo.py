@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create the TODO list which is used by the pipeline to keep track of the
@@ -8,7 +8,7 @@ Example:
 	In order to create to TODO list for the directory in the ``TESSPHOT_INPUT``
 	environment variable simply run the program without any further input:
 
-	>>> python make_todo.py
+	>>> python run_make_todo.py
 
 	This will create the file ``todo.sqlite`` in the directory defined in the
 	``TESSPHOT_INPUT`` environment variable.
@@ -18,11 +18,11 @@ Example:
 	``TESSPHOT_INPUT`` environment variable), you can simply call the script
 	with the directory you want to process:
 
-	>>> python make_todo.py /where/ever/you/want/
+	>>> python run_make_todo.py /where/ever/you/want/
 
 Note:
 	This program assumes that the directory already contains "catalog" files for
-	the given sector. These can be create using the :py:func:`make_catalog`
+	the given sector. These can be create using the :func:`run_make_catalog`
 	utility.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -40,8 +40,9 @@ def main():
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing TODO file.', action='store_true')
-	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
-	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
+	group = parser.add_argument_group('Filter which targets to include')
+	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
+	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
 	parser.add_argument('input_folder', type=str, help='TESSPhot input directory to create TODO file in.', nargs='?', default=None)
 	args = parser.parse_args()
 

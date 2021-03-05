@@ -84,7 +84,7 @@ Make TODO list
 A TODO-list is a list of targets that should be processed by the photometry code. It includes information about which cameras and CCDs they fall on and which photometric methods they should be processed with. A TODO-list can be generated directly from the catalog files (since these contain all targets near the field-of-view) and the details stored in the HDF5 files.
 In order to create a full TODO list of all stars that can be observed, simply run the command:
 
->>> python make_todo.py
+>>> python run_make_todo.py
 
 This will create the file ``todo.sqlite`` in the ``TESSPHOT_INPUT`` directory, which is needed for running the photometry. See the full documentation for more options.
 

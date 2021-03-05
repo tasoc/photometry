@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Corrections of time offset present in early data releases of TESS Data (sectors 1-21).

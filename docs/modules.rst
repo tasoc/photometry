@@ -20,7 +20,7 @@ Command-line Utilities
 
 	run_make_catalog
 	run_prepare_photometry
-	make_todo
+	run_make_todo
 	run_tessphot
 	run_tessphot_mpi
 	run_ffimovie
