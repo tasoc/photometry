@@ -54,7 +54,6 @@ def test_run_tessphot_invalid_ccd():
 @pytest.mark.parametrize('method,starid,datasource', STAR_LIST)
 def test_run_tessphot(SHARED_INPUT_DIR, method, starid, datasource):
 	with tempfile.TemporaryDirectory() as tmpdir:
-		#tmpdir = './out-' + method
 		params = [
 			'-o',
 			'-p',
@@ -62,7 +61,7 @@ def test_run_tessphot(SHARED_INPUT_DIR, method, starid, datasource):
 			f'--starid={starid:d}',
 			'--method=' + method,
 			'--datasource=' + datasource,
-			f'--output="{tmpdir:s}"',
+			'--output', tmpdir,
 			SHARED_INPUT_DIR
 		]
 		out, err, exitcode = capture_cli('run_tessphot.py', params)
