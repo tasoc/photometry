@@ -19,6 +19,10 @@ def test_download_cache(PRIVATE_SPICE_DIR):
 	os.remove(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018108_02.bsp'))
 	os.remove(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018115_01.bsp'))
 
+	# Ensure the two SPICE kernels are gone:
+	assert not os.path.exists(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018108_02.bsp'))
+	assert not os.path.exists(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018115_01.bsp'))
+
 	# Run download_cache directly:
 	photometry.download_cache()
 
@@ -33,6 +37,10 @@ def test_run_download_cache(PRIVATE_SPICE_DIR):
 	# Delete a couple of small SPICE kernels:
 	os.remove(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018108_02.bsp'))
 	os.remove(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018115_01.bsp'))
+
+	# Ensure the two SPICE kernels are gone:
+	assert not os.path.exists(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018108_02.bsp'))
+	assert not os.path.exists(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018115_01.bsp'))
 
 	# Run download_cache CLI program:
 	out, err, exitcode = capture_cli('run_download_cache.py', ['--debug'])
