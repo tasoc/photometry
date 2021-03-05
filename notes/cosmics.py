@@ -57,9 +57,9 @@ if __name__ == '__main__':
 			#if np.any(crmask):
 			plt.figure()
 			plt.subplot(121)
-			plot_image(img, xlabel=None, ylabel=None, make_cbar=True)
+			plot_image(img, xlabel=None, ylabel=None, cbar='right')
 			plt.subplot(122)
-			plot_image(crmask, xlabel=None, ylabel=None, make_cbar=True)
+			plot_image(crmask, xlabel=None, ylabel=None, cbar='right')
 			plt.show()
 
 	print("Done")
