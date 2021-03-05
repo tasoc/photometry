@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 This program will prepare the photometry on individual stars by doing all the operations which
