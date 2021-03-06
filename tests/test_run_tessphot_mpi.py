@@ -41,6 +41,15 @@ def test_run_tessphot_mpi_invalid_ccd():
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.mpi
+def test_run_tessphot_mpi_invalid_cadence():
+	pytest.importorskip("mpi4py", reason="MPI not available")
+
+	out, err, exitcode = capture_cli('run_tessphot_mpi.py', ['-t', '--cadence=121'])
+	assert exitcode == 2
+	assert 'error: argument --cadence: invalid choice: 121 (choose from 20, 120, 600, 1800)' in err
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.mpi
 def test_run_tessphot_mpi(PRIVATE_INPUT_DIR):
 	pytest.importorskip("mpi4py", reason="MPI not available")
 

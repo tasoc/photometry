@@ -45,7 +45,7 @@ def test_run_tessphot_invalid_ccd():
 
 #--------------------------------------------------------------------------------------------------
 def test_run_tessphot_invalid_cadence():
-	out, err, exitcode = capture_run_tessphot("-t --cadence=121")
+	out, err, exitcode = capture_cli('run_tessphot.py', ['-t', '--cadence=121'])
 	assert exitcode == 2
 	assert 'error: argument --cadence: invalid choice: 121 (choose from 20, 120, 600, 1800)' in err
 
