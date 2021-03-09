@@ -90,7 +90,11 @@ def test_prepare_photometry(SHARED_INPUT_DIR):
 
 	with tempfile.NamedTemporaryFile() as tmpfile:
 		# Run prepare_photometry and save output to temp-file:
-		prepare.prepare_photometry(SHARED_INPUT_DIR, sectors=1, cameras=3, ccds=2, output_file=tmpfile.name)
+		prepare.prepare_photometry(SHARED_INPUT_DIR,
+			sectors=1,
+			cameras=3,
+			ccds=2,
+			output_file=tmpfile.name)
 
 		tmpfile.flush()
 		assert os.path.isfile(tmpfile.name + '.hdf5'), "HDF5 was not created"
@@ -101,9 +105,17 @@ def test_prepare_photometry(SHARED_INPUT_DIR):
 def test_run_prepare_photometry(PRIVATE_INPUT_DIR):
 
 	hdf5file = os.path.join(PRIVATE_INPUT_DIR, 'sector001_camera3_ccd2.hdf5')
-	os.remove(hdf5file)
 
-	out, err, exitcode = capture_cli('run_prepare_photometry.py', params=['--camera=3', '--ccd=2', PRIVATE_INPUT_DIR])
+	# Delete existing HDF5-file:
+	os.remove(hdf5file)
+	assert not os.path.exists(hdf5file), "HDF5 file was not removed correctly"
+
+	out, err, exitcode = capture_cli('run_prepare_photometry.py', params=[
+		'--sector=1',
+		'--camera=3',
+		'--ccd=2',
+		PRIVATE_INPUT_DIR
+	])
 
 	assert exitcode == 0
 	assert os.path.isfile(hdf5file), "HDF5 was not created"
