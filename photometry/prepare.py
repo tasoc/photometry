@@ -113,7 +113,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 	logger = logging.getLogger(__name__)
 	tqdm_settings = {
-		'disable': not logger.isEnabledFor(logging.INFO),
+		'disable': None if logger.isEnabledFor(logging.INFO) else True,
 		'dynamic_ncols': True
 	}
 
