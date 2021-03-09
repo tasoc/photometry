@@ -1607,7 +1607,8 @@ class BasePhotometry(object):
 		int_time = 1.98
 		readtime = 0.02
 		if self.header['CRMITEN']:
-			deadc = (int_time * 2/self.header['CRBLKSZ']) / frametime
+			crblocksize = self.header['CRBLKSZ']
+			deadc = (int_time * (crblocksize-2)/crblocksize) / frametime
 		else:
 			deadc = int_time / frametime
 

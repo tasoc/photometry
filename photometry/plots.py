@@ -107,7 +107,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		vmin (float, optional): Lower limit to use for colormap.
 		vmax (float, optional): Upper limit to use for colormap.
 		color_bad (str, optional): Color to apply to bad pixels (NaN). Default is black.
-		kwargs (dict, optional): Keyword arguments to be passed to :py:func:`matplotlib.pyplot.imshow`.
+		kwargs (dict, optional): Keyword arguments to be passed to :func:`matplotlib.pyplot.imshow`.
 
 	Returns:
 		:py:class:`matplotlib.image.AxesImage`: Image from returned
@@ -178,10 +178,15 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 	elif isinstance(scale, (viz.ImageNormalize, matplotlib.colors.Normalize)):
 		norm = scale
 	else:
-		raise ValueError("scale {} is not available.".format(scale))
+		raise ValueError(f"Scale {scale:s} is not available.")
 
 	if offset_axes:
-		extent = (offset_axes[0]-0.5, offset_axes[0] + image.shape[1]-0.5, offset_axes[1]-0.5, offset_axes[1] + image.shape[0]-0.5)
+		extent = (
+			offset_axes[0] - 0.5,
+			offset_axes[0] + image.shape[1] - 0.5,
+			offset_axes[1] - 0.5,
+			offset_axes[1] + image.shape[0] - 0.5
+		)
 	else:
 		extent = (-0.5, image.shape[1]-0.5, -0.5, image.shape[0]-0.5)
 
