@@ -182,19 +182,6 @@ class BasePhotometry(object):
 		handler.setFormatter(formatter)
 		logging.getLogger('photometry').addHandler(handler)
 
-		# Directory where output files will be saved:
-		self.output_folder = os.path.join(
-			self.output_folder_base,
-			self.datasource[:3], # Only three first characters for cases with "tpf:XXXXXX"
-			'{0:011d}'.format(self.starid)[:5]
-		)
-
-		# Set directory where diagnostics plots should be saved to:
-		self.plot_folder = None
-		if self.plot:
-			self.plot_folder = os.path.join(self.output_folder, 'plots', f'{self.starid:011d}')
-			os.makedirs(self.plot_folder, exist_ok=True)
-
 		# Init table that will be filled with lightcurve stuff:
 		self.lightcurve = Table()
 
@@ -392,6 +379,19 @@ class BasePhotometry(object):
 
 			# Correct timestamp offset that was in early data releases:
 			self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], self.header, datatype='tpf')
+
+		# Directory where output files will be saved:
+		self.output_folder = os.path.join(
+			self.output_folder_base,
+			f'c{self.cadence:04d}',
+			f'{self.starid:011d}'[:5]
+		)
+
+		# Set directory where diagnostics plots should be saved to:
+		self.plot_folder = None
+		if self.plot:
+			self.plot_folder = os.path.join(self.output_folder, 'plots', f'{self.starid:011d}')
+			os.makedirs(self.plot_folder, exist_ok=True)
 
 		# The file to load the star catalog from:
 		self.catalog_file = find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
