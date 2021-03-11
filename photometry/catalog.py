@@ -137,8 +137,8 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 	logger = logging.getLogger(__name__)
 
 	# Make sure cameras and ccds are iterable:
-	cameras = to_tuple(camera, (1,2,3,4))
-	ccds = to_tuple(ccd, (1,2,3,4))
+	cameras = to_tuple(cameras, (1,2,3,4))
+	ccds = to_tuple(ccds, (1,2,3,4))
 
 	settings = load_sector_settings(sector=sector)
 	sector_reference_time = settings['reference_time']
