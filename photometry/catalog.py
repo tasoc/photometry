@@ -15,7 +15,7 @@ import contextlib
 from tqdm import tqdm
 from .tasoc_db import TASOC_DB
 from .utilities import (add_proper_motion, load_sector_settings, # find_catalog_files
-	radec_to_cartesian, cartesian_to_radec, download_file)
+	radec_to_cartesian, cartesian_to_radec, download_file, to_tuple)
 
 #--------------------------------------------------------------------------------------------------
 def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None,
@@ -360,8 +360,8 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 		raise NotADirectoryError("Directory does not exist: '%s'" % input_folder)
 
 	# Make sure cameras and ccds are iterable:
-	cameras = (1, 2, 3, 4) if camera is None else (camera, )
-	ccds = (1, 2, 3, 4) if ccd is None else (ccd, )
+	cameras = to_tuple(camera, (1,2,3,4))
+	ccds = to_tuple(ccd, (1,2,3,4))
 
 	# Loop through all combinations of cameras and ccds:
 	for camera, ccd in itertools.product(cameras, ccds):
