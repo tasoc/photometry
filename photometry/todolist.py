@@ -277,7 +277,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 						wcs = WCS(header=hdu[2].header, relax=True)
 					footprint = wcs.calc_footprint(center=False)
 
-					secondary_targets = catalog_sqlite_search_footprint(cursor, footprint, constraints='starid != %d AND tmag < 15' % starid, buffer_size=2)
+					secondary_targets = catalog_sqlite_search_footprint(cursor, footprint, constraints=f'starid != {starid:d} AND tmag < 15', buffer_size=2)
 					for row in secondary_targets:
 						# Calculate the position of this star on the CCD using the WCS:
 						ra_dec = np.atleast_2d([row['ra'], row['decl']])

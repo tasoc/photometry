@@ -137,8 +137,8 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 	logger = logging.getLogger(__name__)
 
 	# Make sure cameras and ccds are iterable:
-	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
-	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
+	cameras = to_tuple(camera, (1,2,3,4))
+	ccds = to_tuple(ccd, (1,2,3,4))
 
 	settings = load_sector_settings(sector=sector)
 	sector_reference_time = settings['reference_time']
@@ -204,7 +204,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				))
 				row = tasocdb.cursor.fetchone()
 				if row is None:
-					raise OSError("The given sector, camera, ccd combination was not found in TASOC database: (%s,%s,%s)", sector, camera, ccd)
+					raise OSError(f"The given SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d} combination was not found in TASOC database.")
 				footprint = row[0]
 				camera_centre_ra = row[1]
 				camera_centre_dec = row[2]
@@ -357,7 +357,7 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 
 	# Check that the target directory exists:
 	if not os.path.isdir(input_folder):
-		raise NotADirectoryError("Directory does not exist: '%s'" % input_folder)
+		raise NotADirectoryError(f"Directory does not exist: '{input_folder:s}'")
 
 	# Make sure cameras and ccds are iterable:
 	cameras = to_tuple(camera, (1,2,3,4))

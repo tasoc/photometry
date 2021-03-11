@@ -30,10 +30,9 @@ def test_prepare_photometry_invalid_input_dir():
 		prepare.prepare_photometry(not_a_directory)
 
 #--------------------------------------------------------------------------------------------------
-def hdf5_file_valid(fname, sector=None, camera=None, ccd=None):
+def hdf5_file_valid(fname, sector=None, camera=None, ccd=None, Ntimes=4):
 
 	# The known sizes for input-data:
-	Ntimes = 4
 	img_size = (2048, 2048)
 
 	with h5py.File(fname, 'r') as hdf:
