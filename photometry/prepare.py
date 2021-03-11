@@ -94,7 +94,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			all cameras will be processed.
 		ccds (iterable of int, optional): TESS CCD number (1-4).
 			If ``None``, all cameras will be processed.
-		calc_movement_kernel (boolean, optional): Should Image Movement Kernels be
+		calc_movement_kernel (bool, optional): Should Image Movement Kernels be
 			calculated for each image? If it is not calculated, only the default WCS
 			movement kernel will be available when doing the folllowing photometry. Default=False.
 		backgrounds_pixels_threshold (float): Percentage of times a pixel has to use used in
