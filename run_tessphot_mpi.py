@@ -43,9 +43,8 @@ def main():
 	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
 	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
 	group.add_argument('--cadence', type=int, choices=(20,120,600,1800), default=None, help='Observing cadence. Default is to run all cadences.')
-    group.add_argument('--datasource', type=str, choices=('ffi','tpf'), default=None, help='Data source or cadence. Default is to run all.')
+	group.add_argument('--datasource', type=str, choices=('ffi','tpf'), default=None, help='Data source or cadence. Default is to run all.')
 	parser.add_argument('--version', type=int, required=True, help='Data release number to store in output files.')
-	
 	parser.add_argument('input_folder', type=str, help='Input directory. This directory should contain a TODO-file.', nargs='?', default=None)
 	args = parser.parse_args()
 
