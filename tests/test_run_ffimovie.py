@@ -19,9 +19,13 @@ NO_FFMPEG = ('ffmpeg' not in animation.writers)
 @pytest.mark.skipif(NO_FFMPEG, reason="FFMpeg not available")
 def test_run_ffimovie(SHARED_INPUT_DIR):
 
-	out, err, exitcode = capture_cli('run_ffimovie.py', params=[SHARED_INPUT_DIR])
-
+	out, err, exitcode = capture_cli('run_ffimovie.py', params=[
+		'--sector=1',
+		SHARED_INPUT_DIR
+	])
 	assert exitcode == 0
+	assert '- ERROR -' not in err
+	assert '- ERROR -' not in out
 
 	for fname in (
 		'sector001_camera3_ccd2.mp4',
