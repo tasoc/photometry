@@ -247,13 +247,13 @@ class TaskManager(object):
 		"""
 		constraints = []
 		if priority is not None:
-			constraints.append('todolist.priority=%d' % priority)
+			constraints.append(f'todolist.priority={priority:d}')
 		if starid is not None:
-			constraints.append('todolist.starid=%d' % starid)
+			constraints.append(f'todolist.starid={starid:d}')
 		if camera is not None:
-			constraints.append('todolist.camera=%d' % camera)
+			constraints.append(f'todolist.camera={camera:d}')
 		if ccd is not None:
-			constraints.append('todolist.ccd=%d' % ccd)
+			constraints.append(f'todolist.ccd={ccd:d}')
 		if datasource is not None:
 			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
 
@@ -275,13 +275,13 @@ class TaskManager(object):
 		"""
 		constraints = []
 		if priority is not None:
-			constraints.append('todolist.priority=%d' % priority)
+			constraints.append(f'todolist.priority={priority:d}')
 		if starid is not None:
-			constraints.append('todolist.starid=%d' % starid)
+			constraints.append(f'todolist.starid={starid:d}')
 		if camera is not None:
-			constraints.append('todolist.camera=%d' % camera)
+			constraints.append(f'todolist.camera={camera:d}')
 		if ccd is not None:
-			constraints.append('todolist.ccd=%d' % ccd)
+			constraints.append(f'todolist.ccd={ccd:d}')
 		if datasource is not None:
 			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
 

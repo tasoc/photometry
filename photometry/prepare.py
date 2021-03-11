@@ -23,7 +23,8 @@ from timeit import default_timer
 from tqdm import tqdm, trange
 from .catalog import download_catalogs
 from .backgrounds import fit_background
-from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
+from .utilities import (load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest,
+	find_tpf_files, to_tuple)
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
 from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes
 
@@ -87,11 +88,11 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 	estimated using the :func:`backgrounds.fit_background` function.
 
 	Parameters:
-		input_folder (string): Input folder to create TODO list for. If ``None``, the input
+		input_folder (str): Input folder to create TODO list for. If ``None``, the input
 			directory in the environment variable ``TESSPHOT_INPUT`` is used.
-		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``,
+		cameras (iterable of int, optional): TESS camera number (1-4). If ``None``,
 			all cameras will be processed.
-		ccds (iterable of integers, optional): TESS CCD number (1-4).
+		ccds (iterable of int, optional): TESS CCD number (1-4).
 			If ``None``, all cameras will be processed.
 		calc_movement_kernel (boolean, optional): Should Image Movement Kernels be
 			calculated for each image? If it is not calculated, only the default WCS
@@ -99,7 +100,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		backgrounds_pixels_threshold (float): Percentage of times a pixel has to use used in
 			background calculation in order to be included in the
 			final list of contributing pixels. Default=0.5.
-		output_file (string, optional): The file path where the output file should be saved.
+		output_file (str, optional): The file path where the output file should be saved.
 			If not specified, the file will be saved into the input directory.
 			Should only be used for testing, since the file would (proberly) otherwise end up with
 			a wrong file name for running with the rest of the pipeline.
@@ -126,8 +127,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
-	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
-	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
+	cameras = to_tuple(cameras, (1,2,3,4))
+	ccds = to_tuple(ccds, (1,2,3,4))
 
 	# Common settings for HDF5 datasets:
 	args = {

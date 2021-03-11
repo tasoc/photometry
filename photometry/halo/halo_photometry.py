@@ -108,6 +108,7 @@ class HaloPhotometry(BasePhotometry):
 		# Initialize
 		logger.info('Formatting data for halo')
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
+		time = self.lightcurve['time'][indx_goodtimes]
 		flux = self.images_cube.T[indx_goodtimes, :, :]
 
 		# Cut out pixels closer than 20 pixels, that were actually observed:
@@ -137,7 +138,7 @@ class HaloPhotometry(BasePhotometry):
 			# If a single hole is found, use it, otherwise don't try to be
 			# to clever, and just don't split the timeseries.
 			timecorr = self.lightcurve['timecorr'][indx_goodtimes]
-			t = self.lightcurve['time'][indx_goodtimes] - timecorr
+			t = time - timecorr
 			dt = np.append(np.diff(t), 0)
 			t0 = np.nanmin(t)
 			Ttot = np.nanmax(t) - t0
@@ -150,6 +151,13 @@ class HaloPhotometry(BasePhotometry):
 			else:
 				logger.warning("No split-timestamps have been defined for this sector")
 				split_times = None # TODO: Is this correct?
+
+		# Ensure that we are not splitting outside the provided time:
+		if split_times is not None:
+			split_times = tuple([st for st in split_times if np.min(time) < st < np.max(time)])
+			if not split_times:
+				split_times = None
+		logger.debug("Split times: %s", split_times)
 
 		# Get the position of the main target
 		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
