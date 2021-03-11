@@ -61,12 +61,12 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	Search directory recursively for TESS FFI images in FITS format.
 
 	Parameters:
-		rootdir (string): Directory to search recursively for TESS FFI images.
-		sector (integer or None, optional): Only return files from the given sector.
+		rootdir (str): Directory to search recursively for TESS FFI images.
+		sector (int or None, optional): Only return files from the given sector.
 			If ``None``, files from all sectors are returned.
-		camera (integer or None, optional): Only return files from the given camera number (1-4).
+		camera (int or None, optional): Only return files from the given camera number (1-4).
 			If ``None``, files from all cameras are returned.
-		ccd (integer or None, optional): Only return files from the given CCD number (1-4).
+		ccd (int or None, optional): Only return files from the given CCD number (1-4).
 			If ``None``, files from all CCDs are returned.
 
 	Returns:
@@ -77,7 +77,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
-	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
+	sector_str = '????' if sector is None else f'{sector:04d}'
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
 	filename_pattern = f'tess*-s{sector_str:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'
@@ -180,9 +180,9 @@ def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 		list: List of paths to HDF5 files matching constraints.
 	"""
 
-	if not isinstance(sector, (list, tuple)): sector = (sector,)
-	if not isinstance(camera, (list, tuple)): camera = (1,2,3,4) if camera is None else (camera,)
-	if not isinstance(ccd, (list, tuple)): ccd = (1,2,3,4) if ccd is None else (ccd,)
+	sector = to_tuple(sector, (None,))
+	camera = to_tuple(camera, (1,2,3,4))
+	ccd = to_tuple(ccd, (1,2,3,4))
 
 	filelst = []
 	for sector, camera, ccd in itertools.product(sector, camera, ccd):
@@ -210,9 +210,9 @@ def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 		list: List of paths to CATALOG files matching constraints.
 	"""
 
-	if not isinstance(sector, (list, tuple)): sector = (sector,)
-	if not isinstance(camera, (list, tuple)): camera = (1,2,3,4) if camera is None else (camera,)
-	if not isinstance(ccd, (list, tuple)): ccd = (1,2,3,4) if ccd is None else (ccd,)
+	sector = to_tuple(sector, (None,))
+	camera = to_tuple(camera, (1,2,3,4))
+	ccd = to_tuple(ccd, (1,2,3,4))
 
 	filelst = []
 	for sector, camera, ccd in itertools.product(sector, camera, ccd):
@@ -262,6 +262,30 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 		return img, headers
 	else:
 		return img
+
+#--------------------------------------------------------------------------------------------------
+def to_tuple(input, default=None):
+	"""
+	Convert iterable or single values to tuple.
+
+	This function is used for converting inputs, perticularly for
+	preparing input to functions cached with :func:`functools.lru_cache`,
+	to ensure inputs are hashable.
+
+	Parameters:
+		input: Input to convert to tuple.
+		default: If ``input`` is ``None`` return this instead.
+
+	Returns:
+		tuple: ``input`` converted to tuple.
+	"""
+	if input is None:
+		return default
+	if isinstance(input, (list, set, frozenset, np.ndarray)):
+		return tuple(input)
+	if isinstance(input, (int, float)):
+		return (input, )
+	return input
 
 #--------------------------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):

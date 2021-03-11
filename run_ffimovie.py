@@ -52,7 +52,7 @@ from photometry.plots import plt, plot_image
 from matplotlib import animation
 from matplotlib.colors import ListedColormap
 from photometry.quality import PixelQualityFlags
-from photometry.utilities import find_hdf5_files, TqdmLoggingHandler
+from photometry.utilities import find_hdf5_files, TqdmLoggingHandler, to_tuple
 
 #--------------------------------------------------------------------------------------------------
 def set_copyright(fig, xpos=0.01, ypos=0.99, fontsize=12):
@@ -415,7 +415,7 @@ def main():
 	run_full_directory = None
 	if len(args.files) == 1 and os.path.isdir(args.files[0]):
 		run_full_directory = args.files[0]
-		args.files = find_hdf5_files(run_full_directory, sector=args.sector)
+		args.files = find_hdf5_files(run_full_directory, sector=to_tuple(args.sector))
 		logger.info("Found %d HDF5 files in directory '%s'", len(args.files), run_full_directory)
 
 	tqdm_settings = {
