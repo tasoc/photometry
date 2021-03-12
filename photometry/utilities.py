@@ -270,7 +270,7 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 		return img
 
 #--------------------------------------------------------------------------------------------------
-def to_tuple(input, default=None):
+def to_tuple(inp, default=None):
 	"""
 	Convert iterable or single values to tuple.
 
@@ -279,19 +279,19 @@ def to_tuple(input, default=None):
 	to ensure inputs are hashable.
 
 	Parameters:
-		input: Input to convert to tuple.
+		inp: Input to convert to tuple.
 		default: If ``input`` is ``None`` return this instead.
 
 	Returns:
-		tuple: ``input`` converted to tuple.
+		tuple: ``inp`` converted to tuple.
 	"""
-	if input is None:
+	if inp is None:
 		return default
-	if isinstance(input, (list, set, frozenset, np.ndarray)):
-		return tuple(input)
-	if isinstance(input, (int, float)):
-		return (input, )
-	return input
+	if isinstance(inp, (list, set, frozenset, np.ndarray)):
+		return tuple(inp)
+	if isinstance(inp, (int, float, bool, str)):
+		return (inp, )
+	return inp
 
 #--------------------------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):
