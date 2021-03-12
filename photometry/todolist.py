@@ -22,11 +22,8 @@ from astropy.table import Table, vstack, Column
 from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from timeit import default_timer
-from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
+from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance, to_tuple
 from .catalog import catalog_sqlite_search_footprint, download_catalogs
-
-# Filter out annoying warnings:
-warnings.filterwarnings('ignore', category=FITSFixedWarning, module="astropy")
 
 #--------------------------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
@@ -123,11 +120,14 @@ def _ffi_todo(hdf5_file, exclude=[]):
 		datarel = int(hdf['images'].attrs['DATA_REL'])
 		if isinstance(hdf['wcs'], h5py.Group):
 			refindx = hdf['wcs'].attrs['ref_frame']
-			hdr_string = hdf['wcs']['%04d' % refindx][0]
+			hdr_string = hdf['wcs'][f'{refindx:04d}'][0]
 		else:
 			hdr_string = hdf['wcs'][0]
-		if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
-		wcs = WCS(header=fits.Header().fromstring(hdr_string))
+		if not isinstance(hdr_string, str):
+			hdr_string = hdr_string.decode("utf-8") # For Python 3
+		with warnings.catch_warnings():
+			warnings.filterwarnings('ignore', category=FITSFixedWarning)
+			wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True)
 		offset_rows = hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 		offset_cols = hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 0)
 		image_shape = hdf['images']['0000'].shape
@@ -136,7 +136,7 @@ def _ffi_todo(hdf5_file, exclude=[]):
 	input_folder = os.path.dirname(hdf5_file)
 	catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 	if len(catalog_file) != 1:
-		raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
+		raise FileNotFoundError(f"Catalog file not found: SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d}")
 
 	with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 		conn.row_factory = sqlite3.Row
@@ -146,7 +146,7 @@ def _ffi_todo(hdf5_file, exclude=[]):
 		cursor.execute("SELECT * FROM settings WHERE sector=? AND camera=? AND ccd=? LIMIT 1;", (sector, camera, ccd))
 		settings = cursor.fetchone()
 		if settings is None:
-			raise Exception("Settings not found in catalog (SECTOR=%d, CAMERA=%d, CCD=%d)" % (sector, camera, ccd))
+			raise Exception(f"Settings not found in catalog (SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d})")
 
 		# Find all the stars in the catalog brigher than a certain limit:
 		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < 15 ORDER BY tmag;")
@@ -228,7 +228,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 			# Load the corresponding catalog:
 			catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 			if len(catalog_file) != 1:
-				raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
+				raise FileNotFoundError(f"Catalog file not found: SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d}")
 
 			with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 				conn.row_factory = sqlite3.Row
@@ -238,7 +238,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 				settings = cursor.fetchone()
 				if settings is None:
 					logger.error("Settings could not be loaded for camera=%d, ccd=%d.", camera, ccd)
-					raise ValueError("Settings could not be loaded for camera=%d, ccd=%d." % (camera, ccd))
+					raise ValueError(f"Settings could not be loaded for CAMERA={camera:d}, CCD={ccd:d}.")
 
 				# Get information about star:
 				cursor.execute("SELECT * FROM catalog WHERE starid=? LIMIT 1;", (starid, ))
@@ -267,7 +267,9 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 					# Use the WCS of the stamp to find all stars that fall within
 					# the footprint of the stamp.
 					image_shape = hdu[2].shape
-					wcs = WCS(header=hdu[2].header)
+					with warnings.catch_warnings():
+						warnings.filterwarnings('ignore', category=FITSFixedWarning)
+						wcs = WCS(header=hdu[2].header, relax=True)
 					footprint = wcs.calc_footprint(center=False)
 
 					secondary_targets = catalog_sqlite_search_footprint(cursor, footprint, constraints=f'starid != {starid:d} AND tmag < 15', buffer_size=2)
@@ -328,17 +330,17 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 	Will create the file `todo.sqlite` in the directory.
 
 	Parameters:
-		input_folder (string, optional): Input folder to create TODO list for.
+		input_folder (str, optional): Input folder to create TODO list for.
 			If ``None``, the input directory in the environment variable
 			``TESSPHOT_INPUT`` is used.
-		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``,
+		cameras (iterable of int, optional): TESS camera number (1-4). If ``None``,
 			all cameras will be included.
-		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``,
+		ccds (iterable of int, optional): TESS CCD number (1-4). If ``None``,
 			all cameras will be included.
-		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
-		find_secondary_targets (boolean): Should secondary targets from TPFs be included?
+		overwrite (bool): Overwrite existing TODO file. Default=``False``.
+		find_secondary_targets (bool): Should secondary targets from TPFs be included?
 			Default=True.
-		output_file (string, optional): The file path where the output file should be saved.
+		output_file (str, optional): The file path where the output file should be saved.
 			If not specified, the file will be saved into the input directory.
 			Should only be used for testing, since the file would (properly) otherwise end up with
 			a wrong file name for running with the rest of the pipeline.
@@ -360,8 +362,8 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
-	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
-	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
+	cameras = to_tuple(cameras, (1,2,3,4))
+	ccds = to_tuple(ccds, (1,2,3,4))
 
 	# The TODO file that we want to create. Delete it if it already exits:
 	if output_file is None:

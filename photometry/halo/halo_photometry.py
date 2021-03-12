@@ -165,7 +165,7 @@ class HaloPhotometry(BasePhotometry):
 
 		# Put together timeseries table in the format that halophot likes:
 		ts = Table({
-			'time': self.lightcurve['time'][indx_goodtimes],
+			'time': time,
 			'cadence': self.lightcurve['cadenceno'][indx_goodtimes],
 			'x': col[indx_goodtimes],
 			'y': row[indx_goodtimes],

@@ -56,9 +56,15 @@ def load_sector_settings(sector=None):
 	return settings
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search directory recursively for TESS FFI images in FITS format.
+
+	The function is cached, meaning the first time it is run on a particular ``rootdir``
+	the list of files in that directory will be read and cached to memory and used in
+	subsequent calls to the function. This means that any changes to files on disk after
+	the first call of the function will not be picked up in subsequent calls to this function.
 
 	Parameters:
 		rootdir (str): Directory to search recursively for TESS FFI images.
@@ -71,7 +77,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 
 	Returns:
 		list: List of full paths to FFI FITS files found in directory. The list will
-			be sorted accoridng to the filename of the files, e.g. primarily by time.
+			be sorted accoridng to the filename of the files, i.e. primarily by time.
 	"""
 
 	logger = logging.getLogger(__name__)
@@ -100,16 +106,16 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 	Search directory recursively for TESS Target Pixel Files.
 
 	Parameters:
-		rootdir (string): Directory to search recursively for TESS TPF files.
-		starid (integer or None, optional): Only return files from the given TIC number.
+		rootdir (str): Directory to search recursively for TESS TPF files.
+		starid (int or None, optional): Only return files from the given TIC number.
 			If ``None``, files from all TIC numbers are returned.
-		sector (integer or None, optional): Only return files from the given sector.
+		sector (int or None, optional): Only return files from the given sector.
 			If ``None``, files from all sectors are returned.
-		camera (integer or None, optional): Only return files from the given camera number (1-4).
+		camera (int or None, optional): Only return files from the given camera number (1-4).
 			If ``None``, files from all cameras are returned.
-		ccd (integer or None, optional): Only return files from the given CCD number (1-4).
+		ccd (int or None, optional): Only return files from the given CCD number (1-4).
 			If ``None``, files from all CCDs are returned.
-		findmax (integer or None, optional): Maximum number of files to return.
+		findmax (int or None, optional): Maximum number of files to return.
 			If ``None``, return all files.
 
 	Note:
@@ -230,7 +236,7 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 
 	Parameters:
 		path (str): Path to FITS file.
-		return_header (boolean, optional): Return FITS headers as well. Default is ``False``.
+		return_header (bool, optional): Return FITS headers as well. Default is ``False``.
 
 	Returns:
 		numpy.ndarray: Full Frame Image.
@@ -341,12 +347,12 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 	Evaluate a 2D symmetrical Gaussian integrated in pixels.
 
 	Parameters:
-		x (numpy array) : x coordinates at which to evaluate the PSF.
-		y (numpy array) : y coordinates at which to evaluate the PSF.
-		flux (float) : Integrated value.
-		x_0 (float) : Centroid position.
-		y_0 (float) : Centroid position.
-		sigma (float, optional) : Standard deviation of Gaussian. Default=1.
+		x (numpy.ndarray): x coordinates at which to evaluate the PSF.
+		y (numpy.ndarray): y coordinates at which to evaluate the PSF.
+		flux (float): Integrated value.
+		x_0 (float): Centroid position.
+		y_0 (float): Centroid position.
+		sigma (float, optional): Standard deviation of Gaussian. Default=1.
 
 	Returns:
 		numpy array : 2D Gaussian integrated pixel values at (x,y).
@@ -701,7 +707,6 @@ class LoggerWriter(object):
 	def write(self, message):
 		if message.strip() != '':
 			self.logger.log(self.level, message)
-
 
 #--------------------------------------------------------------------------------------------------
 def sqlite_drop_column(conn, table, col):

@@ -44,12 +44,6 @@ def test_run_tessphot_invalid_ccd():
 	assert 'error: argument --ccd: invalid choice: 14 (choose from 1, 2, 3, 4)' in err
 
 #--------------------------------------------------------------------------------------------------
-#def test_run_tessphot_invalid_cadence():
-#	out, err, exitcode = capture_cli('run_tessphot.py', ['-t', '--cadence=121'])
-#	assert exitcode == 2
-#	assert 'error: argument --cadence: invalid choice: 121 (choose from 20, 120, 600, 1800)' in err
-
-#--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('method,starid,datasource', STAR_LIST)
 def test_run_tessphot(SHARED_INPUT_DIR, method, starid, datasource):
 	with tempfile.TemporaryDirectory() as tmpdir:
