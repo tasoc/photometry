@@ -57,9 +57,15 @@ def load_sector_settings(sector=None):
 	return settings
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search directory recursively for TESS FFI images in FITS format.
+
+	The function is cached, meaning the first time it is run on a particular ``rootdir``
+	the list of files in that directory will be read and cached to memory and used in
+	subsequent calls to the function. This means that any changes to files on disk after
+	the first call of the function will not be picked up in subsequent calls to this function.
 
 	Parameters:
 		rootdir (str): Directory to search recursively for TESS FFI images.
@@ -72,7 +78,7 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 
 	Returns:
 		list: List of full paths to FFI FITS files found in directory. The list will
-			be sorted accoridng to the filename of the files, e.g. primarily by time.
+			be sorted accoridng to the filename of the files, i.e. primarily by time.
 	"""
 
 	logger = logging.getLogger(__name__)
@@ -278,7 +284,7 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 
 	Parameters:
 		path (str): Path to FITS file.
-		return_header (boolean, optional): Return FITS headers as well. Default is ``False``.
+		return_header (bool, optional): Return FITS headers as well. Default is ``False``.
 
 	Returns:
 		numpy.ndarray: Full Frame Image.
@@ -312,7 +318,7 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 		return img
 
 #--------------------------------------------------------------------------------------------------
-def to_tuple(input, default=None):
+def to_tuple(inp, default=None):
 	"""
 	Convert iterable or single values to tuple.
 
@@ -321,19 +327,19 @@ def to_tuple(input, default=None):
 	to ensure inputs are hashable.
 
 	Parameters:
-		input: Input to convert to tuple.
+		inp: Input to convert to tuple.
 		default: If ``input`` is ``None`` return this instead.
 
 	Returns:
-		tuple: ``input`` converted to tuple.
+		tuple: ``inp`` converted to tuple.
 	"""
-	if input is None:
+	if inp is None:
 		return default
-	if isinstance(input, (list, set, frozenset, np.ndarray)):
-		return tuple(input)
-	if isinstance(input, (int, float)):
-		return (input, )
-	return input
+	if isinstance(inp, (list, set, frozenset, np.ndarray)):
+		return tuple(inp)
+	if isinstance(inp, (int, float, bool, str)):
+		return (inp, )
+	return inp
 
 #--------------------------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):
@@ -389,12 +395,12 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 	Evaluate a 2D symmetrical Gaussian integrated in pixels.
 
 	Parameters:
-		x (numpy array) : x coordinates at which to evaluate the PSF.
-		y (numpy array) : y coordinates at which to evaluate the PSF.
-		flux (float) : Integrated value.
-		x_0 (float) : Centroid position.
-		y_0 (float) : Centroid position.
-		sigma (float, optional) : Standard deviation of Gaussian. Default=1.
+		x (numpy.ndarray): x coordinates at which to evaluate the PSF.
+		y (numpy.ndarray): y coordinates at which to evaluate the PSF.
+		flux (float): Integrated value.
+		x_0 (float): Centroid position.
+		y_0 (float): Centroid position.
+		sigma (float, optional): Standard deviation of Gaussian. Default=1.
 
 	Returns:
 		numpy array : 2D Gaussian integrated pixel values at (x,y).

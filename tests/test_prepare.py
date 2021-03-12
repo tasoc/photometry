@@ -59,7 +59,7 @@ def hdf5_file_valid(fname, sector=None, camera=None, ccd=None, Ntimes=4):
 
 		# Check size of groups:
 		for k in range(Ntimes):
-			dset = '%04d' % k
+			dset = f'{k:04d}'
 			assert 'images/' + dset in hdf and isinstance(hdf['images/' + dset], h5py.Dataset), "IMAGES dset=" + dset + " does not exist"
 			assert 'images_err/' + dset in hdf and isinstance(hdf['images_err/' + dset], h5py.Dataset), "IMAGES_ERR dset=" + dset + " does not exist"
 			assert 'backgrounds/' + dset in hdf and isinstance(hdf['backgrounds/' + dset], h5py.Dataset), "BACKGROUNDS dset=" + dset + " does not exist"

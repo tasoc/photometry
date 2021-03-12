@@ -359,12 +359,13 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	if not os.path.isdir(input_folder):
 		raise NotADirectoryError(f"Directory does not exist: '{input_folder:s}'")
 
-	# Make sure cameras and ccds are iterable:
+	# Make sure sectors, cameras and ccds are iterable:
+	sectors = to_tuple(sector)
 	cameras = to_tuple(camera, (1,2,3,4))
 	ccds = to_tuple(ccd, (1,2,3,4))
 
-	# Loop through all combinations of cameras and ccds:
-	for camera, ccd in itertools.product(cameras, ccds):
+	# Loop through all combinations of sectors, cameras and ccds:
+	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
 		# File name and path for catalog file:
 		fname = f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'
 		fpath = os.path.join(input_folder, fname)
