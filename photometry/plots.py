@@ -132,22 +132,6 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		if cbar_ticks is None: cbar_ticks = [0, 1]
 		if cbar_ticklabels is None: cbar_ticklabels = ['False', 'True']
 
-	# Calculate limits of color scaling:
-	interval = None
-	if vmin is None or vmax is None:
-		if allnan(image):
-			logger.warning("Image is all NaN")
-			vmin = 0
-			vmax = 1
-			if cbar_ticks is None:
-				cbar_ticks = []
-			if cbar_ticklabels is None:
-				cbar_ticklabels = []
-		elif isinstance(percentile, (list, tuple, np.ndarray)):
-			interval = viz.AsymmetricPercentileInterval(percentile[0], percentile[1])
-		else:
-			interval = viz.PercentileInterval(percentile)
-
 	# Create ImageNormalize object with extracted limits:
 	if scale in ('log', 'linear', 'sqrt', 'asinh', 'histeq', 'sinh', 'squared'):
 		if scale == 'log':
@@ -164,6 +148,22 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 			stretch = viz.SinhStretch()
 		elif scale == 'squared':
 			stretch = viz.SquaredStretch()
+
+		# Calculate limits of color scaling:
+		interval = None
+		if vmin is None or vmax is None:
+			if allnan(image):
+				logger.warning("Image is all NaN")
+				vmin = 0
+				vmax = 1
+				if cbar_ticks is None:
+					cbar_ticks = []
+				if cbar_ticklabels is None:
+					cbar_ticklabels = []
+			elif isinstance(percentile, (list, tuple, np.ndarray)):
+				interval = viz.AsymmetricPercentileInterval(percentile[0], percentile[1])
+			else:
+				interval = viz.PercentileInterval(percentile)
 
 		# Create ImageNormalize object. Very important to use clip=False if the image contains
 		# NaNs, otherwise NaN points will not be plotted correctly.
