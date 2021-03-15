@@ -16,7 +16,7 @@ from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from .utilities import load_ffi_fits, move_median_central
 from .pixel_flags import pixel_manual_exclude
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def _reduce_mode(x):
 	if len(x) == 0:
 		return np.NaN
@@ -25,7 +25,7 @@ def _reduce_mode(x):
 	kde.fit(gridsize=2000)
 	return kde.support[np.argmax(kde.density)]
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class ModeBackground(BackgroundBase):
 	def _mode(self, data):
 		modes = np.zeros([data.shape[0]])
@@ -41,7 +41,7 @@ class ModeBackground(BackgroundBase):
 		bkg = np.atleast_1d(self._mode(np.asarray(data, dtype='float64')))
 		return bkg
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def fit_background(image, catalog=None, flux_cutoff=8e4,
 		bkgiters=3, radial_cutoff=2400, radial_pixel_step=15, radial_smooth=3):
 	"""
@@ -52,17 +52,23 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 	component to account for the corner-glow that is present in TESS FFIs.
 
 	Parameters:
-		image (ndarray or string): Either the image as 2D ndarray or a path to FITS or NPY file where to load image from.
-		catalog (`astropy.table.Table` object): Catalog of stars in the image. Is not yet being used for anything.
-		flux_cutoff (float): Flux value at which any pixel above will be masked out of the background estimation.
-		bkgiters (integer): Number of times to iterate the background components. Default=3.
-		radial_cutoff (float): Radial distance in pixels from camera centre to start using radial component. Default=2400.
-		radial_pixel_step (integer): Step sizes to use in radial component. Default=15.
-		radial_smooth (integer): Width of median smoothing on radial profile. Default=3.
+		image (ndarray or str): Either the image as 2D ndarray or a path to FITS or NPY file
+			where to load image from.
+		catalog (:class:`astropy.table.Table`): Catalog of stars in the image.
+			Is currently not yet being used for anything.
+		flux_cutoff (float): Flux value at which any pixel above will be masked out of
+			the background estimation.
+		bkgiters (int): Number of times to iterate the background components. Default=3.
+		radial_cutoff (float): Radial distance in pixels from camera centre to start using
+			radial component. Default=2400.
+		radial_pixel_step (int): Step sizes to use in radial component. Default=15.
+		radial_smooth (int): Width of median smoothing on radial profile. Default=3.
 
 	Returns:
-		ndarray: Estimated background with the same size as the input image.
-		ndarray: Boolean array specifying which pixels was used to estimate the background (``True`` if pixel was not used).
+		tuple:
+		- ndarray: Estimated background with the same size as the input image.
+		- ndarray: Boolean array specifying which pixels was used to estimate the background
+			(``True`` if pixel was not used).
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -135,7 +141,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			(4, 4): [-14.629676, 2111.341670],
 		}.get((camera, ccd))
 		if xycen is None:
-			raise ValueError("Invalid CAMERA or CCD in header: CAMERA=%s, CCD=%s" % (camera, ccd))
+			raise ValueError(f"Invalid CAMERA or CCD in header: CAMERA={camera:s}, CCD={ccd:s}")
 
 		# Create radial coordinates:
 		# Note that these are in "real" coordinates like the ones in the WCS,
