@@ -295,6 +295,11 @@ class TESS_SPICE(object):
 		'TESS_EPH_DEF_2021018_21.bsp',
 		'TESS_EPH_DEF_2021021_21.bsp',
 		'TESS_EPH_DEF_2021028_21.bsp',
+		# New batch (2021-03-15):
+		'TESS_EPH_DEF_2021035_21.bsp',
+		'TESS_EPH_DEF_2021043_21.bsp',
+		'TESS_EPH_DEF_2021050_21.bsp',
+		'TESS_EPH_DEF_2021057_21.bsp',
 	)
 
 	def __init__(self, kernels_folder=None):
