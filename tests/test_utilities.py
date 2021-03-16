@@ -78,13 +78,16 @@ def test_move_median_central():
 def test_find_ffi_files(SHARED_INPUT_DIR):
 
 	files = u.find_ffi_files(SHARED_INPUT_DIR)
-	assert(len(files) == 8)
+	assert(len(files) == 10)
 
 	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=1)
 	assert(len(files) == 4)
 
 	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=3)
 	assert(len(files) == 4)
+
+	files = u.find_ffi_files(SHARED_INPUT_DIR, sector=27)
+	assert(len(files) == 2)
 
 #--------------------------------------------------------------------------------------------------
 def test_find_tpf_files(SHARED_INPUT_DIR):

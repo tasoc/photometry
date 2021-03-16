@@ -93,8 +93,8 @@ def todo_file_valid(fpath, sector=None, camera=None, ccd=None):
 		assert cursor.fetchone()[0] == 2, "Expected 2 TPFs in todolist"
 
 		if sector == 27:
-			cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='ffi';")
-			assert cursor.fetchone()[0] == 0, "Expected no FFI targets in sector 27"
+			#cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='ffi';")
+			#assert cursor.fetchone()[0] == 0, "Expected no FFI targets in sector 27"
 			cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='tpf' AND cadence=120;")
 			assert cursor.fetchone()[0] == 1, "Expected one TPFs in todolist with 120s cadence"
 			cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='tpf' AND cadence=20;")
