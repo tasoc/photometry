@@ -37,6 +37,7 @@ def main():
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	group = parser.add_argument_group('Filter which targets to include')
+	group.add_argument('--sector', type=int, default=None, action='append', help='TESS Sector. Default is to run all sectors.')
 	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, action='append', help='TESS Camera. Default is to run all cameras.')
 	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, action='append', help='TESS CCD. Default is to run all CCDs.')
 	parser.add_argument('input_folder', type=str, help='TESSPhot input directory to create HDF5 files in.', nargs='?', default=None)
@@ -65,6 +66,7 @@ def main():
 
 	# Run the program for the selected camera/ccd combinations:
 	prepare_photometry(args.input_folder,
+		sectors=args.sector,
 		cameras=args.camera,
 		ccds=args.ccd)
 

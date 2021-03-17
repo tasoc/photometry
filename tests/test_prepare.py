@@ -10,6 +10,7 @@ import pytest
 import tempfile
 import h5py
 import os.path
+import numpy as np
 from conftest import capture_cli
 from photometry import prepare
 
@@ -72,12 +73,16 @@ def hdf5_file_valid(fname, sector=None, camera=None, ccd=None, Ntimes=4):
 			assert hdf['pixel_flags/' + dset].shape == img_size, "PIXEL_FLAGS dset=" + dset + " does not have the correct size"
 
 		# Check headers:
+		timestamps = np.asarray(hdf['time']) - np.asarray(hdf['timecorr'])
+
 		if sector is not None:
 			assert hdf['images'].attrs['SECTOR'] == sector
 		if camera is not None:
 			assert hdf['images'].attrs['CAMERA'] == camera
 		if ccd is not None:
 			assert hdf['images'].attrs['CCD'] == ccd
+
+		assert int(hdf['images'].attrs['CADENCE']) == np.round(86400*np.median(np.diff(timestamps)))
 
 #--------------------------------------------------------------------------------------------------
 def test_prepare_photometry(SHARED_INPUT_DIR):
@@ -105,6 +110,7 @@ def test_run_prepare_photometry(PRIVATE_INPUT_DIR):
 	assert not os.path.exists(hdf5file), "HDF5 file was not removed correctly"
 
 	out, err, exitcode = capture_cli('run_prepare_photometry.py', params=[
+		'--sector=1',
 		'--camera=3',
 		'--ccd=2',
 		PRIVATE_INPUT_DIR

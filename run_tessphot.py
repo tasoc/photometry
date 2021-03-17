@@ -53,6 +53,7 @@ def main():
 	group.add_argument('--datasource', type=str, choices=('ffi', 'tpf'), default=None, help='Data-source to load.', )
 	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
 	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
+	group.add_argument('--cadence', type=int, choices=(20,120,600,1800), default=None, help='Observing cadence. Default is to run all cadences.')
 
 	parser.add_argument('--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
 	parser.add_argument('--output', type=str, help='Directory to put lightcurves into.', nargs='?', default=None)
@@ -105,6 +106,7 @@ def main():
 	constraints = {
 		'camera': args.camera,
 		'ccd': args.ccd,
+		'cadence': args.cadence,
 		'datasource': args.datasource,
 		'starid': args.starid,
 		'priority': args.priority

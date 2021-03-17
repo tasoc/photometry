@@ -112,6 +112,20 @@ class TaskManager(object):
 		self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS diagnostics_lightcurve_idx ON diagnostics (lightcurve);")
 		self.conn.commit()
 
+		# This is only for backwards compatibility.
+		self.cursor.execute("PRAGMA table_info(todolist)")
+		existing_columns = [r['name'] for r in self.cursor.fetchall()]
+		if 'cadence' not in existing_columns:
+			self.logger.debug("Adding CADENCE column to todolist")
+			self.cursor.execute("ALTER TABLE todolist ADD COLUMN cadence INTEGER DEFAULT NULL;")
+			self.cursor.execute("UPDATE todolist SET cadence=1800 WHERE datasource='ffi' AND sector < 27;")
+			self.cursor.execute("UPDATE todolist SET cadence=600 WHERE datasource='ffi' AND sector >= 27 AND sector <= 55;")
+			self.cursor.execute("UPDATE todolist SET cadence=120 WHERE datasource!='ffi' AND sector < 27;")
+			self.cursor.execute("SELECT COUNT(*) AS antal FROM todolist WHERE cadence IS NULL;")
+			if self.cursor.fetchone()['antal'] > 0:
+				raise ValueError("TODO-file does not contain CADENCE information and it could not be determined automatically. Please recreate TODO-file.")
+			self.conn.commit()
+
 		# Add status indicator for corrections to todolist, if it doesn't already exists:
 		# This is only for backwards compatibility.
 		self.cursor.execute("PRAGMA table_info(diagnostics)")
@@ -231,7 +245,8 @@ class TaskManager(object):
 		self.close()
 
 	#----------------------------------------------------------------------------------------------
-	def get_number_tasks(self, starid=None, camera=None, ccd=None, datasource=None, priority=None):
+	def get_number_tasks(self, starid=None, camera=None, ccd=None, cadence=None, datasource=None,
+		priority=None):
 		"""
 		Get number of tasks due to be processed.
 
@@ -254,6 +269,8 @@ class TaskManager(object):
 			constraints.append(f'todolist.camera={camera:d}')
 		if ccd is not None:
 			constraints.append(f'todolist.ccd={ccd:d}')
+		if cadence is not None:
+			constraints.append(f'todolist.cadence={cadence:d}')
 		if datasource is not None:
 			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
 
@@ -266,7 +283,8 @@ class TaskManager(object):
 		return int(self.cursor.fetchone()['num'])
 
 	#----------------------------------------------------------------------------------------------
-	def get_task(self, starid=None, camera=None, ccd=None, datasource=None, priority=None):
+	def get_task(self, starid=None, camera=None, ccd=None, cadence=None, datasource=None,
+		priority=None):
 		"""
 		Get next task to be processed.
 
@@ -282,6 +300,8 @@ class TaskManager(object):
 			constraints.append(f'todolist.camera={camera:d}')
 		if ccd is not None:
 			constraints.append(f'todolist.ccd={ccd:d}')
+		if cadence is not None:
+			constraints.append(f'todolist.cadence={cadence:d}')
 		if datasource is not None:
 			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
 
@@ -290,7 +310,7 @@ class TaskManager(object):
 		else:
 			constraints = ''
 
-		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,cadence,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task:
 			return dict(task)
@@ -304,7 +324,7 @@ class TaskManager(object):
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
+		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,cadence,datasource,tmag FROM todolist WHERE status IS NULL ORDER BY RANDOM() LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task:
 			return dict(task)
@@ -351,11 +371,12 @@ class TaskManager(object):
 					# We never want to return a lightcurve for a secondary target over
 					# a primary target, so we are going to mark this one as SKIPPED.
 					primary_tpf_target_starid = int(result['datasource'][4:])
-					self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=? AND camera=? AND ccd=?;", (
+					self.cursor.execute("SELECT priority FROM todolist WHERE starid=? AND datasource='tpf' AND sector=? AND camera=? AND ccd=? AND cadence=?;", (
 						primary_tpf_target_starid,
 						result['sector'],
 						result['camera'],
-						result['ccd']
+						result['ccd'],
+						result['cadence']
 					))
 					primary_tpf_target_priority = self.cursor.fetchone()
 					# Mark the current star as SKIPPED and that it was caused by the primary:
@@ -380,10 +401,11 @@ class TaskManager(object):
 					else:
 						skip_datasources = "'" + result['datasource'] + "'"
 
-					self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=? AND camera=? AND ccd=?;", (
+					self.cursor.execute("SELECT priority,tmag FROM todolist WHERE starid IN (" + skip_starids + ") AND datasource IN (" + skip_datasources + ") AND sector=? AND camera=? AND ccd=? AND cadence=?;", (
 						result['sector'],
 						result['camera'],
-						result['ccd']
+						result['ccd'],
+						result['cadence']
 					))
 					skip_rows = self.cursor.fetchall()
 					if len(skip_rows) > 0:

@@ -34,6 +34,7 @@ def test_taskmanager(PRIVATE_TODO_FILE):
 		assert task1['starid'] == 267211065
 		assert task1['camera'] == 3
 		assert task1['ccd'] == 2
+		assert task1['cadence'] == 120
 		assert task1['datasource'] == 'tpf'
 		assert task1['sector'] == 1
 
@@ -48,6 +49,7 @@ def test_taskmanager(PRIVATE_TODO_FILE):
 		assert task2['starid'] == 267211065
 		assert task2['camera'] == 3
 		assert task2['ccd'] == 2
+		assert task2['cadence'] == 1800
 		assert task2['datasource'] == 'ffi'
 		assert task2['sector'] == 1
 
@@ -313,6 +315,7 @@ def test_taskmanager_skip_targets1(PRIVATE_TODO_FILE):
 		assert row['sector'] == task['sector']
 		assert row['camera'] == task['camera']
 		assert row['ccd'] == task['ccd']
+		assert row['cadence'] == task['cadence']
 		assert row['elaptime'] == 6.14
 		assert row['method_used'] == 'aperture'
 		assert row['status'] == STATUS.OK.value
@@ -365,6 +368,7 @@ def test_taskmanager_skip_targets2(PRIVATE_TODO_FILE):
 		assert row['sector'] == task['sector']
 		assert row['camera'] == task['camera']
 		assert row['ccd'] == task['ccd']
+		assert row['cadence'] == task['cadence']
 		assert row['elaptime'] == 6.14
 		assert row['method_used'] == 'aperture'
 		assert row['status'] == STATUS.SKIPPED.value
@@ -398,6 +402,7 @@ def test_taskmanager_skip_targets_secondary1(PRIVATE_TODO_FILE):
 		tm.start_task(task['priority'])
 		result = task.copy()
 		result['datasource'] = 'tpf:267211065'
+		result['cadence'] = 120
 		result['status'] = STATUS.OK
 		result['time'] = 6.14
 		result['worker_wait_time'] = 2.0
@@ -420,6 +425,7 @@ def test_taskmanager_skip_targets_secondary1(PRIVATE_TODO_FILE):
 		assert row['sector'] == task['sector']
 		assert row['camera'] == task['camera']
 		assert row['ccd'] == task['ccd']
+		assert row['cadence'] == task['cadence']
 		assert row['elaptime'] == 6.14
 		assert row['method_used'] == 'aperture'
 		assert row['status'] == STATUS.SKIPPED.value
@@ -445,6 +451,7 @@ def test_taskmanager_skip_targets_secondary2(PRIVATE_TODO_FILE):
 		tm.start_task(task['priority'])
 		result = task.copy()
 		result['datasource'] = 'tpf:999999999'
+		result['cadence'] = 120
 		result['status'] = STATUS.OK
 		result['time'] = 6.14
 		result['worker_wait_time'] = 2.0
@@ -467,6 +474,7 @@ def test_taskmanager_skip_targets_secondary2(PRIVATE_TODO_FILE):
 		assert row['sector'] == task['sector']
 		assert row['camera'] == task['camera']
 		assert row['ccd'] == task['ccd']
+		assert row['cadence'] == task['cadence']
 		assert row['elaptime'] == 6.14
 		assert row['method_used'] == 'aperture'
 		assert row['status'] == STATUS.SKIPPED.value

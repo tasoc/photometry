@@ -24,7 +24,7 @@ from tqdm import tqdm, trange
 from .catalog import download_catalogs
 from .backgrounds import fit_background
 from .utilities import (load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest,
-	find_tpf_files, to_tuple)
+	find_tpf_files, load_sector_settings, to_tuple)
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
 from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes
 
@@ -90,6 +90,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 	Parameters:
 		input_folder (str): Input folder to create TODO list for. If ``None``, the input
 			directory in the environment variable ``TESSPHOT_INPUT`` is used.
+		sectors (iterable of int, optional): TESS Sectors. If ``None``,
+			all sectors will be processed.
 		cameras (iterable of int, optional): TESS camera number (1-4). If ``None``,
 			all cameras will be processed.
 		ccds (iterable of int, optional): TESS CCD number (1-4).
@@ -127,6 +129,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
+	sectors = to_tuple(sectors)
 	cameras = to_tuple(cameras, (1,2,3,4))
 	ccds = to_tuple(ccds, (1,2,3,4))
 
@@ -154,13 +157,12 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		# since the HDF5 creation below will simply skip any sectors with
 		# no FFIs available
 		for fname in find_tpf_files(input_folder):
-			m = re.match(r'^.+-s(\d+)[-_].+_tp\.fits', os.path.basename(fname))
+			m = re.match(r'^.+-s(\d+)[-_].+_(fast-)?tp\.fits', os.path.basename(fname))
 			if int(m.group(1)) not in sectors:
 				sectors.append(int(m.group(1)))
 
+		sectors = tuple(sorted(sectors))
 		logger.debug("Sectors found: %s", sectors)
-	else:
-		sectors = (sectors,)
 
 	# Check if any sectors were found/provided:
 	if not sectors:
@@ -214,6 +216,9 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			sector_reference_time = row['reference_time']
 			cursor.close()
 
+		# Cadence is simply changed in sector 28:
+		cadence = load_sector_settings(sector)['ffi_cadence']
+
 		# HDF5 file to be created/modified:
 		if output_file is None:
 			hdf_file = os.path.join(input_folder, f'sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.hdf5')
@@ -237,7 +242,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			pixel_flags = hdf.require_group('pixel_flags')
 			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
-			time_smooth = backgrounds.attrs.get('time_smooth', 3)
+			time_smooth = backgrounds.attrs.get('time_smooth', {1800: 3, 600: 9}[cadence])
 			flux_cutoff = backgrounds.attrs.get('flux_cutoff', 8e4)
 			bkgiters = backgrounds.attrs.get('bkgiters', 3)
 			radial_cutoff = backgrounds.attrs.get('radial_cutoff', 2400)
@@ -356,7 +361,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				logger.info('Final processing of individual images...')
 				tic = default_timer()
 				for k, fname in enumerate(tqdm(files, **tqdm_settings)):
-					dset_name = '%04d' % k
+					dset_name = f'{k:04d}'
 
 					# Load the FITS file data and the header:
 					flux0, hdr, flux0_err = load_ffi_fits(fname, return_header=True, return_uncert=True)
@@ -379,7 +384,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					# we are doing a simple scaling of the timestamps.
 					if 'FFIINDEX' in hdr:
 						cadenceno[k] = hdr['FFIINDEX']
-					elif is_tess:
+					elif is_tess and cadence == 1800:
 						# The following numbers comes from unofficial communication
 						# with Doug Caldwell and Roland Vanderspek:
 						# The timestamp in TJD and the corresponding cadenceno:
@@ -389,6 +394,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						# Extracpolate the cadenceno as a simple linear relation:
 						offset = first_cadenceno - first_time/timedelt
 						cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
+					elif is_tess:
+						raise Exception("Could not determine CADENCENO for TESS data")
 					else:
 						cadenceno[k] = k+1
 
@@ -469,6 +476,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
+				images.attrs['CADENCE'] = cadence
 				images.attrs['TIME_OFFSET_CORRECTED'] = fixed_time_offset
 				for key, value in attributes.items():
 					logger.debug("Saving attribute %s = %s", key, value)

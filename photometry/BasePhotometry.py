@@ -29,7 +29,7 @@ from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale,
-	find_nearest, ListHandler, load_settings)
+	find_nearest, ListHandler, load_settings, load_sector_settings)
 from .catalog import catalog_sqlite_search_footprint
 from .psf import PSF
 from .plots import plot_image, plt, save_figure
@@ -102,7 +102,7 @@ class BasePhotometry(object):
 
 	#----------------------------------------------------------------------------------------------
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		sector=None, camera=None, ccd=None, plot=False, cache='basic', version=5):
+		sector=None, camera=None, ccd=None, cadence=None, plot=False, cache='basic', version=6):
 		"""
 		Initialize the photometry object.
 
@@ -115,9 +115,10 @@ class BasePhotometry(object):
 			plot (bool): Create plots as part of the output. Default is ``False``.
 			camera (int): TESS camera (1-4) to load target from (Only used for FFIs).
 			ccd (int): TESS CCD (1-4) to load target from (Only used for FFIs).
+			cadence (int, optional): Not used for ``datasource='ffi'``.
 			cache (str): Optional values are ``'none'``, ``'full'``
 				or ``'basic'`` (Default).
-			version (int): Data release number to be added to headers. Default=5.
+			version (int): Data release number to be added to headers. Default=6.
 
 		Raises:
 			Exception: If starid could not be found in catalog.
@@ -181,19 +182,6 @@ class BasePhotometry(object):
 		handler.setFormatter(formatter)
 		logging.getLogger('photometry').addHandler(handler)
 
-		# Directory where output files will be saved:
-		self.output_folder = os.path.join(
-			self.output_folder_base,
-			self.datasource[:3], # Only three first characters for cases with "tpf:XXXXXX"
-			'{0:011d}'.format(self.starid)[:5]
-		)
-
-		# Set directory where diagnostics plots should be saved to:
-		self.plot_folder = None
-		if self.plot:
-			self.plot_folder = os.path.join(self.output_folder, 'plots', f'{self.starid:011d}')
-			os.makedirs(self.plot_folder, exist_ok=True)
-
 		# Init table that will be filled with lightcurve stuff:
 		self.lightcurve = Table()
 
@@ -242,6 +230,9 @@ class BasePhotometry(object):
 				hdr = dict(self.hdf['images'].attrs)
 				attrs['header'] = hdr
 				attrs['data_rel'] = hdr['DATA_REL'] # Data release number
+				attrs['cadence'] = hdr.get('CADENCE')
+				if attrs['cadence'] is None:
+					attrs['cadence'] = load_sector_settings(self.sector)['ffi_cadence']
 
 				# Start filling out the basic vectors:
 				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
@@ -325,7 +316,7 @@ class BasePhotometry(object):
 				starid_to_load = self.starid
 
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(self.input_folder, sector=sector, starid=starid_to_load)
+			fname = find_tpf_files(self.input_folder, starid=starid_to_load, sector=sector, cadence=cadence)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
@@ -342,6 +333,7 @@ class BasePhotometry(object):
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
 			self.data_rel = self.tpf[0].header['DATA_REL'] # Data release number
+			self.cadence = cadence if cadence is not None else int(np.round(self.tpf[1].header['TIMEDEL']*86400))
 
 			# Fix for timestamps that are not defined. Simply remove them from the table:
 			# This is seen in some file from sector 1.
@@ -389,6 +381,19 @@ class BasePhotometry(object):
 
 			# Correct timestamp offset that was in early data releases:
 			self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], self.header, datatype='tpf')
+
+		# Directory where output files will be saved:
+		self.output_folder = os.path.join(
+			self.output_folder_base,
+			f'c{self.cadence:04d}',
+			f'{self.starid:011d}'[:5]
+		)
+
+		# Set directory where diagnostics plots should be saved to:
+		self.plot_folder = None
+		if self.plot:
+			self.plot_folder = os.path.join(self.output_folder, 'plots', f'{self.starid:011d}')
+			os.makedirs(self.plot_folder, exist_ok=True)
 
 		# The file to load the star catalog from:
 		self.catalog_file = find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
@@ -1593,8 +1598,7 @@ class BasePhotometry(object):
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
 		# Timestamps of start and end of timeseries:
-		cadence = 120 if self.datasource.startswith('tpf') else 1800
-		tdel = cadence/86400
+		tdel = self.cadence/86400
 		tstart = self.lightcurve['time'][0] - tdel/2
 		tstop = self.lightcurve['time'][-1] + tdel/2
 		tstart_tm = Time(tstart, 2457000, format='jd', scale='tdb')
@@ -1705,7 +1709,7 @@ class BasePhotometry(object):
 			sector=self.sector,
 			camera=self.camera,
 			ccd=self.ccd,
-			cadence=cadence,
+			cadence=self.cadence,
 			datarel=self.data_rel,
 			version=version
 		)

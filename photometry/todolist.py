@@ -23,7 +23,7 @@ from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from timeit import default_timer
 from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance,
-	to_tuple, load_settings)
+	to_tuple, load_settings, load_sector_settings)
 from .catalog import catalog_sqlite_search_footprint, download_catalogs
 
 #--------------------------------------------------------------------------------------------------
@@ -78,7 +78,7 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 	"""
 	# Basic check of input:
 	if image_shape is None and aperture is None:
-		raise Exception("Please provide either aperture or image_shape.")
+		raise ValueError("Please provide either aperture or image_shape.")
 
 	if image_shape is None and aperture is not None:
 		image_shape = aperture.shape
@@ -118,6 +118,9 @@ def _ffi_todo(hdf5_file, exclude=[], faint_limit=15.0):
 		sector = int(hdf['images'].attrs['SECTOR'])
 		camera = int(hdf['images'].attrs['CAMERA'])
 		ccd = int(hdf['images'].attrs['CCD'])
+		cadence = int(hdf['images'].attrs.get('CADENCE', -1))
+		if cadence == -1:
+			cadence = load_sector_settings(sector)['ffi_cadence']
 		datarel = int(hdf['images'].attrs['DATA_REL'])
 		if isinstance(hdf['wcs'], h5py.Group):
 			refindx = hdf['wcs'].attrs['ref_frame']
@@ -184,6 +187,7 @@ def _ffi_todo(hdf5_file, exclude=[], faint_limit=15.0):
 				'sector': sector,
 				'camera': camera,
 				'ccd': ccd,
+				'cadence': cadence,
 				'datasource': 'ffi',
 				'tmag': row['tmag'],
 				'cbv_area': cbv_area,
@@ -195,8 +199,8 @@ def _ffi_todo(hdf5_file, exclude=[], faint_limit=15.0):
 	# Create the TODO list as a table which we will fill with targets:
 	return Table(
 		rows=cat_tmp,
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 #--------------------------------------------------------------------------------------------------
@@ -208,8 +212,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 	# Create the TODO list as a table which we will fill with targets:
 	cat_tmp = []
 	empty_table = Table(
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 	logger.debug("Processing TPF file: '%s'", fname)
@@ -220,12 +224,14 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 		ccd = hdu[0].header['CCD']
 		datarel = hdu[0].header['DATA_REL']
 		aperture_observed_pixels = (hdu['APERTURE'].data & 1 != 0)
-
-		if (starid, sector, 'tpf', datarel) in exclude:
-			logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf, DATAREL=%d", starid, sector, datarel)
-			return empty_table
+		cadence = int(np.round(hdu[1].header['TIMEDEL']*86400))
 
 		if camera in cameras and ccd in ccds:
+			# Check of the target has been explicitly excluded:
+			if (starid, sector, 'tpf', datarel) in exclude:
+				logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf, DATAREL=%d", starid, sector, datarel)
+				return empty_table
+
 			# Load the corresponding catalog:
 			catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 			if len(catalog_file) != 1:
@@ -257,6 +263,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 					'sector': sector,
 					'camera': camera,
 					'ccd': ccd,
+					'cadence': cadence,
 					'datasource': 'tpf',
 					'tmag': row['tmag'],
 					'cbv_area': cbv_area,
@@ -302,6 +309,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 							'sector': sector,
 							'camera': camera,
 							'ccd': ccd,
+							'cadence': cadence,
 							'datasource': 'tpf:' + str(starid),
 							'tmag': row['tmag'],
 							'cbv_area': cbv_area,
@@ -317,12 +325,12 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 	# TODO: Could we avoid fixed-size strings in datasource column?
 	return Table(
 		rows=cat_tmp,
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 #--------------------------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
+def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrite=False,
 	find_secondary_targets=True, output_file=None):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
@@ -334,6 +342,8 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		input_folder (str, optional): Input folder to create TODO list for.
 			If ``None``, the input directory in the environment variable
 			``TESSPHOT_INPUT`` is used.
+		sectors (iterable of int, optional): TESS Sector. If ``None``,
+			all sectors will be included.
 		cameras (iterable of int, optional): TESS camera number (1-4). If ``None``,
 			all cameras will be included.
 		ccds (iterable of int, optional): TESS CCD number (1-4). If ``None``,
@@ -363,6 +373,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
+	sectors = to_tuple(sectors)
 	cameras = to_tuple(cameras, (1,2,3,4))
 	ccds = to_tuple(ccds, (1,2,3,4))
 
@@ -396,30 +407,45 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
-	sectors = set()
-
-	# Load list of all Target Pixel files in the directory:
-	tpf_files = find_tpf_files(input_folder)
-	logger.info("Number of TPF files: %d", len(tpf_files))
-
-	# TODO: Could we change this so we don't have to parse the filename?
-	regex_tpf = re.compile(r'-s(\d+)[-_]')
-	for fname in tpf_files:
-		m = regex_tpf.search(os.path.basename(fname))
-		sectors.add(int(m.group(1)))
 
 	# Find list of all HDF5 files:
-	hdf_files = find_hdf5_files(input_folder, camera=cameras, ccd=ccds)
+	hdf_files = find_hdf5_files(input_folder, sector=sectors, camera=cameras, ccd=ccds)
 	logger.info("Number of HDF5 files: %d", len(hdf_files))
 
-	# TODO: Could we change this so we don't have to parse the filename?
-	regex_hdf = re.compile(r'^sector(\d+)_camera(\d)_ccd(\d)\.hdf5$')
-	for fname in hdf_files:
-		m = regex_hdf.match(os.path.basename(fname))
-		sectors.add(int(m.group(1)))
+	# Don't filter on the camera and ccd here, even if they are provided,
+	# since this would mean opening the files to read the headers, and we
+	# are going to do that anyway later on, so might as well wait and only
+	# do that once:
+	#tpf_files = find_tpf_files(input_folder, sector=sectors)
+
+	# If the sectors are not provided, we have to find them from the files
+	# that were found in scanning the input directory:
+	if sectors is None:
+		sectors = set()
+
+		# Load list of all Target Pixel files in the directory:
+		tpf_files = find_tpf_files(input_folder)
+
+		# TODO: Could we change this so we don't have to parse the filename?
+		regex_tpf = re.compile(r'-s(\d+)[-_]')
+		for fname in tpf_files:
+			m = regex_tpf.search(os.path.basename(fname))
+			sectors.add(int(m.group(1)))
+
+		# TODO: Could we change this so we don't have to parse the filename?
+		regex_hdf = re.compile(r'^sector(\d+)_camera(\d)_ccd(\d)\.hdf5$')
+		for fname in hdf_files:
+			m = regex_hdf.match(os.path.basename(fname))
+			sectors.add(int(m.group(1)))
+	else:
+		tpf_files = []
+		for sector in sectors:
+			tpf_files.extend(find_tpf_files(input_folder, sector=sector))
+
+	logger.info("Number of TPF files: %d", len(tpf_files))
 
 	# Make sure that catalog files are available in the input directory.
 	# If they are not already, they will be downloaded from the cache:
@@ -510,36 +536,40 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 	# Remove duplicates!
 	logger.info("Removing duplicate entries...")
-	_, idx = np.unique(cat[('starid', 'sector', 'camera', 'ccd', 'datasource')], return_index=True, axis=0)
+	_, idx = np.unique(cat[('starid', 'sector', 'camera', 'ccd', 'datasource', 'cadence')], return_index=True, axis=0)
 	cat = cat[np.sort(idx)]
 
 	# If the target is present in more than one TPF file, pick the one
 	# where the target is the furthest from the edge of the image
 	# and discard the target in all the other TPFs:
 	if find_secondary_targets:
-		# Add an index column to the table for later use:
-		cat.add_column(Column(name='priority', data=np.arange(len(cat))))
+		indx_secondary = [row['datasource'].strip().startswith('tpf:') for row in cat]
+		for cadence in np.unique(cat[indx_secondary]['cadence']):
+			# Add an index column to the table for later use:
+			cat.add_column(Column(name='priority', data=np.arange(len(cat))))
 
-		# Create index that will only find secondary targets:
-		indx = [row['datasource'].strip().startswith('tpf:') for row in cat]
+			# Create index that will only find secondary targets in this cadence:
+			indx = [row['datasource'].strip().startswith('tpf:') for row in cat]
+			indx &= (cat['cadence'] == cadence)
 
-		# Group the table on the starids and find groups with more than 1 target:
-		# Equivalent to the SQL code "GROUP BY starid HAVING COUNT(*) > 1"
-		remove_indx = []
-		for g in cat[indx].group_by('starid').groups:
-			if len(g) > 1:
-				# Find the target farthest from the edge and mark the rest
-				# for removal:
-				logger.debug(g)
-				im = np.argmax(g['edge_dist'])
-				ir = np.ones(len(g), dtype='bool')
-				ir[im] = False
-				remove_indx += list(g[ir]['priority'])
+			# Group the table on the starids and find groups with more than 1 target:
+			# Equivalent to the SQL code "GROUP BY starid HAVING COUNT(*) > 1"
+			remove_indx = []
+			for g in cat[indx].group_by('starid').groups:
+				if len(g) > 1:
+					# Find the target farthest from the edge and mark the rest
+					# for removal:
+					logger.debug(g)
+					im = np.argmax(g['edge_dist'])
+					ir = np.ones(len(g), dtype='bool')
+					ir[im] = False
+					remove_indx += list(g[ir]['priority'])
 
-		# Remove the list of duplicate secondary targets:
-		logger.info("Removing %d secondary targets as duplicates.", len(remove_indx))
-		logger.debug(remove_indx)
-		cat.remove_rows(remove_indx)
+			# Remove the list of duplicate secondary targets:
+			logger.info("Removing %d secondary targets as duplicates from %ds cadence.", len(remove_indx), cadence)
+			logger.debug(remove_indx)
+			cat.remove_rows(remove_indx)
+			cat.remove_column('priority')
 
 	# Load file with specific method settings and create lookup-table of them:
 	methods_file = os.path.join(os.path.dirname(__file__), 'data', 'todolist-methods.dat')
@@ -570,6 +600,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			datasource TEXT NOT NULL DEFAULT 'ffi',
 			camera INTEGER NOT NULL,
 			ccd INTEGER NOT NULL,
+			cadence INTEGER NOT NULL,
 			method TEXT DEFAULT NULL,
 			tmag REAL,
 			status INTEGER DEFAULT NULL,
@@ -585,12 +616,13 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 				method = 'halo'
 
 			# Add target to TODO-list:
-			cursor.execute("INSERT INTO todolist (priority,starid,sector,camera,ccd,datasource,tmag,cbv_area,method) VALUES (?,?,?,?,?,?,?,?,?);", (
+			cursor.execute("INSERT INTO todolist (priority,starid,sector,camera,ccd,cadence,datasource,tmag,cbv_area,method) VALUES (?,?,?,?,?,?,?,?,?,?);", (
 				pri+1,
 				int(row['starid']),
 				int(row['sector']),
 				int(row['camera']),
 				int(row['ccd']),
+				int(row['cadence']),
 				row['datasource'].strip(),
 				float(row['tmag']),
 				int(row['cbv_area']),
@@ -598,7 +630,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			))
 
 		conn.commit()
-		cursor.execute("CREATE UNIQUE INDEX unique_target_idx ON todolist (starid, datasource, sector, camera, ccd);")
+		cursor.execute("CREATE UNIQUE INDEX unique_target_idx ON todolist (starid, datasource, sector, camera, ccd, cadence);")
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
