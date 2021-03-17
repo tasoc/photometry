@@ -10,15 +10,16 @@ import os.path
 import subprocess
 import re
 from datetime import datetime
-import matplotlib.pyplot as plt
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+if os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) not in sys.path:
+	sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from photometry.spice import TESS_SPICE
+from photometry.plots import plt, plots_interactive
 
 if __name__ == '__main__':
 	# Switch back to interactive plotting backend:
 	# Importing photometry currently changes the backend to Agg, which is non-interactive.
-	plt.switch_backend('Qt5Agg')
+	plots_interactive()
 
 	# List of sectors from tess.mit.edu:
 	# TODO: Are these actually in UTC?

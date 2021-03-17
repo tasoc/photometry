@@ -457,7 +457,7 @@ def test_taskmanager_skip_targets_secondary2(PRIVATE_TODO_FILE):
 		result['worker_wait_time'] = 2.0
 		result['method_used'] = 'aperture'
 		result['details'] = {
-			'skip_targets': [999999999] # Tmag = 2.216
+			'skip_targets': [999999999]
 		}
 		print(result)
 		tm.save_result(result)

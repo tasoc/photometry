@@ -15,7 +15,7 @@ import numpy as np
 from astropy.table import Table
 import halophot
 from halophot.halo_tools import do_lc
-from ..plots import plt, plot_image, save_figure
+from ..plots import matplotlib, plt, plot_image, save_figure
 from .. import BasePhotometry, STATUS
 from ..quality import TESSQualityFlags
 from ..utilities import mag2flux, LoggerWriter
@@ -228,13 +228,16 @@ class HaloPhotometry(BasePhotometry):
 		# Plotting:
 		if self.plot:
 			logger.info('Plotting weight map')
-			norm = np.size(weightmap_dict['weightmap'][0])
 			for k, wm in enumerate(weightmap_dict['weightmap']):
-				im = np.log10(wm*norm)
+				# Create normalization for plot:
+				wm[~pixel_mask] = np.NaN
+				vlim = np.nanmax(np.abs(wm))
+				norm = matplotlib.colors.SymLogNorm(linthresh=0.1*vlim, vmin=-vlim, vmax=vlim, base=10)
+				# Create plot:
 				fig, ax = plt.subplots()
-				plot_image(im, ax=ax, scale='linear', title='TV-min Weightmap', cmap='seismic',
-					cbar='right', vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), clabel=None)
-				save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)), fig=fig)
+				plot_image(wm, ax=ax, scale=norm, title='TV-min Weightmap', cmap='bwr',
+					cbar='right', clabel='Weights')
+				save_figure(os.path.join(self.plot_folder, f'{self.starid:d}_weightmap_{k+1:d}'), fig=fig)
 				plt.close(fig)
 
 		# Add additional headers specific to this method:

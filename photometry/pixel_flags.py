@@ -38,6 +38,7 @@ def pixel_manual_exclude(img, hdr):
 		time = 0.5*(hdr['TSTART'] + hdr['TSTOP'])
 		cadenceno = hdr.get('FFIINDEX', np.inf)
 	else:
+		is_tess = False
 		time = np.NaN
 		cadenceno = np.inf
 

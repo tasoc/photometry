@@ -22,7 +22,8 @@ from astropy.table import Table, vstack, Column
 from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from timeit import default_timer
-from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance, to_tuple
+from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance,
+	to_tuple, load_settings)
 from .catalog import catalog_sqlite_search_footprint, download_catalogs
 
 #--------------------------------------------------------------------------------------------------
@@ -106,7 +107,7 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 	return EdgeDistOuter
 
 #--------------------------------------------------------------------------------------------------
-def _ffi_todo(hdf5_file, exclude=[]):
+def _ffi_todo(hdf5_file, exclude=[], faint_limit=15.0):
 
 	logger = logging.getLogger(__name__)
 
@@ -150,7 +151,7 @@ def _ffi_todo(hdf5_file, exclude=[]):
 			raise Exception(f"Settings not found in catalog (SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d})")
 
 		# Find all the stars in the catalog brigher than a certain limit:
-		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < 15 ORDER BY tmag;")
+		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < ? ORDER BY tmag;", [faint_limit])
 		for row in cursor.fetchall():
 			logger.debug("%011d - %.3f", row['starid'], row['tmag'])
 
@@ -202,7 +203,7 @@ def _ffi_todo(hdf5_file, exclude=[]):
 
 #--------------------------------------------------------------------------------------------------
 def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
-	find_secondary_targets=True, exclude=[]):
+	find_secondary_targets=True, exclude=[], faint_limit=15.0):
 
 	logger = logging.getLogger(__name__)
 
@@ -277,7 +278,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 						wcs = WCS(header=hdu[2].header, relax=True)
 					footprint = wcs.calc_footprint(center=False)
 
-					secondary_targets = catalog_sqlite_search_footprint(cursor, footprint, constraints=f'starid != {starid:d} AND tmag < 15', buffer_size=2)
+					secondary_targets = catalog_sqlite_search_footprint(cursor, footprint, constraints=f'starid != {starid:d} AND tmag < {faint_limit:f}', buffer_size=2)
 					for row in secondary_targets:
 						# Calculate the position of this star on the CCD using the WCS:
 						ra_dec = np.atleast_2d([row['ra'], row['decl']])
@@ -390,6 +391,10 @@ def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrit
 			logger.info("TODO file already exists")
 			return
 
+	# Settings:
+	settings = load_settings()
+	faint_limit = settings.getfloat('todolist', 'faint_limit', fallback=15.0)
+
 	# Number of threads available for parallel processing:
 	threads_max = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
 
@@ -465,7 +470,8 @@ def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrit
 			cameras=cameras,
 			ccds=ccds,
 			find_secondary_targets=find_secondary_targets,
-			exclude=exclude)
+			exclude=exclude,
+			faint_limit=faint_limit)
 
 		for cat2 in m(_tpf_todo_wrapper, tpf_files):
 			cat = vstack([cat, cat2], join_type='exact')
@@ -502,7 +508,9 @@ def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrit
 		else:
 			m = map
 
-		_ffi_todo_wrapper = functools.partial(_ffi_todo, exclude=exclude)
+		_ffi_todo_wrapper = functools.partial(_ffi_todo,
+			exclude=exclude,
+			faint_limit=faint_limit)
 
 		tic = default_timer()
 		ccds_done = 0
