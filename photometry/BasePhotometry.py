@@ -29,7 +29,7 @@ from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale,
-	find_nearest, ListHandler, load_settings)
+	find_nearest, ListHandler, load_settings, load_sector_settings)
 from .catalog import catalog_sqlite_search_footprint
 from .psf import PSF
 from .plots import plot_image, plt, save_figure
@@ -118,7 +118,7 @@ class BasePhotometry(object):
 			cadence (int, optional): Not used for ``datasource='ffi'``.
 			cache (str): Optional values are ``'none'``, ``'full'``
 				or ``'basic'`` (Default).
-			version (int): Data release number to be added to headers. Default=5.
+			version (int): Data release number to be added to headers. Default=6.
 
 		Raises:
 			Exception: If starid could not be found in catalog.
@@ -230,7 +230,9 @@ class BasePhotometry(object):
 				hdr = dict(self.hdf['images'].attrs)
 				attrs['header'] = hdr
 				attrs['data_rel'] = hdr['DATA_REL'] # Data release number
-				attrs['cadence'] = hdr.get('CADENCE', 1800)
+				attrs['cadence'] = hdr.get('CADENCE')
+				if attrs['cadence'] is None:
+					attrs['cadence'] = load_sector_settings(self.sector)['ffi_cadence']
 
 				# Start filling out the basic vectors:
 				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')

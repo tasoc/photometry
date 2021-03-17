@@ -23,7 +23,7 @@ from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from timeit import default_timer
 from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance,
-	to_tuple, load_settings)
+	to_tuple, load_settings, load_sector_settings)
 from .catalog import catalog_sqlite_search_footprint, download_catalogs
 
 #--------------------------------------------------------------------------------------------------
@@ -118,7 +118,9 @@ def _ffi_todo(hdf5_file, exclude=[], faint_limit=15.0):
 		sector = int(hdf['images'].attrs['SECTOR'])
 		camera = int(hdf['images'].attrs['CAMERA'])
 		ccd = int(hdf['images'].attrs['CCD'])
-		cadence = int(hdf['images'].attrs.get('CADENCE', 1800))
+		cadence = int(hdf['images'].attrs.get('CADENCE', -1))
+		if cadence == -1:
+			cadence = load_sector_settings(sector)['ffi_cadence']
 		datarel = int(hdf['images'].attrs['DATA_REL'])
 		if isinstance(hdf['wcs'], h5py.Group):
 			refindx = hdf['wcs'].attrs['ref_frame']
