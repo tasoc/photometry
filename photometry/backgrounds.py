@@ -178,7 +178,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			# We are working in logarithmic units since the mode estimator seems to
 			# work better in that case.
 			pix = img[~mask].flatten()
-			zeropoint = np.min(pix) + 1.0 # Make sure all values are non-negative
+			zeropoint = -np.min(pix) + 1.0 # Make sure all values are non-negative
 			logpix = np.log10(pix + zeropoint)
 
 			s2, _, _ = binned_statistic(
