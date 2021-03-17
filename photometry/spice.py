@@ -19,7 +19,7 @@ import hashlib
 from .utilities import download_parallel
 
 #--------------------------------------------------------------------------------------------------
-class InadequateSpiceException(Exception):
+class InadequateSpiceError(Exception):
 	pass
 
 #--------------------------------------------------------------------------------------------------
@@ -431,7 +431,7 @@ class TESS_SPICE(object):
 			positions, _ = spiceypy.spkpos(of, times, 'J2000', 'NONE', relative_to)
 			positions = np.atleast_2d(positions)
 		except spiceypy.utils.exceptions.SpiceSPKINSUFFDATA:
-			raise InadequateSpiceException("Inadequate SPICE kernels available")
+			raise InadequateSpiceError("Inadequate SPICE kernels available")
 
 		return positions
 
@@ -490,7 +490,7 @@ class TESS_SPICE(object):
 			pos_vel, _ = spiceypy.spkezr(of, times, 'J2000', 'NONE', relative_to)
 			pos_vel = np.asarray(pos_vel)
 		except spiceypy.utils.exceptions.SpiceSPKINSUFFDATA:
-			raise InadequateSpiceException("Inadequate SPICE kernels available")
+			raise InadequateSpiceError("Inadequate SPICE kernels available")
 
 		return pos_vel
 

@@ -322,7 +322,7 @@ class BasePhotometry(object):
 			elif len(fname) == 0:
 				raise FileNotFoundError("Target Pixel File not found")
 			elif len(fname) > 1:
-				raise OSError("Multiple Target Pixel Files found matching pattern")
+				raise FileNotFoundError("Multiple Target Pixel Files found matching pattern")
 
 			# Open the FITS file:
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
@@ -410,7 +410,7 @@ class BasePhotometry(object):
 			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
 			target = cursor.fetchone()
 			if target is None:
-				raise Exception("Star could not be found in catalog: {0:d}".format(self.starid))
+				raise RuntimeError(f"Star could not be found in catalog: {self.starid:d}")
 			self.target = dict(target) # Dictionary of all main target properties.
 			cursor.execute("SELECT sector,reference_time,ticver FROM settings LIMIT 1;")
 			target = cursor.fetchone()
@@ -1336,15 +1336,15 @@ class BasePhotometry(object):
 
 		# Check that the status has been changed:
 		if self._status == STATUS.UNKNOWN:
-			raise Exception("STATUS was not set by do_photometry")
+			raise ValueError("STATUS was not set by do_photometry")
 
 		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
 			# Simple check that entire lightcurve is not NaN:
 			if allnan(self.lightcurve['flux']):
-				raise Exception("Final lightcurve fluxes are all NaNs")
+				raise ValueError("Final lightcurve fluxes are all NaNs")
 			if allnan(self.lightcurve['flux_err']):
-				raise Exception("Final lightcurve errors are all NaNs")
+				raise ValueError("Final lightcurve errors are all NaNs")
 
 			# Pick out the part of the lightcurve that has a good quality
 			# and only use this subset to calculate the diagnostic metrics:

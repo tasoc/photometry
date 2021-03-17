@@ -438,10 +438,10 @@ def test_sqlite_drop_column(factory, foreign_keys):
 
 		# Attempting to drop a column associated with an index should
 		# cause an Exception:
-		with pytest.raises(Exception):
+		with pytest.raises(RuntimeError):
 			u.sqlite_drop_column(conn, 'tbl', 'col_c')
 
-		with pytest.raises(Exception):
+		with pytest.raises(RuntimeError):
 			u.sqlite_drop_column(conn, 'tbl', 'col_e')
 
 #--------------------------------------------------------------------------------------------------

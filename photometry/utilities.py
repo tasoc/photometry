@@ -635,7 +635,7 @@ def download_file(url, destination, desc=None, timeout=60,
 					pbar.update(len(block))
 
 		if os.path.getsize(destination) != total_size:
-			raise Exception("File not downloaded correctly")
+			raise RuntimeError("File not downloaded correctly")
 
 	except: # noqa: E722, pragma: no cover
 		logger.exception("Could not download file")
@@ -693,7 +693,7 @@ def download_parallel(urls, workers=4, timeout=60, showprogress=None):
 				errors.append(url[0])
 
 	if errors:
-		raise Exception("Errors encountered during download of the following URLs:\n%s" % '\n'.join(errors))
+		raise RuntimeError("Errors encountered during download of the following URLs:\n%s" % '\n'.join(errors))
 
 #--------------------------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):
@@ -799,10 +799,10 @@ def sqlite_drop_column(conn, table, col):
 	for sql in index_sql:
 		m = regex_index.match(sql)
 		if not m:
-			raise Exception("COULD NOT UNDERSTAND SQL") # pragma: no cover
+			raise RuntimeError("COULD NOT UNDERSTAND SQL") # pragma: no cover
 		index_columns = [i.strip() for i in m.group(3).split(',')]
 		if col in index_columns:
-			raise Exception("Column is used in INDEX %s." % m.group(2))
+			raise RuntimeError("Column is used in INDEX %s." % m.group(2))
 
 	# Store the current foreign_key setting:
 	cursor.execute("PRAGMA foreign_keys;")

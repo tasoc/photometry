@@ -210,7 +210,7 @@ class ImageMovementKernel(object):
 
 		# Check that reference image was actually given:
 		if self.image_ref is None:
-			raise Exception("Reference image not defined")
+			raise RuntimeError("Reference image not defined")
 
 		# Define the motion model
 		if self.warpmode == 'euclidian':

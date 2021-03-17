@@ -50,7 +50,7 @@ def test_basephotometry_invalid_input(SHARED_INPUT_DIR):
 		assert str(e.value) == "SECTOR, CAMERA and CCD keywords must be provided for FFI targets."
 
 		# Test target not in the catalog:
-		with pytest.raises(Exception) as e:
+		with pytest.raises(RuntimeError) as e:
 			with BasePhotometry(0, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', **DUMMY_KWARG):
 				pass
 		assert str(e.value) == "Star could not be found in catalog: 0"

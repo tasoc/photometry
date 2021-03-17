@@ -128,7 +128,7 @@ def main():
 					else: # pragma: no cover
 						# This should never happen, but just to
 						# make sure we don't run into an infinite loop:
-						raise Exception("Master received an unknown tag: '{0}'".format(tag))
+						raise RuntimeError(f"Master received an unknown tag: '{tag}'")
 
 				tm.logger.info("Master finishing")
 
@@ -186,7 +186,7 @@ def main():
 				else: # pragma: no cover
 					# This should never happen, but just to
 					# make sure we don't run into an infinite loop:
-					raise Exception("Worker received an unknown tag: '{0}'".format(tag))
+					raise RuntimeError(f"Worker received an unknown tag: '{tag}'")
 
 		except: # noqa: E722, pragma: no cover
 			logger.exception("Something failed in worker")

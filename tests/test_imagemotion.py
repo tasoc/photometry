@@ -39,7 +39,7 @@ def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 		assert len(imk) == 0, "Kernel should be an empty array for 'unchanged'"
 	else:
 		# Trying to calculate kernel with no reference image should give error:
-		with pytest.raises(Exception) as e:
+		with pytest.raises(RuntimeError) as e:
 			ImageMovementKernel(image_ref=None, warpmode=warpmode).calc_kernel(img)
 		assert str(e.value) == "Reference image not defined"
 

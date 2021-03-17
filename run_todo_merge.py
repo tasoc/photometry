@@ -73,7 +73,7 @@ if __name__ == '__main__':
 		cursor.execute("SELECT COUNT(*) FROM original.todolist;")
 		count_table2 = cursor.fetchone()[0]
 		if count_table1 != count_table2:
-			raise Exception("The two TODO-files are incompatible")
+			raise RuntimeError("The two TODO-files are incompatible")
 		# Columns that should be the same:
 		cursor.execute("""SELECT COUNT(*) FROM main.todolist t1 LEFT JOIN original.todolist t2 ON t1.priority=t2.priority WHERE
 			t2.priority IS NULL
@@ -84,7 +84,7 @@ if __name__ == '__main__':
 			OR t1.cbv_area != t2.cbv_area
 		;""")
 		if cursor.fetchone()[0] != 0:
-			raise Exception("The two TODO-files are incompatible")
+			raise RuntimeError("The two TODO-files are incompatible")
 
 		# TODO: Create list of priorities where corrections should be re-run.
 		# This is if the method has changed, or the status have changed:
@@ -128,7 +128,7 @@ if __name__ == '__main__':
 						cursor.execute("DROP TABLE %s;" % tbl)
 						conn.commit()
 					else:
-						raise Exception("bla bla bla: %s" % tbl)
+						raise RuntimeError("bla bla bla: %s" % tbl)
 
 		# Using temporary directory to dump the needed tables
 		# to raw SQL file and insert them into the combined SQLite file afterwards:

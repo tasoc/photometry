@@ -15,7 +15,7 @@ import h5py
 from tempfile import TemporaryDirectory
 import conftest # noqa: F401
 from photometry import AperturePhotometry
-from photometry.spice import TESS_SPICE, InadequateSpiceException
+from photometry.spice import TESS_SPICE, InadequateSpiceError
 from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_motion
 from photometry.plots import plt, plots_interactive
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
@@ -64,15 +64,15 @@ def test_position_velocity():
 		# We should fail with a timestamp that are outside the TESS SPICE coverage:
 		# The timestamp used here is well before TESS was launched
 		time_nocoverage = 1000 + 2457000
-		with pytest.raises(InadequateSpiceException) as e:
+		with pytest.raises(InadequateSpiceError) as e:
 			knl.position(time_nocoverage)
 		assert str(e.value) == 'Inadequate SPICE kernels available'
 
-		with pytest.raises(InadequateSpiceException) as e:
+		with pytest.raises(InadequateSpiceError) as e:
 			knl.velocity(time_nocoverage)
 		assert str(e.value) == 'Inadequate SPICE kernels available'
 
-		with pytest.raises(InadequateSpiceException) as e:
+		with pytest.raises(InadequateSpiceError) as e:
 			knl.position_velocity(time_nocoverage)
 		assert str(e.value) == 'Inadequate SPICE kernels available'
 

@@ -150,7 +150,7 @@ def _ffi_todo(hdf5_file, exclude=[], faint_limit=15.0):
 		cursor.execute("SELECT * FROM settings WHERE sector=? AND camera=? AND ccd=? LIMIT 1;", (sector, camera, ccd))
 		settings = cursor.fetchone()
 		if settings is None:
-			raise Exception(f"Settings not found in catalog (SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d})")
+			raise RuntimeError(f"Settings not found in catalog (SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d})")
 
 		# Find all the stars in the catalog brigher than a certain limit:
 		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < ? ORDER BY tmag;", [faint_limit])

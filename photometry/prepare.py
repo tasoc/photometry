@@ -211,7 +211,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
 			row = cursor.fetchone()
 			if row is None:
-				raise OSError("Settings could not be loaded from catalog")
+				raise RuntimeError("Settings could not be loaded from catalog")
 			#sector = row['sector']
 			sector_reference_time = row['reference_time']
 			cursor.close()
@@ -395,7 +395,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						offset = first_cadenceno - first_time/timedelt
 						cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
 					elif is_tess:
-						raise Exception("Could not determine CADENCENO for TESS data")
+						raise RuntimeError("Could not determine CADENCENO for TESS data")
 					else:
 						cadenceno[k] = k+1
 
