@@ -586,7 +586,7 @@ def find_nearest(array, value):
 
 #--------------------------------------------------------------------------------------------------
 def download_file(url, destination, desc=None, timeout=60,
-	position_holders=None, position_lock=None):
+	position_holders=None, position_lock=None, showprogress=None):
 	"""
 	Download file from URL and place into specified destination.
 
@@ -595,6 +595,8 @@ def download_file(url, destination, desc=None, timeout=60,
 		destination (str): Path where to save file.
 		desc (str, optional): Description to write next to progress-bar.
 		timeout (float): Time to wait for server response in seconds. Default=60.
+		showprogress (bool): Force showing the progress bar. If ``None``, the
+			progressbar is shown based on the logging level and output type.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -608,6 +610,8 @@ def download_file(url, destination, desc=None, timeout=60,
 		'disable': None if logger.isEnabledFor(logging.INFO) else True,
 		'desc': desc
 	}
+	if showprogress is not None:
+		tqdm_settings['disable'] = not showprogress
 
 	if position_holders is not None:
 		tqdm_settings['leave'] = False
@@ -647,7 +651,7 @@ def download_file(url, destination, desc=None, timeout=60,
 			position_lock.release()
 
 #--------------------------------------------------------------------------------------------------
-def download_parallel(urls, workers=4, timeout=60):
+def download_parallel(urls, workers=4, timeout=60, showprogress=None):
 	"""
 	Download several files in parallel using multiple threads.
 
@@ -663,7 +667,7 @@ def download_parallel(urls, workers=4, timeout=60):
 
 	# Don't overcomplicate things for a singe file:
 	if len(urls) == 1:
-		download_file(urls[0][0], urls[0][1], timeout=timeout)
+		download_file(urls[0][0], urls[0][1], timeout=timeout, showprogress=showprogress)
 		return
 
 	workers = min(workers, len(urls))
@@ -673,6 +677,7 @@ def download_parallel(urls, workers=4, timeout=60):
 	def _wrapper(arg):
 		download_file(arg[0], arg[1],
 			timeout=timeout,
+			showprogress=showprogress,
 			position_holders=position_holders,
 			position_lock=plock)
 

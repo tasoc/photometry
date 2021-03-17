@@ -119,36 +119,5 @@ def test_make_todolist_sector1(SHARED_INPUT_DIR):
 		todo_file_valid(tmpfile.name + '.sqlite', sector=1, camera=3, ccd=2)
 
 #--------------------------------------------------------------------------------------------------
-def test_make_todolist_sector27(SHARED_INPUT_DIR):
-	with tempfile.NamedTemporaryFile() as tmpfile:
-		# Run make_todo and save output to temp-file:
-		todolist.make_todo(SHARED_INPUT_DIR, sectors=27, cameras=4, ccds=1, output_file=tmpfile.name)
-
-		tmpfile.flush()
-		assert os.path.isfile(tmpfile.name + '.sqlite'), "TODO-file was not created"
-		todo_file_valid(tmpfile.name + '.sqlite', sector=27, camera=4, ccd=1)
-
-#--------------------------------------------------------------------------------------------------
-def test_make_todolist_cli(PRIVATE_INPUT_DIR):
-
-	# Path to the TODO-file:
-	todofile = os.path.join(PRIVATE_INPUT_DIR, 'todo.sqlite')
-
-	# Delete existing todo-file:
-	os.remove(todofile)
-	assert not os.path.exists(todofile), "TODO-file was not removed correctly"
-
-	# Run make_todo CLI script:
-	out, err, exitcode = capture_cli('run_make_todo.py', params=['--sector=1', '--camera=3', '--ccd=2', PRIVATE_INPUT_DIR])
-
-	assert exitcode == 0
-	assert '- ERROR -' not in out
-	assert '- ERROR -' not in err
-	assert '- INFO - TODO done.' in err
-
-	assert os.path.isfile(todofile), "TODO-file was not created"
-	todo_file_valid(todofile, sector=1, camera=3, ccd=2)
-
-#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	pytest.main([__file__])
