@@ -11,7 +11,7 @@ import tempfile
 import sqlite3
 import contextlib
 #import itertools
-from conftest import capture_cli
+import conftest # noqa: F401
 from photometry import todolist
 
 #--------------------------------------------------------------------------------------------------
@@ -107,6 +107,7 @@ def test_make_todolist_invalid_folder():
 	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 	with pytest.raises(NotADirectoryError) as e:
 		todolist.make_todo(os.path.join(INPUT_DIR, 'does', 'not', 'exist'))
+	assert str(e.value) == "The given path does not exist or is not a directory"
 
 #--------------------------------------------------------------------------------------------------
 def test_make_todolist_sector1(SHARED_INPUT_DIR):
