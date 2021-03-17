@@ -20,9 +20,15 @@ from .pixel_flags import pixel_manual_exclude
 def _reduce_mode(x):
 	if len(x) == 0:
 		return np.NaN
-	x = np.asarray(x, dtype=np.float64)
+	x = np.asarray(x, dtype='float64')
 	kde = KDE(x)
-	kde.fit(gridsize=2000)
+	try:
+		kde.fit(gridsize=2000)
+	except RuntimeError as err:
+		# This happens when all points in x have the same value
+		if str(err).startswith('Selected KDE bandwidth is 0.'):
+			return np.median(x)
+		raise
 	return kde.support[np.argmax(kde.density)]
 
 #--------------------------------------------------------------------------------------------------
@@ -141,7 +147,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			(4, 4): [-14.629676, 2111.341670],
 		}.get((camera, ccd))
 		if xycen is None:
-			raise ValueError(f"Invalid CAMERA or CCD in header: CAMERA={camera:s}, CCD={ccd:s}")
+			raise ValueError(f"Invalid CAMERA or CCD in header: CAMERA={camera}, CCD={ccd}")
 
 		# Create radial coordinates:
 		# Note that these are in "real" coordinates like the ones in the WCS,
