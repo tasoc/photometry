@@ -177,9 +177,13 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			# Evaluate the background estimator in radial rings:
 			# We are working in logarithmic units since the mode estimator seems to
 			# work better in that case.
+			pix = img[~mask].flatten()
+			zeropoint = np.min(pix) + 1.0 # Make sure all values are non-negative
+			logpix = np.log10(pix + zeropoint)
+
 			s2, _, _ = binned_statistic(
 				r[~mask].flatten(),
-				np.log10(img[~mask].flatten()),
+				logpix,
 				statistic=stat,
 				bins=bins
 			)
@@ -194,7 +198,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			if Ngood >= 3: # The required number of points for qubic spline
 				try:
 					intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], k=3, ext=3)
-					img_bkg_radial = 10**intp(r)
+					img_bkg_radial = 10**intp(r) - zeropoint
 				except ValueError:
 					logger.exception("Background interpolation failed (N=%d).", Ngood)
 					img_bkg_radial = 0
