@@ -1,7 +1,7 @@
 {
-    "sectors": {
-        "-14": {"sector": -14, "reference_time": 2458613.287916667, "ffi_cadence": 1800},
-        "0": {"sector": 0, "reference_time": 2457840.5, "ffi_cadence": 1800},
+	"sectors": {
+		"-14": {"sector": -14, "reference_time": 2458613.287916667, "ffi_cadence": 1800},
+		"0": {"sector": 0, "reference_time": 2457840.5, "ffi_cadence": 1800},
 		"1": {"sector": 1, "reference_time": 2458351.5, "ffi_cadence": 1800},
 		"2": {"sector": 2, "reference_time": 2458367.5, "ffi_cadence": 1800},
 		"3": {"sector": 3, "reference_time": 2458389.067361, "ffi_cadence": 1800},
@@ -37,5 +37,5 @@
 		"33": {"sector": 33, "reference_time": 2459207.816652, "ffi_cadence": 600},
 		"34": {"sector": 34, "reference_time": 2459235.014569, "ffi_cadence": 600},
 		"35": {"sector": 35, "reference_time": 2459261.337485, "ffi_cadence": 600}
-    }
+	}
 }
