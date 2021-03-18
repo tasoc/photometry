@@ -16,6 +16,7 @@ import os.path
 import glob
 import contextlib
 import warnings
+import enum
 from copy import deepcopy
 from astropy._erfa.core import ErfaWarning
 from astropy.io import fits
@@ -24,7 +25,6 @@ from astropy import units
 import astropy.coordinates as coord
 from astropy.time import Time
 from astropy.wcs import WCS, FITSFixedWarning
-import enum
 from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
@@ -40,11 +40,8 @@ from . import fixes
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
-warnings.filterwarnings('ignore', category=FITSFixedWarning, module="astropy")
 
 __version__ = get_version()
-
-__docformat__ = 'restructuredtext'
 
 hdf5_cache = {}
 
@@ -256,7 +253,9 @@ class BasePhotometry(object):
 				else:
 					hdr_string = self.hdf['wcs'][0]
 				if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
-				self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
+				with warnings.catch_warnings():
+					warnings.filterwarnings('ignore', category=FITSFixedWarning)
+					self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
 				attrs['wcs'] = self.wcs
 
 				# Get shape of sumimage from hdf5 file:
@@ -347,7 +346,9 @@ class BasePhotometry(object):
 			self.lightcurve['quality'] = Column(self.tpf['PIXELS'].data['QUALITY'], description='Quality flags', dtype='int32')
 
 			# World Coordinate System solution:
-			self.wcs = WCS(header=self.tpf['APERTURE'].header, relax=True)
+			with warnings.catch_warnings():
+				warnings.filterwarnings('ignore', category=FITSFixedWarning)
+				self.wcs = WCS(header=self.tpf['APERTURE'].header, relax=True)
 
 			# Get the positions of the stamp from the FITS header:
 			self._max_stamp = (
@@ -407,7 +408,7 @@ class BasePhotometry(object):
 		with contextlib.closing(sqlite3.connect(self.catalog_file)) as conn:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.cursor()
-			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
+			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid=?;", [self.starid])
 			target = cursor.fetchone()
 			if target is None:
 				raise RuntimeError(f"Star could not be found in catalog: {self.starid:d}")
@@ -1465,7 +1466,7 @@ class BasePhotometry(object):
 		hdu.header['TELESCOP'] = ('TESS', 'telescope')
 		hdu.header['INSTRUME'] = ('TESS Photometer', 'detector type')
 		hdu.header['FILTER'] = ('TESS', 'Photometric bandpass filter')
-		hdu.header['OBJECT'] = ("TIC {0:d}".format(self.starid), 'string version of TICID')
+		hdu.header['OBJECT'] = (f"TIC {self.starid:d}", 'string version of TICID')
 		hdu.header['TICID'] = (self.starid, 'unique TESS target identifier')
 		hdu.header['CAMERA'] = (self.camera, 'Camera number')
 		hdu.header['CCD'] = (self.ccd, 'CCD number')
