@@ -5,11 +5,13 @@ name: Tests
 on:
   push:
     branches: [master, devel]
+    tags: 'v*'  # Push events to matching v*, i.e. v1.0, v20.15.10
   pull_request:
     branches: [master, devel]
+  schedule:
+    - cron: '0 6 1 * *'  # once a month in the morning
 
 jobs:
-
   # Run unit tests on Linux, OSX and Windows
   pytest:
     strategy:
