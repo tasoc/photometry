@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Wrapper around `astropy.nddata.CCDData` that allows for normal math.
@@ -41,3 +41,11 @@ class CalibImage(CCDData):
 		self.data[index] = value.data
 		self.uncertainty.array[index] = value.uncertainty.array
 		#self.mask[index] = value.mask
+
+	@property
+	def rows(self):
+		return self.meta['index_rows']
+
+	@property
+	def cols(self):
+		return self.meta['index_columns']

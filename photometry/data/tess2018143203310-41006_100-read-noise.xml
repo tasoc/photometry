@@ -1,3 +1,67 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:e867633aafaac94f63eb023a7f54fd63315b11e19a8dbc987fa436f1e8b82a1d
-size 5566
+<?xml version="1.0" encoding="UTF-8"?>
+<ns1:readNoiseModel dataSetId="41006" readNoiseModelId="100" startTjd="1262.35717897" xmlns:ns1="http://tess.mit.edu/read-noise-model">
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="A" readNoiseDNPerRead="1.92"/>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="B" readNoiseDNPerRead="1.48"/>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="C" readNoiseDNPerRead="1.43"/>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="D" readNoiseDNPerRead="1.92"/>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="A" readNoiseDNPerRead="1.94"/>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="B" readNoiseDNPerRead="1.44"/>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="C" readNoiseDNPerRead="1.44"/>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="D" readNoiseDNPerRead="1.84"/>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="A" readNoiseDNPerRead="1.87"/>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="B" readNoiseDNPerRead="1.4"/>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="C" readNoiseDNPerRead="1.45"/>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="D" readNoiseDNPerRead="1.94"/>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="A" readNoiseDNPerRead="1.88"/>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="B" readNoiseDNPerRead="1.43"/>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="C" readNoiseDNPerRead="1.4"/>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="D" readNoiseDNPerRead="1.77"/>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="A" readNoiseDNPerRead="1.91"/>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="B" readNoiseDNPerRead="1.51"/>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="C" readNoiseDNPerRead="1.51"/>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="D" readNoiseDNPerRead="1.88"/>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="A" readNoiseDNPerRead="1.93"/>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="B" readNoiseDNPerRead="1.47"/>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="C" readNoiseDNPerRead="1.44"/>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="D" readNoiseDNPerRead="1.81"/>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="A" readNoiseDNPerRead="1.87"/>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="B" readNoiseDNPerRead="1.45"/>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="C" readNoiseDNPerRead="1.47"/>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="D" readNoiseDNPerRead="1.9"/>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="A" readNoiseDNPerRead="2.0"/>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="B" readNoiseDNPerRead="1.42"/>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="C" readNoiseDNPerRead="1.39"/>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="D" readNoiseDNPerRead="1.82"/>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="A" readNoiseDNPerRead="1.92"/>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="B" readNoiseDNPerRead="1.49"/>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="C" readNoiseDNPerRead="1.48"/>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="D" readNoiseDNPerRead="1.92"/>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="A" readNoiseDNPerRead="1.89"/>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="B" readNoiseDNPerRead="1.44"/>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="C" readNoiseDNPerRead="1.43"/>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="D" readNoiseDNPerRead="1.78"/>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="A" readNoiseDNPerRead="1.94"/>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="B" readNoiseDNPerRead="1.49"/>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="C" readNoiseDNPerRead="1.46"/>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="D" readNoiseDNPerRead="1.92"/>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="A" readNoiseDNPerRead="2.0"/>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="B" readNoiseDNPerRead="1.44"/>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="C" readNoiseDNPerRead="1.43"/>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="D" readNoiseDNPerRead="1.85"/>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="A" readNoiseDNPerRead="1.91"/>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="B" readNoiseDNPerRead="1.49"/>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="C" readNoiseDNPerRead="1.45"/>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="D" readNoiseDNPerRead="1.9"/>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="A" readNoiseDNPerRead="1.95"/>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="B" readNoiseDNPerRead="1.4"/>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="C" readNoiseDNPerRead="1.42"/>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="D" readNoiseDNPerRead="1.83"/>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="A" readNoiseDNPerRead="1.89"/>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="B" readNoiseDNPerRead="1.43"/>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="C" readNoiseDNPerRead="1.49"/>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="D" readNoiseDNPerRead="1.92"/>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="A" readNoiseDNPerRead="1.96"/>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="B" readNoiseDNPerRead="1.45"/>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="C" readNoiseDNPerRead="1.42"/>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="D" readNoiseDNPerRead="1.82"/>
+</ns1:readNoiseModel>

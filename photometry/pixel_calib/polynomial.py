@@ -12,7 +12,7 @@ from numpy.polynomial.legendre import legval
 class polynomial():
 	def __init__(self, xmlpoly):
 
-		self.type = xmlpoly.get('type')
+		self.type = xmlpoly.get('type', 'standard')
 		self.offsetx = float(xmlpoly.get('offsetx', 0))
 		self.scalex = float(xmlpoly.get('scalex', 1))
 		self.originx = float(xmlpoly.get('originx', 0))
@@ -41,4 +41,4 @@ class polynomial():
 			raise NotImplementedError("Polynomial of type 'NotScaled' is not implemented yet.")
 
 		else:
-			raise NotImplementedError("Unknown polynomial type: '%s'", self.type)
+			raise ValueError("Unknown polynomial type: '%s'", self.type)

@@ -1,3 +1,1283 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:6d541202714859adbbb041d4094318dd033f09a517ad7888a4b67675d5a69b1c
-size 49140
+<?xml version="1.0" encoding="UTF-8"?>
+<ns1:linearityModel dataSetId="41006" linearityModelId="100" startTjd="1262.35718319" xmlns:ns1="http://tess.mit.edu/linearity-model">
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="A">
+    <linearityPoly maxDomain="43982.0" offsetx="0.0" order="2" originx="823.226" scalex="2.57322e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0374716"/>
+        <coeff value="0.0482595"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.0015e-06"/>
+        <covariance value="-4.2018e-06"/>
+        <covariance value="3.5001e-06"/>
+        <covariance value="-4.2018e-06"/>
+        <covariance value="2.741e-05"/>
+        <covariance value="-2.634e-05"/>
+        <covariance value="3.5001e-06"/>
+        <covariance value="-2.634e-05"/>
+        <covariance value="2.6949e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="B">
+    <linearityPoly maxDomain="40872.0" offsetx="0.0" order="2" originx="911.529" scalex="2.61974e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0321036"/>
+        <coeff value="0.0472505"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.012e-06"/>
+        <covariance value="-4.522e-06"/>
+        <covariance value="4.0228e-06"/>
+        <covariance value="-4.522e-06"/>
+        <covariance value="3.163e-05"/>
+        <covariance value="-3.2712e-05"/>
+        <covariance value="4.0228e-06"/>
+        <covariance value="-3.2712e-05"/>
+        <covariance value="3.6428e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="C">
+    <linearityPoly maxDomain="39022.0" offsetx="0.0" order="2" originx="861.398" scalex="2.57796e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0299381"/>
+        <coeff value="0.0410301"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.3152e-06"/>
+        <covariance value="-5.5504e-06"/>
+        <covariance value="4.6548e-06"/>
+        <covariance value="-5.5504e-06"/>
+        <covariance value="3.6505e-05"/>
+        <covariance value="-3.5428e-05"/>
+        <covariance value="4.6548e-06"/>
+        <covariance value="-3.5428e-05"/>
+        <covariance value="3.6788e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="D">
+    <linearityPoly maxDomain="42623.0" offsetx="0.0" order="2" originx="891.072" scalex="2.60366e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0359014"/>
+        <coeff value="0.0415674"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.5504e-06"/>
+        <covariance value="-6.6981e-06"/>
+        <covariance value="5.7635e-06"/>
+        <covariance value="-6.6981e-06"/>
+        <covariance value="4.5299e-05"/>
+        <covariance value="-4.5304e-05"/>
+        <covariance value="5.7635e-06"/>
+        <covariance value="-4.5304e-05"/>
+        <covariance value="4.8755e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="A">
+    <linearityPoly maxDomain="36567.0" offsetx="0.0" order="2" originx="1003.89" scalex="2.65022e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0413358"/>
+        <coeff value="0.0683761"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.5428e-06"/>
+        <covariance value="-7.4056e-06"/>
+        <covariance value="6.9913e-06"/>
+        <covariance value="-7.4056e-06"/>
+        <covariance value="5.5064e-05"/>
+        <covariance value="-5.9928e-05"/>
+        <covariance value="6.9913e-06"/>
+        <covariance value="-5.9928e-05"/>
+        <covariance value="6.9818e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="B">
+    <linearityPoly maxDomain="36314.0" offsetx="0.0" order="2" originx="1019.84" scalex="2.61363e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.031161"/>
+        <coeff value="0.0534969"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.6071e-06"/>
+        <covariance value="-7.7184e-06"/>
+        <covariance value="7.2906e-06"/>
+        <covariance value="-7.7184e-06"/>
+        <covariance value="5.7408e-05"/>
+        <covariance value="-6.2511e-05"/>
+        <covariance value="7.2906e-06"/>
+        <covariance value="-6.2511e-05"/>
+        <covariance value="7.2865e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="C">
+    <linearityPoly maxDomain="38719.0" offsetx="0.0" order="2" originx="893.095" scalex="2.60988e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0271916"/>
+        <coeff value="0.0394685"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.7387e-06"/>
+        <covariance value="-7.5093e-06"/>
+        <covariance value="6.4604e-06"/>
+        <covariance value="-7.5093e-06"/>
+        <covariance value="5.0739e-05"/>
+        <covariance value="-5.0729e-05"/>
+        <covariance value="6.4604e-06"/>
+        <covariance value="-5.0729e-05"/>
+        <covariance value="5.4571e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="D">
+    <linearityPoly maxDomain="37487.0" offsetx="0.0" order="2" originx="814.683" scalex="2.60189e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0377196"/>
+        <coeff value="0.0490083"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.4575e-06"/>
+        <covariance value="-6.1148e-06"/>
+        <covariance value="5.0936e-06"/>
+        <covariance value="-6.1148e-06"/>
+        <covariance value="3.9885e-05"/>
+        <covariance value="-3.8327e-05"/>
+        <covariance value="5.0936e-06"/>
+        <covariance value="-3.8327e-05"/>
+        <covariance value="3.9211e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="A">
+    <linearityPoly maxDomain="43155.0" offsetx="0.0" order="2" originx="919.8" scalex="2.59058e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0393967"/>
+        <coeff value="0.0525883"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.2843e-06"/>
+        <covariance value="-5.739e-06"/>
+        <covariance value="5.1057e-06"/>
+        <covariance value="-5.739e-06"/>
+        <covariance value="4.0161e-05"/>
+        <covariance value="-4.1541e-05"/>
+        <covariance value="5.1057e-06"/>
+        <covariance value="-4.1541e-05"/>
+        <covariance value="4.627e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="B">
+    <linearityPoly maxDomain="40716.0" offsetx="0.0" order="2" originx="976.537" scalex="2.57147e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0374545"/>
+        <coeff value="0.0528702"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.3955e-06"/>
+        <covariance value="-6.3718e-06"/>
+        <covariance value="5.7789e-06"/>
+        <covariance value="-6.3718e-06"/>
+        <covariance value="4.5495e-05"/>
+        <covariance value="-4.7911e-05"/>
+        <covariance value="5.7789e-06"/>
+        <covariance value="-4.7911e-05"/>
+        <covariance value="5.4294e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="C">
+    <linearityPoly maxDomain="39097.0" offsetx="0.0" order="2" originx="900.984" scalex="2.57727e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0389461"/>
+        <coeff value="0.045786"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.3393e-06"/>
+        <covariance value="-5.7865e-06"/>
+        <covariance value="4.9791e-06"/>
+        <covariance value="-5.7865e-06"/>
+        <covariance value="3.9133e-05"/>
+        <covariance value="-3.9135e-05"/>
+        <covariance value="4.9791e-06"/>
+        <covariance value="-3.9135e-05"/>
+        <covariance value="4.2112e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="D">
+    <linearityPoly maxDomain="42786.0" offsetx="0.0" order="2" originx="892.831" scalex="2.59371e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0454134"/>
+        <coeff value="0.0524089"/>
+      </coeffs>
+      <covariances>
+        <covariance value="9.2445e-07"/>
+        <covariance value="-3.9936e-06"/>
+        <covariance value="3.436e-06"/>
+        <covariance value="-3.9936e-06"/>
+        <covariance value="2.7011e-05"/>
+        <covariance value="-2.7012e-05"/>
+        <covariance value="3.436e-06"/>
+        <covariance value="-2.7012e-05"/>
+        <covariance value="2.9067e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="A">
+    <linearityPoly maxDomain="42913.0" offsetx="0.0" order="2" originx="981.681" scalex="2.6866e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0507134"/>
+        <coeff value="0.0562926"/>
+      </coeffs>
+      <covariances>
+        <covariance value="7.2199e-07"/>
+        <covariance value="-3.4716e-06"/>
+        <covariance value="3.2827e-06"/>
+        <covariance value="-3.4716e-06"/>
+        <covariance value="2.5889e-05"/>
+        <covariance value="-2.8231e-05"/>
+        <covariance value="3.2827e-06"/>
+        <covariance value="-2.8231e-05"/>
+        <covariance value="3.2962e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="B">
+    <linearityPoly maxDomain="40794.0" offsetx="0.0" order="2" originx="965.747" scalex="2.58883e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0446359"/>
+        <coeff value="0.0489371"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.1318e-06"/>
+        <covariance value="-5.1707e-06"/>
+        <covariance value="4.6917e-06"/>
+        <covariance value="-5.1707e-06"/>
+        <covariance value="3.6962e-05"/>
+        <covariance value="-3.895e-05"/>
+        <covariance value="4.6917e-06"/>
+        <covariance value="-3.895e-05"/>
+        <covariance value="4.4175e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="C">
+    <linearityPoly maxDomain="38947.0" offsetx="0.0" order="2" originx="775.707" scalex="2.60191e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0492108"/>
+        <coeff value="0.0501099"/>
+      </coeffs>
+      <covariances>
+        <covariance value="8.1275e-07"/>
+        <covariance value="-3.482e-06"/>
+        <covariance value="2.9619e-06"/>
+        <covariance value="-3.482e-06"/>
+        <covariance value="2.3189e-05"/>
+        <covariance value="-2.2735e-05"/>
+        <covariance value="2.9619e-06"/>
+        <covariance value="-2.2735e-05"/>
+        <covariance value="2.3686e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="D">
+    <linearityPoly maxDomain="43281.0" offsetx="0.0" order="2" originx="683.515" scalex="2.61775e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0486886"/>
+        <coeff value="0.0519709"/>
+      </coeffs>
+      <covariances>
+        <covariance value="8.3256e-07"/>
+        <covariance value="-3.6108e-06"/>
+        <covariance value="3.1494e-06"/>
+        <covariance value="-3.6108e-06"/>
+        <covariance value="2.4456e-05"/>
+        <covariance value="-2.47e-05"/>
+        <covariance value="3.1494e-06"/>
+        <covariance value="-2.47e-05"/>
+        <covariance value="2.6527e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="A">
+    <linearityPoly maxDomain="38920.0" offsetx="0.0" order="2" originx="914.283" scalex="2.58758e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0581077"/>
+        <coeff value="0.0606467"/>
+      </coeffs>
+      <covariances>
+        <covariance value="8.7688e-07"/>
+        <covariance value="-3.6441e-06"/>
+        <covariance value="3.1585e-06"/>
+        <covariance value="-3.6441e-06"/>
+        <covariance value="2.2888e-05"/>
+        <covariance value="-2.3116e-05"/>
+        <covariance value="3.1585e-06"/>
+        <covariance value="-2.3116e-05"/>
+        <covariance value="2.4997e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="B">
+    <linearityPoly maxDomain="37270.0" offsetx="0.0" order="2" originx="988.901" scalex="2.59669e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0439921"/>
+        <coeff value="0.0497028"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.1861e-06"/>
+        <covariance value="-4.9536e-06"/>
+        <covariance value="4.2791e-06"/>
+        <covariance value="-4.9536e-06"/>
+        <covariance value="3.1328e-05"/>
+        <covariance value="-3.1421e-05"/>
+        <covariance value="4.2791e-06"/>
+        <covariance value="-3.1421e-05"/>
+        <covariance value="3.3642e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="C">
+    <linearityPoly maxDomain="36655.0" offsetx="0.0" order="2" originx="952.948" scalex="2.61721e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0447996"/>
+        <coeff value="0.043987"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.0326e-06"/>
+        <covariance value="-4.2377e-06"/>
+        <covariance value="3.6151e-06"/>
+        <covariance value="-4.2377e-06"/>
+        <covariance value="2.6322e-05"/>
+        <covariance value="-2.6133e-05"/>
+        <covariance value="3.6151e-06"/>
+        <covariance value="-2.6133e-05"/>
+        <covariance value="2.7749e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="D">
+    <linearityPoly maxDomain="37858.0" offsetx="0.0" order="2" originx="969.021" scalex="2.57771e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0502004"/>
+        <coeff value="0.0565481"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.2267e-06"/>
+        <covariance value="-5.0321e-06"/>
+        <covariance value="4.2913e-06"/>
+        <covariance value="-5.0321e-06"/>
+        <covariance value="3.125e-05"/>
+        <covariance value="-3.1014e-05"/>
+        <covariance value="4.2913e-06"/>
+        <covariance value="-3.1014e-05"/>
+        <covariance value="3.2917e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="A">
+    <linearityPoly maxDomain="32887.0" offsetx="0.0" order="2" originx="1040.49" scalex="2.70836e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0332812"/>
+        <coeff value="0.0576825"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.2791e-06"/>
+        <covariance value="-5.4107e-06"/>
+        <covariance value="4.6676e-06"/>
+        <covariance value="-5.4107e-06"/>
+        <covariance value="3.4515e-05"/>
+        <covariance value="-3.4315e-05"/>
+        <covariance value="4.6676e-06"/>
+        <covariance value="-3.4315e-05"/>
+        <covariance value="3.6242e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="B">
+    <linearityPoly maxDomain="34389.0" offsetx="0.0" order="2" originx="1017.51" scalex="2.61238e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0369586"/>
+        <coeff value="0.0572305"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.9616e-06"/>
+        <covariance value="-8.4083e-06"/>
+        <covariance value="7.3945e-06"/>
+        <covariance value="-8.4083e-06"/>
+        <covariance value="5.4439e-05"/>
+        <covariance value="-5.5332e-05"/>
+        <covariance value="7.3945e-06"/>
+        <covariance value="-5.5332e-05"/>
+        <covariance value="5.984e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="C">
+    <linearityPoly maxDomain="33905.0" offsetx="0.0" order="2" originx="904.56" scalex="2.57524e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0421833"/>
+        <coeff value="0.0603724"/>
+      </coeffs>
+      <covariances>
+        <covariance value="9.0759e-07"/>
+        <covariance value="-3.6924e-06"/>
+        <covariance value="3.1471e-06"/>
+        <covariance value="-3.6924e-06"/>
+        <covariance value="2.2644e-05"/>
+        <covariance value="-2.2526e-05"/>
+        <covariance value="3.1471e-06"/>
+        <covariance value="-2.2526e-05"/>
+        <covariance value="2.4042e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="D">
+    <linearityPoly maxDomain="37878.0" offsetx="0.0" order="2" originx="840.23" scalex="2.57664e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0475555"/>
+        <coeff value="0.0606503"/>
+      </coeffs>
+      <covariances>
+        <covariance value="7.3971e-07"/>
+        <covariance value="-2.9248e-06"/>
+        <covariance value="2.4339e-06"/>
+        <covariance value="-2.9248e-06"/>
+        <covariance value="1.7268e-05"/>
+        <covariance value="-1.6773e-05"/>
+        <covariance value="2.4339e-06"/>
+        <covariance value="-1.6773e-05"/>
+        <covariance value="1.751e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="A">
+    <linearityPoly maxDomain="42306.0" offsetx="0.0" order="2" originx="916.877" scalex="2.58508e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0502073"/>
+        <coeff value="0.0547111"/>
+      </coeffs>
+      <covariances>
+        <covariance value="9.9069e-07"/>
+        <covariance value="-4.117e-06"/>
+        <covariance value="3.5683e-06"/>
+        <covariance value="-4.117e-06"/>
+        <covariance value="2.5848e-05"/>
+        <covariance value="-2.6102e-05"/>
+        <covariance value="3.5683e-06"/>
+        <covariance value="-2.6102e-05"/>
+        <covariance value="2.8222e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="B">
+    <linearityPoly maxDomain="39217.0" offsetx="0.0" order="2" originx="975.949" scalex="2.56261e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0452499"/>
+        <coeff value="0.05191"/>
+      </coeffs>
+      <covariances>
+        <covariance value="8.304e-07"/>
+        <covariance value="-3.4069e-06"/>
+        <covariance value="2.9056e-06"/>
+        <covariance value="-3.4069e-06"/>
+        <covariance value="2.1156e-05"/>
+        <covariance value="-2.0997e-05"/>
+        <covariance value="2.9056e-06"/>
+        <covariance value="-2.0997e-05"/>
+        <covariance value="2.2287e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="C">
+    <linearityPoly maxDomain="38729.0" offsetx="0.0" order="2" originx="892.329" scalex="2.5947e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0495091"/>
+        <coeff value="0.0542741"/>
+      </coeffs>
+      <covariances>
+        <covariance value="6.7561e-07"/>
+        <covariance value="-2.7505e-06"/>
+        <covariance value="2.3456e-06"/>
+        <covariance value="-2.7505e-06"/>
+        <covariance value="1.6888e-05"/>
+        <covariance value="-1.6814e-05"/>
+        <covariance value="2.3456e-06"/>
+        <covariance value="-1.6814e-05"/>
+        <covariance value="1.7963e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="D">
+    <linearityPoly maxDomain="41038.0" offsetx="0.0" order="2" originx="917.551" scalex="2.58622e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0508815"/>
+        <coeff value="0.0561949"/>
+      </coeffs>
+      <covariances>
+        <covariance value="6.4148e-07"/>
+        <covariance value="-2.6655e-06"/>
+        <covariance value="2.3101e-06"/>
+        <covariance value="-2.6655e-06"/>
+        <covariance value="1.6735e-05"/>
+        <covariance value="-1.6898e-05"/>
+        <covariance value="2.3101e-06"/>
+        <covariance value="-1.6898e-05"/>
+        <covariance value="1.8269e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="A">
+    <linearityPoly maxDomain="37812.0" offsetx="0.0" order="2" originx="1008.83" scalex="2.60322e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0542148"/>
+        <coeff value="0.0518747"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.2034e-06"/>
+        <covariance value="-5.1639e-06"/>
+        <covariance value="4.5464e-06"/>
+        <covariance value="-5.1639e-06"/>
+        <covariance value="3.3518e-05"/>
+        <covariance value="-3.4124e-05"/>
+        <covariance value="4.5464e-06"/>
+        <covariance value="-3.4124e-05"/>
+        <covariance value="3.6977e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="B">
+    <linearityPoly maxDomain="34176.0" offsetx="0.0" order="2" originx="1013.74" scalex="2.59428e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0494182"/>
+        <coeff value="0.0509864"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.0274e-06"/>
+        <covariance value="-4.4079e-06"/>
+        <covariance value="3.8801e-06"/>
+        <covariance value="-4.4079e-06"/>
+        <covariance value="2.8597e-05"/>
+        <covariance value="-2.9105e-05"/>
+        <covariance value="3.8801e-06"/>
+        <covariance value="-2.9105e-05"/>
+        <covariance value="3.1527e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="C">
+    <linearityPoly maxDomain="34791.0" offsetx="0.0" order="2" originx="836.186" scalex="2.57109e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0563779"/>
+        <coeff value="0.0553216"/>
+      </coeffs>
+      <covariances>
+        <covariance value="4.771e-07"/>
+        <covariance value="-1.8879e-06"/>
+        <covariance value="1.5718e-06"/>
+        <covariance value="-1.8879e-06"/>
+        <covariance value="1.1158e-05"/>
+        <covariance value="-1.0845e-05"/>
+        <covariance value="1.5718e-06"/>
+        <covariance value="-1.0845e-05"/>
+        <covariance value="1.1331e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="D">
+    <linearityPoly maxDomain="38056.0" offsetx="0.0" order="2" originx="765.641" scalex="2.62769e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0565943"/>
+        <coeff value="0.0538907"/>
+      </coeffs>
+      <covariances>
+        <covariance value="4.1822e-07"/>
+        <covariance value="-1.6786e-06"/>
+        <covariance value="1.4187e-06"/>
+        <covariance value="-1.6786e-06"/>
+        <covariance value="9.9935e-06"/>
+        <covariance value="-9.8423e-06"/>
+        <covariance value="1.4187e-06"/>
+        <covariance value="-9.8423e-06"/>
+        <covariance value="1.0417e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="A">
+    <linearityPoly maxDomain="42593.0" offsetx="0.0" order="2" originx="871.101" scalex="2.65518e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0485704"/>
+        <coeff value="0.0507719"/>
+      </coeffs>
+      <covariances>
+        <covariance value="7.7742e-07"/>
+        <covariance value="-3.4169e-06"/>
+        <covariance value="3.1443e-06"/>
+        <covariance value="-3.4169e-06"/>
+        <covariance value="2.2923e-05"/>
+        <covariance value="-2.4794e-05"/>
+        <covariance value="3.1443e-06"/>
+        <covariance value="-2.4794e-05"/>
+        <covariance value="2.8978e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="B">
+    <linearityPoly maxDomain="39274.0" offsetx="0.0" order="2" originx="940.163" scalex="2.72475e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0480001"/>
+        <coeff value="0.0522887"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.1443e-06"/>
+        <covariance value="-5.1939e-06"/>
+        <covariance value="4.8627e-06"/>
+        <covariance value="-5.1939e-06"/>
+        <covariance value="3.6006e-05"/>
+        <covariance value="-3.9227e-05"/>
+        <covariance value="4.8627e-06"/>
+        <covariance value="-3.9227e-05"/>
+        <covariance value="4.5708e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="C">
+    <linearityPoly maxDomain="40357.0" offsetx="0.0" order="2" originx="897.272" scalex="2.57254e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0524578"/>
+        <coeff value="0.0547793"/>
+      </coeffs>
+      <covariances>
+        <covariance value="5.8894e-07"/>
+        <covariance value="-2.5889e-06"/>
+        <covariance value="2.3826e-06"/>
+        <covariance value="-2.5889e-06"/>
+        <covariance value="1.7373e-05"/>
+        <covariance value="-1.8792e-05"/>
+        <covariance value="2.3826e-06"/>
+        <covariance value="-1.8792e-05"/>
+        <covariance value="2.1964e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="D">
+    <linearityPoly maxDomain="41475.0" offsetx="0.0" order="2" originx="916.949" scalex="2.79272e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0485449"/>
+        <coeff value="0.0506356"/>
+      </coeffs>
+      <covariances>
+        <covariance value="5.9738e-07"/>
+        <covariance value="-2.7114e-06"/>
+        <covariance value="2.5388e-06"/>
+        <covariance value="-2.7114e-06"/>
+        <covariance value="1.8801e-05"/>
+        <covariance value="-2.0489e-05"/>
+        <covariance value="2.5388e-06"/>
+        <covariance value="-2.0489e-05"/>
+        <covariance value="2.3882e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="A">
+    <linearityPoly maxDomain="35853.0" offsetx="0.0" order="2" originx="983.104" scalex="2.61573e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0478297"/>
+        <coeff value="0.0641121"/>
+      </coeffs>
+      <covariances>
+        <covariance value="9.2642e-07"/>
+        <covariance value="-4.2006e-06"/>
+        <covariance value="3.9289e-06"/>
+        <covariance value="-4.2006e-06"/>
+        <covariance value="2.9087e-05"/>
+        <covariance value="-3.1656e-05"/>
+        <covariance value="3.9289e-06"/>
+        <covariance value="-3.1656e-05"/>
+        <covariance value="3.6842e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="B">
+    <linearityPoly maxDomain="35739.0" offsetx="0.0" order="2" originx="985.372" scalex="2.62336e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.034413"/>
+        <coeff value="0.0537814"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.6654e-06"/>
+        <covariance value="-7.5502e-06"/>
+        <covariance value="7.0608e-06"/>
+        <covariance value="-7.5502e-06"/>
+        <covariance value="5.2241e-05"/>
+        <covariance value="-5.6836e-05"/>
+        <covariance value="7.0608e-06"/>
+        <covariance value="-5.6836e-05"/>
+        <covariance value="6.6121e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="C">
+    <linearityPoly maxDomain="36161.0" offsetx="0.0" order="2" originx="840.47" scalex="2.6387e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0448661"/>
+        <coeff value="0.0600269"/>
+      </coeffs>
+      <covariances>
+        <covariance value="6.806e-07"/>
+        <covariance value="-2.8002e-06"/>
+        <covariance value="2.4195e-06"/>
+        <covariance value="-2.8002e-06"/>
+        <covariance value="1.7409e-05"/>
+        <covariance value="-1.7717e-05"/>
+        <covariance value="2.4195e-06"/>
+        <covariance value="-1.7717e-05"/>
+        <covariance value="1.9607e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="D">
+    <linearityPoly maxDomain="35013.0" offsetx="0.0" order="2" originx="768.779" scalex="2.6297e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0530794"/>
+        <coeff value="0.0639607"/>
+      </coeffs>
+      <covariances>
+        <covariance value="3.9091e-07"/>
+        <covariance value="-1.5735e-06"/>
+        <covariance value="1.318e-06"/>
+        <covariance value="-1.5735e-06"/>
+        <covariance value="9.3738e-06"/>
+        <covariance value="-9.1479e-06"/>
+        <covariance value="1.318e-06"/>
+        <covariance value="-9.1479e-06"/>
+        <covariance value="9.6606e-06"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="A">
+    <linearityPoly maxDomain="37958.0" offsetx="0.0" order="2" originx="874.064" scalex="2.65843e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0464842"/>
+        <coeff value="0.0612928"/>
+      </coeffs>
+      <covariances>
+        <covariance value="6.3746e-07"/>
+        <covariance value="-2.799e-06"/>
+        <covariance value="2.5734e-06"/>
+        <covariance value="-2.799e-06"/>
+        <covariance value="1.8754e-05"/>
+        <covariance value="-2.0263e-05"/>
+        <covariance value="2.5734e-06"/>
+        <covariance value="-2.0263e-05"/>
+        <covariance value="2.3654e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="B">
+    <linearityPoly maxDomain="38367.0" offsetx="0.0" order="2" originx="956.817" scalex="2.69553e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0368783"/>
+        <coeff value="0.0512449"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.2755e-06"/>
+        <covariance value="-5.7842e-06"/>
+        <covariance value="5.411e-06"/>
+        <covariance value="-5.7842e-06"/>
+        <covariance value="4.0036e-05"/>
+        <covariance value="-4.3574e-05"/>
+        <covariance value="5.411e-06"/>
+        <covariance value="-4.3574e-05"/>
+        <covariance value="5.0715e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="C">
+    <linearityPoly maxDomain="38602.0" offsetx="0.0" order="2" originx="858.373" scalex="2.58179e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.038546"/>
+        <coeff value="0.0531443"/>
+      </coeffs>
+      <covariances>
+        <covariance value="6.8268e-07"/>
+        <covariance value="-2.8089e-06"/>
+        <covariance value="2.4272e-06"/>
+        <covariance value="-2.8089e-06"/>
+        <covariance value="1.7462e-05"/>
+        <covariance value="-1.7773e-05"/>
+        <covariance value="2.4272e-06"/>
+        <covariance value="-1.7773e-05"/>
+        <covariance value="1.967e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="D">
+    <linearityPoly maxDomain="36313.0" offsetx="0.0" order="2" originx="874.34" scalex="2.65562e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0504402"/>
+        <coeff value="0.0637462"/>
+      </coeffs>
+      <covariances>
+        <covariance value="5.0181e-07"/>
+        <covariance value="-2.2037e-06"/>
+        <covariance value="2.0264e-06"/>
+        <covariance value="-2.2037e-06"/>
+        <covariance value="1.4771e-05"/>
+        <covariance value="-1.5963e-05"/>
+        <covariance value="2.0264e-06"/>
+        <covariance value="-1.5963e-05"/>
+        <covariance value="1.8638e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="A">
+    <linearityPoly maxDomain="35872.0" offsetx="0.0" order="2" originx="1014.94" scalex="2.8381e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0397823"/>
+        <coeff value="0.0471796"/>
+      </coeffs>
+      <covariances>
+        <covariance value="9.3274e-07"/>
+        <covariance value="-4.313e-06"/>
+        <covariance value="4.0172e-06"/>
+        <covariance value="-4.313e-06"/>
+        <covariance value="3.0137e-05"/>
+        <covariance value="-3.2223e-05"/>
+        <covariance value="4.0172e-06"/>
+        <covariance value="-3.2223e-05"/>
+        <covariance value="3.6506e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="B">
+    <linearityPoly maxDomain="38869.0" offsetx="0.0" order="2" originx="994.259" scalex="2.59052e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.03949"/>
+        <coeff value="0.0520631"/>
+      </coeffs>
+      <covariances>
+        <covariance value="8.4685e-07"/>
+        <covariance value="-3.8415e-06"/>
+        <covariance value="3.5946e-06"/>
+        <covariance value="-3.8415e-06"/>
+        <covariance value="2.6606e-05"/>
+        <covariance value="-2.8966e-05"/>
+        <covariance value="3.5946e-06"/>
+        <covariance value="-2.8966e-05"/>
+        <covariance value="3.3725e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="C">
+    <linearityPoly maxDomain="38111.0" offsetx="0.0" order="2" originx="813.502" scalex="2.59421e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0446166"/>
+        <coeff value="0.0497614"/>
+      </coeffs>
+      <covariances>
+        <covariance value="7.746e-07"/>
+        <covariance value="-3.1317e-06"/>
+        <covariance value="2.6466e-06"/>
+        <covariance value="-3.1317e-06"/>
+        <covariance value="1.8908e-05"/>
+        <covariance value="-1.872e-05"/>
+        <covariance value="2.6466e-06"/>
+        <covariance value="-1.872e-05"/>
+        <covariance value="2.0123e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="D">
+    <linearityPoly maxDomain="38438.0" offsetx="0.0" order="2" originx="722.269" scalex="2.578e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0535503"/>
+        <coeff value="0.0608501"/>
+      </coeffs>
+      <covariances>
+        <covariance value="3.8262e-07"/>
+        <covariance value="-1.5465e-06"/>
+        <covariance value="1.2924e-06"/>
+        <covariance value="-1.5465e-06"/>
+        <covariance value="9.1345e-06"/>
+        <covariance value="-8.819e-06"/>
+        <covariance value="1.2924e-06"/>
+        <covariance value="-8.819e-06"/>
+        <covariance value="9.157e-06"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="A">
+    <linearityPoly maxDomain="36307.0" offsetx="0.0" order="2" originx="878.855" scalex="2.57391e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0496681"/>
+        <coeff value="0.0562381"/>
+      </coeffs>
+      <covariances>
+        <covariance value="8.7303e-07"/>
+        <covariance value="-3.8169e-06"/>
+        <covariance value="3.2746e-06"/>
+        <covariance value="-3.8169e-06"/>
+        <covariance value="2.7039e-05"/>
+        <covariance value="-2.6946e-05"/>
+        <covariance value="3.2746e-06"/>
+        <covariance value="-2.6946e-05"/>
+        <covariance value="2.8671e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="B">
+    <linearityPoly maxDomain="35249.0" offsetx="0.0" order="2" originx="952.233" scalex="2.78096e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0255654"/>
+        <coeff value="0.0330627"/>
+      </coeffs>
+      <covariances>
+        <covariance value="2.0185e-06"/>
+        <covariance value="-9.1598e-06"/>
+        <covariance value="8.0235e-06"/>
+        <covariance value="-9.1598e-06"/>
+        <covariance value="6.6379e-05"/>
+        <covariance value="-6.7076e-05"/>
+        <covariance value="8.0235e-06"/>
+        <covariance value="-6.7076e-05"/>
+        <covariance value="7.2423e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="C">
+    <linearityPoly maxDomain="34717.0" offsetx="0.0" order="2" originx="901.636" scalex="2.56824e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0501126"/>
+        <coeff value="0.0565003"/>
+      </coeffs>
+      <covariances>
+        <covariance value="7.3943e-07"/>
+        <covariance value="-3.3266e-06"/>
+        <covariance value="2.9267e-06"/>
+        <covariance value="-3.3266e-06"/>
+        <covariance value="2.4206e-05"/>
+        <covariance value="-2.4719e-05"/>
+        <covariance value="2.9267e-06"/>
+        <covariance value="-2.4719e-05"/>
+        <covariance value="2.6981e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="D">
+    <linearityPoly maxDomain="36150.0" offsetx="0.0" order="2" originx="913.999" scalex="2.60466e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0448427"/>
+        <coeff value="0.0563647"/>
+      </coeffs>
+      <covariances>
+        <covariance value="9.644e-07"/>
+        <covariance value="-4.6218e-06"/>
+        <covariance value="4.2822e-06"/>
+        <covariance value="-4.6218e-06"/>
+        <covariance value="3.547e-05"/>
+        <covariance value="-3.7903e-05"/>
+        <covariance value="4.2822e-06"/>
+        <covariance value="-3.7903e-05"/>
+        <covariance value="4.3164e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="A">
+    <linearityPoly maxDomain="36838.0" offsetx="0.0" order="2" originx="977.398" scalex="2.69813e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0398781"/>
+        <coeff value="0.0423855"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.1437e-06"/>
+        <covariance value="-5.1913e-06"/>
+        <covariance value="4.5478e-06"/>
+        <covariance value="-5.1913e-06"/>
+        <covariance value="3.7658e-05"/>
+        <covariance value="-3.8063e-05"/>
+        <covariance value="4.5478e-06"/>
+        <covariance value="-3.8063e-05"/>
+        <covariance value="4.1111e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="B">
+    <linearityPoly maxDomain="35217.0" offsetx="0.0" order="2" originx="967.056" scalex="2.73665e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0313423"/>
+        <coeff value="0.0379962"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.3305e-06"/>
+        <covariance value="-6.0378e-06"/>
+        <covariance value="5.2888e-06"/>
+        <covariance value="-6.0378e-06"/>
+        <covariance value="4.3764e-05"/>
+        <covariance value="-4.4226e-05"/>
+        <covariance value="5.2888e-06"/>
+        <covariance value="-4.4226e-05"/>
+        <covariance value="4.7754e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="C">
+    <linearityPoly maxDomain="35803.0" offsetx="0.0" order="2" originx="847.83" scalex="2.61286e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0394111"/>
+        <coeff value="0.04401"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.1015e-06"/>
+        <covariance value="-4.7458e-06"/>
+        <covariance value="4.0184e-06"/>
+        <covariance value="-4.7458e-06"/>
+        <covariance value="3.3112e-05"/>
+        <covariance value="-3.2544e-05"/>
+        <covariance value="4.0184e-06"/>
+        <covariance value="-3.2544e-05"/>
+        <covariance value="3.4082e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="D">
+    <linearityPoly maxDomain="38559.0" offsetx="0.0" order="2" originx="749.26" scalex="2.70169e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0432061"/>
+        <coeff value="0.049153"/>
+      </coeffs>
+      <covariances>
+        <covariance value="6.3599e-07"/>
+        <covariance value="-2.7907e-06"/>
+        <covariance value="2.419e-06"/>
+        <covariance value="-2.7907e-06"/>
+        <covariance value="1.9849e-05"/>
+        <covariance value="-1.9978e-05"/>
+        <covariance value="2.419e-06"/>
+        <covariance value="-1.9978e-05"/>
+        <covariance value="2.1366e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="A">
+    <linearityPoly maxDomain="39452.0" offsetx="0.0" order="2" originx="836.514" scalex="2.63179e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0545174"/>
+        <coeff value="0.0522306"/>
+      </coeffs>
+      <covariances>
+        <covariance value="7.222e-07"/>
+        <covariance value="-3.1117e-06"/>
+        <covariance value="2.6349e-06"/>
+        <covariance value="-3.1117e-06"/>
+        <covariance value="2.1736e-05"/>
+        <covariance value="-2.1371e-05"/>
+        <covariance value="2.6349e-06"/>
+        <covariance value="-2.1371e-05"/>
+        <covariance value="2.2391e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="B">
+    <linearityPoly maxDomain="37979.0" offsetx="0.0" order="2" originx="918.289" scalex="2.58206e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.052097"/>
+        <coeff value="0.0530815"/>
+      </coeffs>
+      <covariances>
+        <covariance value="9.2151e-07"/>
+        <covariance value="-4.4211e-06"/>
+        <covariance value="4.0995e-06"/>
+        <covariance value="-4.4211e-06"/>
+        <covariance value="3.3985e-05"/>
+        <covariance value="-3.6347e-05"/>
+        <covariance value="4.0995e-06"/>
+        <covariance value="-3.6347e-05"/>
+        <covariance value="4.143e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="C">
+    <linearityPoly maxDomain="37955.0" offsetx="0.0" order="2" originx="819.441" scalex="2.57241e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0529934"/>
+        <coeff value="0.053071"/>
+      </coeffs>
+      <covariances>
+        <covariance value="6.2757e-07"/>
+        <covariance value="-2.7418e-06"/>
+        <covariance value="2.3568e-06"/>
+        <covariance value="-2.7418e-06"/>
+        <covariance value="1.9405e-05"/>
+        <covariance value="-1.9351e-05"/>
+        <covariance value="2.3568e-06"/>
+        <covariance value="-1.9351e-05"/>
+        <covariance value="2.052e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="D">
+    <linearityPoly maxDomain="40040.0" offsetx="0.0" order="2" originx="850.556" scalex="2.58999e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0552855"/>
+        <coeff value="0.0548873"/>
+      </coeffs>
+      <covariances>
+        <covariance value="4.5294e-07"/>
+        <covariance value="-1.9517e-06"/>
+        <covariance value="1.6526e-06"/>
+        <covariance value="-1.9517e-06"/>
+        <covariance value="1.3631e-05"/>
+        <covariance value="-1.3401e-05"/>
+        <covariance value="1.6526e-06"/>
+        <covariance value="-1.3401e-05"/>
+        <covariance value="1.4038e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="A">
+    <linearityPoly maxDomain="39084.0" offsetx="0.0" order="2" originx="984.241" scalex="2.68663e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0327376"/>
+        <coeff value="0.0366624"/>
+      </coeffs>
+      <covariances>
+        <covariance value="1.2301e-06"/>
+        <covariance value="-5.5824e-06"/>
+        <covariance value="4.8902e-06"/>
+        <covariance value="-5.5824e-06"/>
+        <covariance value="4.0478e-05"/>
+        <covariance value="-4.0911e-05"/>
+        <covariance value="4.8902e-06"/>
+        <covariance value="-4.0911e-05"/>
+        <covariance value="4.4183e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="B">
+    <linearityPoly maxDomain="38857.0" offsetx="0.0" order="2" originx="992.954" scalex="2.6579e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0354987"/>
+        <coeff value="0.0387493"/>
+      </coeffs>
+      <covariances>
+        <covariance value="2.0879e-06"/>
+        <covariance value="-9.4776e-06"/>
+        <covariance value="8.3033e-06"/>
+        <covariance value="-9.4776e-06"/>
+        <covariance value="6.8746e-05"/>
+        <covariance value="-6.9487e-05"/>
+        <covariance value="8.3033e-06"/>
+        <covariance value="-6.9487e-05"/>
+        <covariance value="7.5049e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="C">
+    <linearityPoly maxDomain="39238.0" offsetx="0.0" order="2" originx="800.128" scalex="2.64267e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0409345"/>
+        <coeff value="0.0463524"/>
+      </coeffs>
+      <covariances>
+        <covariance value="6.1337e-07"/>
+        <covariance value="-2.6788e-06"/>
+        <covariance value="2.3022e-06"/>
+        <covariance value="-2.6788e-06"/>
+        <covariance value="1.8941e-05"/>
+        <covariance value="-1.8883e-05"/>
+        <covariance value="2.3022e-06"/>
+        <covariance value="-1.8883e-05"/>
+        <covariance value="2.0017e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="D">
+    <linearityPoly maxDomain="40545.0" offsetx="0.0" order="2" originx="720.125" scalex="2.58413e-05" type="standard" xindex="0">
+      <coeffs>
+        <coeff value="1.0"/>
+        <coeff value="-0.0516081"/>
+        <coeff value="0.0553248"/>
+      </coeffs>
+      <covariances>
+        <covariance value="4.3707e-07"/>
+        <covariance value="-1.9936e-06"/>
+        <covariance value="1.8062e-06"/>
+        <covariance value="-1.9936e-06"/>
+        <covariance value="1.4773e-05"/>
+        <covariance value="-1.5573e-05"/>
+        <covariance value="1.8062e-06"/>
+        <covariance value="-1.5573e-05"/>
+        <covariance value="1.7447e-05"/>
+      </covariances>
+    </linearityPoly>
+  </channel>
+</ns1:linearityModel>

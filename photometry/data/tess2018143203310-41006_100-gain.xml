@@ -1,3 +1,67 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:4ed3aaa5653d3b343b8324c0be47ce404dd37bb52109111b4e2560a1aac54931
-size 5544
+<?xml version="1.0" encoding="UTF-8"?>
+<ns1:gainModel dataSetId="41006" gainModelId="100" startTjd="1262.3571924" xmlns:ns1="http://tess.mit.edu/gain-model">
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="A" gainElectronsPerDN="5.22"/>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="B" gainElectronsPerDN="5.21"/>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="C" gainElectronsPerDN="5.21"/>
+  <channel cameraNumber="1" ccdNumber="1" ccdOutput="D" gainElectronsPerDN="5.26"/>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="A" gainElectronsPerDN="5.27"/>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="B" gainElectronsPerDN="5.14"/>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="C" gainElectronsPerDN="5.11"/>
+  <channel cameraNumber="1" ccdNumber="2" ccdOutput="D" gainElectronsPerDN="5.19"/>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="A" gainElectronsPerDN="5.32"/>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="B" gainElectronsPerDN="5.23"/>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="C" gainElectronsPerDN="5.2"/>
+  <channel cameraNumber="1" ccdNumber="3" ccdOutput="D" gainElectronsPerDN="5.24"/>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="A" gainElectronsPerDN="5.35"/>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="B" gainElectronsPerDN="5.22"/>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="C" gainElectronsPerDN="5.22"/>
+  <channel cameraNumber="1" ccdNumber="4" ccdOutput="D" gainElectronsPerDN="5.18"/>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="A" gainElectronsPerDN="5.31"/>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="B" gainElectronsPerDN="5.24"/>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="C" gainElectronsPerDN="5.23"/>
+  <channel cameraNumber="2" ccdNumber="1" ccdOutput="D" gainElectronsPerDN="5.24"/>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="A" gainElectronsPerDN="5.22"/>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="B" gainElectronsPerDN="5.28"/>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="C" gainElectronsPerDN="5.32"/>
+  <channel cameraNumber="2" ccdNumber="2" ccdOutput="D" gainElectronsPerDN="5.22"/>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="A" gainElectronsPerDN="5.28"/>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="B" gainElectronsPerDN="5.26"/>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="C" gainElectronsPerDN="5.25"/>
+  <channel cameraNumber="2" ccdNumber="3" ccdOutput="D" gainElectronsPerDN="5.21"/>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="A" gainElectronsPerDN="5.33"/>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="B" gainElectronsPerDN="5.2"/>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="C" gainElectronsPerDN="5.3"/>
+  <channel cameraNumber="2" ccdNumber="4" ccdOutput="D" gainElectronsPerDN="5.23"/>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="A" gainElectronsPerDN="5.25"/>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="B" gainElectronsPerDN="5.24"/>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="C" gainElectronsPerDN="5.24"/>
+  <channel cameraNumber="3" ccdNumber="1" ccdOutput="D" gainElectronsPerDN="5.24"/>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="A" gainElectronsPerDN="5.36"/>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="B" gainElectronsPerDN="5.26"/>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="C" gainElectronsPerDN="5.36"/>
+  <channel cameraNumber="3" ccdNumber="2" ccdOutput="D" gainElectronsPerDN="5.29"/>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="A" gainElectronsPerDN="5.26"/>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="B" gainElectronsPerDN="5.16"/>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="C" gainElectronsPerDN="5.22"/>
+  <channel cameraNumber="3" ccdNumber="3" ccdOutput="D" gainElectronsPerDN="5.24"/>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="A" gainElectronsPerDN="5.17"/>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="B" gainElectronsPerDN="5.15"/>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="C" gainElectronsPerDN="5.15"/>
+  <channel cameraNumber="3" ccdNumber="4" ccdOutput="D" gainElectronsPerDN="5.17"/>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="A" gainElectronsPerDN="5.26"/>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="B" gainElectronsPerDN="5.18"/>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="C" gainElectronsPerDN="5.2"/>
+  <channel cameraNumber="4" ccdNumber="1" ccdOutput="D" gainElectronsPerDN="5.2"/>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="A" gainElectronsPerDN="5.25"/>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="B" gainElectronsPerDN="5.17"/>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="C" gainElectronsPerDN="5.12"/>
+  <channel cameraNumber="4" ccdNumber="2" ccdOutput="D" gainElectronsPerDN="5.2"/>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="A" gainElectronsPerDN="5.3"/>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="B" gainElectronsPerDN="5.18"/>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="C" gainElectronsPerDN="5.27"/>
+  <channel cameraNumber="4" ccdNumber="3" ccdOutput="D" gainElectronsPerDN="5.19"/>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="A" gainElectronsPerDN="5.24"/>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="B" gainElectronsPerDN="5.12"/>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="C" gainElectronsPerDN="5.16"/>
+  <channel cameraNumber="4" ccdNumber="4" ccdOutput="D" gainElectronsPerDN="5.16"/>
+</ns1:gainModel>

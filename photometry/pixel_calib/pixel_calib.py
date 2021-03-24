@@ -1,9 +1,10 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Pixel-level calibrations.
 
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+.. codeauthor:: Timothy R. White
 """
 
 import os
@@ -13,7 +14,7 @@ from astropy.nddata import StdDevUncertainty
 import astropy.units as u
 import xml.etree.ElementTree as ET
 import logging
-from bottleneck import replace, nanmedian
+from bottleneck import replace, nanmedian, nanmean
 from .CalibImage import CalibImage
 from .polynomial import polynomial
 from ..utilities import download_file
@@ -23,9 +24,13 @@ from ..plots import plt, plot_image
 class PixelCalibrator(object):
 
 	def __init__(self, camera=None, ccd=None):
-
-		assert camera in (1,2,3,4), "Invalid camera given"
-		assert ccd in (1,2,3,4), "Invalid camera given"
+		"""
+		"""
+		# Basic checks of input:
+		if camera not in (1,2,3,4):
+			raise ValueError("Invalid camera given")
+		if ccd not in (1,2,3,4):
+			raise ValueError("Invalid ccd given")
 
 		self.logger = logging.getLogger(__name__)
 		self.logger.info("Starting calibration module")
@@ -33,6 +38,7 @@ class PixelCalibrator(object):
 		self.camera = camera
 		self.ccd = ccd
 
+		# Directory where calibration files will be stored:
 		self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
 
 		# General settings for TESS data:
@@ -48,14 +54,21 @@ class PixelCalibrator(object):
 		self._linearity = None
 		self._undershoot = None
 
+	#----------------------------------------------------------------------------------------------
 	def __enter__(self, *args, **kwargs):
 		return self
 
+	#----------------------------------------------------------------------------------------------
 	def __exit__(self, *args, **kwargs):
-		pass
+		self.close()
 
+	#----------------------------------------------------------------------------------------------
 	def __repr__(self):
-		return "<PixelCalibrator(camera={0:d}, ccd={1:d})>".format(self.camera, self.ccd)
+		return f"<PixelCalibrator(camera={self.camera:d}, ccd={self.ccd:d})>"
+
+	#----------------------------------------------------------------------------------------------
+	def close(self):
+		pass
 
 	#----------------------------------------------------------------------------------------------
 	@property
@@ -64,15 +77,12 @@ class PixelCalibrator(object):
 		2D black image for current stamp.
 
 		Returns:
-			CalibImage: 2D array with image of 2D black for current stamp.
+			:class:`CalibImage`: 2D array with image of 2D black for current stamp.
 		"""
 		if self._twodblack is None:
 			# FITS file containing flat-field model:
 			blackfile = os.path.join(self.datadir, 'twodblack',
-			   'tess2018324-{camera:d}-{ccd:d}-2dblack.fits.gz'.format(
-					camera=self.camera,
-					ccd=self.ccd
-				))
+			   f'tess2018324-{self.camera:d}-{self.ccd:d}-2dblack.fits.gz')
 
 			if not os.path.isfile(blackfile):
 				url = 'https://tasoc.dk/pipeline/twodblack/' + os.path.basename(blackfile)
@@ -95,15 +105,12 @@ class PixelCalibrator(object):
 		Flatfield for current stamp.
 
 		Returns:
-			CalibImage: 2D array with image of flatfield for current stamp.
+			:class:`CalibImage`: 2D array with image of flatfield for current stamp.
 		"""
 		if self._flatfield is None:
 			# FITS file containing flat-field model:
 			flatfile = os.path.join(self.datadir, 'flatfield',
-			   'tess2018323-{camera:d}-{ccd:d}-flat.fits.gz'.format(
-					camera=self.camera,
-					ccd=self.ccd
-				))
+			   f'tess2018323-{self.camera:d}-{self.ccd:d}-flat.fits.gz')
 
 			if not os.path.isfile(flatfile):
 				url = 'https://tasoc.dk/pipeline/flatfield/' + os.path.basename(flatfile)
@@ -122,34 +129,26 @@ class PixelCalibrator(object):
 	#----------------------------------------------------------------------------------------------
 	def plot_flatfield(self):
 
-		fig = plt.figure()
-		ax = fig.add_subplot(111)
-		plot_image(self.flatfield.data, ax=ax, scale='linear', cmap='seismic', vmin=0.95, vmax=1.05, make_cbar=True)
+		fig, ax = plt.subplots()
+		plot_image(self.flatfield.data, ax=ax, scale='linear', cmap='seismic', vmin=0.95, vmax=1.05, cbar='right')
 
 	#----------------------------------------------------------------------------------------------
 	def plot_twodblack(self):
 
-		fig = plt.figure()
-		ax = fig.add_subplot(111)
-		plot_image(self.twodblack.data, ax=ax, scale='linear', make_cbar=True)
+		fig, ax = plt.subplots()
+		plot_image(self.twodblack.data, ax=ax, scale='linear', cbar='right')
 
 	#----------------------------------------------------------------------------------------------
 	@property
 	def readnoise(self):
 		"""CCD read-noise model."""
-
 		if self._readnoise is None:
 			self.logger.info("Loading read-noise model...")
 			readnoise_model = ET.parse(os.path.join(self.datadir, 'tess2018143203310-41006_100-read-noise.xml')).getroot()
 
 			self._readnoise = {}
 			for output in ('A', 'B', 'C', 'D'):
-				readnoise = readnoise_model.find("./channel[@cameraNumber='{camera:d}'][@ccdNumber='{ccd:d}'][@ccdOutput='{output}']".format(
-					camera=self.camera,
-					ccd=self.ccd,
-					output=output
-				)).get('readNoiseDNPerRead')
-
+				readnoise = readnoise_model.find(f"./channel[@cameraNumber='{self.camera:d}'][@ccdNumber='{self.ccd:d}'][@ccdOutput='{output:s}']").get('readNoiseDNPerRead')
 				self._readnoise[output] = float(readnoise) * u.electron
 
 		return self._readnoise
@@ -158,19 +157,13 @@ class PixelCalibrator(object):
 	@property
 	def gain(self):
 		"""CCD gain model."""
-
 		if self._gain is None:
 			self.logger.info("Loading gain model...")
 			gain_model = ET.parse(os.path.join(self.datadir, 'tess2018143203310-41006_100-gain.xml')).getroot()
 
 			self._gain = {}
 			for output in ('A', 'B', 'C', 'D'):
-				gain = gain_model.find("./channel[@cameraNumber='{camera:d}'][@ccdNumber='{ccd:d}'][@ccdOutput='{output}']".format(
-					camera=self.camera,
-					ccd=self.ccd,
-					output=output
-				)).get('gainElectronsPerDN')
-
+				gain = gain_model.find(f"./channel[@cameraNumber='{self.camera:d}'][@ccdNumber='{self.ccd:d}'][@ccdOutput='{output:s}']").get('gainElectronsPerDN')
 				self._gain[output] = float(gain) * u.photon/u.electron
 
 		return self._gain
@@ -179,7 +172,6 @@ class PixelCalibrator(object):
 	@property
 	def linearity(self):
 		"""CCD Linearity model."""
-
 		if self._linearity is None:
 			# Load the linearity models from XML files:
 			self.logger.info("Loading linearity model...")
@@ -187,11 +179,7 @@ class PixelCalibrator(object):
 
 			self._linearity = {}
 			for output in ('A', 'B', 'C', 'D'):
-				linpoly = linearity_model.find("./channel[@cameraNumber='{camera:d}'][@ccdNumber='{ccd:d}'][@ccdOutput='{output}']/linearityPoly".format(
-					camera=self.camera,
-					ccd=self.ccd,
-					output=output
-				))
+				linpoly = linearity_model.find(f"./channel[@cameraNumber='{self.camera:d}'][@ccdNumber='{self.ccd:d}'][@ccdOutput='{output:s}']/linearityPoly")
 				self._linearity[output] = polynomial(linpoly)
 
 		return self._linearity
@@ -200,7 +188,6 @@ class PixelCalibrator(object):
 	@property
 	def undershoot(self):
 		"""CCD undershoot model."""
-
 		if self._undershoot is None:
 			# Load the linearity models from XML files:
 			self.logger.info("Loading undershoot model...")
@@ -208,11 +195,7 @@ class PixelCalibrator(object):
 
 			self._undershoot = {}
 			for output in ('A', 'B', 'C', 'D'):
-				ushoot = undershoot_model.find("./channel[@cameraNumber='{camera:d}'][@ccdNumber='{ccd:d}'][@ccdOutput='{output}']".format(
-					camera=self.camera,
-					ccd=self.ccd,
-					output=output
-				)).get('undershoot')
+				ushoot = undershoot_model.find(f"./channel[@cameraNumber='{self.camera:d}'][@ccdNumber='{self.ccd:d}'][@ccdOutput='{output:s}']").get('undershoot')
 				self._undershoot[output] = float(ushoot)
 
 		return self._undershoot
@@ -220,9 +203,8 @@ class PixelCalibrator(object):
 	#----------------------------------------------------------------------------------------------
 	def apply_linearity_gain(self, img):
 		"""
-		CCD Linearity/gain correction.
+		Apply CCD Linearity/gain correction.
 		"""
-
 		self.logger.info("Doing gain/linearity correction...")
 
 		outputs = img.meta['aperture'] & (32 + 64 + 128 + 256)
@@ -305,17 +287,79 @@ class PixelCalibrator(object):
 
 		return img
 
-	#---------------------------------------------------------------------------------------------
-	def apply_twodblack(self, img):
-		"""2D black-level correction.
+	#----------------------------------------------------------------------------------------------
+	def apply_smear_tim(self, img, smrow, output, smear='alternate'):
 
-		TODO:
-			 - Correct collateral pixels as well.
+
+		# Origin and dimensions of the target pixel file relative to the smear data
+		if output == 'A':
+			sx1 = 44
+		if output == 'B':
+			sx1 = 556
+		if output == 'C':
+			sx1 = 1068
+		if output == 'D':
+			sx1 = 1580
+
+		x1 = self.hdu[2].header['CRVAL1P']-1-sx1
+		dx = self.hdu[2].header['NAXIS1']
+		dy = self.hdu[2].header['NAXIS2']
+
+		if smrow.shape[0] == 2: # TPF goes over two outputs
+			newsmrow = np.zeros((smrow.shape[1],10,1024))
+			newsmrow[:,:,:512] = smrow[0]
+			newsmrow[:,:,512] = smrow[1]
+			smrow = newsmrow
+		else:
+			smrow = smrow[0]
+
+		# Calculate the 'regular' smear correction
+		smcor = nanmedian(smrow, axis=1)
+
+		if smear == 'alternate':
+			# Find which rows are below the bleed column
+			medimg = nanmedian(img, axis=0)
+
+			maxrows = []
+			for col in np.arange(dx):
+				maxrows.append(np.argmax(medimg[:,col][medimg[:,col] < 1e5]))
+
+			maxrow = np.nanmin(maxrows) - 10 # 10 row buffer to (hopefully) ensure we're always below the bleed column
+
+			# Build a mask from the pixels with the lowest flux in each column
+			smmask = np.zeros((dy,dx), dtype='bool')
+			for col in np.arange(dx):
+				idx = medimg[:maxrow,col] < np.percentile(medimg[:maxrow,col],20)
+				smmask[:maxrow,col][idx] = True
+
+			# From the background pixels calculate a smear correction + background for each column as a function of time
+			smbkgd = nanmean(img.T[smmask.T].reshape(dx,int(np.sum(smmask)/dx),img.shape[0]),axis=1).T
+
+			# Estimate the background and remove it from the smear correction.
+			# Here we can use the median level for the regular smear correction
+			msk = (np.arange(smrow.shape[2]) < x1) | (np.arange(smrow.shape[2]) > x1 + dx)
+			bkgd = np.nanmin(smbkgd,axis=1) - nanmedian(smcor[:,msk], axis=1)
+			sm = smbkgd - np.tile(bkgd[:,np.newaxis], dx)
+
+		elif smear == 'standard':
+			sm = smcor[:,x1:x1+dx]
+
+		# Apply the new correction
+		img -= np.expand_dims(sm, axis=1)
+
+		return img
+
+	#----------------------------------------------------------------------------------------------
+	def apply_twodblack(self, img):
+		"""
+		Apply 2D black-level correction.
 		"""
 		self.logger.info("Doing 2D black correction...")
 
 		# Subtract fixed offset:
-		img -= int(img.meta['header']['FXDOFF']) * u.electron
+		fxdoff = img.meta['header'].get('FXDOFF', None)
+		if fxdoff is not None:
+			img -= int(fxdoff) * u.electron
 
 		# Add mean black level per outout:
 		outputs = img.meta['aperture'] & (32 + 64 + 128 + 256)
@@ -325,9 +369,75 @@ class PixelCalibrator(object):
 			img[indx] += float(img.meta['header']['MEANBLC' + output_name]) * u.electron
 
 		# Subtract 2D-black model:
-		return img - (img.meta['coadds'] * self.twodblack[img.meta['index_rows'], img.meta['index_columns']])
+		return img - (img.meta['coadds'] * self.twodblack[img.rows, img.cols])
 
-	#---------------------------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
+	@property
+	def get_tpf_virtual_rows(self):
+
+		tv_cal = np.zeros((len(set(outputs)),flux.shape[0],2078,11))
+		for idx, output in enumerate(set(outputs)):
+
+			tvcolfile = path.split('/')[-1].split('-')[0]+'-'+path.split('/')[-1].split('-')[1]+'-tvcol-'+str(self.camera)+'-'+str(self.ccd)+'-'+output.lower()+'-'+path.split('/')[-1].split('-')[3]+'-s_col.fits'
+
+			f'tess2020186164531-s{sector:04d}-lvcol-{camera:d}-{ccd:d}-{output:s}-0189-s_col.fits'
+
+			self.logger.info("... loading trailing virtual column file "+tvcolfile)
+
+			with fits.open(tvcolfile, mode='readonly') as hdu:
+				tv_cal[idx] = hdu[1].data['TVCOL_RAW']
+
+		return tv_cal
+
+	#----------------------------------------------------------------------------------------------
+	@property
+	def get_tpf_smear_rows(self):
+
+		sm_cal = np.zeros((len(set(outputs)), flux.shape[0], 10, 512))
+		for idx, output in enumerate(set(outputs)):
+
+			smrowfile = path.split('/')[-1].split('-')[0]+'-'+path.split('/')[-1].split('-')[1]+'-smrow-'+str(self.camera)+'-'+str(self.ccd)+'-'+output.lower()+'-'+path.split('/')[-1].split('-')[3]+'-s_col.fits'
+			self.logger.info("... loading smear row file "+smrowfile)
+
+			with fits.open(smrowfile, mode='readonly') as hdu:
+				sm_cal[idx] = hdu[1].data['SMROW_RAW']
+
+		return sm_cal
+
+	#----------------------------------------------------------------------------------------------
+	def apply_onedblack(self, img):
+
+		warnings.simplefilter('ignore',np.RankWarning)
+
+		y1 = self.hdu[2].header['CRVAL2P']-1
+		dy = self.hdu[2].header['NAXIS2']
+
+		# For each frame, fit a polynomial to the TV col values, choosing the order using the AIC
+		tvcol = self.trailing_virtual_columns
+		nrows = tvcol.shape[1]
+		x = np.arange(nrows)/nrows-0.5
+		ks = np.arange(20,50)
+
+		for frame in range(tvcol.shape[0]):
+			# Average over all but the last column, which seems to be off
+			y = nanmean(tvcol[frame,:,:-1], axis=1)
+
+			aics = []
+			for k in ks:
+				p = np.polynomial.Polynomial.fit(x, y, k)
+				aic = 2*k + nrows*np.log(np.sum((y-p(x))**2))
+				aics.append(aic)
+
+			order = ks[np.argmin(np.asarray(aics))]
+			p = np.polynomial.Polynomial.fit(x, y, order)
+
+			black1d = p(x)
+
+			img[frame,:,:] -= np.expand_dims(black1d[y1:y1+dy], axis=1)
+
+		return img
+
+	#----------------------------------------------------------------------------------------------
 	def apply_undershoot(self, img):
 
 		self.logger.info("Doing undershoot correction...")
@@ -348,32 +458,86 @@ class PixelCalibrator(object):
 
 		return img
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def apply_flatfield(self, img):
 		"""CCD flat-field correction."""
 		self.logger.info("Doing flatfield correction...")
-		return img / self.flatfield[img.meta['index_rows'], img.meta['index_columns']]
+		return img / self.flatfield[img.rows, img.cols]
 
-	#--------------------------------------------------------------------------
-	def to_counts_per_second(self, img):
+	#----------------------------------------------------------------------------------------------
+	def to_electrons_per_second(self, img):
+		"""Convert image to electrons per seconds."""
 		self.logger.info("Converting to counts per second...")
 		return img / (self.exposure_time * img.meta['coadds'])
 
-	#--------------------------------------------------------------------------
-	def calibrate(self, img):
-		"""Perform all calibration steps in sequence."""
+	#----------------------------------------------------------------------------------------------
+	#def calibrate(self, img):
+	#	"""Perform all calibration steps in sequence."""
+	#
+	#	img = self.apply_twodblack(img)
+	#	#img = self.apply_undershoot(img)
+	#	img = self.apply_linearity_gain(img)
+	#	img = self.apply_dark_smear(img)
+	#	img = self.apply_flatfield(img)
+	#	img = self.to_counts_per_second(img)
+	#
+	#	return img
 
+	#----------------------------------------------------------------------------------------------
+	def calibrate(self, img, smear='alternate'):
+		"""
+		Performs a new calibration for a single image.
+
+		Parameters:
+			img (:class:`CalibImage`): Image to be calibrated.
+			smear (str): 'standard', or 'alternate'
+				If the string 'standard' is passed, will calculate the smear correction directly from the collateral files.
+				If the string 'alternate' is passed, smear correction will be estimated from the target pixel file.
+
+		Returns:
+			:class:`CalibImage`: Calibrated image.
+		"""
+
+		sm_cal = self.smear_rows
+		tv_cal = self.trailing_virtual_columns
+
+		# Apply 2D black to flux images:
 		img = self.apply_twodblack(img)
-		#img = self.apply_undershoot(img)
+
+		# Apply 2D black to smear
+		sm_cal = self.apply_twodblack(sm_cal)
+		tv_cal = self.apply_twodblack(tv_cal)
+
+		# 1D black:
+		img = self.apply_onedblack(img)
+		sm_cal = self.apply_onedblack(sm_cal)
+
+		# Linearity-Gain correction:
 		img = self.apply_linearity_gain(img)
-		img = self.apply_dark_smear(img)
+		sm_cal = self.apply_linearity_gain(sm_cal)
+
+		# Undershoot correction:
+		img = self.apply_undershoot(img)
+		sm_cal = self.apply_undershoot(sm_cal)
+
+		img = self.apply_smear_tim(img, sm_cal, outputs[0], smear=smear)
+
 		img = self.apply_flatfield(img)
-		img = self.to_counts_per_second(img)
+
+		img = self.to_electrons_per_second(img)
 
 		return img
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def calibrate_tpf(self, tpf):
+		"""
+		Calibrate Target Pixel File.
+		"""
+
+		if tpf[0].header['CAMERA'] != self.camera:
+			raise ValueError("")
+		if tpf[0].header['CCD'] != self.ccd:
+			raise ValueError("")
 
 		meta = {}
 		meta['coadds'] = int(tpf['PIXELS'].header['NREADOUT'])
@@ -392,20 +556,29 @@ class PixelCalibrator(object):
 			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
 			read_noise[indx] = meta['coadds'] * self.readnoise[output_name].value
 
+		# In TPFs the masked smear rows and virtual rows have to be fetched separately:
+		smear_rows = self.get_tpf_smear_rows(tpf)
+		virtual_rows = self.get_tpf_virtual_rows(tpf)
 
-		for k in range(len(tpf['PIXELS'].data['RAW_CNTS'])):
+		# Loop through all target pixel images, calibrating them one at a time:
+		tab = tpf['PIXELS'].data
+		for k in range(len(tab)):
+			cadenceno = tab['CADENCENO'][k]
 
-			shot_noise = np.sqrt(tpf['PIXELS'].data['RAW_CNTS'][k])
+			shot_noise = np.sqrt(tab['RAW_CNTS'][k])
 			total_noise = np.sqrt( read_noise**2 + shot_noise**2 )
 
 			# Construct CCDData image object:
 			img = CalibImage(
-				data=tpf['PIXELS'].data['RAW_CNTS'][k],
+				data=tab['RAW_CNTS'][k],
 				uncertainty=StdDevUncertainty(total_noise),
 				unit=u.electron, # u.ct? u.adu?
 				mask=mask,
 				meta=meta
 			)
+
+			#smear_rows[cadenceno]
+			#virtual_rows[cadenceno]
 
 			# Calibrate the image:
 			img_cal = self.calibrate(img.copy())
@@ -429,12 +602,15 @@ class PixelCalibrator(object):
 			tpf['PIXELS'].data['FLUX'][k][:] = np.asarray(img_cal.data)
 			tpf['PIXELS'].data['FLUX_ERR'][k][:] = img_cal.uncertainty.array
 
-			break
-
 		return tpf
 
-	#--------------------------------------------------------------------------
+	#----------------------------------------------------------------------------------------------
 	def calibrate_ffi(self, ffi):
+
+		if ffi[0].header['CAMERA'] != self.camera:
+			raise ValueError("")
+		if ffi[0].header['CCD'] != self.ccd:
+			raise ValueError("")
 
 		meta = {}
 		meta['coadds'] = int(ffi[1].header['NREADOUT'])
@@ -476,12 +652,6 @@ class PixelCalibrator(object):
 		shot_noise = np.sqrt(ffi[1].data)
 		total_noise = np.sqrt( read_noise**2 + shot_noise**2 )
 
-		meta['masked_smear'] = ffi[1].data[2058:2068, 44:2092]
-		meta['virtual_smear'] = ffi[1].data[2068:, 44:2092]
-
-		print(meta['masked_smear'].shape)
-		print(meta['virtual_smear'].shape)
-
 		# Construct CCDData image object:
 		img = CalibImage(
 			data=ffi[1].data,
@@ -490,6 +660,11 @@ class PixelCalibrator(object):
 			mask=mask,
 			meta=meta
 		)
+
+		# In FFIs the masked smear rows and virtual rows are part of the image itself:
+		smear_rows = img[2058:2068, 44:2092]
+		virtual_rows = img[2068:, 44:2092]
+
 
 		plt.figure()
 		plot_image(meta['aperture'])
@@ -505,8 +680,13 @@ class PixelCalibrator(object):
 		plt.figure(figsize=(15,8))
 
 		ax = plt.subplot(121)
-		plot_image(img.data, xlabel=None, ylabel=None, make_cbar=True, clabel='Raw counts (e/cadence)', title='RAW_CNTS')
+		plot_image(img.data, xlabel=None, ylabel=None, cbar=True, clabel='Raw counts (e/cadence)', title='RAW_CNTS')
 		#plot_image(meta['aperture'], xlabel=None, ylabel=None, clabel='Raw counts (e/cadence)', title='APERTURE', alpha=1, cmap='viridis')
 
 		plt.subplot(122, sharex=ax, sharey=ax)
-		plot_image(img_cal.data, xlabel=None, ylabel=None, make_cbar=True, clabel='Flux (e/s)', title='TASOC Flux')
+		plot_image(img_cal.data, xlabel=None, ylabel=None, cbar=True, clabel='Flux (e/s)', title='TASOC Flux')
+
+		# Store the resulting calibrated image in the FITS hdu:
+		ffi[1].data = np.asarray(img_cal.data)
+		ffi[2].data = img_cal.uncertainty.array
+		return ffi
