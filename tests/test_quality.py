@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of photometry.quality.
@@ -8,9 +8,7 @@ Tests of photometry.quality.
 
 import pytest
 import numpy as np
-import sys
-import os.path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import conftest # noqa: F401
 from photometry.quality import CorrectorQualityFlags, TESSQualityFlags, PixelQualityFlags
 
 #--------------------------------------------------------------------------------------------------

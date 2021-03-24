@@ -1,16 +1,16 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create catalogs of stars in a given TESS observing sector.
 
 Example:
 	In order to create catalogs for sector 14 simple call this program from the
-	commandline like so:
+	command-line like so:
 
-	>>> python make_catalog.py 14
+	>>> python run_make_catalog.py 14
 
 	This will create the catalog files (`*.sqlite`) corresponding to sector 14
-	in the directory defined in the ``TESSPHOT_INPUT`` envirnonment variable.
+	in the directory defined in the ``TESSPHOT_INPUT`` environment variable.
 
 Note:
 	This function requires the user to be connected to the TASOC network
@@ -25,9 +25,8 @@ import argparse
 import logging
 from photometry.catalog import make_catalog
 
-#------------------------------------------------------------------------------
-if __name__ == '__main__':
-
+#--------------------------------------------------------------------------------------------------
+def main():
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Create CATALOG files for TESS Photometry.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
@@ -55,4 +54,12 @@ if __name__ == '__main__':
 	logger.addHandler(console)
 
 	# Run the program:
-	make_catalog(args.sector, input_folder=args.input_folder, cameras=args.camera, ccds=args.ccd, overwrite=args.overwrite)
+	make_catalog(args.sector,
+		input_folder=args.input_folder,
+		cameras=args.camera,
+		ccds=args.ccd,
+		overwrite=args.overwrite)
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == '__main__':
+	main()

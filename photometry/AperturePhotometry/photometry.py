@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Simple Aperture Photometry using K2P2 to define masks.
@@ -10,26 +10,37 @@ import numpy as np
 from bottleneck import allnan
 import logging
 from .. import BasePhotometry, STATUS
+from ..utilities import mag2flux
 from . import k2p2v2 as k2p2
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class AperturePhotometry(BasePhotometry):
-	"""Simple Aperture Photometry using K2P2 to define masks.
+	"""
+	Simple Aperture Photometry using K2P2 to define masks.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	#----------------------------------------------------------------------------------------------
 	def __init__(self, *args, **kwargs):
 		# Call the parent initializing:
 		# This will set several default settings
 		super().__init__(*args, **kwargs)
 
+	#----------------------------------------------------------------------------------------------
 	def _minimum_aperture(self):
-		cols, rows = self.get_pixel_grid()
-		mask_main = ( np.abs(cols - self.target_pos_column - 1) <= 1 ) \
-					& ( np.abs(rows - self.target_pos_row - 1) <= 1 )
-		return mask_main
+		# Map of valid pixels that can be included:
+		collected_pixels = (self.aperture & 1 != 0)
 
+		# Create minimum 2x2 mask around target position:
+		cols, rows = self.get_pixel_grid()
+		mask_main = (( np.abs(cols - self.target_pos_column - 1) <= 1 )
+			& ( np.abs(rows - self.target_pos_row - 1) <= 1 ))
+
+		# Return the 2x2 mask, but only the pixels that are actually collected:
+		return mask_main & collected_pixels
+
+	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
 		"""Perform photometry on the given target.
 
@@ -52,7 +63,16 @@ class AperturePhotometry(BasePhotometry):
 			'extend_overflow': True
 		}
 
-		for retries in range(5):
+		# For bright saturated stars we allow for more retries:
+		ExpectedFlux = mag2flux(self.target['tmag'])
+		haloswitch_tmag_limit = self.settings.getfloat('haloswitch', 'tmag_limit')
+		haloswitch_flux_limit = self.settings.getfloat('haloswitch', 'flux_limit')
+
+		allow_retries = 5
+		if self.target['tmag'] < 6:
+			allow_retries = 10
+
+		for retries in range(allow_retries):
 			# Delete any plots left over in the plots folder from an earlier iteration:
 			self.delete_plots()
 
@@ -60,22 +80,25 @@ class AperturePhotometry(BasePhotometry):
 			SumImage = self.sumimage
 
 			logger.info(self.stamp)
-			logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
+			logger.info("Target position in stamp: (%f, %f)",
+				self.target_pos_row_stamp, self.target_pos_column_stamp )
 
-			cat = np.column_stack((self.catalog['column_stamp'], self.catalog['row_stamp'], self.catalog['tmag']))
+			cat = np.column_stack((
+				self.catalog['column_stamp'],
+				self.catalog['row_stamp'],
+				self.catalog['tmag']))
 
 			logger.info("Creating new masks...")
 			try:
 				masks, background_bandwidth = k2p2.k2p2FixFromSum(SumImage, plot_folder=self.plot_folder, show_plot=False, catalog=cat, **k2p2_settings)
 				masks = np.asarray(masks, dtype='bool')
 			except k2p2.K2P2NoStars:
-				self.report_details(error='No flux above threshold.')
+				logger.error('No flux above threshold.')
 				masks = np.asarray(0, dtype='bool')
 
 			using_minimum_mask = False
 			if len(masks.shape) == 0:
-				logger.warning("No masks found")
-				self.report_details(error='No masks found. Using minimum aperture.')
+				logger.warning("No masks found. Using minimum aperture.")
 				mask_main = self._minimum_aperture()
 				using_minimum_mask = True
 
@@ -85,13 +108,11 @@ class AperturePhotometry(BasePhotometry):
 
 				if not np.any(indx_main):
 					logger.warning('No mask found for main target. Using minimum aperture.')
-					self.report_details(error='No mask found for main target. Using minimum aperture.')
 					mask_main = self._minimum_aperture()
 					using_minimum_mask = True
 
 				elif np.sum(indx_main) > 1:
-					logger.error('Too many masks')
-					self.report_details(error='Too many masks')
+					logger.error('Too many masks.')
 					return STATUS.ERROR
 
 				else:
@@ -110,18 +131,42 @@ class AperturePhotometry(BasePhotometry):
 				resize_args['right'] = 10
 
 			if resize_args:
-				logger.warning("Touching the edges! Retrying")
-				logger.info(resize_args)
+				logger.info("Touching the edges! Retrying.")
+				logger.debug(resize_args)
+				stamp_before = self.stamp
+				sumimage_before = self.sumimage
 				if not self.resize_stamp(**resize_args):
 					resize_args = {}
-					logger.warning("Could not resize stamp any further")
+					logger.warning("Could not resize stamp any further.")
 					break
+
+				# It did resize, but let's just check if it tried
+				# to resize in a direction, but it hit the limit.
+				# In that case, let's check if we are already over the "HaloSwitch" limit
+				# Don't do this for secondary targets though.
+				if self.target['tmag'] <= haloswitch_tmag_limit and not self.datasource.startswith('tpf:'):
+					edge = np.zeros_like(mask_main, dtype='bool')
+					if resize_args.get('down') and self.stamp[0] == stamp_before[0]:
+						edge[0, :] = True
+					if resize_args.get('up') and self.stamp[1] == stamp_before[1]:
+						edge[-1, :] = True
+					if resize_args.get('left') and self.stamp[2] == stamp_before[2]:
+						edge[:, 0] = True
+					if resize_args.get('right') and self.stamp[3] == stamp_before[3]:
+						edge[:, -1] = True
+
+					if np.any(edge):
+						EdgeFlux = np.nansum(sumimage_before[mask_main & edge])
+						if EdgeFlux/ExpectedFlux > haloswitch_flux_limit:
+							logger.error('Stamp resize hit limit. Haloswitch quick break.')
+							self._details['edge_flux'] = EdgeFlux
+							return STATUS.ERROR
 			else:
 				break
 
 		# If we reached the last retry but still needed a resize, give up:
 		if resize_args:
-			self.report_details(error='Too many stamp resizes')
+			logger.error('Too many stamp resizes.')
 			return STATUS.ERROR
 
 		# XY of pixels in frame
@@ -138,7 +183,7 @@ class AperturePhotometry(BasePhotometry):
 				self.lightcurve['flux'][k] = np.NaN
 				self.lightcurve['flux_err'][k] = np.NaN
 				self.lightcurve['pos_centroid'][k, :] = np.NaN
-				#self.lightcurve['quality']
+				#self.lightcurve['quality'][k] |= ?
 			else:
 				self.lightcurve['flux'][k] = np.sum(flux_in_cluster)
 				self.lightcurve['flux_err'][k] = np.sqrt(np.sum(imgerr[mask_main]**2))
@@ -180,8 +225,7 @@ class AperturePhotometry(BasePhotometry):
 
 		# Calculate contamination from the other targets in the mask:
 		if len(target_in_mask) == 0:
-			logger.error("No targets in mask")
-			self.report_details(error='No targets in mask')
+			logger.error("No targets in mask.")
 			contamination = np.nan
 			my_status = STATUS.ERROR
 		elif len(target_in_mask) == 1 and self.catalog[target_in_mask][0]['starid'] == self.starid:
@@ -190,8 +234,8 @@ class AperturePhotometry(BasePhotometry):
 			# Calculate contamination metric as defined in Lund & Handberg (2014):
 			mags_in_mask = self.catalog[target_in_mask]['tmag']
 			mags_total = -2.5*np.log10(np.nansum(10**(-0.4*mags_in_mask)))
-			contamination = 1.0 - 10**(0.4*(mags_total - self.target_tmag))
-			contamination = np.abs(contamination) # Avoid stupid signs due to round-off errors
+			contamination = 1.0 - 10**(0.4*(mags_total - self.target['tmag']))
+			contamination = np.clip(contamination, 0, None) # Avoid stupid signs due to round-off errors
 
 		logger.info("Contamination: %f", contamination)
 		if not np.isnan(contamination):

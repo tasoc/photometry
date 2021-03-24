@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
@@ -7,19 +7,14 @@
 import pytest
 import os
 import numpy as np
-import sys
 import tempfile
-import logging
 import sqlite3
 import contextlib
 #import itertools
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import conftest # noqa: F401
 from photometry import todolist
-from photometry.utilities import TqdmLoggingHandler
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_methods_file():
 
 	methods_file = os.path.join(os.path.dirname(__file__), '..', 'photometry', 'data', 'todolist-methods.dat')
@@ -34,7 +29,7 @@ def test_methods_file():
 		assert d[2] in ('ffi', 'tpf')
 		assert d[3] in ('aperture', 'halo', 'psf', 'linpsf')
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def test_exclude_file():
 
 	methods_file = os.path.join(os.path.dirname(__file__), '..', 'photometry', 'data', 'todolist-exclude.dat')
@@ -48,7 +43,7 @@ def test_exclude_file():
 		assert d[1] > 0
 		assert d[2] in ('ffi', 'tpf')
 
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 #def test_calc_cbv_area():
 #
 #	for camera, ccd in itertools.product((1,2,3,4), (1,2,3,4)):
@@ -69,41 +64,61 @@ def test_exclude_file():
 #		print(cbv_area)
 #		assert(cbv_area == 131)
 
-#----------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_make_todolist(datafiles):
-	test_dir = str(datafiles)
+#--------------------------------------------------------------------------------------------------
+def todo_file_valid(fpath, sector=None, camera=None, ccd=None):
+
+	expected_cadence_ffi = {1: 1800, 27: 600}.get(sector, None)
+	expected_cadence_tpf = (120,) if sector == 1 else (120, 20)
+
+	with contextlib.closing(sqlite3.connect("file:" + fpath + '?mode=ro', uri=True)) as conn:
+		conn.row_factory = sqlite3.Row
+		cursor = conn.cursor()
+
+		cursor.execute("SELECT * FROM todolist;")
+		for row in cursor.fetchall():
+			if sector is not None:
+				assert row['sector'] == sector, "Wrong sector returned"
+			if camera is not None:
+				assert row['camera'] == camera, "Wrong camera returned"
+			if ccd is not None:
+				assert row['ccd'] == ccd, "Wrong CCD returned"
+
+			if row['datasource'] == 'ffi':
+				assert row['cadence'] == expected_cadence_ffi, "Wrong cadence"
+			else:
+				assert row['cadence'] in expected_cadence_tpf, "Wrong cadence"
+
+		# NOTE: There is actually 2 TPF matching the test-cases in both sectors:
+		cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='tpf';")
+		assert cursor.fetchone()[0] == 2, "Expected 2 TPFs in todolist"
+
+		if sector == 27:
+			#cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='ffi';")
+			#assert cursor.fetchone()[0] == 0, "Expected no FFI targets in sector 27"
+			cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='tpf' AND cadence=120;")
+			assert cursor.fetchone()[0] == 1, "Expected one TPFs in todolist with 120s cadence"
+			cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='tpf' AND cadence=20;")
+			assert cursor.fetchone()[0] == 1, "Expected one TPFs in todolist with 20s cadence"
+
+		cursor.close()
+
+#--------------------------------------------------------------------------------------------------
+def test_make_todolist_invalid_folder():
+	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+	with pytest.raises(NotADirectoryError) as e:
+		todolist.make_todo(os.path.join(INPUT_DIR, 'does', 'not', 'exist'))
+	assert str(e.value) == "The given path does not exist or is not a directory"
+
+#--------------------------------------------------------------------------------------------------
+def test_make_todolist_sector1(SHARED_INPUT_DIR):
 	with tempfile.NamedTemporaryFile() as tmpfile:
 		# Run make_todo and save output to temp-file:
-		todolist.make_todo(test_dir, cameras=3, ccds=2, output_file=tmpfile.name)
+		todolist.make_todo(SHARED_INPUT_DIR, sectors=1, cameras=3, ccds=2, output_file=tmpfile.name)
 
 		tmpfile.flush()
-		assert os.path.exists(tmpfile.name + '.sqlite'), "TODO-file was not created"
+		assert os.path.isfile(tmpfile.name + '.sqlite'), "TODO-file was not created"
+		todo_file_valid(tmpfile.name + '.sqlite', sector=1, camera=3, ccd=2)
 
-		with contextlib.closing(sqlite3.connect("file:" + tmpfile.name + '.sqlite?mode=ro', uri=True)) as conn:
-			conn.row_factory = sqlite3.Row
-			cursor = conn.cursor()
-
-			cursor.execute("SELECT * FROM todolist LIMIT 1;")
-			row = cursor.fetchone()
-			print(dict(row))
-			assert row['camera'] == 3, "Wrong camera returned"
-			assert row['ccd'] == 2, "Wrong CCD returned"
-
-			cursor.execute("SELECT COUNT(*) FROM todolist WHERE datasource='tpf';")
-			assert cursor.fetchone()[0] == 2, "Expected 2 TPFs in todolist"
-
-			cursor.close()
-
-#----------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	# Setup logging:
-	formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-	console = TqdmLoggingHandler()
-	console.setFormatter(formatter)
-	logger_parent = logging.getLogger('photometry')
-	logger_parent.setLevel(logging.INFO)
-	if not logger_parent.hasHandlers():
-		logger_parent.addHandler(console)
-
 	pytest.main([__file__])

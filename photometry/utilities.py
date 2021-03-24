@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Collection of utility functions that can be used throughout
@@ -14,22 +14,41 @@ import logging
 import tqdm
 from scipy.special import erf
 from scipy.stats import binned_statistic
+import configparser
 import json
 import os.path
 import fnmatch
 import glob
+import re
 import itertools
+from functools import lru_cache
 import requests
-from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 from threading import Lock
+from collections import defaultdict
 
 # Constants:
 mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)
 
 #--------------------------------------------------------------------------------------------------
-def load_settings(sector=None):
+@lru_cache(maxsize=1)
+def load_settings():
+	"""
+	Load settings.
 
-	with open(os.path.join(os.path.dirname(__file__), 'data', 'settings.json'), 'r') as fid:
+	Returns:
+		:class:`configparser.ConfigParser`:
+	"""
+
+	settings = configparser.ConfigParser()
+	settings.read(os.path.join(os.path.dirname(__file__), 'data', 'settings.ini'))
+	return settings
+
+#--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=10)
+def load_sector_settings(sector=None):
+
+	with open(os.path.join(os.path.dirname(__file__), 'data', 'sectors.json'), 'r') as fid:
 		settings = json.load(fid)
 
 	if sector is not None:
@@ -38,32 +57,37 @@ def load_settings(sector=None):
 	return settings
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search directory recursively for TESS FFI images in FITS format.
 
+	The function is cached, meaning the first time it is run on a particular ``rootdir``
+	the list of files in that directory will be read and cached to memory and used in
+	subsequent calls to the function. This means that any changes to files on disk after
+	the first call of the function will not be picked up in subsequent calls to this function.
+
 	Parameters:
-		rootdir (string): Directory to search recursively for TESS FFI images.
-		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
-		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
-		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
+		rootdir (str): Directory to search recursively for TESS FFI images.
+		sector (int or None, optional): Only return files from the given sector.
+			If ``None``, files from all sectors are returned.
+		camera (int or None, optional): Only return files from the given camera number (1-4).
+			If ``None``, files from all cameras are returned.
+		ccd (int or None, optional): Only return files from the given CCD number (1-4).
+			If ``None``, files from all CCDs are returned.
 
 	Returns:
 		list: List of full paths to FFI FITS files found in directory. The list will
-			be sorted accoridng to the filename of the files, e.g. primarily by time.
+			be sorted accoridng to the filename of the files, i.e. primarily by time.
 	"""
 
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
-	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
+	sector_str = '????' if sector is None else f'{sector:04d}'
 	camera = '?' if camera is None else str(camera)
 	ccd = '?' if ccd is None else str(ccd)
-	filename_pattern = 'tess*-s{sector:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'.format(
-		sector=sector_str,
-		camera=camera,
-		ccd=ccd
-	)
+	filename_pattern = f'tess*-s{sector_str:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'
 	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
@@ -78,17 +102,68 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	return matches
 
 #--------------------------------------------------------------------------------------------------
-def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, findmax=None):
+@lru_cache(maxsize=10)
+def _find_tpf_files(rootdir, sector=None, cadence=None):
+
+	logger = logging.getLogger(__name__)
+
+	# Create the filename pattern to search for:
+	sector_str = r'\d{4}' if sector is None else f'{sector:04d}'
+	suffix = {None: '(fast-)?tp', 120: 'tp', 20: 'fast-tp'}[cadence]
+	re_pattern = r'^tess\d+-s(?P<sector>' + sector_str + r')-(?P<starid>\d+)-\d{4}-[xsab]_' + suffix + r'\.fits(\.gz)?$'
+	regexps = [re.compile(re_pattern)]
+	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, re_pattern)
+
+	# Pattern used for TESS Alert data:
+	if cadence is None or cadence == 120:
+		sector_str = r'\d{2}' if sector is None else f'{sector:02d}'
+		re_pattern2 = r'^hlsp_tess-data-alerts_tess_phot_(?P<starid>\d+)-s(?P<sector>' + sector_str + r')_tess_v\d+_tp\.fits(\.gz)?$'
+		regexps.append(re.compile(re_pattern2))
+		logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, re_pattern2)
+
+	# Do a recursive search in the directory, finding all files that match the pattern:
+	filedict = defaultdict(list)
+	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
+		for filename in filenames:
+			for regex in regexps:
+				m = regex.match(filename)
+				if m:
+					starid = int(m.group('starid'))
+					filedict[starid].append(os.path.join(root, filename))
+					break
+
+	# Ensure that each list is sorted by itself. We do this once here
+	# so we don't have to do it each time a specific starid is requested:
+	for key in filedict.keys():
+		filedict[key].sort(key=lambda x: os.path.basename(x))
+
+	return filedict
+
+#--------------------------------------------------------------------------------------------------
+def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, cadence=None,
+	findmax=None):
 	"""
 	Search directory recursively for TESS Target Pixel Files.
 
+	The function is cached, meaning the first time it is run on a particular ``rootdir``
+	the list of files in that directory will be read and cached to memory and used in
+	subsequent calls to the function. This means that any changes to files on disk after
+	the first call of the function will not be picked up in subsequent calls to this function.
+
 	Parameters:
-		rootdir (string): Directory to search recursively for TESS TPF files.
-		starid (integer or None, optional): Only return files from the given TIC number. If ``None``, files from all TIC numbers are returned.
-		sector (integer or None, optional): Only return files from the given sector. If ``None``, files from all sectors are returned.
-		camera (integer or None, optional): Only return files from the given camera number (1-4). If ``None``, files from all cameras are returned.
-		ccd (integer or None, optional): Only return files from the given CCD number (1-4). If ``None``, files from all CCDs are returned.
-		findmax (integer or None, optional): Maximum number of files to return. If ``None``, return all files.
+		rootdir (str): Directory to search recursively for TESS TPF files.
+		starid (int, optional): Only return files from the given TIC number.
+			If ``None``, files from all TIC numbers are returned.
+		sector (int, optional): Only return files from the given sector.
+			If ``None``, files from all sectors are returned.
+		camera (int or None, optional): Only return files from the given camera number (1-4).
+			If ``None``, files from all cameras are returned.
+		ccd (int, optional): Only return files from the given CCD number (1-4).
+			If ``None``, files from all CCDs are returned.
+		cadence (int, optional): Only return files from the given cadence (20 or 120).
+			If ``None``, files from all cadences are returned.
+		findmax (int, optional): Maximum number of files to return.
+			If ``None``, return all files.
 
 	Note:
 		Filtering on camera and/or ccd will cause the program to read the headers
@@ -97,109 +172,106 @@ def find_tpf_files(rootdir, starid=None, sector=None, camera=None, ccd=None, fin
 
 	Returns:
 		list: List of full paths to TPF FITS files found in directory. The list will
-			be sorted accoriding to the filename of the files, e.g. primarily by time.
+			be sorted according to the filename of the files, i.e. primarily by time.
 	"""
 
-	logger = logging.getLogger(__name__)
+	if cadence is not None and cadence not in (120, 20):
+		raise ValueError("Invalid cadence. Must be either 20 or 120.")
 
-	# Create the filename pattern to search for:
-	sector_str = '????' if sector is None else '{0:04d}'.format(sector)
-	starid_str = '*' if starid is None else '{0:016d}'.format(starid)
-	filename_pattern = 'tess*-s{sector:s}-{starid:s}-????-[xsab]_tp.fits*'.format(
-		sector=sector_str,
-		starid=starid_str
-	)
+	# Call cached function which searches for files on disk:
+	filedict = _find_tpf_files(rootdir, sector=sector, cadence=cadence)
 
-	# Pattern used for TESS Alert data:
-	sector_str = '??' if sector is None else '{0:02d}'.format(sector)
-	starid_str = '*' if starid is None else '{0:011d}'.format(starid)
-	filename_pattern2 = 'hlsp_tess-data-alerts_tess_phot_{starid:s}-s{sector:s}_tess_v?_tp.fits*'.format(
-		sector=sector_str,
-		starid=starid_str
-	)
+	if starid is not None:
+		files = filedict.get(starid, [])
+	else:
+		# If we are not searching for a particilar starid,
+		# simply flatten the dict to a list of all found files
+		# and sort the list of files by thir filename:
+		files = list(itertools.chain(*filedict.values()))
+		files.sort(key=lambda x: os.path.basename(x))
 
-	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern)
-	logger.debug("Searching for TPFs in '%s' using pattern '%s'", rootdir, filename_pattern2)
+	# Expensive check which involve opening the files and reading headers:
+	# We are only removing elements, and preserving the ordering, so there
+	# is no need for re-sorting the list afterwards.
+	if camera is not None or ccd is not None:
+		matches = []
+		for fpath in files:
+			if camera is not None and fits.getval(fpath, 'CAMERA', ext=0) != camera:
+				continue
+			if ccd is not None and fits.getval(fpath, 'CCD', ext=0) != ccd:
+				continue
 
-	# Do a recursive search in the directory, finding all files that match the pattern:
-	breakout = False
-	matches = []
-	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
-		for filename in filenames:
-			if fnmatch.fnmatch(filename, filename_pattern) or fnmatch.fnmatch(filename, filename_pattern2):
-				fpath = os.path.join(root, filename)
-				if camera is not None and fits.getval(fpath, 'CAMERA', ext=0) != camera:
-					continue
+			# Add the file to the list, but stop if we have already
+			# reached the number of files we need to find:
+			matches.append(fpath)
+			if findmax is not None and len(matches) >= findmax:
+				break
 
-				if ccd is not None and fits.getval(fpath, 'CCD', ext=0) != ccd:
-					continue
+		files = matches
 
-				matches.append(fpath)
-				if findmax is not None and len(matches) >= findmax:
-					breakout = True
-					break
-		if breakout: break
+	# Just to ensure that we are not returning more than we should:
+	if findmax is not None and len(files) > findmax:
+		files = files[:findmax]
 
-	# Sort the list of files by thir filename:
-	matches.sort(key=lambda x: os.path.basename(x))
-
-	return matches
+	return files
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_hdf5_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for HDF5 files matching constraints.
 
 	Parameters:
-		rootdir (string): Directory to search for HDF5 files.
-		sector (integer, list or None, optional): Only return files from the given sectors. If ``None``, files from all TIC numbers are returned.
-		camera (integer, list or None, optional): Only return files from the given camera. If ``None``, files from all cameras are returned.
-		ccd (integer, list or None, optional): Only return files from the given ccd. If ``None``, files from all ccds are returned.
+		rootdir (str): Directory to search for HDF5 files.
+		sector (int, list or None, optional): Only return files from the given sectors.
+			If ``None``, files from all TIC numbers are returned.
+		camera (int, list or None, optional): Only return files from the given camera.
+			If ``None``, files from all cameras are returned.
+		ccd (int, list or None, optional): Only return files from the given ccd.
+			If ``None``, files from all ccds are returned.
 
 	Returns:
 		list: List of paths to HDF5 files matching constraints.
 	"""
 
-	if not isinstance(sector, (list, tuple)): sector = (sector,)
-	if not isinstance(camera, (list, tuple)): camera = (1,2,3,4) if camera is None else (camera,)
-	if not isinstance(ccd, (list, tuple)): ccd = (1,2,3,4) if ccd is None else (ccd,)
+	sector = to_tuple(sector, (None,))
+	camera = to_tuple(camera, (1,2,3,4))
+	ccd = to_tuple(ccd, (1,2,3,4))
 
 	filelst = []
 	for sector, camera, ccd in itertools.product(sector, camera, ccd):
-		filelst += glob.glob(os.path.join(rootdir, 'sector{0:s}_camera{1:d}_ccd{2:d}.hdf5'.format(
-			'???' if sector is None else '%03d' % sector,
-			camera,
-			ccd
-		)))
+		sector_str = '???' if sector is None else f'{sector:03d}'
+		filelst += glob.glob(os.path.join(rootdir, f'sector{sector_str:s}_camera{camera:d}_ccd{ccd:d}.hdf5'))
 
 	return filelst
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=32)
 def find_catalog_files(rootdir, sector=None, camera=None, ccd=None):
 	"""
 	Search the input directory for CATALOG (sqlite) files matching constraints.
 
 	Parameters:
-		rootdir (string): Directory to search for CATALOG files.
-		sector (integer, list or None, optional): Only return files from the given sectors. If ``None``, files from all TIC numbers are returned.
-		camera (integer, list or None, optional): Only return files from the given camera. If ``None``, files from all cameras are returned.
-		ccd (integer, list or None, optional): Only return files from the given ccd. If ``None``, files from all ccds are returned.
+		rootdir (str): Directory to search for CATALOG files.
+		sector (int, list or None, optional): Only return files from the given sectors.
+			If ``None``, files from all TIC numbers are returned.
+		camera (int, list or None, optional): Only return files from the given camera.
+			If ``None``, files from all cameras are returned.
+		ccd (int, list or None, optional): Only return files from the given ccd.
+			If ``None``, files from all ccds are returned.
 
 	Returns:
 		list: List of paths to CATALOG files matching constraints.
 	"""
 
-	if not isinstance(sector, (list, tuple)): sector = (sector,)
-	if not isinstance(camera, (list, tuple)): camera = (1,2,3,4) if camera is None else (camera,)
-	if not isinstance(ccd, (list, tuple)): ccd = (1,2,3,4) if ccd is None else (ccd,)
+	sector = to_tuple(sector, (None,))
+	camera = to_tuple(camera, (1,2,3,4))
+	ccd = to_tuple(ccd, (1,2,3,4))
 
 	filelst = []
 	for sector, camera, ccd in itertools.product(sector, camera, ccd):
-		filelst += glob.glob(os.path.join(rootdir, 'catalog_sector{0:s}_camera{1:d}_ccd{2:d}.sqlite'.format(
-			'???' if sector is None else '%03d' % sector,
-			camera,
-			ccd
-		)))
+		sector_str = '???' if sector is None else f'{sector:03d}'
+		filelst += glob.glob(os.path.join(rootdir, f'catalog_sector{sector_str:s}_camera{camera:d}_ccd{ccd:d}.sqlite'))
 
 	return filelst
 
@@ -212,7 +284,7 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 
 	Parameters:
 		path (str): Path to FITS file.
-		return_header (boolean, optional): Return FITS headers as well. Default is ``False``.
+		return_header (bool, optional): Return FITS headers as well. Default is ``False``.
 
 	Returns:
 		numpy.ndarray: Full Frame Image.
@@ -244,6 +316,30 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 		return img, headers
 	else:
 		return img
+
+#--------------------------------------------------------------------------------------------------
+def to_tuple(inp, default=None):
+	"""
+	Convert iterable or single values to tuple.
+
+	This function is used for converting inputs, perticularly for
+	preparing input to functions cached with :func:`functools.lru_cache`,
+	to ensure inputs are hashable.
+
+	Parameters:
+		inp: Input to convert to tuple.
+		default: If ``input`` is ``None`` return this instead.
+
+	Returns:
+		tuple: ``inp`` converted to tuple.
+	"""
+	if inp is None:
+		return default
+	if isinstance(inp, (list, set, frozenset, np.ndarray)):
+		return tuple(inp)
+	if isinstance(inp, (int, float, bool, str)):
+		return (inp, )
+	return inp
 
 #--------------------------------------------------------------------------------------------------
 def _move_median_central_1d(x, width_points):
@@ -285,7 +381,8 @@ def add_proper_motion(ra, dec, pm_ra, pm_dec, bjd, epoch=2000.0):
 	decrate = pm_dec/3600000.0  # in degrees/year (assuming original was in mas/year)
 	decindegrees = dec + timeelapsed*decrate
 
-	# Calculate the unprojected rate of RA motion, using the mean declination between the catalog and present epoch:
+	# Calculate the unprojected rate of RA motion, using the mean declination between
+	# the catalog and present epoch.
 	rarate = pm_ra/np.cos((dec + timeelapsed*decrate/2.0)*np.pi/180.0)/3600000.0  # in degress of RA/year (assuming original was in mas/year)
 	raindegrees = ra + timeelapsed*rarate
 
@@ -298,12 +395,12 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 	Evaluate a 2D symmetrical Gaussian integrated in pixels.
 
 	Parameters:
-		x (numpy array) : x coordinates at which to evaluate the PSF.
-		y (numpy array) : y coordinates at which to evaluate the PSF.
-		flux (float) : Integrated value.
-		x_0 (float) : Centroid position.
-		y_0 (float) : Centroid position.
-		sigma (float, optional) : Standard deviation of Gaussian. Default=1.
+		x (numpy.ndarray): x coordinates at which to evaluate the PSF.
+		y (numpy.ndarray): y coordinates at which to evaluate the PSF.
+		flux (float): Integrated value.
+		x_0 (float): Centroid position.
+		y_0 (float): Centroid position.
+		sigma (float, optional): Standard deviation of Gaussian. Default=1.
 
 	Returns:
 		numpy array : 2D Gaussian integrated pixel values at (x,y).
@@ -321,13 +418,13 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		[ 0.92564571,  1.46631496,  0.92564571],
 		[ 0.58433556,  0.92564571,  0.58433556]])
 	"""
-	return (flux / 4 * ((erf((x - x_0 + 0.5) / (np.sqrt(2) * sigma))
-		- erf((x - x_0 - 0.5) / (np.sqrt(2) * sigma)))
-		* (erf((y - y_0 + 0.5) / (np.sqrt(2) * sigma))
-		- erf((y - y_0 - 0.5) / (np.sqrt(2) * sigma)))))
+	denom = np.sqrt(2) * sigma
+	return (flux / 4 * ((erf((x - x_0 + 0.5) / denom)
+		- erf((x - x_0 - 0.5) / denom)) * (erf((y - y_0 + 0.5) / denom)
+		- erf((y - y_0 - 0.5) / denom)))) # noqa: ET126
 
 #--------------------------------------------------------------------------------------------------
-def mag2flux(mag):
+def mag2flux(mag, zp=20.60654144):
 	"""
 	Convert from magnitude to flux using scaling relation from
 	aperture photometry. This is an estimate.
@@ -340,7 +437,7 @@ def mag2flux(mag):
 	Returns:
 		float: Corresponding flux value
 	"""
-	return 10**(-0.4*(mag - 20.60654144))
+	return np.clip(10**(-0.4*(mag - zp)), 0, None)
 
 #--------------------------------------------------------------------------------------------------
 def sphere_distance(ra1, dec1, ra2, dec2):
@@ -425,7 +522,8 @@ def rms_timescale(time, flux, timescale=3600/86400):
 	Parameters:
 		time (ndarray): Timestamps in days.
 		flux (ndarray): Flux to calculate RMS for.
-		timescale (float, optional): Timescale to bin timeseries before calculating RMS. Default=1 hour.
+		timescale (float, optional): Timescale to bin timeseries before calculating RMS.
+			Default=1 hour.
 
 	Returns:
 		float: Robust RMS on specified timescale.
@@ -487,13 +585,18 @@ def find_nearest(array, value):
 	#	return idx
 
 #--------------------------------------------------------------------------------------------------
-def download_file(url, destination, position_holders=None, position_lock=None):
+def download_file(url, destination, desc=None, timeout=60,
+	position_holders=None, position_lock=None, showprogress=None):
 	"""
 	Download file from URL and place into specified destination.
 
 	Parameters:
-		url (string): URL to file to be downloaded.
-		destination (string): Path where to save file.
+		url (str): URL to file to be downloaded.
+		destination (str): Path where to save file.
+		desc (str, optional): Description to write next to progress-bar.
+		timeout (float): Time to wait for server response in seconds. Default=60.
+		showprogress (bool): Force showing the progress bar. If ``None``, the
+			progressbar is shown based on the logging level and output type.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -504,8 +607,11 @@ def download_file(url, destination, position_holders=None, position_lock=None):
 		'unit_scale': True,
 		'position': None,
 		'leave': True,
-		'disable': not logger.isEnabledFor(logging.INFO)
+		'disable': None if logger.isEnabledFor(logging.INFO) else True,
+		'desc': desc
 	}
+	if showprogress is not None:
+		tqdm_settings['disable'] = not showprogress
 
 	if position_holders is not None:
 		tqdm_settings['leave'] = False
@@ -516,7 +622,7 @@ def download_file(url, destination, position_holders=None, position_lock=None):
 
 	try:
 		# Start stream from URL and throw an error for bad status codes:
-		response = requests.get(url, stream=True, allow_redirects=True)
+		response = requests.get(url, stream=True, allow_redirects=True, timeout=timeout)
 		response.raise_for_status()
 
 		total_size = int(response.headers.get('content-length', 0))
@@ -529,22 +635,23 @@ def download_file(url, destination, position_holders=None, position_lock=None):
 					pbar.update(len(block))
 
 		if os.path.getsize(destination) != total_size:
-			raise Exception("File not downloaded correctly")
+			raise RuntimeError("File not downloaded correctly")
 
-	except: # noqa: E722
+	except: # noqa: E722, pragma: no cover
 		logger.exception("Could not download file")
 		if os.path.exists(destination):
 			os.remove(destination)
 		raise
 
-	# Pause before returning to give progress bar time to write.
-	if position_holders is not None:
-		position_lock.acquire()
-		position_holders[tqdm_settings['position']] = False
-		position_lock.release()
+	finally:
+		# Pause before returning to give progress bar time to write.
+		if position_holders is not None:
+			position_lock.acquire()
+			position_holders[tqdm_settings['position']] = False
+			position_lock.release()
 
 #--------------------------------------------------------------------------------------------------
-def download_parallel(urls, workers=4):
+def download_parallel(urls, workers=4, timeout=60, showprogress=None):
 	"""
 	Download several files in parallel using multiple threads.
 
@@ -552,20 +659,41 @@ def download_parallel(urls, workers=4):
 		urls (iterable): List of files to download. Each element should consist of a list or tuple,
 			containing two elements: The URL to download, and the path to the destination where the
 			file should be saved.
-		workers (integer, optional): Number of threads to use for downloading. Default=4.
+		workers (int, optional): Number of threads to use for downloading. Default=4.
+		timeout (float): Time to wait for server response in seconds. Default=60.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
+
+	# Don't overcomplicate things for a singe file:
+	if len(urls) == 1:
+		download_file(urls[0][0], urls[0][1], timeout=timeout, showprogress=showprogress)
+		return
 
 	workers = min(workers, len(urls))
 	position_holders = [False] * workers
 	plock = Lock()
 
 	def _wrapper(arg):
-		download_file(arg[0], arg[1], position_holders=position_holders, position_lock=plock)
+		download_file(arg[0], arg[1],
+			timeout=timeout,
+			showprogress=showprogress,
+			position_holders=position_holders,
+			position_lock=plock)
 
-	with ThreadPoolExecutor(max_workers=workers) as executor:
-		executor.map(_wrapper, urls)
+	errors = []
+	with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+		# Start the load operations and mark each future with its URL
+		future_to_url = {executor.submit(_wrapper, url): url for url in urls}
+		for future in concurrent.futures.as_completed(future_to_url):
+			url = future_to_url[future]
+			try:
+				future.result()
+			except: # noqa: E722, pragma: no cover
+				errors.append(url[0])
+
+	if errors:
+		raise RuntimeError("Errors encountered during download of the following URLs:\n%s" % '\n'.join(errors))
 
 #--------------------------------------------------------------------------------------------------
 class TqdmLoggingHandler(logging.Handler):
@@ -577,7 +705,129 @@ class TqdmLoggingHandler(logging.Handler):
 			msg = self.format(record)
 			tqdm.tqdm.write(msg)
 			self.flush()
-		except (KeyboardInterrupt, SystemExit):
+		except (KeyboardInterrupt, SystemExit): # pragma: no cover
 			raise
-		except: # noqa: E722
+		except: # noqa: E722, pragma: no cover
 			self.handleError(record)
+
+#--------------------------------------------------------------------------------------------------
+class ListHandler(logging.Handler):
+	"""
+	A logging.Handler that writes messages into a list object.
+
+	The standard logging.QueueHandler/logging.QueueListener can not be used
+	for this because the QueueListener runs in a private thread, not the
+	main thread.
+
+	.. warning::
+		This handler is not thread-safe. Do not use it in threaded environments.
+	"""
+
+	def __init__(self, *args, message_queue, **kwargs):
+		"""Initialize by copying the queue and sending everything else to superclass."""
+		super().__init__(*args, **kwargs)
+		self.message_queue = message_queue
+
+	def emit(self, record):
+		"""Add the formatted log message (sans newlines) to the queue."""
+		self.message_queue.append(self.format(record).rstrip('\n'))
+
+#--------------------------------------------------------------------------------------------------
+class LoggerWriter(object):
+	"""
+	File-like object which passes input into a logger.
+
+	Can be used together with :py:func:`contextlib.redirect_stdout`
+	or :py:func:`contextlib.redirect_stderr` to redirect streams to the given logger.
+	Can be useful for wrapping codes which uses normal :py:func:`print` functions for logging.
+
+	.. code-block:: python
+		:linenos:
+
+		logger = logging.getLogger(__name__)
+		with contextlib.redirect_stdout(LoggerWriter(logger, logging.INFO)):
+			print("This goes into the logger instead of STDOUT")
+
+	.. warning::
+		This object is not thread-safe. Do not use it in threaded environments.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+	def __init__(self, logger, level=logging.INFO):
+		self.logger = logger
+		self.level = level
+
+	def write(self, message):
+		if message.strip() != '':
+			self.logger.log(self.level, message)
+
+#--------------------------------------------------------------------------------------------------
+def sqlite_drop_column(conn, table, col):
+	"""
+	Drop table column from SQLite table.
+
+	Since SQLite does not have functionality for dropping/deleting columns
+	in existing tables, this function can provide this functionality.
+	This is done by temporarily copying the entire table, so this can be
+	quite an expensive operation.
+
+	Parameters:
+		conn (:class:`sqlite3.Connection`): Connection to SQLite database.
+		table (str): Table to drop column from.
+		col (str): Column to be dropped from table.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	# Get a list of columns in the existing table:
+	cursor = conn.cursor()
+	cursor.execute("PRAGMA table_info({table:s})".format(table=table))
+	columns = [col[1] for col in cursor.fetchall()]
+	if col not in columns:
+		raise ValueError("Column '%s' not found in table '%s'" % (col, table))
+	columns.remove(col)
+	columns = ','.join(columns)
+
+	# Get list of index associated with the table:
+	cursor.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name=?", [table])
+	index = cursor.fetchall()
+	index_names = [row[0] for row in index]
+	index_sql = [row[1] for row in index]
+
+	# Warn if any index exist with the column to be removed:
+	regex_index = re.compile(r'^CREATE( UNIQUE)? INDEX (.+) ON ' + re.escape(table) + r'\s*\((.+)\).*$', re.IGNORECASE)
+	for sql in index_sql:
+		m = regex_index.match(sql)
+		if not m:
+			raise RuntimeError("COULD NOT UNDERSTAND SQL") # pragma: no cover
+		index_columns = [i.strip() for i in m.group(3).split(',')]
+		if col in index_columns:
+			raise RuntimeError("Column is used in INDEX %s." % m.group(2))
+
+	# Store the current foreign_key setting:
+	cursor.execute("PRAGMA foreign_keys;")
+	current_foreign_keys = cursor.fetchone()[0]
+
+	#BEGIN TRANSACTION;
+	#cursor.execute('BEGIN')
+	try:
+		cursor.execute("PRAGMA foreign_keys=off;")
+
+		# Drop all indexes associated with table:
+		for name in index_names:
+			cursor.execute("DROP INDEX {0:s};".format(name))
+
+		cursor.execute("ALTER TABLE {table:s} RENAME TO {table:s}_backup;".format(table=table))
+		cursor.execute("CREATE TABLE {table:s} AS SELECT {columns:s} FROM {table:s}_backup;".format(table=table, columns=columns))
+		cursor.execute("DROP TABLE {table:s}_backup;".format(table=table))
+
+		# Recreate all index associated with table:
+		for sql in index_sql:
+			cursor.execute(sql)
+
+		conn.commit()
+	except: # noqa: E722, pragma: no cover
+		conn.rollback()
+		raise
+	finally:
+		cursor.execute("PRAGMA foreign_keys=%s;" % current_foreign_keys)

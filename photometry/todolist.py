@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create the TODO list which is used by the pipeline to keep track of the
@@ -11,25 +11,42 @@ import logging
 import sqlite3
 import h5py
 import re
+import itertools
 import functools
 import contextlib
+import warnings
 import multiprocessing
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.interpolate import RectBivariateSpline
 from astropy.table import Table, vstack, Column
 from astropy.io import fits
-from astropy.wcs import WCS
+from astropy.wcs import WCS, FITSFixedWarning
 from timeit import default_timer
-from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance
-from .catalog import catalog_sqlite_search_footprint
+from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance,
+	to_tuple, load_settings, load_sector_settings)
+from .catalog import catalog_sqlite_search_footprint, download_catalogs
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def calc_cbv_area(catalog_row, settings):
+	"""
+	CBV area that a given target falls within.
+
+	Parameters:
+		catalog_row (dict): Target catalog entry.
+		settings (dict): Catalog settings.
+
+	Returns:
+		int: CBV area that the star falls within.
+	"""
 	# The distance from the camera centre to the corner furthest away:
-	camera_radius = np.sqrt( 12**2 + 12**2 ) # np.max(sphere_distance(a[:,0], a[:,1], settings['camera_centre_ra'], settings['camera_centre_dec']))
+	camera_radius = np.sqrt( 12**2 + 12**2 )
 
 	# Distance to centre of the camera in degrees:
-	camera_centre_dist = sphere_distance(catalog_row['ra'], catalog_row['decl'], settings['camera_centre_ra'], settings['camera_centre_dec'])
+	camera_centre_dist = sphere_distance(
+		catalog_row['ra'],
+		catalog_row['decl'],
+		settings['camera_centre_ra'],
+		settings['camera_centre_dec'])
 
 	cbv_area = settings['camera']*100 + settings['ccd']*10
 
@@ -44,7 +61,7 @@ def calc_cbv_area(catalog_row, settings):
 
 	return cbv_area
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def edge_distance(row, column, aperture=None, image_shape=None):
 	"""
 	Distance to nearest edge.
@@ -52,7 +69,8 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 	Parameters:
 		row (ndarray): Array of row positions to calculate distance of.
 		column (ndarray): Array of column positions to calculate distance of.
-		aperture (ndarray, optional): Boolean array indicating pixels to be considered "holes" (False) and good (True).
+		aperture (ndarray, optional): Boolean array indicating pixels to be
+			considered "holes" (False) and good (True).
 		image_shape (tuple, optional): Shape of aperture image.
 
 	Returns:
@@ -60,13 +78,18 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 	"""
 	# Basic check of input:
 	if image_shape is None and aperture is None:
-		raise Exception("Please provide either aperture or image_shape.")
+		raise ValueError("Please provide either aperture or image_shape.")
 
 	if image_shape is None and aperture is not None:
 		image_shape = aperture.shape
 
 	# Distance from position to outer edges of image:
-	EdgeDistOuter = np.minimum.reduce([column+0.5, row+0.5, image_shape[1]-(column+0.5), image_shape[0]-(row+0.5)])
+	EdgeDistOuter = np.minimum.reduce([
+		column+0.5,
+		row+0.5,
+		image_shape[1]-(column+0.5),
+		image_shape[0]-(row+0.5)
+	])
 
 	# If we have been provided with an aperture and it contains "holes",
 	# we should include the distance to these holes:
@@ -83,52 +106,61 @@ def edge_distance(row, column, aperture=None, image_shape=None):
 
 	return EdgeDistOuter
 
-#------------------------------------------------------------------------------
-def _ffi_todo_wrapper(args):
-	return _ffi_todo(*args)
-
-def _ffi_todo(input_folder, sector, camera, ccd):
+#--------------------------------------------------------------------------------------------------
+def _ffi_todo(hdf5_file, exclude=[], faint_limit=15.0):
 
 	logger = logging.getLogger(__name__)
 
 	cat_tmp = []
 
-	# See if there are any FFIs for this camera and ccd.
-	# We just check if an HDF5 file exist.
-	hdf5_file = find_hdf5_files(input_folder, sector=sector, camera=camera, ccd=ccd)
-	if len(hdf5_file) != 1:
-		raise FileNotFoundError("Could not find HDF5 file")
-
 	# Load the relevant information from the HDF5 file for this camera and ccd:
-	with h5py.File(hdf5_file[0], 'r') as hdf:
+	with h5py.File(hdf5_file, 'r') as hdf:
+		sector = int(hdf['images'].attrs['SECTOR'])
+		camera = int(hdf['images'].attrs['CAMERA'])
+		ccd = int(hdf['images'].attrs['CCD'])
+		cadence = int(hdf['images'].attrs.get('CADENCE', -1))
+		if cadence == -1:
+			cadence = load_sector_settings(sector)['ffi_cadence']
+		datarel = int(hdf['images'].attrs['DATA_REL'])
 		if isinstance(hdf['wcs'], h5py.Group):
 			refindx = hdf['wcs'].attrs['ref_frame']
-			hdr_string = hdf['wcs']['%04d' % refindx][0]
+			hdr_string = hdf['wcs'][f'{refindx:04d}'][0]
 		else:
 			hdr_string = hdf['wcs'][0]
-		if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
-		wcs = WCS(header=fits.Header().fromstring(hdr_string))
+		if not isinstance(hdr_string, str):
+			hdr_string = hdr_string.decode("utf-8") # For Python 3
+		with warnings.catch_warnings():
+			warnings.filterwarnings('ignore', category=FITSFixedWarning)
+			wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True)
 		offset_rows = hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 		offset_cols = hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 0)
 		image_shape = hdf['images']['0000'].shape
 
 	# Load the corresponding catalog:
+	input_folder = os.path.dirname(hdf5_file)
 	catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 	if len(catalog_file) != 1:
-		raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
+		raise FileNotFoundError(f"Catalog file not found: SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d}")
 
 	with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 		conn.row_factory = sqlite3.Row
 		cursor = conn.cursor()
 
 		# Load the settings:
-		cursor.execute("SELECT * FROM settings WHERE camera=? AND ccd=? LIMIT 1;", (camera, ccd))
+		cursor.execute("SELECT * FROM settings WHERE sector=? AND camera=? AND ccd=? LIMIT 1;", (sector, camera, ccd))
 		settings = cursor.fetchone()
+		if settings is None:
+			raise RuntimeError(f"Settings not found in catalog (SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d})")
 
 		# Find all the stars in the catalog brigher than a certain limit:
-		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < 15 ORDER BY tmag;")
+		cursor.execute("SELECT starid,tmag,ra,decl FROM catalog WHERE tmag < ? ORDER BY tmag;", [faint_limit])
 		for row in cursor.fetchall():
 			logger.debug("%011d - %.3f", row['starid'], row['tmag'])
+
+			# Exclude targets from exclude list:
+			if (row['starid'], sector, 'ffi', datarel) in exclude:
+				logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=ffi, DATAREL=%d", row['starid'], sector, datarel)
+				continue
 
 			# Calculate the position of this star on the CCD using the WCS:
 			ra_dec = np.atleast_2d([row['ra'], row['decl']])
@@ -146,7 +178,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 			# Calculate distance from target to edge of image:
 			EdgeDist = edge_distance(y, x, image_shape=image_shape)
 
-			# Calculate the Cotrending Basis Vector area the star falls in:
+			# Calculate the Co-trending Basis Vector area the star falls in:
 			cbv_area = calc_cbv_area(row, settings)
 
 			# The targets is on silicon, so add it to the todo list:
@@ -155,6 +187,7 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 				'sector': sector,
 				'camera': camera,
 				'ccd': ccd,
+				'cadence': cadence,
 				'datasource': 'ffi',
 				'tmag': row['tmag'],
 				'cbv_area': cbv_area,
@@ -166,20 +199,21 @@ def _ffi_todo(input_folder, sector, camera, ccd):
 	# Create the TODO list as a table which we will fill with targets:
 	return Table(
 		rows=cat_tmp,
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
-#------------------------------------------------------------------------------
-def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_targets=True, exclude=[]):
+#--------------------------------------------------------------------------------------------------
+def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
+	find_secondary_targets=True, exclude=[], faint_limit=15.0):
 
 	logger = logging.getLogger(__name__)
 
 	# Create the TODO list as a table which we will fill with targets:
 	cat_tmp = []
 	empty_table = Table(
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
 	logger.debug("Processing TPF file: '%s'", fname)
@@ -188,17 +222,20 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 		sector = hdu[0].header['SECTOR']
 		camera = hdu[0].header['CAMERA']
 		ccd = hdu[0].header['CCD']
+		datarel = hdu[0].header['DATA_REL']
 		aperture_observed_pixels = (hdu['APERTURE'].data & 1 != 0)
-
-		if (starid, sector, 'tpf') in exclude or (starid, sector, 'all') in exclude:
-			logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf", starid, sector)
-			return empty_table
+		cadence = int(np.round(hdu[1].header['TIMEDEL']*86400))
 
 		if camera in cameras and ccd in ccds:
+			# Check of the target has been explicitly excluded:
+			if (starid, sector, 'tpf', datarel) in exclude:
+				logger.debug("Target excluded: STARID=%d, SECTOR=%d, DATASOURCE=tpf, DATAREL=%d", starid, sector, datarel)
+				return empty_table
+
 			# Load the corresponding catalog:
 			catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 			if len(catalog_file) != 1:
-				raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (sector, camera, ccd))
+				raise FileNotFoundError(f"Catalog file not found: SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d}")
 
 			with contextlib.closing(sqlite3.connect(catalog_file[0])) as conn:
 				conn.row_factory = sqlite3.Row
@@ -208,7 +245,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 				settings = cursor.fetchone()
 				if settings is None:
 					logger.error("Settings could not be loaded for camera=%d, ccd=%d.", camera, ccd)
-					raise ValueError("Settings could not be loaded for camera=%d, ccd=%d." % (camera, ccd))
+					raise ValueError(f"Settings could not be loaded for CAMERA={camera:d}, CCD={ccd:d}.")
 
 				# Get information about star:
 				cursor.execute("SELECT * FROM catalog WHERE starid=? LIMIT 1;", (starid, ))
@@ -226,6 +263,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 					'sector': sector,
 					'camera': camera,
 					'ccd': ccd,
+					'cadence': cadence,
 					'datasource': 'tpf',
 					'tmag': row['tmag'],
 					'cbv_area': cbv_area,
@@ -237,10 +275,12 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 					# Use the WCS of the stamp to find all stars that fall within
 					# the footprint of the stamp.
 					image_shape = hdu[2].shape
-					wcs = WCS(header=hdu[2].header)
+					with warnings.catch_warnings():
+						warnings.filterwarnings('ignore', category=FITSFixedWarning)
+						wcs = WCS(header=hdu[2].header, relax=True)
 					footprint = wcs.calc_footprint(center=False)
 
-					secondary_targets = catalog_sqlite_search_footprint(cursor, footprint, constraints='starid != %d AND tmag < 15' % starid, buffer_size=2)
+					secondary_targets = catalog_sqlite_search_footprint(cursor, footprint, constraints=f'starid != {starid:d} AND tmag < {faint_limit:f}', buffer_size=2)
 					for row in secondary_targets:
 						# Calculate the position of this star on the CCD using the WCS:
 						ra_dec = np.atleast_2d([row['ra'], row['decl']])
@@ -269,6 +309,7 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 							'sector': sector,
 							'camera': camera,
 							'ccd': ccd,
+							'cadence': cadence,
 							'datasource': 'tpf:' + str(starid),
 							'tmag': row['tmag'],
 							'cbv_area': cbv_area,
@@ -284,12 +325,12 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None, find_secondary_
 	# TODO: Could we avoid fixed-size strings in datasource column?
 	return Table(
 		rows=cat_tmp,
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
-#------------------------------------------------------------------------------
-def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
+#--------------------------------------------------------------------------------------------------
+def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrite=False,
 	find_secondary_targets=True, output_file=None):
 	"""
 	Create the TODO list which is used by the pipeline to keep track of the
@@ -298,15 +339,21 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 	Will create the file `todo.sqlite` in the directory.
 
 	Parameters:
-		input_folder (string, optional): Input folder to create TODO list for.
-			If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
-		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be included.
-		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be included.
-		overwrite (boolean): Overwrite existing TODO file. Default=``False``.
-		find_secondary_targets (boolean): Should secondary targets from TPFs be included? Default=True.
-		output_file (string, optional): The file path where the output file should be saved.
+		input_folder (str, optional): Input folder to create TODO list for.
+			If ``None``, the input directory in the environment variable
+			``TESSPHOT_INPUT`` is used.
+		sectors (iterable of int, optional): TESS Sector. If ``None``,
+			all sectors will be included.
+		cameras (iterable of int, optional): TESS camera number (1-4). If ``None``,
+			all cameras will be included.
+		ccds (iterable of int, optional): TESS CCD number (1-4). If ``None``,
+			all cameras will be included.
+		overwrite (bool): Overwrite existing TODO file. Default=``False``.
+		find_secondary_targets (bool): Should secondary targets from TPFs be included?
+			Default=True.
+		output_file (str, optional): The file path where the output file should be saved.
 			If not specified, the file will be saved into the input directory.
-			Should only be used for testing, since the file would (proberly) otherwise end up with
+			Should only be used for testing, since the file would (properly) otherwise end up with
 			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
@@ -326,8 +373,9 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
-	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
-	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
+	sectors = to_tuple(sectors)
+	cameras = to_tuple(cameras, (1,2,3,4))
+	ccds = to_tuple(ccds, (1,2,3,4))
 
 	# The TODO file that we want to create. Delete it if it already exits:
 	if output_file is None:
@@ -345,28 +393,70 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			logger.info("TODO file already exists")
 			return
 
+	# Settings:
+	settings = load_settings()
+	faint_limit = settings.getfloat('todolist', 'faint_limit', fallback=15.0)
+
 	# Number of threads available for parallel processing:
 	threads_max = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
 
 	# Load file with targets to be excluded from processing for some reason:
 	exclude_file = os.path.join(os.path.dirname(__file__), 'data', 'todolist-exclude.dat')
-	exclude = np.genfromtxt(exclude_file, usecols=(0,1,2), dtype=None, encoding='utf-8')
+	exclude = np.genfromtxt(exclude_file, usecols=(0,1,2,3), dtype=None, encoding='utf-8')
 	exclude = set([tuple(e) for e in exclude])
 
 	# Create the TODO list as a table which we will fill with targets:
 	cat = Table(
-		names=('starid', 'sector', 'camera', 'ccd', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
-		dtype=('int64', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
+		names=('starid', 'sector', 'camera', 'ccd', 'cadence', 'datasource', 'tmag', 'cbv_area', 'edge_dist'),
+		dtype=('int64', 'int32', 'int32', 'int32', 'int32', 'S256', 'float32', 'int32', 'float32')
 	)
 
-	# Load list of all Target Pixel files in the directory:
-	tpf_files = find_tpf_files(input_folder)
+	# Find list of all HDF5 files:
+	hdf_files = find_hdf5_files(input_folder, sector=sectors, camera=cameras, ccd=ccds)
+	logger.info("Number of HDF5 files: %d", len(hdf_files))
+
+	# Don't filter on the camera and ccd here, even if they are provided,
+	# since this would mean opening the files to read the headers, and we
+	# are going to do that anyway later on, so might as well wait and only
+	# do that once:
+	#tpf_files = find_tpf_files(input_folder, sector=sectors)
+
+	# If the sectors are not provided, we have to find them from the files
+	# that were found in scanning the input directory:
+	if sectors is None:
+		sectors = set()
+
+		# Load list of all Target Pixel files in the directory:
+		tpf_files = find_tpf_files(input_folder)
+
+		# TODO: Could we change this so we don't have to parse the filename?
+		regex_tpf = re.compile(r'-s(\d+)[-_]')
+		for fname in tpf_files:
+			m = regex_tpf.search(os.path.basename(fname))
+			sectors.add(int(m.group(1)))
+
+		# TODO: Could we change this so we don't have to parse the filename?
+		regex_hdf = re.compile(r'^sector(\d+)_camera(\d)_ccd(\d)\.hdf5$')
+		for fname in hdf_files:
+			m = regex_hdf.match(os.path.basename(fname))
+			sectors.add(int(m.group(1)))
+	else:
+		tpf_files = []
+		for sector in sectors:
+			tpf_files.extend(find_tpf_files(input_folder, sector=sector))
+
 	logger.info("Number of TPF files: %d", len(tpf_files))
 
+	# Make sure that catalog files are available in the input directory.
+	# If they are not already, they will be downloaded from the cache:
+	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
+		download_catalogs(input_folder, sector, camera=camera, ccd=ccd)
+
+	# Add the target pixel files to the TODO list:
 	if len(tpf_files) > 0:
 		# Open a pool of workers:
 		logger.info("Starting pool of workers for TPFs...")
-		threads = min(threads_max, len(tpf_files)) # No reason to use more than the number of jobs in total
+		threads = min(threads_max, len(tpf_files)) # No reason to use more than the number of jobs
 		logger.info("Using %d processes.", threads)
 
 		if threads > 1:
@@ -377,7 +467,14 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 		# Run the TPF files in parallel:
 		tic = default_timer()
-		_tpf_todo_wrapper = functools.partial(_tpf_todo, input_folder=input_folder, cameras=cameras, ccds=ccds, find_secondary_targets=find_secondary_targets, exclude=exclude)
+		_tpf_todo_wrapper = functools.partial(_tpf_todo,
+			input_folder=input_folder,
+			cameras=cameras,
+			ccds=ccds,
+			find_secondary_targets=find_secondary_targets,
+			exclude=exclude,
+			faint_limit=faint_limit)
+
 		for cat2 in m(_tpf_todo_wrapper, tpf_files):
 			cat = vstack([cat, cat2], join_type='exact')
 
@@ -401,20 +498,10 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		logger.info("Removing %d secondary TPF files as they are also primary", np.sum(indx_remove))
 		cat = cat[~indx_remove]
 
-	# Find list of all HDF5 files:
-	hdf_files = find_hdf5_files(input_folder, camera=cameras, ccd=ccds)
-	logger.info("Number of HDF5 files: %d", len(hdf_files))
-
 	if len(hdf_files) > 0:
-		# TODO: Could we change this so we dont have to parse the filename?
-		inputs = []
-		for fname in hdf_files:
-			m = re.match(r'sector(\d+)_camera(\d)_ccd(\d)\.hdf5', os.path.basename(fname))
-			inputs.append( (input_folder, int(m.group(1)), int(m.group(2)), int(m.group(3))) )
-
 		# Open a pool of workers:
 		logger.info("Starting pool of workers for FFIs...")
-		threads = min(threads_max, len(inputs)) # No reason to use more than the number of jobs in total
+		threads = min(threads_max, len(hdf_files)) # No reason to use more than the number of jobs
 		logger.info("Using %d processes.", threads)
 
 		if threads > 1:
@@ -423,16 +510,20 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		else:
 			m = map
 
+		_ffi_todo_wrapper = functools.partial(_ffi_todo,
+			exclude=exclude,
+			faint_limit=faint_limit)
+
 		tic = default_timer()
 		ccds_done = 0
-		for cat2 in m(_ffi_todo_wrapper, inputs):
+		for cat2 in m(_ffi_todo_wrapper, hdf_files):
 			cat = vstack([cat, cat2], join_type='exact')
 			ccds_done += 1
-			logger.info("CCDs done: %d/%d", ccds_done, len(inputs))
+			logger.info("CCDs done: %d/%d", ccds_done, len(hdf_files))
 
 		# Amount of time it took to process TPF files:
 		toc = default_timer()
-		logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(inputs))
+		logger.info("Elaspsed time: %f seconds (%f per file)", toc-tic, (toc-tic)/len(hdf_files))
 
 		if threads > 1:
 			pool.close()
@@ -445,52 +536,40 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 
 	# Remove duplicates!
 	logger.info("Removing duplicate entries...")
-	_, idx = np.unique(cat[('starid', 'sector', 'camera', 'ccd', 'datasource')], return_index=True, axis=0)
+	_, idx = np.unique(cat[('starid', 'sector', 'camera', 'ccd', 'datasource', 'cadence')], return_index=True, axis=0)
 	cat = cat[np.sort(idx)]
 
 	# If the target is present in more than one TPF file, pick the one
 	# where the target is the furthest from the edge of the image
 	# and discard the target in all the other TPFs:
 	if find_secondary_targets:
-		# Add an index column to the table for later use:
-		cat.add_column(Column(name='priority', data=np.arange(len(cat))))
+		indx_secondary = [row['datasource'].strip().startswith('tpf:') for row in cat]
+		for cadence in np.unique(cat[indx_secondary]['cadence']):
+			# Add an index column to the table for later use:
+			cat.add_column(Column(name='priority', data=np.arange(len(cat))))
 
-		# Create index that will only find secondary targets:
-		indx = [row['datasource'].strip().startswith('tpf:') for row in cat]
+			# Create index that will only find secondary targets in this cadence:
+			indx = [row['datasource'].strip().startswith('tpf:') for row in cat]
+			indx &= (cat['cadence'] == cadence)
 
-		# Group the table on the starids and find groups with more than 1 target:
-		# Equivalent to the SQL code "GROUP BY starid HAVING COUNT(*) > 1"
-		remove_indx = []
-		for g in cat[indx].group_by('starid').groups:
-			if len(g) > 1:
-				# Find the target farthest from the edge and mark the rest
-				# for removal:
-				logger.debug(g)
-				im = np.argmax(g['edge_dist'])
-				ir = np.ones(len(g), dtype='bool')
-				ir[im] = False
-				remove_indx += list(g[ir]['priority'])
+			# Group the table on the starids and find groups with more than 1 target:
+			# Equivalent to the SQL code "GROUP BY starid HAVING COUNT(*) > 1"
+			remove_indx = []
+			for g in cat[indx].group_by('starid').groups:
+				if len(g) > 1:
+					# Find the target farthest from the edge and mark the rest
+					# for removal:
+					logger.debug(g)
+					im = np.argmax(g['edge_dist'])
+					ir = np.ones(len(g), dtype='bool')
+					ir[im] = False
+					remove_indx += list(g[ir]['priority'])
 
-		# Remove the list of duplicate secondary targets:
-		logger.info("Removing %d secondary targets as duplicates.", len(remove_indx))
-		logger.debug(remove_indx)
-		cat.remove_rows(remove_indx)
-
-	# Exclude targets from exclude list:
-	# Add an index and use that to search for starid, and then further check sector and datasource:
-	cat.add_index('starid')
-	remove_indx = []
-	for ex in exclude:
-		try:
-			indx = np.atleast_1d(cat.loc_indices['starid', ex[0]])
-		except KeyError:
-			indx = []
-		for i in indx:
-			if cat[i]['sector'] == ex[1] and cat[i]['datasource'] == ex[2]:
-				remove_indx.append(i)
-	if remove_indx:
-		del cat[remove_indx]
-	cat.remove_indices('starid')
+			# Remove the list of duplicate secondary targets:
+			logger.info("Removing %d secondary targets as duplicates from %ds cadence.", len(remove_indx), cadence)
+			logger.debug(remove_indx)
+			cat.remove_rows(remove_indx)
+			cat.remove_column('priority')
 
 	# Load file with specific method settings and create lookup-table of them:
 	methods_file = os.path.join(os.path.dirname(__file__), 'data', 'todolist-methods.dat')
@@ -516,11 +595,12 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		# Create TODO-list table:
 		cursor.execute("""CREATE TABLE todolist (
 			priority INTEGER PRIMARY KEY ASC NOT NULL,
-			starid BIGINT NOT NULL,
+			starid INTEGER NOT NULL,
 			sector INTEGER NOT NULL,
 			datasource TEXT NOT NULL DEFAULT 'ffi',
 			camera INTEGER NOT NULL,
 			ccd INTEGER NOT NULL,
+			cadence INTEGER NOT NULL,
 			method TEXT DEFAULT NULL,
 			tmag REAL,
 			status INTEGER DEFAULT NULL,
@@ -531,13 +611,18 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			# Find if there is a specific method defined for this target:
 			method = methods.get((int(row['starid']), int(row['sector']), row['datasource'].strip()), None)
 
+			# For very bright stars, we might as well just use Halo photometry right away:
+			if method is None and row['tmag'] <= 2.0 and row['datasource'] == 'ffi':
+				method = 'halo'
+
 			# Add target to TODO-list:
-			cursor.execute("INSERT INTO todolist (priority,starid,sector,camera,ccd,datasource,tmag,cbv_area,method) VALUES (?,?,?,?,?,?,?,?,?);", (
+			cursor.execute("INSERT INTO todolist (priority,starid,sector,camera,ccd,cadence,datasource,tmag,cbv_area,method) VALUES (?,?,?,?,?,?,?,?,?,?);", (
 				pri+1,
 				int(row['starid']),
 				int(row['sector']),
 				int(row['camera']),
 				int(row['ccd']),
+				int(row['cadence']),
 				row['datasource'].strip(),
 				float(row['tmag']),
 				int(row['cbv_area']),
@@ -545,7 +630,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 			))
 
 		conn.commit()
-		cursor.execute("CREATE INDEX starid_datasource_idx ON todolist (starid, datasource);") # FIXME: Should be "UNIQUE", but something is weird in ETE-6?!
+		cursor.execute("CREATE UNIQUE INDEX unique_target_idx ON todolist (starid, datasource, sector, camera, ccd, cadence);")
 		cursor.execute("CREATE INDEX status_idx ON todolist (status);")
 		cursor.execute("CREATE INDEX starid_idx ON todolist (starid);")
 		conn.commit()
@@ -557,7 +642,7 @@ def make_todo(input_folder=None, cameras=None, ccds=None, overwrite=False,
 		# Run a VACUUM of the table which will force a recreation of the
 		# underlying "pages" of the file.
 		# Please note that we are changing the "isolation_level" of the connection here,
-		# but since we closing the conmnection just after, we are not changing it back
+		# but since we closing the connection just after, we are not changing it back
 		conn.isolation_level = None
 		cursor.execute("VACUUM;")
 

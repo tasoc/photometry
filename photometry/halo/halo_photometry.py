@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Halo Photometry.
@@ -10,14 +10,15 @@ Halo Photometry.
 
 import logging
 import os.path
+import contextlib
 import numpy as np
 from astropy.table import Table
 import halophot
 from halophot.halo_tools import do_lc
-from ..plots import plt, save_figure
+from ..plots import matplotlib, plt, plot_image, save_figure
 from .. import BasePhotometry, STATUS
 from ..quality import TESSQualityFlags
-from ..utilities import mag2flux
+from ..utilities import mag2flux, LoggerWriter
 
 #--------------------------------------------------------------------------------------------------
 class HaloPhotometry(BasePhotometry):
@@ -100,11 +101,14 @@ class HaloPhotometry(BasePhotometry):
 		if self.datasource == 'ffi':
 			self.resize_stamp(width=dist_max+2, height=dist_max+2)
 
-		logger.info("Target position in stamp: (%f, %f)", self.target_pos_row_stamp, self.target_pos_column_stamp )
+		logger.info("Target position in stamp: (%f, %f)",
+			self.target_pos_row_stamp,
+			self.target_pos_column_stamp)
 
 		# Initialize
 		logger.info('Formatting data for halo')
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
+		time = self.lightcurve['time'][indx_goodtimes]
 		flux = self.images_cube.T[indx_goodtimes, :, :]
 
 		# Cut out pixels closer than 20 pixels, that were actually observed:
@@ -134,7 +138,7 @@ class HaloPhotometry(BasePhotometry):
 			# If a single hole is found, use it, otherwise don't try to be
 			# to clever, and just don't split the timeseries.
 			timecorr = self.lightcurve['timecorr'][indx_goodtimes]
-			t = self.lightcurve['time'][indx_goodtimes] - timecorr
+			t = time - timecorr
 			dt = np.append(np.diff(t), 0)
 			t0 = np.nanmin(t)
 			Ttot = np.nanmax(t) - t0
@@ -148,13 +152,20 @@ class HaloPhotometry(BasePhotometry):
 				logger.warning("No split-timestamps have been defined for this sector")
 				split_times = None # TODO: Is this correct?
 
+		# Ensure that we are not splitting outside the provided time:
+		if split_times is not None:
+			split_times = tuple([st for st in split_times if np.min(time) < st < np.max(time)])
+			if not split_times:
+				split_times = None
+		logger.debug("Split times: %s", split_times)
+
 		# Get the position of the main target
 		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
 		row = self.target_pos_row + self.lightcurve['pos_corr'][:, 1]
 
 		# Put together timeseries table in the format that halophot likes:
 		ts = Table({
-			'time': self.lightcurve['time'][indx_goodtimes],
+			'time': time,
 			'cadence': self.lightcurve['cadenceno'][indx_goodtimes],
 			'x': col[indx_goodtimes],
 			'y': row[indx_goodtimes],
@@ -163,28 +174,28 @@ class HaloPhotometry(BasePhotometry):
 
 		# Run the halo photometry core function
 		try:
-			# TODO: Redirect stdout to logger.info
-			pf, ts, weights, weightmap_dict, pixels_sub = do_lc(
-				flux,
-				ts,
-				splits,
-				sub,
-				maxiter=maxiter,
-				split_times=split_times,
-				w_init=w_init,
-				random_init=random_init,
-				thresh=thresh,
-				minflux=minflux,
-				objective=objective,
-				analytic=analytic,
-				sigclip=sigclip,
-				verbose=logger.isEnabledFor(logging.INFO),
-				mission='TESS',
-				bitmask=TESSQualityFlags.DEFAULT_BITMASK
-			)
+			# Redirect stdout to logger.info
+			with contextlib.redirect_stdout(LoggerWriter(logger)):
+				pf, ts, weights, weightmap_dict, pixels_sub = do_lc(
+					flux,
+					ts,
+					splits,
+					sub,
+					maxiter=maxiter,
+					split_times=split_times,
+					w_init=w_init,
+					random_init=random_init,
+					thresh=thresh,
+					minflux=minflux,
+					objective=objective,
+					analytic=analytic,
+					sigclip=sigclip,
+					verbose=logger.isEnabledFor(logging.INFO),
+					mission='TESS',
+					bitmask=TESSQualityFlags.DEFAULT_BITMASK
+				)
 		except: # noqa: E722
 			logger.exception('Halo optimization failed')
-			self.report_details(error='Halo optimization failed')
 			return STATUS.ERROR
 
 		# Fix for halophot sometimes not returning lists:
@@ -205,7 +216,7 @@ class HaloPhotometry(BasePhotometry):
 		for k, imgerr in enumerate(self.images_err):
 			if not indx_goodtimes[k]: continue
 			wm = weightmap_dict['weightmap'][wmindx[k]] # Get the weightmap for this cadence
-			self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.sum( wm**2 * imgerr**2 ))
+			self.lightcurve['flux_err'][k] = np.abs(normfactor) * np.sqrt(np.nansum( wm**2 * imgerr**2 ))
 
 		self.lightcurve['pos_centroid'][:,0] = col # we don't actually calculate centroids
 		self.lightcurve['pos_centroid'][:,1] = row
@@ -217,19 +228,16 @@ class HaloPhotometry(BasePhotometry):
 		# Plotting:
 		if self.plot:
 			logger.info('Plotting weight map')
-			cmap = plt.get_cmap('seismic')
-			norm = np.size(weightmap_dict['weightmap'][0])
-			cmap.set_bad('k', 1.)
 			for k, wm in enumerate(weightmap_dict['weightmap']):
-				im = np.log10(wm*norm)
-				fig = plt.figure()
-				ax = fig.add_subplot(111)
-				plt.imshow(im, cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im),
-					interpolation='None', origin='lower')
-				plt.colorbar()
-				ax.set_title('TV-min Weightmap')
-				#plot_image(im, scale='log', cmap=cmap, vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), make_cbar=True, title='TV-min Weightmap')
-				save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)))
+				# Create normalization for plot:
+				wm[~pixel_mask] = np.NaN
+				vlim = np.nanmax(np.abs(wm))
+				norm = matplotlib.colors.SymLogNorm(linthresh=0.1*vlim, vmin=-vlim, vmax=vlim, base=10)
+				# Create plot:
+				fig, ax = plt.subplots()
+				plot_image(wm, ax=ax, scale=norm, title='TV-min Weightmap', cmap='bwr',
+					cbar='right', clabel='Weights')
+				save_figure(os.path.join(self.plot_folder, f'{self.starid:d}_weightmap_{k+1:d}'), fig=fig)
 				plt.close(fig)
 
 		# Add additional headers specific to this method:
@@ -242,6 +250,16 @@ class HaloPhotometry(BasePhotometry):
 
 		# Return mask used for photometry:
 		self.final_phot_mask = pixel_mask
+
+		# Check if there are other targets in the mask that could then be skipped from
+		# processing, and report this back to the TaskManager. The TaskManager will decide
+		# if this means that this target or the other targets should be skipped in the end.
+		cols, rows = self.get_pixel_grid()
+		skip_targets = [t['starid'] for t in self.catalog if t['starid'] != self.starid
+			and np.any(pixel_mask & (rows == np.round(t['row'])+1) & (cols == np.round(t['column'])+1))]
+		if skip_targets:
+			logger.info("These stars could be skipped: %s", skip_targets)
+			self.report_details(skip_targets=skip_targets)
 
 		# Return whether you think it went well:
 		return STATUS.OK

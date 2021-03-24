@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 The basic photometry class for the TASOC Photometry pipeline.
@@ -16,6 +16,7 @@ import os.path
 import glob
 import contextlib
 import warnings
+import enum
 from copy import deepcopy
 from astropy._erfa.core import ErfaWarning
 from astropy.io import fits
@@ -23,24 +24,24 @@ from astropy.table import Table, Column
 from astropy import units
 import astropy.coordinates as coord
 from astropy.time import Time
-from astropy.wcs import WCS
-import enum
-from bottleneck import replace, nanmedian, nanvar, nanstd, allnan
+from astropy.wcs import WCS, FITSFixedWarning
+from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
-from .utilities import find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale, find_nearest
+from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale,
+	find_nearest, ListHandler, load_settings, load_sector_settings)
 from .catalog import catalog_sqlite_search_footprint
+from .psf import PSF
 from .plots import plot_image, plt, save_figure
 from .spice import TESS_SPICE
 from .version import get_version
+from . import fixes
 
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=ErfaWarning, module="astropy")
 
 __version__ = get_version()
-
-__docformat__ = 'restructuredtext'
 
 hdf5_cache = {}
 
@@ -65,55 +66,59 @@ class BasePhotometry(object):
 	All other specific photometric algorithms will inherit from this.
 
 	Attributes:
-		starid (integer): TIC number of star being processed.
-		input_folder (string): Root directory where files are loaded from.
-		output_folder (string): Root directory where output files are saved.
-		plot (boolean): Indicates wheter plots should be created as part of the output.
-		plot_folder (string): Directory where plots are saved to.
+		starid (int): TIC number of star being processed.
+		input_folder (str): Root directory where files are loaded from.
+		output_folder (str): Root directory where output files are saved.
+		plot (bool): Indicates wheter plots should be created as part of the output.
+		plot_folder (str): Directory where plots are saved to.
+		method (str): String indication the method of photometry.
 
-		sector (integer): TESS observing sector.
-		camera (integer): TESS camera (1-4).
-		ccd (integer): TESS CCD (1-4).
-		n_readout (integer): Number of frames co-added in each timestamp.
+		sector (int): TESS observing sector.
+		camera (int): TESS camera (1-4).
+		ccd (int): TESS CCD (1-4).
+		data_rel (int): Data release number.
+		n_readout (int): Number of frames co-added in each timestamp.
+		header (dict-like): Primary header, either from TPF or HDF5 files.
 
-		target_mag (float): TESS magnitude of the main target.
-		target_pos_ra (float): Right ascension of the main target at time of observation.
-		target_pos_dec (float): Declination of the main target at time of observation.
-		target_pos_ra_J2000 (float): Right ascension of the main target at J2000.
-		target_pos_dec_J2000 (float): Declination of the main target at J2000.
-		target_pos_column (flat): Main target CCD column position.
+		target (dict): Catalog information about the main target.
+		target_pos_column (float): Main target CCD column position.
 		target_pos_row (float): Main target CCD row position.
 		target_pos_column_stamp (float): Main target CCD column position in stamp.
 		target_pos_row_stamp (float): Main target CCD row position in stamp.
-		wcs (``astropy.wcs.WCS`` object): World Coordinate system solution.
+		wcs (:class:`astropy.wcs.WCS`): World Coordinate system solution.
 
-		lightcurve (``astropy.table.Table`` object): Table to be filled with an extracted lightcurve.
-		pixelflags (numpy.ndarray): Flags for each pixel, as defined by the TESS data product manual.
-		final_phot_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of lightcurve. ``True`` if used, ``False`` otherwise.
-		final_position_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of positions. ``True`` if used, ``False`` otherwise.
+		lightcurve (:class:`astropy.table.Table`): Table to be filled with an extracted lightcurve.
+		final_phot_mask (numpy.ndarray): Mask indicating which pixels were used in extraction of
+			lightcurve. ``True`` if used, ``False`` otherwise.
+		final_position_mask (numpy.ndarray): Mask indicating which pixels were used in extraction
+			of positions. ``True`` if used, ``False`` otherwise.
 		additional_headers (dict): Additional headers to be included in FITS files.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
+	#----------------------------------------------------------------------------------------------
 	def __init__(self, starid, input_folder, output_folder, datasource='ffi',
-		sector=None, camera=None, ccd=None, plot=False, cache='basic', version=5):
+		sector=None, camera=None, ccd=None, cadence=None, plot=False, cache='basic', version=6):
 		"""
 		Initialize the photometry object.
 
 		Parameters:
 			starid (int): TIC number of star to be processed.
-			input_folder (string): Root directory where files are loaded from.
-			output_folder (string): Root directory where output files are saved.
-			datasource (string, optional): Source of the data. Options are ``'ffi'`` or ``'tpf'``. Default is ``'ffi'``.
-			plot (boolean, optional): Create plots as part of the output. Default is ``False``.
-			camera (integer, optional): TESS camera (1-4) to load target from (Only used for FFIs).
-			ccd (integer, optional): TESS CCD (1-4) to load target from (Only used for FFIs).
-			cache (string, optional): Optional values are ``'none'``, ``'full'`` or ``'basic'`` (Default).
-			version (integer): Data release number to be added to headers. Default=5.
+			input_folder (str): Root directory where files are loaded from.
+			output_folder (str): Root directory where output files are saved.
+			datasource (str): Source of the data. Options are ``'ffi'`` or ``'tpf'``.
+				Default is ``'ffi'``.
+			plot (bool): Create plots as part of the output. Default is ``False``.
+			camera (int): TESS camera (1-4) to load target from (Only used for FFIs).
+			ccd (int): TESS CCD (1-4) to load target from (Only used for FFIs).
+			cadence (int, optional): Not used for ``datasource='ffi'``.
+			cache (str): Optional values are ``'none'``, ``'full'``
+				or ``'basic'`` (Default).
+			version (int): Data release number to be added to headers. Default=6.
 
 		Raises:
-			OSError: If starid could not be found in catalog.
+			Exception: If starid could not be found in catalog.
 			FileNotFoundError: If input file (HDF5, TPF, Catalog) could not be found.
 			ValueError: On invalid datasource.
 			ValueError: If ``camera`` and ``ccd`` is not provided together with ``datasource='ffi'``.
@@ -122,19 +127,36 @@ class BasePhotometry(object):
 		logger = logging.getLogger(__name__)
 
 		if datasource != 'ffi' and not datasource.startswith('tpf'):
-			raise ValueError("Invalid datasource: '%s'" % datasource)
+			raise ValueError(f"Invalid datasource: '{datasource:s}'")
 		if cache not in ('basic', 'none', 'full'):
-			raise ValueError("Invalid cache: '%s'" % cache)
+			raise ValueError(f"Invalid cache: '{cache:s}'")
 
 		# Store the input:
 		self.starid = starid
-		self.input_folder = input_folder
+		self.input_folder = os.path.abspath(input_folder)
 		self.output_folder_base = os.path.abspath(output_folder)
 		self.plot = plot
 		self.datasource = datasource
 		self.version = version
 
-		logger.info('STARID = %d, DATASOURCE = %s', self.starid, self.datasource)
+		# Further checks of inputs:
+		if os.path.isfile(self.input_folder):
+			self.input_folder = os.path.dirname(self.input_folder)
+		if not os.path.isdir(self.input_folder):
+			raise FileNotFoundError(f"Not a valid input directory: '{self.input_folder:s}'")
+
+		# Extract which photometric method that is being used by checking the
+		# name of the class that is running:
+		self.method = {
+			'BasePhotometry': 'base',
+			'AperturePhotometry': 'aperture',
+			'PSFPhotometry': 'psf',
+			'LinPSFPhotometry': 'linpsf',
+			'HaloPhotometry': 'halo'
+		}.get(self.__class__.__name__, None)
+
+		logger.info('STARID = %d, DATASOURCE = %s, METHOD = %s',
+			self.starid, self.datasource, self.method)
 
 		self._status = STATUS.UNKNOWN
 		self._details = {}
@@ -147,19 +169,15 @@ class BasePhotometry(object):
 		self._pixelflags_cube_full = None
 		self._sumimage_full = None
 
-		# Directory where output files will be saved:
-		self.output_folder = os.path.join(
-			self.output_folder_base,
-			self.datasource[:3], # Only three first characters for cases with "tpf:XXXXXX"
-			'{0:011d}'.format(self.starid)[:5]
-		)
-
-		# Set directory where diagnostics plots should be saved to:
-		self.plot_folder = None
-		if self.plot:
-			self.plot_folder = os.path.join(self.output_folder, 'plots', '{0:011d}'.format(self.starid))
-			if not os.path.exists(self.plot_folder):
-				os.makedirs(self.plot_folder) # "exists_ok=True" doesn't work in Python 2.7
+		# Add a ListHandler to the logging of the photometry module.
+		# This is needed to catch any errors and warnings made by the photometries
+		# for ultimately storing them in the TODO-file.
+		# https://stackoverflow.com/questions/36408496/python-logging-handler-to-append-to-list
+		self.message_queue = []
+		handler = ListHandler(message_queue=self.message_queue, level=logging.WARNING)
+		formatter = logging.Formatter('%(levelname)s: %(message)s')
+		handler.setFormatter(formatter)
+		logging.getLogger('photometry').addHandler(handler)
 
 		# Init table that will be filled with lightcurve stuff:
 		self.lightcurve = Table()
@@ -179,16 +197,15 @@ class BasePhotometry(object):
 			logger.debug('CCD = %s', self.ccd)
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+			filepath_hdf5 = find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
-				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+				raise FileNotFoundError(f"HDF5 File not found. SECTOR={self.sector:d}, CAMERA={self.camera:d}, CCD={self.ccd:d}")
 			filepath_hdf5 = filepath_hdf5[0]
 			self.filepath_hdf5 = filepath_hdf5
 
 			logger.debug("CACHE = %s", cache)
 			load_into_cache = False
 			if cache == 'none':
-				attrs = {}
 				load_into_cache = True
 			else:
 				global hdf5_cache
@@ -197,16 +214,22 @@ class BasePhotometry(object):
 					load_into_cache = True
 				elif cache == 'full' and hdf5_cache[filepath_hdf5].get('_images_cube_full') is None:
 					load_into_cache = True
-				attrs = hdf5_cache[filepath_hdf5] # Pointer to global variable
 
 			# Open the HDF5 file for reading if we are not holding everything in memory:
 			if load_into_cache or cache != 'full':
-				self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
-				#self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest', driver='mpio', comm=MPI.COMM_WORLD)
-				#self.hdf.atomic = False # Since we are only reading, this should be okay
+				self.hdf = h5py.File(filepath_hdf5, 'r')
 
 			if load_into_cache:
 				logger.debug('Loading basic data into cache...')
+				attrs = {}
+
+				# Just a shorthand for the attributes we use as "headers":
+				hdr = dict(self.hdf['images'].attrs)
+				attrs['header'] = hdr
+				attrs['data_rel'] = hdr['DATA_REL'] # Data release number
+				attrs['cadence'] = hdr.get('CADENCE')
+				if attrs['cadence'] is None:
+					attrs['cadence'] = load_sector_settings(self.sector)['ffi_cadence']
 
 				# Start filling out the basic vectors:
 				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
@@ -217,34 +240,43 @@ class BasePhotometry(object):
 					self.lightcurve['timecorr'] = Column(self.hdf['timecorr'], description='Barycentric time correction', unit='days', dtype='float32')
 				else:
 					self.lightcurve['timecorr'] = Column(np.zeros(N, dtype='float32'), description='Barycentric time correction', unit='days', dtype='float32')
+
+				# Correct timestamp offset that was in early data releases:
+				self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], hdr, datatype='ffi')
+
 				attrs['lightcurve'] = self.lightcurve
 
 				# World Coordinate System solution:
 				if isinstance(self.hdf['wcs'], h5py.Group):
 					refindx = self.hdf['wcs'].attrs['ref_frame']
-					hdr_string = self.hdf['wcs']['%04d' % refindx][0]
+					hdr_string = self.hdf['wcs'][f'{refindx:04d}'][0]
 				else:
 					hdr_string = self.hdf['wcs'][0]
 				if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
-				self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
+				with warnings.catch_warnings():
+					warnings.filterwarnings('ignore', category=FITSFixedWarning)
+					self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
 				attrs['wcs'] = self.wcs
 
 				# Get shape of sumimage from hdf5 file:
 				attrs['_max_stamp'] = (0, self.hdf['sumimage'].shape[0], 0, self.hdf['sumimage'].shape[1])
-				attrs['pixel_offset_row'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-				attrs['pixel_offset_col'] = self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
+				attrs['pixel_offset_row'] = hdr.get('PIXEL_OFFSET_ROW', 0)
+				attrs['pixel_offset_col'] = hdr.get('PIXEL_OFFSET_COLUMN', 44) # Default for TESS data
 
 				# Get info for psf fit Gaussian statistic:
-				attrs['readnoise'] = self.hdf['images'].attrs.get('READNOIS', 10)
-				attrs['gain'] = self.hdf['images'].attrs.get('GAIN', 100)
-				attrs['num_frm'] = self.hdf['images'].attrs.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
-				attrs['n_readout'] = self.hdf['images'].attrs.get('NREADOUT', int(attrs['num_frm']*(1-2/self.hdf['images'].attrs.get('CRBLKSZ', np.inf)))) # Number of frames co-added in each timestamp (Default=TESS).
+				attrs['readnoise'] = hdr.get('READNOIS', 10)
+				attrs['gain'] = hdr.get('GAIN', 100)
+				attrs['num_frm'] = hdr.get('NUM_FRM', 900) # Number of frames co-added in each timestamp (Default=TESS).
+				attrs['n_readout'] = hdr.get('NREADOUT', int(attrs['num_frm']*(1-2/hdr.get('CRBLKSZ', np.inf)))) # Number of readouts
 
 				# Load MovementKernel into memory:
 				attrs['_MovementKernel'] = self.MovementKernel
 
 				# The full sum-image:
 				attrs['_sumimage_full'] = np.asarray(self.hdf['sumimage'])
+
+				# Store attr in global variable:
+				hdf5_cache[filepath_hdf5] = deepcopy(attrs)
 
 				# If we are doing a full cache (everything in memory) load the image cubes as well.
 				# Note that this will take up A LOT of memory!
@@ -265,13 +297,14 @@ class BasePhotometry(object):
 					self.hdf = None
 			else:
 				logger.debug('Loaded data from cache!')
+				attrs = hdf5_cache[filepath_hdf5] # Pointer to global variable
 
 			# Set all the attributes from the cache:
-			# TODO: Does this create copies of data - if so we should mayde delete "attrs" again?
+			# TODO: Does this create copies of data? - if so we should mayde delete "attrs" again?
 			for key, value in attrs.items():
 				setattr(self, key, value)
 
-		elif self.datasource.startswith('tpf'):
+		else:
 			# If the datasource was specified as 'tpf:starid' it means
 			# that we should load from the specified starid instead of
 			# the starid of the current main target.
@@ -282,45 +315,50 @@ class BasePhotometry(object):
 				starid_to_load = self.starid
 
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(input_folder, sector=sector, starid=starid_to_load)
+			fname = find_tpf_files(self.input_folder, starid=starid_to_load, sector=sector, cadence=cadence)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
 				raise FileNotFoundError("Target Pixel File not found")
 			elif len(fname) > 1:
-				raise OSError("Multiple Target Pixel Files found matching pattern")
+				raise FileNotFoundError("Multiple Target Pixel Files found matching pattern")
 
 			# Open the FITS file:
 			self.tpf = fits.open(fname, mode='readonly', memmap=True)
 
 			# Load sector, camera and CCD from the FITS header:
+			self.header = self.tpf[0].header
 			self.sector = self.tpf[0].header['SECTOR']
 			self.camera = self.tpf[0].header['CAMERA']
 			self.ccd = self.tpf[0].header['CCD']
+			self.data_rel = self.tpf[0].header['DATA_REL'] # Data release number
+			self.cadence = cadence if cadence is not None else int(np.round(self.tpf[1].header['TIMEDEL']*86400))
 
 			# Fix for timestamps that are not defined. Simply remove them from the table:
 			# This is seen in some file from sector 1.
-			indx_good_times = np.isfinite(self.tpf[1].data.field('TIME'))
-			self.tpf[1].data = self.tpf[1].data[indx_good_times]
+			indx_good_times = np.isfinite(self.tpf['PIXELS'].data['TIME'])
+			self.tpf['PIXELS'].data = self.tpf['PIXELS'].data[indx_good_times]
 
 			# Extract the relevant information from the FITS file:
-			self.lightcurve['time'] = Column(self.tpf[1].data.field('TIME'), description='Time', dtype='float64', unit='TBJD')
-			self.lightcurve['timecorr'] = Column(self.tpf[1].data.field('TIMECORR'), description='Barycentric time correction', unit='days', dtype='float32')
-			self.lightcurve['cadenceno'] = Column(self.tpf[1].data.field('CADENCENO'), description='Cadence number', dtype='int32')
-			self.lightcurve['quality'] = Column(self.tpf[1].data.field('QUALITY'), description='Quality flags', dtype='int32')
+			self.lightcurve['time'] = Column(self.tpf['PIXELS'].data['TIME'], description='Time', dtype='float64', unit='TBJD')
+			self.lightcurve['timecorr'] = Column(self.tpf['PIXELS'].data['TIMECORR'], description='Barycentric time correction', unit='days', dtype='float32')
+			self.lightcurve['cadenceno'] = Column(self.tpf['PIXELS'].data['CADENCENO'], description='Cadence number', dtype='int32')
+			self.lightcurve['quality'] = Column(self.tpf['PIXELS'].data['QUALITY'], description='Quality flags', dtype='int32')
 
 			# World Coordinate System solution:
-			self.wcs = WCS(header=self.tpf[2].header, relax=True)
+			with warnings.catch_warnings():
+				warnings.filterwarnings('ignore', category=FITSFixedWarning)
+				self.wcs = WCS(header=self.tpf['APERTURE'].header, relax=True)
 
 			# Get the positions of the stamp from the FITS header:
 			self._max_stamp = (
-				self.tpf[2].header['CRVAL2P'] - 1,
-				self.tpf[2].header['CRVAL2P'] - 1 + self.tpf[2].header['NAXIS2'],
-				self.tpf[2].header['CRVAL1P'] - 1,
-				self.tpf[2].header['CRVAL1P'] - 1 + self.tpf[2].header['NAXIS1']
+				self.tpf['APERTURE'].header['CRVAL2P'] - 1,
+				self.tpf['APERTURE'].header['CRVAL2P'] - 1 + self.tpf[2].header['NAXIS2'],
+				self.tpf['APERTURE'].header['CRVAL1P'] - 1,
+				self.tpf['APERTURE'].header['CRVAL1P'] - 1 + self.tpf[2].header['NAXIS1']
 			)
-			self.pixel_offset_row = self.tpf[2].header['CRVAL2P'] - 1
-			self.pixel_offset_col = self.tpf[2].header['CRVAL1P'] - 1
+			self.pixel_offset_row = self.tpf['APERTURE'].header['CRVAL2P'] - 1
+			self.pixel_offset_col = self.tpf['APERTURE'].header['CRVAL1P'] - 1
 
 			logger.debug(
 				'Max stamp size: (%d, %d)',
@@ -329,43 +367,52 @@ class BasePhotometry(object):
 			)
 
 			# Get info for psf fit Gaussian statistic:
-			self.readnoise = self.tpf[1].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
-			self.gain = self.tpf[1].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
-			self.num_frm = self.tpf[1].header.get('NUM_FRM', 60) # Number of frames co-added in each timestamp.
-			self.n_readout = self.tpf[1].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
+			self.readnoise = self.tpf['PIXELS'].header.get('READNOIA', 10) # FIXME: This only loads readnoise from channel A!
+			self.gain = self.tpf['PIXELS'].header.get('GAINA', 100) # FIXME: This only loads gain from channel A!
+			self.num_frm = self.tpf['PIXELS'].header.get('NUM_FRM', 60) # Number of frames co-added in each timestamp.
+			self.n_readout = self.tpf['PIXELS'].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = find_hdf5_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+			filepath_hdf5 = find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
-				raise FileNotFoundError("HDF5 File not found. SECTOR=%d, CAMERA=%d, CCD=%d" % (self.sector, self.camera, self.ccd))
+				raise FileNotFoundError(f"HDF5 File not found. SECTOR={self.sector:d}, CAMERA={self.camera:d}, CCD={self.ccd:d}")
 			filepath_hdf5 = filepath_hdf5[0]
-			self.hdf = h5py.File(filepath_hdf5, 'r', libver='latest')
+			self.filepath_hdf5 = filepath_hdf5
+			self.hdf = h5py.File(filepath_hdf5, 'r')
 
-		else:
-			raise ValueError("Invalid datasource: '%s'" % self.datasource)
+			# Correct timestamp offset that was in early data releases:
+			self.lightcurve['time'] = fixes.time_offset(self.lightcurve['time'], self.header, datatype='tpf')
+
+		# Directory where output files will be saved:
+		self.output_folder = os.path.join(
+			self.output_folder_base,
+			f'c{self.cadence:04d}',
+			f'{self.starid:011d}'[:5]
+		)
+
+		# Set directory where diagnostics plots should be saved to:
+		self.plot_folder = None
+		if self.plot:
+			self.plot_folder = os.path.join(self.output_folder, 'plots', f'{self.starid:011d}')
+			os.makedirs(self.plot_folder, exist_ok=True)
 
 		# The file to load the star catalog from:
-		self.catalog_file = find_catalog_files(input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+		self.catalog_file = find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 		self._catalog = None
 		logger.debug('Catalog file: %s', self.catalog_file)
 		if len(self.catalog_file) != 1:
-			raise FileNotFoundError("Catalog file not found: SECTOR=%s, CAMERA=%s, CCD=%s" % (self.sector, self.camera, self.ccd))
+			raise FileNotFoundError(f"Catalog file not found: SECTOR={self.sector:d}, CAMERA={self.camera:d}, CCD={self.ccd:d}")
 		self.catalog_file = self.catalog_file[0]
 
 		# Load information about main target:
 		with contextlib.closing(sqlite3.connect(self.catalog_file)) as conn:
 			conn.row_factory = sqlite3.Row
 			cursor = conn.cursor()
-			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid={0:d};".format(self.starid))
+			cursor.execute("SELECT ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff FROM catalog WHERE starid=?;", [self.starid])
 			target = cursor.fetchone()
 			if target is None:
-				raise OSError("Star could not be found in catalog: {0:d}".format(self.starid))
+				raise RuntimeError(f"Star could not be found in catalog: {self.starid:d}")
 			self.target = dict(target) # Dictionary of all main target properties.
-			self.target_tmag = target['tmag'] # TESS magnitude of the main target.
-			self.target_pos_ra = target['ra'] # Right ascension of the main target at time of observation.
-			self.target_pos_dec = target['decl'] # Declination of the main target at time of observation.
-			self.target_pos_ra_J2000 = target['ra_J2000'] # Right ascension of the main target at J2000.
-			self.target_pos_dec_J2000 = target['decl_J2000'] # Declination of the main target at J2000.
 			cursor.execute("SELECT sector,reference_time,ticver FROM settings LIMIT 1;")
 			target = cursor.fetchone()
 			if target is not None:
@@ -386,8 +433,8 @@ class BasePhotometry(object):
 		if self.datasource == 'ffi':
 			# Coordinates of the target as astropy SkyCoord object:
 			star_coord = coord.SkyCoord(
-				ra=self.target_pos_ra,
-				dec=self.target_pos_dec,
+				ra=self.target['ra'],
+				dec=self.target['decl'],
 				unit=units.deg,
 				frame='icrs'
 			)
@@ -409,7 +456,7 @@ class BasePhotometry(object):
 		self.additional_headers = {} # Additional headers to be included in FITS files.
 
 		# Project target position onto the pixel plane:
-		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target_pos_ra, self.target_pos_dec, 0, ra_dec_order=True)
+		self.target_pos_column, self.target_pos_row = self.wcs.all_world2pix(self.target['ra'], self.target['decl'], 0, ra_dec_order=True)
 		if self.datasource.startswith('tpf'):
 			self.target_pos_column += self.pixel_offset_col
 			self.target_pos_row += self.pixel_offset_row
@@ -434,30 +481,41 @@ class BasePhotometry(object):
 		self._backgrounds_cube = None
 		self._pixelflags_cube = None
 		self._aperture = None
+		self._psf = None
 
+	#----------------------------------------------------------------------------------------------
 	def __enter__(self):
 		return self
 
+	#----------------------------------------------------------------------------------------------
 	def __exit__(self, *args):
 		self.close()
 
+	#----------------------------------------------------------------------------------------------
+	def __del__(self):
+		self.close()
+
+	#----------------------------------------------------------------------------------------------
 	def close(self):
 		"""Close photometry object and close all associated open file handles."""
-		if self.hdf:
+		if hasattr(self, 'hdf') and self.hdf:
 			self.hdf.close()
-		if self.tpf:
+		if hasattr(self, 'tpf') and self.tpf:
 			self.tpf.close()
 
+	#----------------------------------------------------------------------------------------------
 	def clear_cache(self):
 		"""Clear internal cache"""
 		global hdf5_cache
 		hdf5_cache = {}
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def status(self):
 		"""The status of the photometry. From :py:class:`STATUS`."""
 		return self._status
 
+	#----------------------------------------------------------------------------------------------
 	def default_stamp(self):
 		"""
 		The default size of the stamp to use.
@@ -495,14 +553,15 @@ class BasePhotometry(object):
 			17.83731732, 16.5532873, 15.73785092, 15.21999971,
 			14.89113301, 14.68228285, 14.54965042, 14.46542084, 14.0])
 
-		Ncolumns = np.interp(self.target_tmag, tmag, width)
-		Nrows = np.interp(self.target_tmag, tmag, height)
+		Ncolumns = np.interp(self.target['tmag'], tmag, width)
+		Nrows = np.interp(self.target['tmag'], tmag, height)
 
 		# Round off and make sure we have minimum 15 pixels:
 		Nrows = np.maximum(np.ceil(Nrows), 15)
 		Ncolumns = np.maximum(np.ceil(Ncolumns), 15)
 		return Nrows, Ncolumns
 
+	#----------------------------------------------------------------------------------------------
 	def resize_stamp(self, down=None, up=None, left=None, right=None, width=None, height=None):
 		"""
 		Resize the stamp in a given direction.
@@ -550,6 +609,7 @@ class BasePhotometry(object):
 		# Return if the stamp actually changed:
 		return stamp_changed
 
+	#----------------------------------------------------------------------------------------------
 	def _set_stamp(self, compare_stamp=None):
 		"""
 		The default size of the stamp to use.
@@ -627,8 +687,10 @@ class BasePhotometry(object):
 		self._backgrounds_cube = None
 		self._pixelflags_cube = None
 		self._aperture = None
+		self._psf = None
 		return True
 
+	#----------------------------------------------------------------------------------------------
 	def get_pixel_grid(self):
 		"""
 		Returns mesh-grid of the pixels (1-based) in the stamp.
@@ -641,6 +703,7 @@ class BasePhotometry(object):
 			np.arange(self._stamp[0]+1, self._stamp[1]+1, 1, dtype='int32')
 		)
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def stamp(self):
 		"""
@@ -651,6 +714,7 @@ class BasePhotometry(object):
 		"""
 		return self._stamp
 
+	#----------------------------------------------------------------------------------------------
 	def _load_cube(self, tpf_field='FLUX', hdf_group='images', full_cube=None):
 		"""
 		Load data cube into memory from TPF and HDF5 files depending on datasource.
@@ -680,10 +744,11 @@ class BasePhotometry(object):
 			ic2 = self._stamp[3] - self._max_stamp[2]
 			cube = np.empty((ir2-ir1, ic2-ic1, self.Ntimes), dtype='float32')
 			for k in range(self.Ntimes):
-				cube[:, :, k] = self.tpf[1].data[tpf_field][k][ir1:ir2, ic1:ic2]
+				cube[:, :, k] = self.tpf['PIXELS'].data[tpf_field][k][ir1:ir2, ic1:ic2]
 
 		return cube
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def images_cube(self):
 		"""
@@ -696,7 +761,8 @@ class BasePhotometry(object):
 
 		Note:
 			The images has had the large-scale background subtracted. If needed
-			the backgrounds can be added again from :py:func:`backgrounds` or :py:func:`backgrounds_cube`.
+			the backgrounds can be added again from :py:meth:`backgrounds`
+			or :py:meth:`backgrounds_cube`.
 
 		Example:
 
@@ -705,12 +771,13 @@ class BasePhotometry(object):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:func:`images`, :py:func:`backgrounds`, :py:func:`backgrounds_cube`
+			:py:meth:`images`, :py:meth:`backgrounds`, :py:meth:`backgrounds_cube`
 		"""
 		if self._images_cube is None:
 			self._images_cube = self._load_cube(tpf_field='FLUX', hdf_group='images', full_cube=self._images_cube_full)
 		return self._images_cube
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def images_err_cube(self):
 		"""
@@ -728,12 +795,13 @@ class BasePhotometry(object):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:func:`images`, :py:func:`backgrounds`, :py:func:`backgrounds_cube`
+			:py:meth:`images`, :py:meth:`backgrounds`, :py:meth:`backgrounds_cube`
 		"""
 		if self._images_err_cube is None:
 			self._images_err_cube = self._load_cube(tpf_field='FLUX_ERR', hdf_group='images_err', full_cube=self._images_err_cube_full)
 		return self._images_err_cube
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def backgrounds_cube(self):
 		"""
@@ -751,16 +819,17 @@ class BasePhotometry(object):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:func:`backgrounds`, :py:func:`images_cube`, :py:func:`images`
+			:py:meth:`backgrounds`, :py:meth:`images_cube`, :py:meth:`images`
 		"""
 		if self._backgrounds_cube is None:
 			self._backgrounds_cube = self._load_cube(tpf_field='FLUX_BKG', hdf_group='backgrounds', full_cube=self._backgrounds_cube_full)
 		return self._backgrounds_cube
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def pixelflags_cube(self):
 		"""
-		Cube containing all the pixel flag images as a function of time.
+		Cube containing all pixel flag images as a function of time.
 
 		Returns:
 			ndarray: Three dimentional array with shape ``(rows, cols, ffi_times)``, where
@@ -774,18 +843,16 @@ class BasePhotometry(object):
 		Example:
 
 			>>> pho = BasePhotometry(starid)
-			>>> print(pho.backgrounds_cube.shape):
+			>>> print(pho.pixelflags_cube.shape):
 			>>>   (10, 10, 1399)
 
 		See Also:
-			:py:func:`backgrounds`, :py:func:`images_cube`, :py:func:`images`
+			:py:meth:`pixelflags`, :py:meth:`backgrounds_cube`, :py:meth:`images_cube`.
 		"""
 		if self._pixelflags_cube is None:
 			# We can't used the _loac_cube function here, since we always have
 			# to load from the HDF5 file, even though we are running an TPF.
 			if self._pixelflags_cube_full is None:
-				hdf_group = 'pixel_flags'
-
 				ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 				ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 				ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
@@ -794,9 +861,9 @@ class BasePhotometry(object):
 				# We dont have an in-memory version of the full cube, so let us
 				# create the cube by loading the cutouts of each image:
 				cube = np.empty((ir2-ir1, ic2-ic1, len(self.hdf['time'])), dtype='uint8')
-				if hdf_group in self.hdf:
+				if 'pixel_flags' in self.hdf:
 					for k in range(len(self.hdf['time'])):
-						cube[:, :, k] = self.hdf[hdf_group + '/%04d' % k][ir1:ir2, ic1:ic2]
+						cube[:, :, k] = self.hdf['pixel_flags/%04d' % k][ir1:ir2, ic1:ic2]
 				else:
 					cube[:, :, :] = 0
 			else:
@@ -808,31 +875,23 @@ class BasePhotometry(object):
 
 		return self._pixelflags_cube
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def pixelflags(self):
 		"""
-		Iterator that will loop through the image stamps.
+		Iterator that will loop through the pixel flag images.
 
 		Returns:
-			iterator: Iterator which can be used to loop through the image stamps.
-
-		Note:
-			The images has had the large-scale background subtracted. If needed
-			the backgrounds can be added again from :py:func:`backgrounds`.
-
-		Note:
-			For each image, this function will actually load the necessary
-			data from disk, so don't loop through it more than you absolutely
-			have to to save I/O.
+			iterator: Iterator which can be used to loop through the pixel flags images.
 
 		Example:
 
 			>>> pho = BasePhotometry(starid)
-			>>> for img in pho.images:
+			>>> for img in pho.pixelflags:
 			>>> 	print(img)
 
 		See Also:
-			:py:func:`images_cube`, :py:func:`images_err`, :py:func:`backgrounds`
+			:py:meth:`pixelflags_cube`, :py:meth:`images`, :py:meth:`backgrounds`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		if self.datasource == 'ffi':
@@ -844,6 +903,7 @@ class BasePhotometry(object):
 				indx = find_nearest(hdf_times, self.lightcurve['time'][k] - self.lightcurve['timecorr'][k])
 				yield self.pixelflags_cube[:, :, indx]
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def images(self):
 		"""
@@ -854,7 +914,7 @@ class BasePhotometry(object):
 
 		Note:
 			The images has had the large-scale background subtracted. If needed
-			the backgrounds can be added again from :py:func:`backgrounds`.
+			the backgrounds can be added again from :py:meth:`backgrounds`.
 
 		Note:
 			For each image, this function will actually load the necessary
@@ -868,12 +928,13 @@ class BasePhotometry(object):
 			>>> 	print(img)
 
 		See Also:
-			:py:func:`images_cube`, :py:func:`images_err`, :py:func:`backgrounds`
+			:py:meth:`images_cube`, :py:meth:`images_err`, :py:meth:`backgrounds`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		for k in range(self.Ntimes):
 			yield self.images_cube[:, :, k]
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def images_err(self):
 		"""
@@ -889,12 +950,13 @@ class BasePhotometry(object):
 			>>> 	print(imgerr)
 
 		See Also:
-			:py:func:`images_err_cube`, :py:func:`images`, :py:func:`images_cube`, :py:func:`backgrounds`
+			:py:meth:`images_err_cube`, :py:meth:`images`, :py:meth:`images_cube`, :py:meth:`backgrounds`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		for k in range(self.Ntimes):
 			yield self.images_err_cube[:, :, k]
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def backgrounds(self):
 		"""
@@ -915,12 +977,13 @@ class BasePhotometry(object):
 			>>> 	print(img)
 
 		See Also:
-			:py:func:`backgrounds_cube`, :py:func:`images`
+			:py:meth:`backgrounds_cube`, :py:meth:`images`
 		"""
 		# Yield slices from the data-cube as an iterator:
 		for k in range(self.Ntimes):
 			yield self.backgrounds_cube[:, :, k]
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def sumimage(self):
 		"""
@@ -945,21 +1008,26 @@ class BasePhotometry(object):
 				Nimg = np.zeros_like(self._sumimage, dtype='int32')
 				for k, img in enumerate(self.images):
 					if TESSQualityFlags.filter(self.lightcurve['quality'][k]):
-						Nimg += np.isfinite(img)
-						replace(img, np.nan, 0)
+						isgood = np.isfinite(img)
+						img[~isgood] = 0
+						Nimg += np.asarray(isgood, dtype='int32')
 						self._sumimage += img
-				self._sumimage /= Nimg
+
+				isgood = (Nimg > 0)
+				self._sumimage[isgood] /= Nimg[isgood]
+				self._sumimage[~isgood] = np.NaN
 
 			if self.plot:
-				fig = plt.figure()
-				ax = fig.add_subplot(111)
-				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2]+1, self._stamp[0]+1))
+				fig, ax = plt.subplots()
+				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2]+1, self._stamp[0]+1),
+					xlabel='Pixel Column Number', ylabel='Pixel Row Number', cbar='right')
 				ax.plot(self.target_pos_column + 1, self.target_pos_row + 1, 'r+')
 				save_figure(os.path.join(self.plot_folder, 'sumimage'), fig=fig)
 				plt.close(fig)
 
 		return self._sumimage
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def aperture(self):
 		"""
@@ -975,10 +1043,10 @@ class BasePhotometry(object):
 				self._aperture = np.asarray(np.isfinite(self.sumimage), dtype='int32')
 
 				# Add mapping onto TESS output channels:
-				self._aperture[(45 <= cols) & (cols <= 556)] += 32 # CCD output A
-				self._aperture[(557 <= cols) & (cols <= 1068)] += 64 # CCD output B
-				self._aperture[(1069 <= cols) & (cols <= 1580)] += 128 # CCD output C
-				self._aperture[(1581 <= cols) & (cols <= 2092)] += 256 # CCD output D
+				self._aperture[(45 <= cols) & (cols <= 556)] |= 32 # CCD output A
+				self._aperture[(557 <= cols) & (cols <= 1068)] |= 64 # CCD output B
+				self._aperture[(1069 <= cols) & (cols <= 1580)] |= 128 # CCD output C
+				self._aperture[(1581 <= cols) & (cols <= 2092)] |= 256 # CCD output D
 
 				# Add information about which pixels were used for background calculation:
 				if 'backgrounds_pixels_used' in self.hdf:
@@ -1004,6 +1072,23 @@ class BasePhotometry(object):
 
 		return self._aperture
 
+	#----------------------------------------------------------------------------------------------
+	@property
+	def settings(self):
+		"""
+		Pipeline settings and constants.
+
+		Returns:
+			:class:`configparser.ConfigParser`: Pipeline settings, loaded from settings file.
+
+		See also:
+			:func:`load_settings`.
+		"""
+		if not hasattr(self, '_settings') or self._settings is None:
+			self._settings = load_settings()
+		return self._settings
+
+	#----------------------------------------------------------------------------------------------
 	@property
 	def catalog(self):
 		"""
@@ -1029,7 +1114,7 @@ class BasePhotometry(object):
 			>>> pho.catalog[('starid', 'tmag', 'row', 'column')]
 
 		See Also:
-			:py:func:`catalog_attime`
+			:py:meth:`catalog_attime`
 		"""
 
 		if not self._catalog:
@@ -1094,6 +1179,7 @@ class BasePhotometry(object):
 
 		return self._catalog
 
+	#----------------------------------------------------------------------------------------------
 	@property
 	def MovementKernel(self):
 		"""
@@ -1133,6 +1219,7 @@ class BasePhotometry(object):
 
 		return self._MovementKernel
 
+	#----------------------------------------------------------------------------------------------
 	def catalog_attime(self, time):
 		"""
 		Catalog of stars, calculated at a given time-stamp, so CCD positions are
@@ -1142,10 +1229,12 @@ class BasePhotometry(object):
 			time (float): Time in MJD when to calculate catalog.
 
 		Returns:
-			`astropy.table.Table`: Table with the same columns as :py:func:`catalog`, but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated at the given timestamp.
+			`astropy.table.Table`: Table with the same columns as :py:meth:`catalog`,
+				but with ``column``, ``row``, ``column_stamp`` and ``row_stamp`` calculated
+				at the given timestamp.
 
 		See Also:
-			:py:func:`catalog`
+			:py:meth:`catalog`
 		"""
 
 		# If we didn't have enough information, just return the unchanged catalog:
@@ -1167,9 +1256,26 @@ class BasePhotometry(object):
 
 		return cat
 
+	#----------------------------------------------------------------------------------------------
+	@property
+	def psf(self):
+		"""
+		Point Spread Function.
+
+		Returns:
+			:class:`psf.PSF`: PSF object for the given target position.
+
+		See Also:
+			:class:`psf.PSF`
+		"""
+		if self._psf is None:
+			self._psf = PSF(self.sector, self.camera, self.ccd, self.stamp)
+		return self._psf
+
+	#----------------------------------------------------------------------------------------------
 	def delete_plots(self):
 		"""
-		Delete all files in :py:func:`plot_folder`.
+		Delete all files in :py:attr:`plot_folder`.
 
 		If plotting is not enabled, this method does nothing and will therefore
 		leave any existing files in the plot folder, should it already exists.
@@ -1180,6 +1286,7 @@ class BasePhotometry(object):
 				logger.debug("Deleting plot '%s'", f)
 				os.unlink(f)
 
+	#----------------------------------------------------------------------------------------------
 	def report_details(self, error=None, skip_targets=None):
 		"""
 		Report details of the processing back to the overlying scheduler system.
@@ -1196,11 +1303,12 @@ class BasePhotometry(object):
 			if 'errors' not in self._details: self._details['errors'] = []
 			self._details['errors'].append(error)
 
+	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
 		"""
 		Run photometry algorithm.
 
-		This should fill the ``self.lightcurve`` table with all relevant parameters.
+		This should fill the :py:attr:`lightcurve` table with all relevant parameters.
 
 		Returns:
 			The status of the photometry.
@@ -1210,61 +1318,77 @@ class BasePhotometry(object):
 		"""
 		raise NotImplementedError("You have to implement the actual lightcurve extraction yourself... Sorry!")
 
+	#----------------------------------------------------------------------------------------------
 	def photometry(self, *args, **kwargs):
 		"""
 		Run photometry.
 
-		Will run the :py:func:`do_photometry` method and
+		Will run the :py:meth:`do_photometry` method and
 		check some of the output and calculate various
 		performance metrics.
 
 		See Also:
-			:py:func:`do_photometry`
+			:py:meth:`do_photometry`
 		"""
+		logger = logging.getLogger(__name__)
 
 		# Run the photometry:
 		self._status = self.do_photometry(*args, **kwargs)
 
 		# Check that the status has been changed:
 		if self._status == STATUS.UNKNOWN:
-			raise Exception("STATUS was not set by do_photometry")
+			raise ValueError("STATUS was not set by do_photometry")
 
 		# Calculate performance metrics if status was not an error:
 		if self._status in (STATUS.OK, STATUS.WARNING):
 			# Simple check that entire lightcurve is not NaN:
 			if allnan(self.lightcurve['flux']):
-				raise Exception("Final lightcurve is all NaNs")
+				raise ValueError("Final lightcurve fluxes are all NaNs")
+			if allnan(self.lightcurve['flux_err']):
+				raise ValueError("Final lightcurve errors are all NaNs")
+
+			# Pick out the part of the lightcurve that has a good quality
+			# and only use this subset to calculate the diagnostic metrics:
+			indx_good = TESSQualityFlags.filter(self.lightcurve['quality'])
+			goodlc = self.lightcurve[indx_good]
 
 			# Calculate the mean flux level:
-			self._details['mean_flux'] = nanmedian(self.lightcurve['flux'])
+			self._details['mean_flux'] = nanmedian(goodlc['flux'])
 
 			# Convert to relative flux:
-			flux = (self.lightcurve['flux'] / self._details['mean_flux']) - 1
-			flux_err = np.abs(1/self._details['mean_flux']) * self.lightcurve['flux_err']
+			flux = (goodlc['flux'] / self._details['mean_flux']) - 1
+			flux_err = np.abs(1/self._details['mean_flux']) * goodlc['flux_err']
 
 			# Calculate noise metrics of the relative flux:
 			self._details['variance'] = nanvar(flux, ddof=1)
-			self._details['rms_hour'] = rms_timescale(self.lightcurve['time'], flux, timescale=3600/86400)
+			self._details['rms_hour'] = rms_timescale(goodlc['time'], flux, timescale=3600/86400)
 			self._details['ptp'] = nanmedian(np.abs(np.diff(flux)))
 
 			# Calculate the median centroid position in pixel coordinates:
-			self._details['pos_centroid'] = nanmedian(self.lightcurve['pos_centroid'], axis=0)
+			self._details['pos_centroid'] = nanmedian(goodlc['pos_centroid'], axis=0)
 
 			# Calculate variability used e.g. in CBV selection of stars:
-			indx = np.isfinite(self.lightcurve['time']) & np.isfinite(flux) & np.isfinite(flux_err)
+			indx = np.isfinite(goodlc['time']) & np.isfinite(flux) & np.isfinite(flux_err)
 			# Do a more robust fitting with a third-order polynomial,
 			# where we are catching cases where the fitting goes bad.
 			# This happens in the test-data because there are so few points.
-			with warnings.catch_warnings():
-				warnings.filterwarnings('error', category=np.RankWarning)
-				try:
-					p = np.polyfit(self.lightcurve['time'][indx], flux[indx], 3, w=1/flux_err[indx])
-				except np.RankWarning:
-					p = [0]
+			if np.any(indx):
+				mintime = np.nanmin(goodlc['time'][indx])
+				with warnings.catch_warnings():
+					warnings.filterwarnings('error', category=np.RankWarning)
+					try:
+						p = np.polyfit(goodlc['time'][indx] - mintime, flux[indx], 3, w=1/flux_err[indx])
+						detrend = np.polyval(p, goodlc['time'] - mintime)
+					except np.RankWarning: # pragma: no cover
+						logger.warning("Could not detrend lightcurve for variability calculation.")
+						detrend = 0
+			else:
+				logger.warning("Could not detrend lightcurve for variability calculation.")
+				detrend = 0
 
 			# Calculate the variability as the standard deviation of the
 			# polynomial-subtracted lightcurve devided by the median error:
-			self._details['variability'] = nanstd(flux - np.polyval(p, self.lightcurve['time'])) / nanmedian(flux_err)
+			self._details['variability'] = nanstd(flux - detrend) / nanmedian(flux_err)
 
 			if self.final_phot_mask is not None:
 				# Calculate the total number of pixels in the mask:
@@ -1276,18 +1400,28 @@ class BasePhotometry(object):
 				edge = np.zeros_like(self.sumimage, dtype='bool')
 				edge[:, (0,-1)] = True
 				edge[(0,-1), 1:-1] = True
-				self._details['edge_flux'] = np.sum(self.sumimage[self.final_phot_mask & edge])
+				self._details['edge_flux'] = np.nansum(self.sumimage[self.final_phot_mask & edge])
 
 			if self.additional_headers and 'AP_CONT' in self.additional_headers:
 				self._details['contamination'] = self.additional_headers['AP_CONT'][0]
 
+		# Unpack any errors or warnings that were sent to the logger during the photometry:
+		if self.message_queue:
+			if not self._details.get('errors'):
+				self._details['errors'] = []
+			self._details['errors'] += self.message_queue
+			self.message_queue.clear()
+
+	#----------------------------------------------------------------------------------------------
 	def save_lightcurve(self, output_folder=None, version=None):
 		"""
 		Save generated lightcurve to file.
 
 		Parameters:
-			output_folder (string, optional): Path to directory where to save lightcurve. If ``None`` the directory specified in the attribute ``output_folder`` is used.
-			data_rel (integer, optional): Data release number to put in FITS header.
+			output_folder (string, optional): Path to directory where to save lightcurve.
+				If ``None`` the directory specified in the attribute ``output_folder`` is used.
+			version (integer, optional): Version number to add to the FITS header and file name.
+				If not set, the :py:attr:`version` is used.
 
 		Returns:
 			string: Path to the generated file.
@@ -1303,8 +1437,7 @@ class BasePhotometry(object):
 				version = self.version
 
 		# Make sure that the directory exists:
-		if not os.path.exists(output_folder):
-			os.makedirs(output_folder)
+		os.makedirs(output_folder, exist_ok=True)
 
 		# Create sumimage before changing the self.lightcurve object:
 		SumImage = self.sumimage
@@ -1324,26 +1457,6 @@ class BasePhotometry(object):
 		# Get the current date for the files:
 		now = datetime.datetime.now()
 
-		# Extract which photmetric method is being used by checking the
-		# name of the class that is running:
-		photmethod = {
-			'BasePhotometry': 'base',
-			'AperturePhotometry': 'aperture',
-			'PSFPhotometry': 'psf',
-			'LinPSFPhotometry': 'linpsf',
-			'HaloPhotometry': 'halo'
-		}.get(self.__class__.__name__, None)
-
-		# TODO: This really should be done in another way,
-		# but for now it will work...
-		if self.datasource.startswith('tpf'):
-			hdr = self.tpf[0].header
-		else:
-			hdr = self.hdf['images'].attrs
-
-		# Get data release number of original file:
-		data_rel = hdr['DATA_REL']
-
 		# Primary FITS header:
 		hdu = fits.PrimaryHDU()
 		hdu.header['NEXTEND'] = (3 + int(hasattr(self, 'halo_weightmap')), 'number of standard extensions')
@@ -1353,7 +1466,7 @@ class BasePhotometry(object):
 		hdu.header['TELESCOP'] = ('TESS', 'telescope')
 		hdu.header['INSTRUME'] = ('TESS Photometer', 'detector type')
 		hdu.header['FILTER'] = ('TESS', 'Photometric bandpass filter')
-		hdu.header['OBJECT'] = ("TIC {0:d}".format(self.starid), 'string version of TICID')
+		hdu.header['OBJECT'] = (f"TIC {self.starid:d}", 'string version of TICID')
 		hdu.header['TICID'] = (self.starid, 'unique TESS target identifier')
 		hdu.header['CAMERA'] = (self.camera, 'Camera number')
 		hdu.header['CCD'] = (self.ccd, 'CCD number')
@@ -1362,9 +1475,9 @@ class BasePhotometry(object):
 		# Versions:
 		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
 		hdu.header['FILEVER'] = ('1.4', 'File format version')
-		hdu.header['DATA_REL'] = (data_rel, 'Data release number')
+		hdu.header['DATA_REL'] = (self.data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
-		hdu.header['PHOTMET'] = (photmethod, 'Photometric method used')
+		hdu.header['PHOTMET'] = (self.method, 'Photometric method used')
 
 		# Object properties:
 		if self.target['pm_ra'] is None or self.target['pm_decl'] is None:
@@ -1374,24 +1487,27 @@ class BasePhotometry(object):
 
 		hdu.header['RADESYS'] = ('ICRS', 'reference frame of celestial coordinates')
 		hdu.header['EQUINOX'] = (2000.0, 'equinox of celestial coordinate system')
-		hdu.header['RA_OBJ'] = (self.target_pos_ra_J2000, '[deg] Right ascension')
-		hdu.header['DEC_OBJ'] = (self.target_pos_dec_J2000, '[deg] Declination')
+		hdu.header['RA_OBJ'] = (self.target['ra_J2000'], '[deg] Right ascension')
+		hdu.header['DEC_OBJ'] = (self.target['decl_J2000'], '[deg] Declination')
 		hdu.header['PMRA'] = (fits.card.Undefined() if not self.target['pm_ra'] else self.target['pm_ra'], '[mas/yr] RA proper motion')
 		hdu.header['PMDEC'] = (fits.card.Undefined() if not self.target['pm_decl'] else self.target['pm_decl'], '[mas/yr] Dec proper motion')
 		hdu.header['PMTOTAL'] = (pmtotal, '[mas/yr] total proper motion')
-		hdu.header['TESSMAG'] = (self.target_tmag, '[mag] TESS magnitude')
+		hdu.header['TESSMAG'] = (self.target['tmag'], '[mag] TESS magnitude')
 		hdu.header['TEFF'] = (fits.card.Undefined() if not self.target['teff'] else self.target['teff'], '[K] Effective temperature')
 		hdu.header['TICVER'] = (self.ticver, 'TESS Input Catalog version')
 
 		# Cosmic ray headers:
-		hdu.header['CRMITEN'] = (hdr['CRMITEN'], 'spacecraft cosmic ray mitigation enabled')
-		hdu.header['CRBLKSZ'] = (hdr['CRBLKSZ'], '[exposures] s/c cosmic ray mitigation block siz')
-		hdu.header['CRSPOC'] = (hdr['CRSPOC'], 'SPOC cosmic ray cleaning enabled')
+		hdu.header['CRMITEN'] = (self.header['CRMITEN'], 'spacecraft cosmic ray mitigation enabled')
+		hdu.header['CRBLKSZ'] = (self.header['CRBLKSZ'], '[exposures] s/c cosmic ray mitigation block siz')
+		hdu.header['CRSPOC'] = (self.header['CRSPOC'], 'SPOC cosmic ray cleaning enabled')
 
 		# Add K2P2 Settings to the header of the file:
 		if self.additional_headers:
 			for key, value in self.additional_headers.items():
 				hdu.header[key] = value
+
+		# Add Data Validation header, which will be filled later on:
+		hdu.header['DATAVAL'] = (0, 'Data validation flags')
 
 		# Make binary table:
 		# Define table columns:
@@ -1483,8 +1599,7 @@ class BasePhotometry(object):
 		tbhdu.header.set('INHERIT', True, 'inherit the primary header', after='TFIELDS')
 
 		# Timestamps of start and end of timeseries:
-		cadence = 120 if self.datasource.startswith('tpf') else 1800
-		tdel = cadence/86400
+		tdel = self.cadence/86400
 		tstart = self.lightcurve['time'][0] - tdel/2
 		tstop = self.lightcurve['time'][-1] + tdel/2
 		tstart_tm = Time(tstart, 2457000, format='jd', scale='tdb')
@@ -1494,8 +1609,9 @@ class BasePhotometry(object):
 		frametime = 2.0
 		int_time = 1.98
 		readtime = 0.02
-		if hdr['CRMITEN']:
-			deadc = (int_time * 2/hdr['CRBLKSZ']) / frametime
+		if self.header['CRMITEN']:
+			crblocksize = self.header['CRBLKSZ']
+			deadc = (int_time * (crblocksize-2)/crblocksize) / frametime
 		else:
 			deadc = int_time / frametime
 
@@ -1525,7 +1641,6 @@ class BasePhotometry(object):
 		tbhdu.header['NREADOUT'] = (self.n_readout, 'number of read per cadence')
 
 		# Make aperture image:
-		# TODO: Pixels used in background calculation (value=4)
 		mask = self.aperture
 		if self.final_phot_mask is not None:
 			mask[self.final_phot_mask] |= 2
@@ -1533,7 +1648,15 @@ class BasePhotometry(object):
 			mask[self.final_position_mask] |= 8
 
 		# Construct FITS header for image extensions:
-		wcs = self.wcs[self._stamp[0]:self._stamp[1], self._stamp[2]:self._stamp[3]]
+		if self.datasource == 'ffi':
+			ir1, ir2, ic1, ic2 = self._stamp
+		else:
+			ir1 = self._stamp[0] - self._max_stamp[0]
+			ir2 = self._stamp[1] - self._max_stamp[0]
+			ic1 = self._stamp[2] - self._max_stamp[2]
+			ic2 = self._stamp[3] - self._max_stamp[2]
+
+		wcs = self.wcs[ir1:ir2, ic1:ic2]
 		header = wcs.to_header(relax=True)
 		header.set('INHERIT', True, 'inherit the primary header', before=0) # Add inherit header
 
@@ -1582,11 +1705,13 @@ class BasePhotometry(object):
 			hdus.append(wm)
 
 		# File name to save the lightcurve under:
-		filename = 'tess{starid:011d}-s{sector:02d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits.gz'.format(
+		filename = 'tess{starid:011d}-s{sector:03d}-{camera:d}-{ccd:d}-c{cadence:04d}-dr{datarel:02d}-v{version:02d}-tasoc_lc.fits.gz'.format(
 			starid=self.starid,
 			sector=self.sector,
-			cadence=cadence,
-			datarel=data_rel,
+			camera=self.camera,
+			ccd=self.ccd,
+			cadence=self.cadence,
+			datarel=self.data_rel,
 			version=version
 		)
 

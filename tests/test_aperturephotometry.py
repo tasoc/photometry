@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of Aperture Photometry.
@@ -10,25 +10,20 @@ import pytest
 import numpy as np
 from bottleneck import allnan, anynan
 import logging
-import sys
-import os
 from tempfile import TemporaryDirectory
 from astropy.io import fits
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import conftest # noqa: F401
 from photometry import AperturePhotometry, STATUS
 from photometry.plots import plot_image, plt
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 DUMMY_TARGET = 260795451
 DUMMY_KWARG = {'sector': 1, 'camera': 3, 'ccd': 2}
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
-def test_aperturephotometry(datafiles, datasource):
-	test_dir = str(datafiles)
+def test_aperturephotometry(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with AperturePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho:
+		with AperturePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho:
 
 			pho.photometry()
 			filepath = pho.save_lightcurve()
@@ -37,8 +32,11 @@ def test_aperturephotometry(datafiles, datasource):
 			# It should set the status to one of these:
 			assert(pho.status in (STATUS.OK, STATUS.WARNING))
 
+			# Check the sumimage:
 			plt.figure()
 			plot_image(pho.sumimage, title=datasource)
+
+			assert not anynan(pho.sumimage), "There are NaNs in the SUMIMAGE"
 
 			# They shouldn't be exactly zero:
 			assert not np.all(pho.lightcurve['flux'] == 0)
@@ -51,6 +49,9 @@ def test_aperturephotometry(datafiles, datasource):
 			assert not allnan(pho.lightcurve['flux_err'])
 			assert not allnan(pho.lightcurve['pos_centroid'][:,0])
 			assert not allnan(pho.lightcurve['pos_centroid'][:,1])
+
+			assert not np.any(~np.isfinite(pho.lightcurve['time']))
+			assert not np.any(pho.lightcurve['time'] == 0)
 
 			# Test the outputted FITS file:
 			with fits.open(filepath, mode='readonly') as hdu:
@@ -71,18 +72,16 @@ def test_aperturephotometry(datafiles, datasource):
 				assert np.any(ap & 8 != 0), "No position mask set"
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
-def test_aperturephotometry_plots(datafiles, datasource):
-	test_dir = str(datafiles)
+def test_aperturephotometry_plots(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with AperturePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, plot=False, datasource=datasource, **DUMMY_KWARG) as pho_noplot:
+		with AperturePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, plot=False, datasource=datasource, **DUMMY_KWARG) as pho_noplot:
 			pho_noplot.photometry()
 			assert isinstance(pho_noplot.plot, bool), "PLOT should be boolean"
 			assert not pho_noplot.plot, "PLOT should be False"
 			print(pho_noplot.status)
 
-		with AperturePhotometry(DUMMY_TARGET, test_dir, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho_plot:
+		with AperturePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho_plot:
 			pho_plot.photometry()
 			assert isinstance(pho_plot.plot, bool), "PLOT should be boolean"
 			assert pho_plot.plot, "PLOT should be True"

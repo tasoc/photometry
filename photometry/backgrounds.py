@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Estimation of sky background in TESS Full Frame Images.
@@ -16,33 +16,38 @@ from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from .utilities import load_ffi_fits, move_median_central
 from .pixel_flags import pixel_manual_exclude
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def _reduce_mode(x):
 	if len(x) == 0:
 		return np.NaN
-	x = np.asarray(x, dtype=np.float64)
+	x = np.asarray(x, dtype='float64')
 	kde = KDE(x)
-	kde.fit(gridsize=2000)
+	try:
+		kde.fit(gridsize=2000)
+	except RuntimeError as err:
+		# This happens when all points in x have the same value
+		if str(err).startswith('Selected KDE bandwidth is 0.'):
+			return np.median(x)
+		raise
 	return kde.support[np.argmax(kde.density)]
 
-#------------------------------------------------------------------------------
-def _mode(data):
-	modes = np.zeros([data.shape[0]])
-	for i in range(data.shape[0]):
-		kde = KDE(data[i,:])
-		kde.fit(gridsize=2000)
-		modes[i] = kde.support[np.argmax(kde.density)]
-	return modes
-
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 class ModeBackground(BackgroundBase):
+	def _mode(self, data):
+		modes = np.zeros([data.shape[0]])
+		for i in range(data.shape[0]):
+			kde = KDE(data[i,:])
+			kde.fit(gridsize=2000)
+			modes[i] = kde.support[np.argmax(kde.density)]
+		return modes
+
 	def calc_background(self, data, axis=None):
 		if self.sigma_clip is not None:
 			data = self.sigma_clip(data, axis=axis)
-		bkg = np.atleast_1d(_mode(np.asarray(data, dtype=np.float64)))
+		bkg = np.atleast_1d(self._mode(np.asarray(data, dtype='float64')))
 		return bkg
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def fit_background(image, catalog=None, flux_cutoff=8e4,
 		bkgiters=3, radial_cutoff=2400, radial_pixel_step=15, radial_smooth=3):
 	"""
@@ -53,17 +58,23 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 	component to account for the corner-glow that is present in TESS FFIs.
 
 	Parameters:
-		image (ndarray or string): Either the image as 2D ndarray or a path to FITS or NPY file where to load image from.
-		catalog (`astropy.table.Table` object): Catalog of stars in the image. Is not yet being used for anything.
-		flux_cutoff (float): Flux value at which any pixel above will be masked out of the background estimation.
-		bkgiters (integer): Number of times to iterate the background components. Default=3.
-		radial_cutoff (float): Radial distance in pixels from camera centre to start using radial component. Default=2400.
-		radial_pixel_step (integer): Step sizes to use in radial component. Default=15.
-		radial_smooth (integer): Width of median smoothing on radial profile. Default=3.
+		image (ndarray or str): Either the image as 2D ndarray or a path to FITS or NPY file
+			where to load image from.
+		catalog (:class:`astropy.table.Table`): Catalog of stars in the image.
+			Is currently not yet being used for anything.
+		flux_cutoff (float): Flux value at which any pixel above will be masked out of
+			the background estimation.
+		bkgiters (int): Number of times to iterate the background components. Default=3.
+		radial_cutoff (float): Radial distance in pixels from camera centre to start using
+			radial component. Default=2400.
+		radial_pixel_step (int): Step sizes to use in radial component. Default=15.
+		radial_smooth (int): Width of median smoothing on radial profile. Default=3.
 
 	Returns:
-		ndarray: Estimated background with the same size as the input image.
-		ndarray: Boolean array specifying which pixels was used to estimate the background (``True`` if pixel was not used).
+		tuple:
+		- ndarray: Estimated background with the same size as the input image.
+		- ndarray: Boolean array specifying which pixels was used to estimate the background
+			(``True`` if pixel was not used).
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -136,7 +147,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			(4, 4): [-14.629676, 2111.341670],
 		}.get((camera, ccd))
 		if xycen is None:
-			raise ValueError("Invalid CAMERA or CCD in header: CAMERA=%s, CCD=%s" % (camera, ccd))
+			raise ValueError(f"Invalid CAMERA or CCD in header: CAMERA={camera}, CCD={ccd}")
 
 		# Create radial coordinates:
 		# Note that these are in "real" coordinates like the ones in the WCS,
@@ -166,9 +177,13 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			# Evaluate the background estimator in radial rings:
 			# We are working in logarithmic units since the mode estimator seems to
 			# work better in that case.
+			pix = img[~mask].flatten()
+			zeropoint = -np.min(pix) + 1.0 # Make sure all values are non-negative
+			logpix = np.log10(pix + zeropoint)
+
 			s2, _, _ = binned_statistic(
 				r[~mask].flatten(),
-				np.log10(img[~mask].flatten()),
+				logpix,
 				statistic=stat,
 				bins=bins
 			)
@@ -183,7 +198,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 			if Ngood >= 3: # The required number of points for qubic spline
 				try:
 					intp = InterpolatedUnivariateSpline(bin_center[indx], s2[indx], k=3, ext=3)
-					img_bkg_radial = 10**intp(r)
+					img_bkg_radial = 10**intp(r) - zeropoint
 				except ValueError:
 					logger.exception("Background interpolation failed (N=%d).", Ngood)
 					img_bkg_radial = 0

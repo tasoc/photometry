@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of photometry.utilities.
@@ -7,13 +7,59 @@ Tests of photometry.utilities.
 """
 
 import pytest
-import sys
 import os.path
 import numpy as np
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import sqlite3
+import configparser
+import conftest # noqa: F401
 import photometry.utilities as u
 
 INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+
+#--------------------------------------------------------------------------------------------------
+def test_load_settings():
+
+	settings = u.load_settings()
+	assert isinstance(settings, configparser.ConfigParser)
+	assert settings.getboolean('fixes', 'time_offset', fallback=True) # Actually checking value
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.load_settings.cache_info().hits
+	settings2 = u.load_settings()
+	assert settings2 == settings
+	assert u.load_settings.cache_info().hits == hits_before+1
+
+#--------------------------------------------------------------------------------------------------
+def test_load_sector_settings():
+
+	settings = u.load_sector_settings(2)
+	print(settings)
+	assert isinstance(settings, dict)
+	assert int(settings['sector']) == 2
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.load_sector_settings.cache_info().hits
+	settings2 = u.load_sector_settings(2)
+	assert settings2 == settings
+	assert u.load_sector_settings.cache_info().hits == hits_before+1
+
+	settings = u.load_sector_settings()
+	print(settings)
+	assert isinstance(settings, dict)
+	assert 'sectors' in settings
+
+	sectors = []
+	for key, value in settings['sectors'].items():
+		# Make sure they contain what they should:
+		assert isinstance(value, dict)
+		assert 'sector' in value
+		assert 'reference_time' in value
+		assert 'ffi_cadence' in value
+		assert value['ffi_cadence'] in (1800, 600), "Invalid FFI Cadence"
+
+		# Ensure that sector numbers are unique:
+		assert value['sector'] not in sectors
+		sectors.append(value['sector'])
 
 #--------------------------------------------------------------------------------------------------
 def test_move_median_central():
@@ -29,70 +75,166 @@ def test_move_median_central():
 	np.testing.assert_allclose(result_2d, expected_2d)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_find_ffi_files(datafiles):
-	test_dir = str(datafiles)
+def test_find_ffi_files(SHARED_INPUT_DIR):
 
-	files = u.find_ffi_files(test_dir)
-	assert(len(files) == 8)
+	files = u.find_ffi_files(SHARED_INPUT_DIR)
+	assert(len(files) == 10)
 
-	files = u.find_ffi_files(test_dir, camera=1)
+	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=1)
 	assert(len(files) == 4)
 
-	files = u.find_ffi_files(test_dir, camera=3)
+	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=3)
 	assert(len(files) == 4)
 
-#--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_find_tpf_files(datafiles):
-	test_dir = str(datafiles)
-
-	files = u.find_tpf_files(test_dir)
+	files = u.find_ffi_files(SHARED_INPUT_DIR, sector=27)
 	assert(len(files) == 2)
-
-	files = u.find_tpf_files(test_dir, starid=267211065)
-	assert(len(files) == 1)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_find_hdf5_files(datafiles):
-	test_dir = str(datafiles)
+def test_find_tpf_files(SHARED_INPUT_DIR):
+	"""
+	The current list of test-files are:
 
-	files = u.find_hdf5_files(test_dir)
-	assert(len(files) == 2)
+	starid    sector  camera  ccd  cadence
+	267211065      1       3    2      120
+	260795451      1       3    2      120
+	 25155310      1       1    4      120  alert
+	 25155310     27       4    1      120
+	 25155310     27       4    1       20
+	"""
 
-	files = u.find_hdf5_files(test_dir, sector=1)
-	assert(len(files) == 2)
+	# Find all TPF files in input dir:
+	files = u.find_tpf_files(SHARED_INPUT_DIR)
+	print(files)
+	assert(len(files) == 5)
 
-	files = u.find_hdf5_files(test_dir, camera=1)
+	# Find file with specific starid (only one exists)
+	files = u.find_tpf_files(SHARED_INPUT_DIR, starid=267211065)
+	print(files)
 	assert(len(files) == 1)
 
-	files = u.find_hdf5_files(test_dir, sector=1, camera=3)
+	# Find TPFs from sector 1 (2 regular, 1 alert-data):
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=1)
+	print(files)
+	assert(len(files) == 3)
+
+	# Limit with findmax (only the first one should be returned):
+	files2 = u.find_tpf_files(SHARED_INPUT_DIR, sector=1, findmax=1)
+	print(files2)
+	assert len(files2) == 1
+	assert files2[0] == files[0]
+
+	# Find TPFs for starid with both 120 and 20s cadences and a alert data file:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, starid=25155310)
+	print(files)
+	assert(len(files) == 3)
+
+	# Test files from sector 27, with both 120 and 20s cadences:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27)
+	print(files)
+	assert(len(files) == 2)
+
+	# Test files from sector 27, with only 120s cadence:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, cadence=120)
+	print(files)
 	assert(len(files) == 1)
+
+	# Test files from sector 27, with only 20s cadence:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, cadence=20)
+	print(files)
+	assert(len(files) == 1)
+
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=1, camera=3)
+	print(files)
+	assert(len(files) == 2)
+
+	# Find TPFs from sector 1, on camera 2, which should have no files:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=1, camera=2)
+	print(files)
+	assert(len(files) == 0)
+
+	# Test files from sector 27 on CCD 4, which should have no files:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, ccd=4)
+	print(files)
+	assert(len(files) == 0)
+
+	# Test files from sector 27, with both 120 and 20s cadences:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, ccd=1)
+	print(files)
+	assert(len(files) == 2)
+
+	# Test files from sector 27, with both 120 and 20s cadences:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, ccd=1, findmax=1)
+	print(files)
+	assert(len(files) == 1)
+
+	# Test the cache:
+	hits_before = u._find_tpf_files.cache_info().hits
+	files2 = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, ccd=1, findmax=1)
+	assert files2 == files
+	assert u._find_tpf_files.cache_info().hits == hits_before+1
+
+	# Test with invalid cadence:
+	with pytest.raises(ValueError) as e:
+		u.find_tpf_files(SHARED_INPUT_DIR, sector=27, cadence=123345)
+	assert str(e.value) == "Invalid cadence. Must be either 20 or 120."
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_find_catalog_files(datafiles):
-	test_dir = str(datafiles)
+def test_find_hdf5_files(SHARED_INPUT_DIR):
 
-	files = u.find_catalog_files(test_dir)
+	files = u.find_hdf5_files(SHARED_INPUT_DIR)
 	assert(len(files) == 2)
 
-	files = u.find_catalog_files(test_dir, sector=1)
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1)
 	assert(len(files) == 2)
 
-	files = u.find_catalog_files(test_dir, camera=1)
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, camera=1)
 	assert(len(files) == 1)
 
-	files = u.find_catalog_files(test_dir, sector=1, camera=3, ccd=2)
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3)
 	assert(len(files) == 1)
+
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert(len(files) == 1)
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.find_hdf5_files.cache_info().hits
+	files2 = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert files2 == files
+	assert u.find_hdf5_files.cache_info().hits == hits_before+1
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.datafiles(INPUT_DIR)
-def test_load_ffi_files(datafiles):
-	test_dir = str(datafiles)
+def test_find_catalog_files(SHARED_INPUT_DIR):
 
-	files = u.find_ffi_files(test_dir, camera=1)
+	files = u.find_catalog_files(SHARED_INPUT_DIR)
+	print(files)
+	assert(len(files) == 3)
+
+	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=1)
+	print(files)
+	assert(len(files) == 2)
+
+	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=27)
+	print(files)
+	assert(len(files) == 1)
+
+	files = u.find_catalog_files(SHARED_INPUT_DIR, camera=1)
+	print(files)
+	assert(len(files) == 1)
+
+	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	print(files)
+	assert(len(files) == 1)
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.find_catalog_files.cache_info().hits
+	files2 = u.find_catalog_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert files2 == files
+	assert u.find_catalog_files.cache_info().hits == hits_before+1
+
+#--------------------------------------------------------------------------------------------------
+def test_load_ffi_files(SHARED_INPUT_DIR):
+
+	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=1)
 
 	img = u.load_ffi_fits(files[0])
 	assert(img.shape == (2048, 2048))
@@ -167,6 +309,21 @@ def test_rms_timescale():
 	print(rms)
 	np.testing.assert_allclose(rms, 0)
 
+	# Time with infinity should give ValueError:
+	time[1] = np.Inf
+	with pytest.raises(ValueError):
+		u.rms_timescale(time, flux)
+
+	# Time with negative infinity should give ValueError:
+	time[1] = np.NINF
+	with pytest.raises(ValueError):
+		u.rms_timescale(time, flux)
+
+	# All timestamps being the same should give ValueError:
+	time[:] = 1.2
+	with pytest.raises(ValueError):
+		u.rms_timescale(time, flux)
+
 #--------------------------------------------------------------------------------------------------
 def test_find_nearest():
 
@@ -220,6 +377,72 @@ def test_mag2flux():
 	assert np.all(np.isfinite(flux)), "MAG2FLUX should give finite fluxes on finite mags"
 	assert np.all(np.diff(flux) < 0), "MAG2FLUX should give montomical decreasing values"
 	assert np.isnan(u.mag2flux(np.NaN)), "MAG2FLUX should return NaN on NaN input"
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('factory', [None, sqlite3.Row])
+@pytest.mark.parametrize('foreign_keys', [1, 0])
+def test_sqlite_drop_column(factory, foreign_keys):
+
+	with sqlite3.connect(':memory:') as conn:
+		conn.row_factory = factory
+		cursor = conn.cursor()
+
+		cursor.execute("PRAGMA foreign_keys=%s;" % foreign_keys)
+
+		# Make sure the foreign key is set as we want it:
+		cursor.execute("PRAGMA foreign_keys;")
+		assert cursor.fetchone()[0] == foreign_keys
+
+		# Create test-table:
+		cursor.execute("""CREATE TABLE tbl (
+			col_a INTEGER,
+			col_b REAL,
+			col_c REAL NOT NULL,
+			col_d REAL,
+			col_e REAL
+		);""")
+		for k in range(1000):
+			cursor.execute("INSERT INTO tbl VALUES (%d,RANDOM(),RANDOM(),RANDOM(),RANDOM());" % k)
+		cursor.execute("CREATE UNIQUE INDEX col_a_idx ON tbl (col_a);")
+		cursor.execute("CREATE INDEX col_c_idx ON tbl (col_c);")
+		cursor.execute("CREATE\t INDEX  col_de_idx ON tbl (col_d, col_e);") # with strange whitespace
+		conn.commit()
+
+		# Check names of columns before we remove anything:
+		cursor.execute("PRAGMA table_info(tbl);")
+		s = set([row[1] for row in cursor.fetchall()])
+		assert s == set(['col_a', 'col_b', 'col_c', 'col_d', 'col_e'])
+
+		# Remove col_b:
+		u.sqlite_drop_column(conn, 'tbl', 'col_b')
+
+		# Check names of columns after we removed col_b:
+		cursor.execute("PRAGMA table_info(tbl);")
+		s = set([row[1] for row in cursor.fetchall()])
+		assert s == set(['col_a', 'col_c', 'col_d', 'col_e'])
+
+		# Make sure the number of rows has not changed:
+		cursor.execute("SELECT COUNT(*) FROM tbl;")
+		assert cursor.fetchone()[0] == 1000
+
+		# Make sure the foreign_keys setting has not changed:
+		cursor.execute("PRAGMA foreign_keys;")
+		assert cursor.fetchone()[0] == foreign_keys
+
+		# Wrong table or column name should give a ValueError:
+		with pytest.raises(ValueError):
+			u.sqlite_drop_column(conn, 'tbl_wrong', 'col_e')
+
+		with pytest.raises(ValueError):
+			u.sqlite_drop_column(conn, 'tbl', 'col_wrong')
+
+		# Attempting to drop a column associated with an index should
+		# cause an Exception:
+		with pytest.raises(RuntimeError):
+			u.sqlite_drop_column(conn, 'tbl', 'col_c')
+
+		with pytest.raises(RuntimeError):
+			u.sqlite_drop_column(conn, 'tbl', 'col_e')
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

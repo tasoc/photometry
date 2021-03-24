@@ -114,3 +114,6 @@ ENV/
 
 # Kate
 .*.kate-swp
+
+# PyCharm
+.idea/

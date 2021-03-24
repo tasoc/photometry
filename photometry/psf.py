@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Point Spread Function (PSF).
@@ -18,14 +18,15 @@ class PSF(object):
 	Point Spread Function (PSF).
 
 	Attributes:
-		camera (integer): TESS camera (1-4).
-		ccd (integer): TESS CCD (1-4).
+		camera (int): TESS camera (1-4).
+		ccd (int): TESS CCD (1-4).
 		stamp (tuple): The pixel sub-stamp used to generate PSF.
 		shape (tuple): Shape of pixel sub-stamp.
 		PSFfile (string): Path to PSF file that was interpolated in.
 		ref_column (float): Reference CCD column that PSF is calculated for.
 		ref_row (float): Reference CCD row that PSF is calculated for.
-		splineInterpolation (`scipy.interpolate.RectBivariateSpline` object): Interpolation to evaluate PSF on arbitrery position relative to center of PSF.
+		splineInterpolation (:py:class:`scipy.interpolate.RectBivariateSpline`): 2D Interpolation
+			to evaluate PSF on arbitrary position relative to center of PSF.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -36,18 +37,23 @@ class PSF(object):
 		Point Spread Function (PSF).
 
 		Parameters:
-			sector (integer): TESS Observation sector.
-			camera (integer): TESS camera number (1-4).
-			ccd (integer): TESS CCD number (1-4).
+			sector (int): TESS Observation sector.
+			camera (int): TESS camera number (1-4).
+			ccd (int): TESS CCD number (1-4).
 			stamp (4-tuple): Sub-stamp on CCD to load PSF for.
 
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
 		# Simple input checks:
-		assert sector >= 1, "Sector number must be greater than zero"
-		assert camera in (1,2,3,4), "Camera must be 1, 2, 3 or 4."
-		assert ccd in (1,2,3,4), "CCD must be 1, 2, 3 or 4."
+		if sector < 1:
+			raise ValueError("Sector number must be greater than zero")
+		if camera not in (1, 2, 3, 4):
+			raise ValueError("Camera must be 1, 2, 3 or 4.")
+		if ccd not in (1, 2, 3, 4):
+			raise ValueError("CCD must be 1, 2, 3 or 4.")
+		if len(stamp) != 4:
+			raise ValueError("Incorrect stamp provided.")
 
 		# Store information given in call:
 		self.sector = sector
@@ -61,7 +67,7 @@ class PSF(object):
 		# Get path to corresponding TESS PRF file:
 		PSFdir = os.path.join(os.path.dirname(__file__), 'data', 'psf')
 		SectorDir = 'start_s0004' if sector >= 4 else 'start_s0001'
-		PSFglob = os.path.join(PSFdir, SectorDir, 'tess*-{camera:d}-{ccd:d}-characterized-prf.mat'.format(camera=camera, ccd=ccd))
+		PSFglob = os.path.join(PSFdir, SectorDir, f'tess*-{camera:d}-{ccd:d}-characterized-prf.mat')
 		self.PSFfile = glob.glob(PSFglob)[0]
 
 		# Set minimum PRF weight to avoid dividing by almost 0 somewhere:
@@ -101,8 +107,7 @@ class PSF(object):
 			prfWeight = np.sqrt((self.ref_column - crval1p)**2 + (self.ref_row - crval2p)**2)
 
 			# Catch too small weights
-			if prfWeight < minimum_prf_weight:
-				prfWeight = minimum_prf_weight
+			prfWeight = max(prfWeight, minimum_prf_weight)
 
 			# Add the weighted values to the PRF array:
 			prf += prfn / prfWeight
@@ -111,7 +116,7 @@ class PSF(object):
 		prf /= (np.nansum(prf) * cdelt1p * cdelt2p)
 
 		# Interpolation function over the PRF:
-		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf) #: 2D-interpolation of PSF (RectBivariateSpline).
+		self.splineInterpolation = RectBivariateSpline(PRFx, PRFy, prf)
 
 	#----------------------------------------------------------------------------------------------
 	def integrate_to_image(self, params, cutoff_radius=5):
@@ -119,8 +124,10 @@ class PSF(object):
 		Integrate the underlying high-res PSF onto pixels.
 
 		Parameters:
-			params (iterator, numpy.array): List of stars to add to image. Should be an iterator where each element is an numpy array with three elements: row, column and flux.
-			cutoff_radius (float, optional): Maximal radius away from center of star in pixels to integrate PSF model.
+			params (iterator, numpy.array): List of stars to add to image. Should be an iterator
+				where each element is an numpy array with three elements: row, column and flux.
+			cutoff_radius (float, optional): Maximal radius away from center of star in pixels
+				to integrate PSF model.
 
 		Returns:
 			numpy.array: Image
@@ -132,7 +139,7 @@ class PSF(object):
 				for star in params:
 					star_row = star[0]
 					star_column = star[1]
-					if np.sqrt((j-star_column)**2 + (i-star_row)**2) < cutoff_radius:
+					if cutoff_radius is None or np.sqrt((j-star_column)**2 + (i-star_row)**2) < cutoff_radius:
 						star_flux = star[2]
 						column_cen = j - star_column
 						row_cen = i - star_row

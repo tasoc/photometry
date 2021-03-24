@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of HaloPhotometry.
@@ -10,24 +10,17 @@ import pytest
 import logging
 import numpy as np
 from bottleneck import allnan, anynan
-import sys
-import os
 from tempfile import TemporaryDirectory
 from astropy.io import fits
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+import conftest # noqa: F401
 from photometry import HaloPhotometry, STATUS
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
-
 #--------------------------------------------------------------------------------------------------
-#@pytest.mark.skipif(os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true',
-#	reason="This is simply too slow to run on Travis. We need to do something about that.'")
-@pytest.mark.datafiles(INPUT_DIR)
+@pytest.mark.slow
 @pytest.mark.parametrize('datasource', ['tpf',]) # Not testing 'ffi' since there is not enough data
-def test_halo(datafiles, datasource):
-	test_dir = str(datafiles)
+def test_halo(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
-		with HaloPhotometry(267211065, test_dir, OUTPUT_DIR, plot=True, datasource=datasource, sector=1, camera=3, ccd=2) as pho:
+		with HaloPhotometry(267211065, SHARED_INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, sector=1, camera=3, ccd=2) as pho:
 
 			pho.photometry()
 			filepath = pho.save_lightcurve()
@@ -79,5 +72,4 @@ if __name__ == '__main__':
 	if not logger_phot.hasHandlers(): logger_phot.addHandler(console)
 	logger_phot.setLevel(logging.INFO)
 
-	test_halo(INPUT_DIR, 'tpf')
-	#test_halo(INPUT_DIR, 'ffi')
+	pytest.main([__file__])

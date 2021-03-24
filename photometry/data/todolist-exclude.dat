@@ -1,3 +1,92 @@
-version https://git-lfs.github.com/spec/v1
-oid sha256:78943aabab292644337b0647529de3b1c05fe57b18fa5385e1f335c98ba8e578
-size 2667
+# Targets to be excluded from processing
+#
+# Column 1: TIC identifier
+# Column 2: Sector
+# Column 3: Datasource (ffi/tpf)
+# Column 4: Data Release number
+# Column 5: Reason
+#---------------------------------------------
+44577667    1   tpf   1  No calibrated data.
+238196512   1   tpf   1  No calibrated data.
+394046358   1   tpf   1  No calibrated data.
+38877693    1   tpf   1  No calibrated data.
+149251611   1   tpf   1  Wrong placement of stamp.
+220478335   1   tpf   1  Wrong placement of stamp.
+149542119   1   tpf   1  Wrong placement of stamp.
+300160320   1   tpf   1  Wrong placement of stamp.
+176954932   1   tpf   1  Wrong placement of stamp.
+80256524    2   tpf   2  No calibrated data.
+47552789    2   tpf   2  No calibrated data.
+238196512   2   tpf   2  No calibrated data.
+38877693    2   tpf   2  No calibrated data.
+374942153   2   tpf   2  Wrong placement of stamp.
+350433330   2   tpf   2  Wrong placement of stamp.
+38877693    3   tpf   4  No pixel uncertainties.
+114434141   3   tpf   4  No pixel uncertainties.
+238196512   3   tpf   4  No pixel uncertainties.
+260192532   3   tpf   4  Wrong placement of stamp.
+150065151   3   tpf   4  Wrong placement of stamp.
+150106553   3   tpf   4  Wrong placement of stamp.
+141423536   3   tpf   4  Wrong placement of stamp.
+328228602   4   tpf   5  No pixel uncertainties.
+92252969    4   tpf   5  No pixel uncertainties.
+38877693    4   tpf   5  No pixel uncertainties.
+255559489   5   tpf   7  No pixel uncertainties.
+231308237   5   tpf   7  No pixel uncertainties.
+38877693    5   tpf   7  No pixel uncertainties.
+325685265   5   tpf   7  No pixel uncertainties.
+255559489   6   tpf   8  No pixel uncertainties.
+238196512   6   tpf   8  No pixel uncertainties.
+38877693    6   tpf   8  No pixel uncertainties.
+134501440   6   tpf   8  No pixel uncertainties.
+322899250   6   tpf   8  No pixel uncertainties.
+322899250   7   tpf   9  No pixel uncertainties.
+64602863    7   tpf   9  No pixel uncertainties.
+255559489   7   tpf   9  No pixel uncertainties.
+38877693    7   tpf   9  No pixel uncertainties.
+280310048   7   tpf   9  No pixel uncertainties.
+134501440   8   tpf  10  No pixel uncertainties.
+38877693    8   tpf  10  No pixel uncertainties.
+31975064    8   tpf  10  No pixel uncertainties.
+255559489   8   tpf  10  No pixel uncertainties.
+46799297    8   tpf  10  No pixel uncertainties.
+238001475   8   tpf  10  No pixel uncertainties.
+31975064    9   tpf  11  No pixel uncertainties.
+38877693    9   tpf  11  No pixel uncertainties.
+238196512   9   tpf  11  No pixel uncertainties.
+438741592   9   tpf  11  No pixel uncertainties.
+438741592  10   tpf  14  No pixel uncertainties.
+272314138  11   tpf  16  No pixel uncertainties.
+399646462  11   tpf  16  No pixel uncertainties.
+471011144  11   tpf  16  No pixel uncertainties.
+471011145  11   tpf  16  No pixel uncertainties.
+38877693   11   tpf  16  No pixel uncertainties.
+179323446  11   tpf  16  No pixel uncertainties.
+440960978  11   tpf  16  No pixel uncertainties.
+30247429   11   tpf  16  No pixel uncertainties.
+328329822  11   tpf  16  No pixel uncertainties.
+396139114  11   tpf  16  No pixel uncertainties.
+364216056  12   tpf  17  No pixel uncertainties.
+471011144  12   tpf  17  No pixel uncertainties.
+191437754  12   tpf  17  No pixel uncertainties.
+396139114  12   tpf  17  No pixel uncertainties.
+171207618  12   tpf  17  No pixel uncertainties.
+399646462  12   tpf  17  No pixel uncertainties.
+38877693   12   tpf  17  No pixel uncertainties.
+471011145  12   tpf  17  No pixel uncertainties.
+325635393  12   tpf  17  No pixel uncertainties.
+238196512  12   tpf  17  No pixel uncertainties.
+38877693   13   tpf  18  No pixel uncertainties.
+49231061   13   tpf  18  No pixel uncertainties.
+57334718   13   tpf  18  No pixel uncertainties.
+471012017  14   tpf  19  No pixel uncertainties.
+157587146  14   tpf  19  No pixel uncertainties.
+99843265   14   tpf  19  No pixel uncertainties.
+229540730  14   tpf  19  No pixel uncertainties.
+329269366  14   tpf  19  No pixel uncertainties.
+164642404  14   tpf  19  No pixel uncertainties.
+237195876  14   tpf  19  No pixel uncertainties.
+229540730  15   tpf  21  No pixel uncertainties.
+232853959  15   tpf  21  No pixel uncertainties.
+150387644  15   tpf  21  No pixel uncertainties.
+260614141  16   tpf  22  No pixel uncertainties.

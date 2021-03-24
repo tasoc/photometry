@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Preparation for Photometry extraction.
@@ -9,26 +9,26 @@ Preparation for Photometry extraction.
 import os
 import numpy as np
 import h5py
-from astropy.io import fits
 import sqlite3
 import logging
 import re
 import multiprocessing
-from astropy.wcs import WCS, NoConvergence
-from bottleneck import replace, nanmean, nanmedian
-from timeit import default_timer
 import itertools
 import functools
 import contextlib
+from astropy.io import fits
+from astropy.wcs import WCS, NoConvergence
+from bottleneck import replace, nanmean, nanmedian
+from timeit import default_timer
 from tqdm import tqdm, trange
 from .catalog import download_catalogs
 from .backgrounds import fit_background
-from .utilities import load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest, find_tpf_files
+from .utilities import (load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest,
+	find_tpf_files, load_sector_settings, to_tuple)
 from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
-from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel
-#from .plots import plt, plot_image
+from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def quality_from_tpf(tpffile, time_start, time_end):
 	"""
 	Transfer quality flags from Target Pixel File to FFIs.
@@ -71,12 +71,12 @@ def quality_from_tpf(tpffile, time_start, time_end):
 
 	return quality
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def _iterate_hdf_group(dset, start=0, stop=None):
 	for d in range(start, stop if stop is not None else len(dset)):
 		yield np.asarray(dset['%04d' % d])
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		calc_movement_kernel=False, backgrounds_pixels_threshold=0.5, output_file=None):
 	"""
@@ -85,30 +85,38 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 	pipeline.
 
 	In this process the background flux in each FFI is
-	estimated using the `backgrounds.fit_background` function.
+	estimated using the :func:`backgrounds.fit_background` function.
 
 	Parameters:
-		input_folder (string): Input folder to create TODO list for. If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
-		cameras (iterable of integers, optional): TESS camera number (1-4). If ``None``, all cameras will be processed.
-		ccds (iterable of integers, optional): TESS CCD number (1-4). If ``None``, all cameras will be processed.
-		calc_movement_kernel (boolean, optional): Should Image Movement Kernels be calculated for each image?
-			If it is not calculated, only the default WCS movement kernel will be available when doing the folllowing photometry. Default=False.
-		backgrounds_pixels_threshold (float): Percentage of times a pixel has to use used in background calculation in order to be included in the
+		input_folder (str): Input folder to create TODO list for. If ``None``, the input
+			directory in the environment variable ``TESSPHOT_INPUT`` is used.
+		sectors (iterable of int, optional): TESS Sectors. If ``None``,
+			all sectors will be processed.
+		cameras (iterable of int, optional): TESS camera number (1-4). If ``None``,
+			all cameras will be processed.
+		ccds (iterable of int, optional): TESS CCD number (1-4).
+			If ``None``, all cameras will be processed.
+		calc_movement_kernel (bool, optional): Should Image Movement Kernels be
+			calculated for each image? If it is not calculated, only the default WCS
+			movement kernel will be available when doing the folllowing photometry. Default=False.
+		backgrounds_pixels_threshold (float): Percentage of times a pixel has to use used in
+			background calculation in order to be included in the
 			final list of contributing pixels. Default=0.5.
-		output_file (string, optional): The file path where the output file should be saved.
+		output_file (str, optional): The file path where the output file should be saved.
 			If not specified, the file will be saved into the input directory.
 			Should only be used for testing, since the file would (proberly) otherwise end up with
 			a wrong file name for running with the rest of the pipeline.
 
 	Raises:
-		NotADirectoryError: If the specified ``input_folder`` is not an existing directory or if settings table could not be loaded from the catalog SQLite file.
+		NotADirectoryError: If the specified ``input_folder`` is not an existing directory
+			or if settings table could not be loaded from the catalog SQLite file.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
 	logger = logging.getLogger(__name__)
 	tqdm_settings = {
-		'disable': not logger.isEnabledFor(logging.INFO),
+		'disable': None if logger.isEnabledFor(logging.INFO) else True,
 		'dynamic_ncols': True
 	}
 
@@ -121,8 +129,9 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		raise NotADirectoryError("The given path does not exist or is not a directory")
 
 	# Make sure cameras and ccds are iterable:
-	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
-	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
+	sectors = to_tuple(sectors)
+	cameras = to_tuple(cameras, (1,2,3,4))
+	ccds = to_tuple(ccds, (1,2,3,4))
 
 	# Common settings for HDF5 datasets:
 	args = {
@@ -148,13 +157,12 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		# since the HDF5 creation below will simply skip any sectors with
 		# no FFIs available
 		for fname in find_tpf_files(input_folder):
-			m = re.match(r'^.+-s(\d+)[-_].+_tp\.fits', os.path.basename(fname))
+			m = re.match(r'^.+-s(\d+)[-_].+_(fast-)?tp\.fits', os.path.basename(fname))
 			if int(m.group(1)) not in sectors:
 				sectors.append(int(m.group(1)))
 
+		sectors = tuple(sorted(sectors))
 		logger.debug("Sectors found: %s", sectors)
-	else:
-		sectors = (sectors,)
 
 	# Check if any sectors were found/provided:
 	if not sectors:
@@ -179,7 +187,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 	# Loop over each combination of camera and CCD:
 	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
-		logger.info("Running SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
+		logger.info("Running SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 		tic_total = default_timer()
 
 		# Find all the FFI files associated with this camera and CCD:
@@ -192,7 +200,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		# Catalog file:
 		catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 		if len(catalog_file) != 1:
-			logger.error("Catalog file could not be found: SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
+			logger.error("Catalog file could not be found: SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 			continue
 		logger.debug("Catalog File: %s", catalog_file[0])
 
@@ -203,14 +211,17 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			cursor.execute("SELECT sector,reference_time FROM settings LIMIT 1;")
 			row = cursor.fetchone()
 			if row is None:
-				raise OSError("Settings could not be loaded from catalog")
+				raise RuntimeError("Settings could not be loaded from catalog")
 			#sector = row['sector']
 			sector_reference_time = row['reference_time']
 			cursor.close()
 
+		# Cadence is simply changed in sector 28:
+		cadence = load_sector_settings(sector)['ffi_cadence']
+
 		# HDF5 file to be created/modified:
 		if output_file is None:
-			hdf_file = os.path.join(input_folder, 'sector{0:03d}_camera{1:d}_ccd{2:d}.hdf5'.format(sector, camera, ccd))
+			hdf_file = os.path.join(input_folder, f'sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.hdf5')
 		else:
 			output_file = os.path.abspath(output_file)
 			if not output_file.endswith('.hdf5'):
@@ -231,7 +242,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			pixel_flags = hdf.require_group('pixel_flags')
 			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
 			wcs = hdf.require_group('wcs')
-			time_smooth = backgrounds.attrs.get('time_smooth', 3)
+			time_smooth = backgrounds.attrs.get('time_smooth', {1800: 3, 600: 9}[cadence])
 			flux_cutoff = backgrounds.attrs.get('flux_cutoff', 8e4)
 			bkgiters = backgrounds.attrs.get('bkgiters', 3)
 			radial_cutoff = backgrounds.attrs.get('radial_cutoff', 2400)
@@ -340,6 +351,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					'CAMERA': None,
 					'CCD': None,
 					'DATA_REL': None,
+					'PROCVER': None,  # Used to distinguish bad timestamps in sectors 20 and 21
 					'NUM_FRM': None,
 					'NREADOUT': None,
 					'CRMITEN': None,
@@ -349,7 +361,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				logger.info('Final processing of individual images...')
 				tic = default_timer()
 				for k, fname in enumerate(tqdm(files, **tqdm_settings)):
-					dset_name = '%04d' % k
+					dset_name = f'{k:04d}'
 
 					# Load the FITS file data and the header:
 					flux0, hdr, flux0_err = load_ffi_fits(fname, return_header=True, return_uncert=True)
@@ -372,7 +384,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					# we are doing a simple scaling of the timestamps.
 					if 'FFIINDEX' in hdr:
 						cadenceno[k] = hdr['FFIINDEX']
-					elif is_tess:
+					elif is_tess and cadence == 1800:
 						# The following numbers comes from unofficial communication
 						# with Doug Caldwell and Roland Vanderspek:
 						# The timestamp in TJD and the corresponding cadenceno:
@@ -382,6 +394,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						# Extracpolate the cadenceno as a simple linear relation:
 						offset = first_cadenceno - first_time/timedelt
 						cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
+					elif is_tess:
+						raise RuntimeError("Could not determine CADENCENO for TESS data")
 					else:
 						cadenceno[k] = k+1
 
@@ -449,6 +463,11 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				# Normalize sumimage
 				SumImage /= Nimg
 
+				# Correct timestamp offset that was in early data releases:
+				time_start = fixes.time_offset(time_start, attributes, datatype='ffi', timepos='start')
+				time_stop = fixes.time_offset(time_stop, attributes, datatype='ffi', timepos='end')
+				time, fixed_time_offset = fixes.time_offset(time, attributes, datatype='ffi', timepos='mid', return_flag=True)
+
 				# Single boolean image indicating if the pixel was (on average) used in the background estimation:
 				if 'backgrounds_pixels_used' not in hdf:
 					UsedInBackgrounds = (UsedInBackgrounds/numfiles > backgrounds_pixels_threshold)
@@ -457,6 +476,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 				# Save attributes
 				images.attrs['SECTOR'] = sector
+				images.attrs['CADENCE'] = cadence
+				images.attrs['TIME_OFFSET_CORRECTED'] = fixed_time_offset
 				for key, value in attributes.items():
 					logger.debug("Saving attribute %s = %s", key, value)
 					images.attrs[key] = value
@@ -563,7 +584,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 					#msmax = max(np.abs(np.min(mean_shenanigans)), np.abs(np.max(mean_shenanigans)))
 					#fig = plt.figure()
-					#plot_image(mean_shenanigans, scale='linear', vmin=-msmax, vmax=msmax, cmap='coolwarm', make_cbar=True, xlabel=None, ylabel=None)
+					#plot_image(mean_shenanigans, scale='linear', vmin=-msmax, vmax=msmax, cmap='coolwarm', cbar=True)
 					#fig.savefig('test.png', bbox_inches='tight')
 
 					logger.info("Setting background shenanigans...")
@@ -576,7 +597,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						#img[np.abs(img) <= bkgshe_threshold/2] = 0
 						#fig = plt.figure(figsize=(8,9))
 						#ax = fig.add_subplot(111)
-						#plot_image(img, ax=ax, scale='linear', vmin=-bkgshe_threshold, vmax=bkgshe_threshold, xlabel=None, ylabel=None, cmap="RdBu_r", make_cbar=True)
+						#plot_image(img, ax=ax, scale='linear', vmin=-bkgshe_threshold, vmax=bkgshe_threshold, cmap="RdBu_r", cbar=True)
 						#ax.set_xticks([])
 						#ax.set_yticks([])
 						#fig.savefig(dset_name + '.png', bbox_inches='tight')

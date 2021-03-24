@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Code to generate plot for Photometry Paper.
@@ -10,7 +10,7 @@ import numpy as np
 import h5py
 import sys
 import os.path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from photometry.plots import plt, plot_image, matplotlib
 from photometry.quality import PixelQualityFlags
 from matplotlib.colors import ListedColormap

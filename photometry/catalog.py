@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create catalogs of stars in a given TESS observing sector.
@@ -12,11 +12,12 @@ import sqlite3
 import logging
 import itertools
 import contextlib
+from tqdm import tqdm
 from .tasoc_db import TASOC_DB
-from .utilities import (add_proper_motion, load_settings, # find_catalog_files
-	radec_to_cartesian, cartesian_to_radec, download_file)
+from .utilities import (add_proper_motion, load_sector_settings, # find_catalog_files
+	radec_to_cartesian, cartesian_to_radec, download_file, to_tuple)
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None,
 	buffer_size=5, pixel_scale=21.0):
 	"""
@@ -26,10 +27,10 @@ def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=
 	are handled correctly.
 
 	Parameters:
-		cursor (``sqlite3.Cursor`` object): Cursor to catalog SQLite file.
+		cursor (:class:`sqlite3.Cursor`): Cursor to catalog SQLite file.
 		footprint (ndarray): 2D ndarray of RA and DEC coordinates of the corners of footprint.
-		columns (string): Default is to return all columns.
-		constraints (string): Additional constraints on the query in addition to the footprint.
+		columns (str): Default is to return all columns.
+		constraints (str): Additional constraints on the query in addition to the footprint.
 		buffer_size (float): Buffer to add around stamp in pixels. Default=5.
 		pixel_scale (float): Size of single pixel in arcsecs. Default=21.0 (TESS).
 
@@ -103,19 +104,23 @@ def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=
 
 	return cursor.fetchall()
 
-#------------------------------------------------------------------------------
-def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2, overwrite=False): # pragma: no cover
+#--------------------------------------------------------------------------------------------------
+def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffer=0.2,
+	overwrite=False): # pragma: no cover
 	"""
 	Create catalogs of stars in a given TESS observing sector.
 
 	Parameters:
-		sector (integer): TESS observing sector.
-		input_folder (string or None, optional):  Input folder to create catalog file in.
+		sector (int): TESS observing sector.
+		input_folder (str or None, optional): Input folder to create catalog file in.
 			If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
-		cameras (iterable or None, optional): TESS cameras (1-4) to create catalogs for. If ``None`` all cameras are created.
-		ccds (iterable or None, optional): TESS ccds (1-4) to create catalogs for. If ``None`` all ccds are created.
-		coord_buffer (float, optional): Buffer in degrees around each CCD to include in catalogs. Default=0.1.
-		overwrite (boolean, optional): Overwrite existing catalogs. Default=``False``.
+		cameras (iterable or None, optional): TESS cameras (1-4) to create catalogs for.
+			If ``None`` all cameras are created.
+		ccds (iterable or None, optional): TESS ccds (1-4) to create catalogs for.
+			If ``None`` all ccds are created.
+		coord_buffer (float, optional): Buffer in degrees around each CCD to include in catalogs.
+			Default=0.1.
+		overwrite (bool, optional): Overwrite existing catalogs. Default=``False``.
 
 	Note:
 		This function requires the user to be connected to the TASOC network
@@ -132,10 +137,10 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 	logger = logging.getLogger(__name__)
 
 	# Make sure cameras and ccds are iterable:
-	cameras = (1, 2, 3, 4) if cameras is None else (cameras, )
-	ccds = (1, 2, 3, 4) if ccds is None else (ccds, )
+	cameras = to_tuple(cameras, (1,2,3,4))
+	ccds = to_tuple(ccds, (1,2,3,4))
 
-	settings = load_settings(sector=sector)
+	settings = load_sector_settings(sector=sector)
 	sector_reference_time = settings['reference_time']
 	epoch = (sector_reference_time - 2451544.5)/365.25
 
@@ -149,11 +154,11 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 		# Loop through the cameras and CCDs that should have catalogs created:
 		for camera, ccd in itertools.product(cameras, ccds):
 
-			logger.info("Running SECTOR=%s, CAMERA=%s, CCD=%s", sector, camera, ccd)
+			logger.info("Running SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 
 			# Create SQLite file:
 			# TODO: Could we use "find_catalog_files" instead?
-			catalog_file = os.path.join(input_folder, 'catalog_sector{0:03d}_camera{1:d}_ccd{2:d}.sqlite'.format(sector, camera, ccd))
+			catalog_file = os.path.join(input_folder, f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite')
 			if os.path.exists(catalog_file):
 				if overwrite:
 					os.remove(catalog_file)
@@ -199,7 +204,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				))
 				row = tasocdb.cursor.fetchone()
 				if row is None:
-					raise OSError("The given sector, camera, ccd combination was not found in TASOC database: (%s,%s,%s)", sector, camera, ccd)
+					raise OSError(f"The given SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d} combination was not found in TASOC database.")
 				footprint = row[0]
 				camera_centre_ra = row[1]
 				camera_centre_dec = row[2]
@@ -254,36 +259,47 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				))
 				conn.commit()
 
+				# We need a list of when the sectors are in time:
+				logger.info('Projecting catalog %.3f years relative to 2000', epoch)
+
+				# Count number of stars in the footprint:
+				logger.info("Querying for number of targets within footprint...")
+				tasocdb.cursor.execute(f"SELECT COUNT(*) AS num FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '{footprint:s}'::polygon) AND (disposition IS NULL OR disposition=3);")
+				total_count = tasocdb.cursor.fetchone()['num']
+
+				# Settings for tqdm progress bar:
+				tqdm_settings = {
+					'disable': None if logger.isEnabledFor(logging.INFO) else True,
+					'total': total_count
+				}
+
 				# Query the TESS Input Catalog table for all stars in the footprint.
 				# This is a MASSIVE table, so this query may take a while.
-				tasocdb.cursor.execute("SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '%s'::polygon) AND disposition IS NULL;" % (
-					footprint,
-				))
+				logger.info("Building catalog table with %d rows...", total_count)
+				with tasocdb.named_cursor(itersize=20000) as cursor_named:
+					cursor_named.execute(f"SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '{footprint:s}'::polygon) AND (disposition IS NULL OR disposition=3);")
 
-				# We need a list of when the sectors are in time:
-				logger.info('Projecting catalog {0:.3f} years relative to 2000'.format(epoch))
+					for row in tqdm(cursor_named, **tqdm_settings):
+						# Add the proper motion to each coordinate:
+						if row['pm_ra'] and row['pm_decl']:
+							ra, dec = add_proper_motion(row['ra'], row['decl'], row['pm_ra'], row['pm_decl'], sector_reference_time, epoch=2000.0)
+							logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
+						else:
+							ra = row['ra']
+							dec = row['decl']
 
-				for row in tasocdb.cursor.fetchall():
-					# Add the proper motion to each coordinate:
-					if row['pm_ra'] and row['pm_decl']:
-						ra, dec = add_proper_motion(row['ra'], row['decl'], row['pm_ra'], row['pm_decl'], sector_reference_time, epoch=2000.0)
-						logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
-					else:
-						ra = row['ra']
-						dec = row['decl']
-
-					# Save the coordinates in SQLite database:
-					cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff) VALUES (?,?,?,?,?,?,?,?,?);", (
-						int(row['starid']),
-						ra,
-						dec,
-						row['ra'],
-						row['decl'],
-						row['pm_ra'],
-						row['pm_decl'],
-						row['Tmag'],
-						row['Teff']
-					))
+						# Save the coordinates in SQLite database:
+						cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff) VALUES (?,?,?,?,?,?,?,?,?);", (
+							int(row['starid']),
+							ra,
+							dec,
+							row['ra'],
+							row['decl'],
+							row['pm_ra'],
+							row['pm_decl'],
+							row['Tmag'],
+							row['Teff']
+						))
 
 				cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
 				conn.commit()
@@ -312,7 +328,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 	logger.info("All catalogs done.")
 
-#------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------
 def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	"""
 	Download catalog SQLite files from TASOC cache into input_folder.
@@ -320,16 +336,16 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 	This enables users to circumvent the creation of catalog files directly using
 	:py:func:`make_catalog`, which requires the user to be connected to the TASOC internal
 	networks at Aarhus University.
-	This does require that the TASOC personel have made catalogs available in the cache for
+	This does require that the TASOC personnel have made catalogs available in the cache for
 	the given sector, otherwise this function will throw an error.
 
 	Parameters:
-		input_folder (string): Target directory to download files into.
+		input_folder (str): Target directory to download files into.
 			Should be a TESSPHOT input directory.
-		sector (integer): Sector to download catalogs for.
-		camera (integer, optional): Camera to download catalogs for.
+		sector (int): Sector to download catalogs for.
+		camera (int, optional): Camera to download catalogs for.
 			If not specified, all cameras will be downloaded.
-		ccd (integer, optional): CCD to download catalogs for.
+		ccd (int, optional): CCD to download catalogs for.
 			If not specified, all CCDs will be downloaded.
 
 	Raises:
@@ -341,20 +357,17 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 
 	# Check that the target directory exists:
 	if not os.path.isdir(input_folder):
-		raise NotADirectoryError("Directory does not exist: '%s'" % input_folder)
+		raise NotADirectoryError(f"Directory does not exist: '{input_folder:s}'")
 
-	# Make sure cameras and ccds are iterable:
-	cameras = (1, 2, 3, 4) if camera is None else (camera, )
-	ccds = (1, 2, 3, 4) if ccd is None else (ccd, )
+	# Make sure sectors, cameras and ccds are iterable:
+	sectors = to_tuple(sector)
+	cameras = to_tuple(camera, (1,2,3,4))
+	ccds = to_tuple(ccd, (1,2,3,4))
 
-	# Loop through all combinations of cameras and ccds:
-	for camera, ccd in itertools.product(cameras, ccds):
+	# Loop through all combinations of sectors, cameras and ccds:
+	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
 		# File name and path for catalog file:
-		fname = 'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'.format(
-			sector=sector,
-			camera=camera,
-			ccd=ccd
-		)
+		fname = f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite'
 		fpath = os.path.join(input_folder, fname)
 
 		# If the file already exists, skip the download:
@@ -363,10 +376,7 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 			continue
 
 		# URL for the missing catalog file:
-		url = 'https://tasoc.dk/pipeline/catalogs/tic8/sector{sector:03d}/{fname:s}'.format(
-			sector=sector,
-			fname=fname
-		)
+		url = f'https://tasoc.dk/pipeline/catalogs/tic8/sector{sector:03d}/{fname:s}'
 
 		# Download the file using the utilities function:
-		download_file(url, fpath)
+		download_file(url, fpath, desc=f'Catalog S{sector:d}-{camera:d}-{ccd:d}')

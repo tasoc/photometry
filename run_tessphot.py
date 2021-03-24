@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Command-line utility to run TESS photometry from command-line.
@@ -34,27 +34,34 @@ import functools
 from timeit import default_timer
 from photometry import tessphot, TaskManager
 
-#------------------------------------------------------------------------------
-if __name__ == '__main__':
-
+#--------------------------------------------------------------------------------------------------
+def main():
 	# Parse command line arguments:
 	parser = argparse.ArgumentParser(description='Run TESS Photometry pipeline on single star.')
-	parser.add_argument('-m', '--method', help='Photometric method to use.', default=None, choices=('aperture', 'psf', 'linpsf', 'halo'))
-	parser.add_argument('-s', '--source', help='Data-source to load.', default=None, choices=('ffi', 'tpf'))
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
-	parser.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
 	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
-	parser.add_argument('--all', help='Run all stars, one by one. Please consider using the MPI program instead.', action='store_true')
-	parser.add_argument('--starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
-	parser.add_argument('-v', '--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
+	parser.add_argument('-m', '--method', choices=('aperture', 'psf', 'linpsf', 'halo'), default=None, help='Photometric method to use.')
+
+	group = parser.add_argument_group('Filter which targets to run')
+	group.add_argument('--all', help='Run all stars, one by one. Please consider using the MPI program instead.', action='store_true')
+	group.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
+	group.add_argument('--priority', type=int, help='Priority of target.', nargs='?', default=None)
+	group.add_argument('--starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
+	group.add_argument('--datasource', type=str, choices=('ffi', 'tpf'), default=None, help='Data-source to load.', )
+	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
+	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
+	group.add_argument('--cadence', type=int, choices=(20,120,600,1800), default=None, help='Observing cadence. Default is to run all cadences.')
+
+	parser.add_argument('--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
+	parser.add_argument('--output', type=str, help='Directory to put lightcurves into.', nargs='?', default=None)
 	parser.add_argument('input_folder', type=str, help='Directory to create catalog files in.', nargs='?', default=None)
 	args = parser.parse_args()
 
 	# Make sure at least one setting is given:
-	if not args.all and args.starid is None and not args.random:
+	if not args.all and args.starid is None and args.priority is None and not args.random:
 		parser.error("Please select either a specific STARID or RANDOM.")
 
 	# Set logging level:
@@ -84,34 +91,51 @@ if __name__ == '__main__':
 	else:
 		input_folder = os.environ.get('TESSPHOT_INPUT', test_folder)
 
-	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(input_folder, 'lightcurves'))
+	if os.path.isfile(input_folder):
+		input_folder = os.path.dirname(input_folder)
+
+	if args.output:
+		output_folder = args.output
+	else:
+		output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(input_folder, 'lightcurves'))
 
 	logger.info("Loading input data from '%s'", input_folder)
 	logger.info("Putting output data in '%s'", output_folder)
 
+	# Constraints on which targets to process:
+	constraints = {
+		'camera': args.camera,
+		'ccd': args.ccd,
+		'cadence': args.cadence,
+		'datasource': args.datasource,
+		'starid': args.starid,
+		'priority': args.priority
+	}
+
 	# Create partial function of tessphot, setting the common keywords:
-	f = functools.partial(tessphot, input_folder=input_folder, output_folder=output_folder, plot=args.plot, version=args.version)
+	f = functools.partial(
+		tessphot,
+		input_folder=input_folder,
+		output_folder=output_folder,
+		plot=args.plot,
+		version=args.version)
 
 	# Run the program:
-	with TaskManager(input_folder, overwrite=args.overwrite) as tm:
+	with TaskManager(input_folder, overwrite=args.overwrite, cleanup_constraints=constraints) as tm:
 		while True:
-			if args.all and args.random:
+			if args.random:
 				task = tm.get_random_task()
-				if task is None: break
-				if args.method: task['method'] = args.method
-				if args.source: task['datasource'] = args.source
-			elif args.all:
-				task = tm.get_task()
-				if task is None: break
-				if args.method: task['method'] = args.method
-				if args.source: task['datasource'] = args.source
-			elif args.starid is not None:
-				task = tm.get_task(starid=args.starid)
-				if task is None: parser.error("The STARID '%d' was not found in TODOLIST." % args.starid)
-				if args.method: task['method'] = args.method
-				if args.source: task['datasource'] = args.source
-			elif args.random:
-				task = tm.get_random_task()
+			else:
+				task = tm.get_task(**constraints)
+
+			if task is None:
+				parser.error("No task found matching constraints.")
+				break
+
+			# If specific method provided, overwrite whatever
+			# was defined in the TODO-file:
+			if args.method:
+				task['method'] = args.method
 
 			result = task.copy()
 			del task['priority'], task['tmag']
@@ -123,6 +147,7 @@ if __name__ == '__main__':
 			# Construct result message:
 			result.update({
 				'status': pho.status,
+				'method_used': pho.method,
 				'time': t2 - t1,
 				'details': pho._details
 			})
@@ -130,3 +155,7 @@ if __name__ == '__main__':
 
 			if not args.all:
 				break
+
+#--------------------------------------------------------------------------------------------------
+if __name__ == '__main__':
+	main()
