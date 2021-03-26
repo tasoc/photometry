@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from .pixel_calib import PixelCalibrator
+from .pixel_calib import TESSPixelCalibrator
