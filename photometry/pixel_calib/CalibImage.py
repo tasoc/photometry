@@ -42,6 +42,23 @@ class CalibImage(CCDData):
 		self.uncertainty.array[index] = value.uncertainty.array
 		#self.mask[index] = value.mask
 
+	def __getitem__(self, item):
+
+		new = super().__getitem__(item)
+
+		if 'aperture' in self.meta:
+			new.meta['aperture'] = self.meta['aperture'][item]
+
+		return new
+
+	@property
+	def aperture(self):
+		return self.meta.get('aperture')
+
+	@property
+	def outputs(self):
+		return self.aperture & (32 + 64 + 128 + 256)
+
 	@property
 	def rows(self):
 		return self.meta['index_rows']

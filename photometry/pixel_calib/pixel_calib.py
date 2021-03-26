@@ -21,6 +21,47 @@ from ..utilities import download_file
 from ..plots import plt, plot_image
 
 #--------------------------------------------------------------------------------------------------
+def get_tpf_col(img, coltype=None):
+	"""
+	Load collateral data matching the given Target Pixel File.
+	"""
+
+	if coltype not in ('vrow', 'smrow', 'lvcol', 'tvcol'):
+		raise ValueError()
+
+	logger = logging.getLogger(__name__)
+
+	sector = img.meta['sector']
+	camera = img.meta['camera']
+	ccd = img.meta['ccd']
+	cadence = img.meta['cadence']
+	suffix = {120: 'col', 20: 'fast-col'}[cadence]
+
+	# Find the outputs from the aperture extension:
+	outputs = np.unique(img.aperture & (32 + 64 + 128 + 256))
+
+	collateral = [] # np.zeros((len(outputs),flux.shape[0],2078,11), dtype='int32')
+	for output in outputs:
+
+		colfile = os.path.join('.',
+			f's{sector:04d}',
+			f'camera{camera:d}-ccd{ccd:d}',
+			f'tess2018349182459-s{sector:04d}-{coltype:s}-{camera:d}-{ccd:d}-{output:s}-0126-s_{suffix:s}.fits')
+
+		if not os.path.isfile(colfile):
+			url = f'https://archive.stsci.edu/missions/tess/ffi/s{sector:04d}/2018/349/{camera:d}-{ccd:d}/' + os.path.basename(colfile)
+			os.makedirs(os.path.dirname(colfile), exist_ok=True)
+			download_file(url, colfile)
+
+		logger.info("... loading trailing virtual column file %s", colfile)
+		with fits.open(colfile, mode='readonly') as hdu:
+			raw = np.asarray(hdu[1].data[coltype.upper() + '_RAW'], dtype='int32')
+			collateral = np.column_stack((collateral, raw))
+
+	print(collateral)
+	return collateral
+
+#--------------------------------------------------------------------------------------------------
 class PixelCalibrator(object):
 
 	def __init__(self, camera=None, ccd=None):
@@ -40,6 +81,8 @@ class PixelCalibrator(object):
 
 		# Directory where calibration files will be stored:
 		self.datadir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data'))
+
+		self.cache_dir = '.'
 
 		# General settings for TESS data:
 		self.exposure_time = 1.98 * u.second
@@ -127,18 +170,6 @@ class PixelCalibrator(object):
 		return self._flatfield
 
 	#----------------------------------------------------------------------------------------------
-	def plot_flatfield(self):
-
-		fig, ax = plt.subplots()
-		plot_image(self.flatfield.data, ax=ax, scale='linear', cmap='seismic', vmin=0.95, vmax=1.05, cbar='right')
-
-	#----------------------------------------------------------------------------------------------
-	def plot_twodblack(self):
-
-		fig, ax = plt.subplots()
-		plot_image(self.twodblack.data, ax=ax, scale='linear', cbar='right')
-
-	#----------------------------------------------------------------------------------------------
 	@property
 	def readnoise(self):
 		"""CCD read-noise model."""
@@ -191,7 +222,7 @@ class PixelCalibrator(object):
 		if self._undershoot is None:
 			# Load the linearity models from XML files:
 			self.logger.info("Loading undershoot model...")
-			undershoot_model = ET.parse(os.path.join(self.datadir, 'undershoot.xml')).getroot()
+			undershoot_model = ET.parse(os.path.join(self.datadir, 'tess-undershoot.xml')).getroot()
 
 			self._undershoot = {}
 			for output in ('A', 'B', 'C', 'D'):
@@ -207,7 +238,7 @@ class PixelCalibrator(object):
 		"""
 		self.logger.info("Doing gain/linearity correction...")
 
-		outputs = img.meta['aperture'] & (32 + 64 + 128 + 256)
+		outputs = img.aperture & (32 + 64 + 128 + 256)
 		coadds = img.meta['coadds']
 
 		#
@@ -288,64 +319,82 @@ class PixelCalibrator(object):
 		return img
 
 	#----------------------------------------------------------------------------------------------
-	def apply_smear_tim(self, img, smrow, output, smear='alternate'):
+	def apply_smear_tim(self, img, smrow, smear='alternate'):
+		"""
+		Parameters:
+			smear (str): 'standard', or 'alternate'
+				If the string 'standard' is passed, will calculate the smear correction directly from the collateral files.
+				If the string 'alternate' is passed, smear correction will be estimated from the target pixel file.
+		"""
 
-
-		# Origin and dimensions of the target pixel file relative to the smear data
-		if output == 'A':
-			sx1 = 44
-		if output == 'B':
-			sx1 = 556
-		if output == 'C':
-			sx1 = 1068
-		if output == 'D':
-			sx1 = 1580
-
-		x1 = self.hdu[2].header['CRVAL1P']-1-sx1
-		dx = self.hdu[2].header['NAXIS1']
-		dy = self.hdu[2].header['NAXIS2']
-
-		if smrow.shape[0] == 2: # TPF goes over two outputs
-			newsmrow = np.zeros((smrow.shape[1],10,1024))
-			newsmrow[:,:,:512] = smrow[0]
-			newsmrow[:,:,512] = smrow[1]
-			smrow = newsmrow
+		# In TPFs the masked smear rows and virtual rows have to be fetched separately:
+		if img.meta['cadence'] == 'ffi':
+			smrow = img.mask['smear_rows']
 		else:
-			smrow = smrow[0]
+			smrow = get_tpf_col(img, coltype='smrow', output=output_name)
 
-		# Calculate the 'regular' smear correction
-		smcor = nanmedian(smrow, axis=1)
+		# Add mean black level per outout:
+		outputs = img.aperture & (32 + 64 + 128 + 256)
+		for output in np.unique(outputs):
+			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
+			msk = (outputs == output)
 
-		if smear == 'alternate':
-			# Find which rows are below the bleed column
-			medimg = nanmedian(img, axis=0)
+			# Origin and dimensions of the target pixel file relative to the smear data
+			if output_name == 'A':
+				sx1 = 44
+			if output_name == 'B':
+				sx1 = 556
+			if output_name == 'C':
+				sx1 = 1068
+			if output_name == 'D':
+				sx1 = 1580
 
-			maxrows = []
-			for col in np.arange(dx):
-				maxrows.append(np.argmax(medimg[:,col][medimg[:,col] < 1e5]))
+			x1 = self.hdu[2].header['CRVAL1P']-1-sx1
+			dx = self.hdu[2].header['NAXIS1']
+			dy = self.hdu[2].header['NAXIS2']
 
-			maxrow = np.nanmin(maxrows) - 10 # 10 row buffer to (hopefully) ensure we're always below the bleed column
+			if smrow.shape[0] == 2: # TPF goes over two outputs
+				newsmrow = np.zeros((smrow.shape[1],10,1024))
+				newsmrow[:,:,:512] = smrow[0]
+				newsmrow[:,:,512] = smrow[1]
+				smrow = newsmrow
+			else:
+				smrow = smrow[0]
 
-			# Build a mask from the pixels with the lowest flux in each column
-			smmask = np.zeros((dy,dx), dtype='bool')
-			for col in np.arange(dx):
-				idx = medimg[:maxrow,col] < np.percentile(medimg[:maxrow,col],20)
-				smmask[:maxrow,col][idx] = True
+			# Calculate the 'regular' smear correction
+			smcor = nanmedian(smrow, axis=1)
 
-			# From the background pixels calculate a smear correction + background for each column as a function of time
-			smbkgd = nanmean(img.T[smmask.T].reshape(dx,int(np.sum(smmask)/dx),img.shape[0]),axis=1).T
+			if smear == 'alternate':
+				# Find which rows are below the bleed column
+				medimg = nanmedian(img, axis=0)
 
-			# Estimate the background and remove it from the smear correction.
-			# Here we can use the median level for the regular smear correction
-			msk = (np.arange(smrow.shape[2]) < x1) | (np.arange(smrow.shape[2]) > x1 + dx)
-			bkgd = np.nanmin(smbkgd,axis=1) - nanmedian(smcor[:,msk], axis=1)
-			sm = smbkgd - np.tile(bkgd[:,np.newaxis], dx)
+				maxrows = []
+				for col in np.arange(dx):
+					maxrows.append(np.argmax(medimg[:,col][medimg[:,col] < 1e5]))
 
-		elif smear == 'standard':
-			sm = smcor[:,x1:x1+dx]
+				# 10 row buffer to (hopefully) ensure we're always below the bleed column
+				maxrow = np.nanmin(maxrows) - 10
 
-		# Apply the new correction
-		img -= np.expand_dims(sm, axis=1)
+				# Build a mask from the pixels with the lowest flux in each column
+				smmask = np.zeros((dy,dx), dtype='bool')
+				for col in np.arange(dx):
+					idx = medimg[:maxrow,col] < np.percentile(medimg[:maxrow,col],20)
+					smmask[:maxrow,col][idx] = True
+
+				# From the background pixels calculate a smear correction + background for each column as a function of time
+				smbkgd = nanmean(img.T[smmask.T].reshape(dx,int(np.sum(smmask)/dx),img.shape[0]),axis=1).T
+
+				# Estimate the background and remove it from the smear correction.
+				# Here we can use the median level for the regular smear correction
+				msk = (np.arange(smrow.shape[2]) < x1) | (np.arange(smrow.shape[2]) > x1 + dx)
+				bkgd = np.nanmin(smbkgd,axis=1) - nanmedian(smcor[:,msk], axis=1)
+				sm = smbkgd - np.tile(bkgd[:,np.newaxis], dx)
+
+			elif smear == 'standard':
+				sm = smcor[:, x1:x1+dx]
+
+			# Apply the new correction
+			img[msk] -= np.expand_dims(sm, axis=1)
 
 		return img
 
@@ -356,13 +405,17 @@ class PixelCalibrator(object):
 		"""
 		self.logger.info("Doing 2D black correction...")
 
+		print(img.aperture)
+
 		# Subtract fixed offset:
 		fxdoff = img.meta['header'].get('FXDOFF', None)
 		if fxdoff is not None:
 			img -= int(fxdoff) * u.electron
 
+		print(img.aperture)
+
 		# Add mean black level per outout:
-		outputs = img.meta['aperture'] & (32 + 64 + 128 + 256)
+		outputs = img.aperture & (32 + 64 + 128 + 256)
 		for output in np.unique(outputs):
 			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
 			indx = (outputs == output)
@@ -372,26 +425,54 @@ class PixelCalibrator(object):
 		return img - (img.meta['coadds'] * self.twodblack[img.rows, img.cols])
 
 	#----------------------------------------------------------------------------------------------
-	@property
-	def get_tpf_virtual_rows(self):
+	def onedblack(self, img, output):
 
-		tv_cal = np.zeros((len(set(outputs)),flux.shape[0],2078,11))
-		for idx, output in enumerate(set(outputs)):
+		#
+		sector = img.meta['sector']
+		cadence = img.meta['cadence']
 
-			tvcolfile = path.split('/')[-1].split('-')[0]+'-'+path.split('/')[-1].split('-')[1]+'-tvcol-'+str(self.camera)+'-'+str(self.ccd)+'-'+output.lower()+'-'+path.split('/')[-1].split('-')[3]+'-s_col.fits'
+		# Cache file:
+		cache_file = os.path.join(self.cache_dir,
+			f's{sector:04d}',
+			f'camera{self.camera:d}-ccd{self.ccd:d}',
+			f'tess-s{sector:04d}-c{cadence:04d}-{self.camera:d}-{self.ccd:d}-{output:s}-1dblack.npy')
 
-			f'tess2020186164531-s{sector:04d}-lvcol-{camera:d}-{ccd:d}-{output:s}-0189-s_col.fits'
+		# If a cached file exists, load it and return that:
+		if os.path.isfile(cache_file):
+			return np.load(cache_file)
+
+		if cadence == 'ffi':
+			tvcol = img.meta['trailing_virtual_columns']
+		else:
+			tvcol = get_tpf_col(img, coltype='tvcol')
+
+		# First, apply the normal 2D Black correction to the collateral data:
+		tvcol = self.apply_twodblack(tvcol)
+
+		# For each frame, fit a polynomial to the TV col values, choosing the order using the AIC
+		nrows = tvcol.shape[1]
+		x = np.arange(nrows)/nrows-0.5
+		polyorders = np.arange(20, 50)
+
+		aics = np.empty(len(polyorders), dtype='float64')
+		_onedblack = np.empty([tvcol.shape[0], len(x)], dtype='float64')
+		with warnings.catch_warnings():
+			warnings.simplefilter('ignore', np.RankWarning)
+
+			for frame in range(tvcol.shape[0]):
+				# Average over all but the last column, which seems to be off
+				y = nanmean(tvcol[frame,:,:-1], axis=1)
 
 			self.logger.info("... loading trailing virtual column file "+tvcolfile)
 
 			with fits.open(tvcolfile, mode='readonly') as hdu:
 				tv_cal[idx] = hdu[1].data['TVCOL_RAW']
 
-		return tv_cal
+				_onedblack[frame, :] = p(x)
 
-	#----------------------------------------------------------------------------------------------
-	@property
-	def get_tpf_smear_rows(self):
+		# Save this for later reuse:
+		np.save(cache_file, _onedblack)
+		return _onedblack
 
 		sm_cal = np.zeros((len(set(outputs)), flux.shape[0], 10, 512))
 		for idx, output in enumerate(set(outputs)):
@@ -406,34 +487,24 @@ class PixelCalibrator(object):
 
 	#----------------------------------------------------------------------------------------------
 	def apply_onedblack(self, img):
+		"""
+		Apply time-dependent 1D black correction.
+		"""
+		self.logger.info("Doing 1D black correction...")
 
-		warnings.simplefilter('ignore',np.RankWarning)
+		cadenceno = img.meta['cadenceno']
 
-		y1 = self.hdu[2].header['CRVAL2P']-1
-		dy = self.hdu[2].header['NAXIS2']
+		# Subtract 1D black level per output:
+		outputs = img.aperture & (32 + 64 + 128 + 256)
+		for output in np.unique(outputs):
+			indx = (outputs == output)
+			output_name = {32: 'a', 64: 'b', 128: 'c', 256: 'd'}[output]
 
-		# For each frame, fit a polynomial to the TV col values, choosing the order using the AIC
-		tvcol = self.trailing_virtual_columns
-		nrows = tvcol.shape[1]
-		x = np.arange(nrows)/nrows-0.5
-		ks = np.arange(20,50)
+			# This will contain an array with time down the rows and the rows along the columns
+			# - Yes, that is very confusing!
+			onedblack = self.onedblack(img, output_name)
 
-		for frame in range(tvcol.shape[0]):
-			# Average over all but the last column, which seems to be off
-			y = nanmean(tvcol[frame,:,:-1], axis=1)
-
-			aics = []
-			for k in ks:
-				p = np.polynomial.Polynomial.fit(x, y, k)
-				aic = 2*k + nrows*np.log(np.sum((y-p(x))**2))
-				aics.append(aic)
-
-			order = ks[np.argmin(np.asarray(aics))]
-			p = np.polynomial.Polynomial.fit(x, y, order)
-
-			black1d = p(x)
-
-			img[frame,:,:] -= np.expand_dims(black1d[y1:y1+dy], axis=1)
+			img[indx] -= np.expand_dims(onedblack[cadenceno, img.rows], axis=1)
 
 		return img
 
@@ -441,7 +512,7 @@ class PixelCalibrator(object):
 	def apply_undershoot(self, img):
 
 		self.logger.info("Doing undershoot correction...")
-		outputs = img.meta['aperture'][0,:] & (32 + 64 + 128 + 256)
+		outputs = img.aperture[0,:] & (32 + 64 + 128 + 256)
 
 		for output in np.unique(outputs):
 			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
@@ -471,22 +542,9 @@ class PixelCalibrator(object):
 		return img / (self.exposure_time * img.meta['coadds'])
 
 	#----------------------------------------------------------------------------------------------
-	#def calibrate(self, img):
-	#	"""Perform all calibration steps in sequence."""
-	#
-	#	img = self.apply_twodblack(img)
-	#	#img = self.apply_undershoot(img)
-	#	img = self.apply_linearity_gain(img)
-	#	img = self.apply_dark_smear(img)
-	#	img = self.apply_flatfield(img)
-	#	img = self.to_counts_per_second(img)
-	#
-	#	return img
-
-	#----------------------------------------------------------------------------------------------
 	def calibrate(self, img, smear='alternate'):
 		"""
-		Performs a new calibration for a single image.
+		Perform all calibration steps for a single image.
 
 		Parameters:
 			img (:class:`CalibImage`): Image to be calibrated.
@@ -498,32 +556,33 @@ class PixelCalibrator(object):
 			:class:`CalibImage`: Calibrated image.
 		"""
 
-		sm_cal = self.smear_rows
-		tv_cal = self.trailing_virtual_columns
+		#sm_cal = self.smear_rows
 
-		# Apply 2D black to flux images:
+		# Apply 2D black to flux images and smear images:
+		print(img.aperture)
 		img = self.apply_twodblack(img)
-
-		# Apply 2D black to smear
-		sm_cal = self.apply_twodblack(sm_cal)
-		tv_cal = self.apply_twodblack(tv_cal)
+		#sm_cal = self.apply_twodblack(sm_cal)
 
 		# 1D black:
 		img = self.apply_onedblack(img)
-		sm_cal = self.apply_onedblack(sm_cal)
+		#sm_cal = self.apply_onedblack(sm_cal)
 
 		# Linearity-Gain correction:
 		img = self.apply_linearity_gain(img)
-		sm_cal = self.apply_linearity_gain(sm_cal)
+		#sm_cal = self.apply_linearity_gain(sm_cal)
 
 		# Undershoot correction:
 		img = self.apply_undershoot(img)
-		sm_cal = self.apply_undershoot(sm_cal)
+		#sm_cal = self.apply_undershoot(sm_cal)
 
-		img = self.apply_smear_tim(img, sm_cal, outputs[0], smear=smear)
+		# Smear corrections:
+		#img = self.apply_dark_smear(img)
+		#img = self.apply_smear_tim(img, sm_cal, smear=smear)
 
+		# Flatfield correction:
 		img = self.apply_flatfield(img)
 
+		# Convert to electrons per second:
 		img = self.to_electrons_per_second(img)
 
 		return img
@@ -543,32 +602,36 @@ class PixelCalibrator(object):
 		meta['coadds'] = int(tpf['PIXELS'].header['NREADOUT'])
 		meta['index_rows'] = slice(tpf[2].header['CRVAL2P'] - 1, tpf[2].header['CRVAL2P'] + tpf[2].header['NAXIS2'] - 1, 1)
 		meta['index_columns'] = slice(tpf[2].header['CRVAL1P'] - 1, tpf[2].header['CRVAL1P'] + tpf[2].header['NAXIS1'] - 1, 1)
-		meta['aperture'] = np.asarray(tpf['APERTURE'].data, dtype='int32')
+		aperture = np.asarray(tpf['APERTURE'].data, dtype='int32')
+		meta['sector'] = int(tpf[0].header['SECTOR'])
+		meta['cadence'] = 120
+		meta['header'] = tpf['PIXELS'].header
+		meta['aperture'] = aperture
 
 		# Mask of pixels not to include in any kind of calculations:
-		mask = (meta['aperture'] & 1 == 0)
+		mask = (aperture & 1 == 0)
 
 		# Build read-noise image:
-		outputs = meta['aperture'] & (32 + 64 + 128 + 256)
-		read_noise = np.zeros_like(meta['aperture'], dtype='float64')
+		outputs = aperture & (32 + 64 + 128 + 256)
+		read_noise = np.zeros_like(aperture, dtype='float64')
 		for output in np.unique(outputs):
 			indx = (outputs == output)
 			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
 			read_noise[indx] = meta['coadds'] * self.readnoise[output_name].value
 
-		# In TPFs the masked smear rows and virtual rows have to be fetched separately:
-		smear_rows = self.get_tpf_smear_rows(tpf)
-		virtual_rows = self.get_tpf_virtual_rows(tpf)
+		#
+		#smrow = get_tpf_col(img, coltype='smrow')
 
 		# Loop through all target pixel images, calibrating them one at a time:
 		tab = tpf['PIXELS'].data
-		for k in range(len(tab)):
-			cadenceno = tab['CADENCENO'][k]
+		for k in tqdm.trange(len(tab)):
 
+			# Create uncertainty image:
 			shot_noise = np.sqrt(tab['RAW_CNTS'][k])
 			total_noise = np.sqrt( read_noise**2 + shot_noise**2 )
 
-			# Construct CCDData image object:
+			# Construct CalibImage image object:
+			meta['cadenceno'] = tab['CADENCENO'][k]
 			img = CalibImage(
 				data=tab['RAW_CNTS'][k],
 				uncertainty=StdDevUncertainty(total_noise),
@@ -576,9 +639,6 @@ class PixelCalibrator(object):
 				mask=mask,
 				meta=meta
 			)
-
-			#smear_rows[cadenceno]
-			#virtual_rows[cadenceno]
 
 			# Calibrate the image:
 			img_cal = self.calibrate(img.copy())
@@ -602,11 +662,17 @@ class PixelCalibrator(object):
 			tpf['PIXELS'].data['FLUX'][k][:] = np.asarray(img_cal.data)
 			tpf['PIXELS'].data['FLUX_ERR'][k][:] = img_cal.uncertainty.array
 
+			break
+
 		return tpf
 
 	#----------------------------------------------------------------------------------------------
 	def calibrate_ffi(self, ffi):
-
+		"""
+		Calibrate Full Frame Image.
+		"""
+		if isinstance(ffi, str):
+			ffi = fits.open(ffi, mode='readonly')
 		if ffi[0].header['CAMERA'] != self.camera:
 			raise ValueError("")
 		if ffi[0].header['CCD'] != self.ccd:
@@ -618,32 +684,34 @@ class PixelCalibrator(object):
 
 		meta['index_rows'] = slice(None, None, 1)
 		meta['index_columns'] = slice(None, None, 1)
+		meta['sector'] = int(ffi[0].header['SECTOR'])
+		meta['cadence'] = 'ffi'
 
 		# Create a large and aperture image:
-		meta['aperture'] = np.ones_like(ffi[1].data, dtype='int32')
-		meta['aperture'][:, 44:556] |= 32 # CCD output A
-		meta['aperture'][:, 556:1068] |= 64 # CCD output B
-		meta['aperture'][:, 1068:1580] |= 128 # CCD output C
-		meta['aperture'][:, 1580:2092] |= 256 # CCD output D
+		aperture = np.ones_like(ffi[1].data, dtype='int32')
+		aperture[:, 44:556] |= 32 # CCD output A
+		aperture[:, 556:1068] |= 64 # CCD output B
+		aperture[:, 1068:1580] |= 128 # CCD output C
+		aperture[:, 1580:2092] |= 256 # CCD output D
 
 		# Leading columns (underclocks):
-		meta['aperture'][:, 0:11] |= 32 # CCD output A
-		meta['aperture'][:, 11:22] |= 64 # CCD output B
-		meta['aperture'][:, 22:33] |= 128 # CCD output C
-		meta['aperture'][:, 33:44] |= 256 # CCD output C
+		aperture[:, 0:11] |= 32 # CCD output A
+		aperture[:, 11:22] |= 64 # CCD output B
+		aperture[:, 22:33] |= 128 # CCD output C
+		aperture[:, 33:44] |= 256 # CCD output C
 
 		# Trailing columns (overclocks):
-		meta['aperture'][:, 2092:2103] |= 32 # CCD output A
-		meta['aperture'][:, 2103:2114] |= 64 # CCD output B
-		meta['aperture'][:, 2114:2125] |= 128 # CCD output C
-		meta['aperture'][:, 2125:2136] |= 256 # CCD output C
+		aperture[:, 2092:2103] |= 32 # CCD output A
+		aperture[:, 2103:2114] |= 64 # CCD output B
+		aperture[:, 2114:2125] |= 128 # CCD output C
+		aperture[:, 2125:2136] |= 256 # CCD output C
 
 		# Mask of pixels not to include in any kind of calculations:
-		mask = (meta['aperture'] & 1 == 0)
+		mask = (aperture & 1 == 0)
 
 		# Build read-noise image:
-		outputs = meta['aperture'] & (32 + 64 + 128 + 256)
-		read_noise = np.zeros_like(meta['aperture'], dtype='float64')
+		outputs = aperture & (32 + 64 + 128 + 256)
+		read_noise = np.zeros_like(aperture, dtype='float64')
 		for output in np.unique(outputs):
 			indx = (outputs == output)
 			output_name = {32: 'A', 64: 'B', 128: 'C', 256: 'D'}[output]
@@ -658,31 +726,30 @@ class PixelCalibrator(object):
 			uncertainty=StdDevUncertainty(total_noise),
 			unit=u.electron, # u.ct? u.adu?
 			mask=mask,
-			meta=meta
+			meta=meta,
+			flags=aperture
 		)
+
+		img = img[:2048, 44:2092]
 
 		# In FFIs the masked smear rows and virtual rows are part of the image itself:
 		smear_rows = img[2058:2068, 44:2092]
 		virtual_rows = img[2068:, 44:2092]
-
+		trailing_virtual_cols = img[:2048, 2092:]
 
 		plt.figure()
-		plot_image(meta['aperture'])
+		plot_image(aperture)
 
 		# Calibrate the image:
 		img_cal = self.calibrate(img.copy())
 
-
 		plt.figure()
 		plt.plot(img_cal.meta['smear'])
-
 
 		plt.figure(figsize=(15,8))
 
 		ax = plt.subplot(121)
 		plot_image(img.data, xlabel=None, ylabel=None, cbar=True, clabel='Raw counts (e/cadence)', title='RAW_CNTS')
-		#plot_image(meta['aperture'], xlabel=None, ylabel=None, clabel='Raw counts (e/cadence)', title='APERTURE', alpha=1, cmap='viridis')
-
 		plt.subplot(122, sharex=ax, sharey=ax)
 		plot_image(img_cal.data, xlabel=None, ylabel=None, cbar=True, clabel='Flux (e/s)', title='TASOC Flux')
 
@@ -690,3 +757,13 @@ class PixelCalibrator(object):
 		ffi[1].data = np.asarray(img_cal.data)
 		ffi[2].data = img_cal.uncertainty.array
 		return ffi
+
+	#----------------------------------------------------------------------------------------------
+	def plot_flatfield(self):
+		fig, ax = plt.subplots()
+		plot_image(self.flatfield.data, ax=ax, scale='linear', cmap='seismic', vmin=0.95, vmax=1.05, cbar='right')
+
+	#----------------------------------------------------------------------------------------------
+	def plot_twodblack(self):
+		fig, ax = plt.subplots()
+		plot_image(self.twodblack.data, ax=ax, scale='linear', cbar='right')
