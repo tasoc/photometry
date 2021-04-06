@@ -1,7 +1,7 @@
 pytest
 pytest-mpl
 flake8
-flake8-tabs
+flake8-tabs !=2.3.0,!=2.3.1
 flake8-builtins
 flake8-logging-format
 numpy == 1.19.2
