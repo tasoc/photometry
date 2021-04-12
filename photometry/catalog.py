@@ -280,17 +280,20 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 					cursor_named.execute(f"SELECT starid,ra,decl,pm_ra,pm_decl,\"Tmag\",\"Teff\",version FROM tasoc.tic_newest WHERE q3c_poly_query(ra, decl, '{footprint:s}'::polygon) AND (disposition IS NULL OR disposition=3);")
 
 					for row in tqdm(cursor_named, **tqdm_settings):
+						starid = int(row['starid'])
 						# Add the proper motion to each coordinate:
-						if row['pm_ra'] and row['pm_decl']:
+						if row['pm_ra'] is not None and row['pm_decl'] is not None:
 							ra, dec = add_proper_motion(row['ra'], row['decl'], row['pm_ra'], row['pm_decl'], sector_reference_time, epoch=2000.0)
 							logger.debug("(%f, %f) => (%f, %f)", row[1], row[2], ra, dec)
-						else:
+						elif row['pm_ra'] is None and row['pm_decl'] is None:
 							ra = row['ra']
 							dec = row['decl']
+						else:
+							raise RuntimeError(f"Invalid proper motion returned from database (TIC {starid})")
 
 						# Save the coordinates in SQLite database:
 						cursor.execute("INSERT INTO catalog (starid,ra,decl,ra_J2000,decl_J2000,pm_ra,pm_decl,tmag,teff) VALUES (?,?,?,?,?,?,?,?,?);", (
-							int(row['starid']),
+							starid,
 							ra,
 							dec,
 							row['ra'],
