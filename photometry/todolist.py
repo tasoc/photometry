@@ -223,6 +223,8 @@ def _tpf_todo(fname, input_folder=None, cameras=None, ccds=None,
 		camera = hdu[0].header['CAMERA']
 		ccd = hdu[0].header['CCD']
 		datarel = hdu[0].header['DATA_REL']
+		if 'APERTURE' not in hdu:
+			raise ValueError(f"APERTURE extenson not found: {fname}")
 		aperture_observed_pixels = (hdu['APERTURE'].data & 1 != 0)
 		cadence = int(np.round(hdu[1].header['TIMEDEL']*86400))
 

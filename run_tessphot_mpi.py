@@ -179,6 +179,9 @@ def main():
 					# Send the result back to the master:
 					comm.send(result, dest=0, tag=tags.DONE)
 
+					# Attempt to do a cleanup:
+					del pho, result, task
+
 				elif tag == tags.EXIT:
 					# We were told to EXIT, so lets do that
 					break
