@@ -424,18 +424,20 @@ def integratedGaussian(x, y, flux, x_0, y_0, sigma=1):
 		- erf((y - y_0 - 0.5) / denom)))) # noqa: ET126
 
 #--------------------------------------------------------------------------------------------------
-def mag2flux(mag, zp=20.60654144):
+def mag2flux(mag, zp=20.451):
 	"""
 	Convert from magnitude to flux using scaling relation from
 	aperture photometry. This is an estimate.
 
-	The scaling is based on fast-track TESS data from sectors 1 and 2.
+	The default scaling is based on TASOC Data Release 5 from sectors 1-5.
 
 	Parameters:
-		mag (float): Magnitude in TESS band.
+		mag (ndarray): Magnitude in TESS band.
+		zp (float): Zero-point to use in scaling. Default is estimated from
+			TASOC Data Release 5 from TESS sectors 1-5.
 
 	Returns:
-		float: Corresponding flux value
+		ndarray: Corresponding flux value
 	"""
 	return np.clip(10**(-0.4*(mag - zp)), 0, None)
 
