@@ -14,7 +14,7 @@ import itertools
 import contextlib
 from tqdm import tqdm
 from .tasoc_db import TASOC_DB
-from .utilities import (add_proper_motion, load_sector_settings, # find_catalog_files
+from .utilities import (add_proper_motion, load_sector_settings,
 	radec_to_cartesian, cartesian_to_radec, download_file, to_tuple)
 
 #--------------------------------------------------------------------------------------------------
@@ -112,15 +112,15 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 	Parameters:
 		sector (int): TESS observing sector.
-		input_folder (str or None, optional): Input folder to create catalog file in.
+		input_folder (str or None): Input folder to create catalog file in.
 			If ``None``, the input directory in the environment variable ``TESSPHOT_INPUT`` is used.
-		cameras (iterable or None, optional): TESS cameras (1-4) to create catalogs for.
+		cameras (iterable or None): TESS cameras (1-4) to create catalogs for.
 			If ``None`` all cameras are created.
-		ccds (iterable or None, optional): TESS ccds (1-4) to create catalogs for.
+		ccds (iterable or None): TESS ccds (1-4) to create catalogs for.
 			If ``None`` all ccds are created.
-		coord_buffer (float, optional): Buffer in degrees around each CCD to include in catalogs.
-			Default=0.1.
-		overwrite (bool, optional): Overwrite existing catalogs. Default=``False``.
+		coord_buffer (float): Buffer in degrees around each CCD to include in catalogs.
+			Default=0.2.
+		overwrite (bool): Overwrite existing catalogs. Default=``False``.
 
 	Note:
 		This function requires the user to be connected to the TASOC network
@@ -129,12 +129,13 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 		table.
 
 	Raises:
-		OSError: If settings could not be loaded from TASOC databases.
+		RuntimeError: If settings could not be correctly loaded from TASOC databases.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
-
 	logger = logging.getLogger(__name__)
+	if coord_buffer < 0:
+		raise ValueError("Invalid COORD_BUFFER")
 
 	# Make sure cameras and ccds are iterable:
 	cameras = to_tuple(cameras, (1,2,3,4))
@@ -207,7 +208,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				))
 				row = tasocdb.cursor.fetchone()
 				if row is None:
-					raise OSError(f"The given SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d} combination was not found in TASOC database.")
+					raise RuntimeError(f"The given SECTOR={sector:d}, CAMERA={camera:d}, CCD={ccd:d} combination was not found in TASOC database.")
 				footprint = row[0]
 				camera_centre_ra = row[1]
 				camera_centre_dec = row[2]

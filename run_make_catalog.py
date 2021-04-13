@@ -32,8 +32,11 @@ def main():
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
-	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
-	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
+	group = parser.add_argument_group('Filter which CCDs to include')
+	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, action='append', help='TESS Camera. Default is to run all cameras.')
+	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, action='append', help='TESS CCD. Default is to run all CCDs.')
+	group = parser.add_argument_group('Settings')
+	group.add_argument('--buffer', type=float, default=0.2, help="Buffer in degrees around each CCD to include in catalogs.")
 	parser.add_argument('sector', type=int, help='TESS observing sector to generate catalogs for.')
 	parser.add_argument('input_folder', type=str, help='Directory to create catalog files in.', nargs='?', default=None)
 	args = parser.parse_args()
@@ -58,7 +61,8 @@ def main():
 		input_folder=args.input_folder,
 		cameras=args.camera,
 		ccds=args.ccd,
-		overwrite=args.overwrite)
+		overwrite=args.overwrite,
+		coord_buffer=args.buffer)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
