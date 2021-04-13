@@ -157,7 +157,6 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 			logger.info("Running SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 
 			# Create SQLite file:
-			# TODO: Could we use "find_catalog_files" instead?
 			catalog_file = os.path.join(input_folder, f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite')
 			if os.path.exists(catalog_file):
 				if overwrite:
@@ -169,6 +168,10 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 			with contextlib.closing(sqlite3.connect(catalog_file)) as conn:
 				conn.row_factory = sqlite3.Row
 				cursor = conn.cursor()
+
+				# Change settings of SQLite file:
+				cursor.execute("PRAGMA page_size=4096;")
+				cursor.execute("PRAGMA foreign_keys=TRUE;")
 
 				# Table which stores information used to generate catalog:
 				cursor.execute("""CREATE TABLE settings (
@@ -307,12 +310,9 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				cursor.execute("CREATE INDEX ra_dec_idx ON catalog (ra, decl);")
 				conn.commit()
 
-				# Change settings of SQLite file:
-				cursor.execute("PRAGMA page_size=4096;")
-				cursor.execute("PRAGMA foreign_keys=TRUE;")
-
 				# Analyze the tables for better query planning:
 				cursor.execute("ANALYZE;")
+				conn.commit()
 
 				# Run a VACUUM of the table which will force a recreation of the
 				# underlying "pages" of the file.
