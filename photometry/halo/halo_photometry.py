@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Halo Photometry.
@@ -15,7 +15,7 @@ import numpy as np
 from astropy.table import Table
 import halophot
 from halophot.halo_tools import do_lc
-from ..plots import plt, plot_image, save_figure
+from ..plots import matplotlib, plt, plot_image, save_figure
 from .. import BasePhotometry, STATUS
 from ..quality import TESSQualityFlags
 from ..utilities import mag2flux, LoggerWriter
@@ -108,6 +108,7 @@ class HaloPhotometry(BasePhotometry):
 		# Initialize
 		logger.info('Formatting data for halo')
 		indx_goodtimes = np.isfinite(self.lightcurve['time'])
+		time = self.lightcurve['time'][indx_goodtimes]
 		flux = self.images_cube.T[indx_goodtimes, :, :]
 
 		# Cut out pixels closer than 20 pixels, that were actually observed:
@@ -137,7 +138,7 @@ class HaloPhotometry(BasePhotometry):
 			# If a single hole is found, use it, otherwise don't try to be
 			# to clever, and just don't split the timeseries.
 			timecorr = self.lightcurve['timecorr'][indx_goodtimes]
-			t = self.lightcurve['time'][indx_goodtimes] - timecorr
+			t = time - timecorr
 			dt = np.append(np.diff(t), 0)
 			t0 = np.nanmin(t)
 			Ttot = np.nanmax(t) - t0
@@ -151,13 +152,20 @@ class HaloPhotometry(BasePhotometry):
 				logger.warning("No split-timestamps have been defined for this sector")
 				split_times = None # TODO: Is this correct?
 
+		# Ensure that we are not splitting outside the provided time:
+		if split_times is not None:
+			split_times = tuple([st for st in split_times if np.min(time) < st < np.max(time)])
+			if not split_times:
+				split_times = None
+		logger.debug("Split times: %s", split_times)
+
 		# Get the position of the main target
 		col = self.target_pos_column + self.lightcurve['pos_corr'][:, 0]
 		row = self.target_pos_row + self.lightcurve['pos_corr'][:, 1]
 
 		# Put together timeseries table in the format that halophot likes:
 		ts = Table({
-			'time': self.lightcurve['time'][indx_goodtimes],
+			'time': time,
 			'cadence': self.lightcurve['cadenceno'][indx_goodtimes],
 			'x': col[indx_goodtimes],
 			'y': row[indx_goodtimes],
@@ -220,13 +228,16 @@ class HaloPhotometry(BasePhotometry):
 		# Plotting:
 		if self.plot:
 			logger.info('Plotting weight map')
-			norm = np.size(weightmap_dict['weightmap'][0])
 			for k, wm in enumerate(weightmap_dict['weightmap']):
-				im = np.log10(wm*norm)
+				# Create normalization for plot:
+				wm[~pixel_mask] = np.NaN
+				vlim = np.nanmax(np.abs(wm))
+				norm = matplotlib.colors.SymLogNorm(linthresh=0.1*vlim, vmin=-vlim, vmax=vlim, base=10)
+				# Create plot:
 				fig, ax = plt.subplots()
-				plot_image(im, ax=ax, scale='linear', title='TV-min Weightmap', cmap='seismic',
-					cbar='right', vmin=-2*np.nanmax(im), vmax=2*np.nanmax(im), clabel=None)
-				save_figure(os.path.join(self.plot_folder, '%d_weightmap_%d' % (self.starid, k+1)))
+				plot_image(wm, ax=ax, scale=norm, title='TV-min Weightmap', cmap='bwr',
+					cbar='right', clabel='Weights')
+				save_figure(os.path.join(self.plot_folder, f'{self.starid:d}_weightmap_{k+1:d}'), fig=fig)
 				plt.close(fig)
 
 		# Add additional headers specific to this method:

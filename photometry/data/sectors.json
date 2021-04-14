@@ -1,84 +1,41 @@
 {
-    "sectors": {
-        "-14": {
-            "reference_time": 2458613.287916667,
-            "sector": -14
-        },
-        "0": {
-            "reference_time": 2457840.5,
-            "sector": 0
-        },
-		"1": {
-			"reference_time": 2458351.5,
-			"sector": 1
-		},
-		"2": {
-			"reference_time": 2458367.5,
-			"sector": 2
-		},
-		"3": {
-			"reference_time": 2458389.067361,
-			"sector": 3
-		},
-		"4": {
-			"reference_time": 2458417.020139,
-			"sector": 4
-		},
-		"5": {
-			"reference_time": 2458444.320139,
-			"sector": 5
-		},
-		"6": {
-			"reference_time": 2458471.060417,
-			"sector": 6
-		},
-		"7": {
-			"reference_time": 2458497.374306,
-			"sector": 7
-		},
-		"8": {
-			"reference_time": 2458523.361806,
-			"sector": 8
-		},
-		"9": {
-			"reference_time": 2458549.331250,
-			"sector": 9
-		},
-		"10": {
-			"reference_time": 2458575.831250,
-			"sector": 10
-		},
-		"11": {
-			"reference_time": 2458603.434028,
-			"sector": 11
-		},
-		"12": {
-			"reference_time": 2458632.007639,
-			"sector": 12
-		},
-		"13": {
-			"reference_time": 2458660.914583,
-			"sector": 13
-		},
-		"14": {
-			"reference_time": 2458689.53403,
-			"sector": 14
-		},
-		"15": {
-			"reference_time": 2458717.42292,
-			"sector": 15
-		},
-		"16": {
-			"reference_time": 2458744.39514,
-			"sector": 16
-		},
-		"17": {
-			"reference_time": 2458770.55208,
-			"sector": 17
-		},
-		"18": {
-			"reference_time": 2458796.23681,
-			"sector": 18
-		}
-    }
+	"sectors": {
+		"-14": {"sector": -14, "reference_time": 2458613.287916667, "ffi_cadence": 1800},
+		"0": {"sector": 0, "reference_time": 2457840.5, "ffi_cadence": 1800},
+		"1": {"sector": 1, "reference_time": 2458351.5, "ffi_cadence": 1800},
+		"2": {"sector": 2, "reference_time": 2458367.5, "ffi_cadence": 1800},
+		"3": {"sector": 3, "reference_time": 2458389.067361, "ffi_cadence": 1800},
+		"4": {"sector": 4, "reference_time": 2458417.020139, "ffi_cadence": 1800},
+		"5": {"sector": 5, "reference_time": 2458444.320139, "ffi_cadence": 1800},
+		"6": {"sector": 6, "reference_time": 2458471.060417, "ffi_cadence": 1800},
+		"7": {"sector": 7, "reference_time": 2458497.337496, "ffi_cadence": 1800},
+		"8": {"sector": 8, "reference_time": 2458523.368746, "ffi_cadence": 1800},
+		"9": {"sector": 9, "reference_time": 2458549.327079, "ffi_cadence": 1800},
+		"10": {"sector": 10, "reference_time": 2458575.827078, "ffi_cadence": 1800},
+		"11": {"sector": 11, "reference_time": 2458603.431245, "ffi_cadence": 1800},
+		"12": {"sector": 12, "reference_time": 2458632.004161, "ffi_cadence": 1800},
+		"13": {"sector": 13, "reference_time": 2458660.920827, "ffi_cadence": 1800},
+		"14": {"sector": 14, "reference_time": 2458689.535410, "ffi_cadence": 1800},
+		"15": {"sector": 15, "reference_time": 2458717.431243, "ffi_cadence": 1800},
+		"16": {"sector": 16, "reference_time": 2458744.399993, "ffi_cadence": 1800},
+		"17": {"sector": 17, "reference_time": 2458770.556242, "ffi_cadence": 1800},
+		"18": {"sector": 18, "reference_time": 2458796.233325, "ffi_cadence": 1800},
+		"19": {"sector": 19, "reference_time": 2458822.014575, "ffi_cadence": 1800},
+		"20": {"sector": 20, "reference_time": 2458848.702074, "ffi_cadence": 1800},
+		"21": {"sector": 21, "reference_time": 2458876.795824, "ffi_cadence": 1800},
+		"22": {"sector": 22, "reference_time": 2458905.660407, "ffi_cadence": 1800},
+		"23": {"sector": 23, "reference_time": 2458934.347906, "ffi_cadence": 1800},
+		"24": {"sector": 24, "reference_time": 2458962.358323, "ffi_cadence": 1800},
+		"25": {"sector": 25, "reference_time": 2458989.535406, "ffi_cadence": 1800},
+		"26": {"sector": 26, "reference_time": 2459015.941655, "ffi_cadence": 1800},
+		"27": {"sector": 27, "reference_time": 2459041.889571, "ffi_cadence": 600},
+		"28": {"sector": 28, "reference_time": 2459067.899988, "ffi_cadence": 600},
+		"29": {"sector": 29, "reference_time": 2459094.597904, "ffi_cadence": 600},
+		"30": {"sector": 30, "reference_time": 2459122.358320, "ffi_cadence": 600},
+		"31": {"sector": 31, "reference_time": 2459150.952070, "ffi_cadence": 600},
+		"32": {"sector": 32, "reference_time": 2459179.670819, "ffi_cadence": 600},
+		"33": {"sector": 33, "reference_time": 2459207.816652, "ffi_cadence": 600},
+		"34": {"sector": 34, "reference_time": 2459235.014569, "ffi_cadence": 600},
+		"35": {"sector": 35, "reference_time": 2459261.337485, "ffi_cadence": 600}
+	}
 }

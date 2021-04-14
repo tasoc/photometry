@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of photometry.utilities.
@@ -23,6 +23,12 @@ def test_load_settings():
 	assert isinstance(settings, configparser.ConfigParser)
 	assert settings.getboolean('fixes', 'time_offset', fallback=True) # Actually checking value
 
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.load_settings.cache_info().hits
+	settings2 = u.load_settings()
+	assert settings2 == settings
+	assert u.load_settings.cache_info().hits == hits_before+1
+
 #--------------------------------------------------------------------------------------------------
 def test_load_sector_settings():
 
@@ -30,6 +36,12 @@ def test_load_sector_settings():
 	print(settings)
 	assert isinstance(settings, dict)
 	assert int(settings['sector']) == 2
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.load_sector_settings.cache_info().hits
+	settings2 = u.load_sector_settings(2)
+	assert settings2 == settings
+	assert u.load_sector_settings.cache_info().hits == hits_before+1
 
 	settings = u.load_sector_settings()
 	print(settings)
@@ -42,6 +54,8 @@ def test_load_sector_settings():
 		assert isinstance(value, dict)
 		assert 'sector' in value
 		assert 'reference_time' in value
+		assert 'ffi_cadence' in value
+		assert value['ffi_cadence'] in (1800, 600), "Invalid FFI Cadence"
 
 		# Ensure that sector numbers are unique:
 		assert value['sector'] not in sectors
@@ -64,7 +78,7 @@ def test_move_median_central():
 def test_find_ffi_files(SHARED_INPUT_DIR):
 
 	files = u.find_ffi_files(SHARED_INPUT_DIR)
-	assert(len(files) == 8)
+	assert(len(files) == 10)
 
 	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=1)
 	assert(len(files) == 4)
@@ -72,14 +86,97 @@ def test_find_ffi_files(SHARED_INPUT_DIR):
 	files = u.find_ffi_files(SHARED_INPUT_DIR, camera=3)
 	assert(len(files) == 4)
 
-#--------------------------------------------------------------------------------------------------
-def test_find_tpf_files(SHARED_INPUT_DIR):
-
-	files = u.find_tpf_files(SHARED_INPUT_DIR)
+	files = u.find_ffi_files(SHARED_INPUT_DIR, sector=27)
 	assert(len(files) == 2)
 
+#--------------------------------------------------------------------------------------------------
+def test_find_tpf_files(SHARED_INPUT_DIR):
+	"""
+	The current list of test-files are:
+
+	starid    sector  camera  ccd  cadence
+	267211065      1       3    2      120
+	260795451      1       3    2      120
+	 25155310      1       1    4      120  alert
+	 25155310     27       4    1      120
+	 25155310     27       4    1       20
+	"""
+
+	# Find all TPF files in input dir:
+	files = u.find_tpf_files(SHARED_INPUT_DIR)
+	print(files)
+	assert(len(files) == 5)
+
+	# Find file with specific starid (only one exists)
 	files = u.find_tpf_files(SHARED_INPUT_DIR, starid=267211065)
+	print(files)
 	assert(len(files) == 1)
+
+	# Find TPFs from sector 1 (2 regular, 1 alert-data):
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=1)
+	print(files)
+	assert(len(files) == 3)
+
+	# Limit with findmax (only the first one should be returned):
+	files2 = u.find_tpf_files(SHARED_INPUT_DIR, sector=1, findmax=1)
+	print(files2)
+	assert len(files2) == 1
+	assert files2[0] == files[0]
+
+	# Find TPFs for starid with both 120 and 20s cadences and a alert data file:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, starid=25155310)
+	print(files)
+	assert(len(files) == 3)
+
+	# Test files from sector 27, with both 120 and 20s cadences:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27)
+	print(files)
+	assert(len(files) == 2)
+
+	# Test files from sector 27, with only 120s cadence:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, cadence=120)
+	print(files)
+	assert(len(files) == 1)
+
+	# Test files from sector 27, with only 20s cadence:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, cadence=20)
+	print(files)
+	assert(len(files) == 1)
+
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=1, camera=3)
+	print(files)
+	assert(len(files) == 2)
+
+	# Find TPFs from sector 1, on camera 2, which should have no files:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=1, camera=2)
+	print(files)
+	assert(len(files) == 0)
+
+	# Test files from sector 27 on CCD 4, which should have no files:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, ccd=4)
+	print(files)
+	assert(len(files) == 0)
+
+	# Test files from sector 27, with both 120 and 20s cadences:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, ccd=1)
+	print(files)
+	assert(len(files) == 2)
+
+	# Test files from sector 27, with both 120 and 20s cadences:
+	files = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, ccd=1, findmax=1)
+	print(files)
+	assert(len(files) == 1)
+
+	# Test the cache:
+	hits_before = u._find_tpf_files.cache_info().hits
+	files2 = u.find_tpf_files(SHARED_INPUT_DIR, sector=27, ccd=1, findmax=1)
+	assert files2 == files
+	assert u._find_tpf_files.cache_info().hits == hits_before+1
+
+	# Test with invalid cadence:
+	with pytest.raises(ValueError) as e:
+		u.find_tpf_files(SHARED_INPUT_DIR, sector=27, cadence=123345)
+	assert str(e.value) == "Invalid cadence. Must be either 20 or 120."
 
 #--------------------------------------------------------------------------------------------------
 def test_find_hdf5_files(SHARED_INPUT_DIR):
@@ -96,20 +193,43 @@ def test_find_hdf5_files(SHARED_INPUT_DIR):
 	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3)
 	assert(len(files) == 1)
 
+	files = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert(len(files) == 1)
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.find_hdf5_files.cache_info().hits
+	files2 = u.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert files2 == files
+	assert u.find_hdf5_files.cache_info().hits == hits_before+1
+
 #--------------------------------------------------------------------------------------------------
 def test_find_catalog_files(SHARED_INPUT_DIR):
 
 	files = u.find_catalog_files(SHARED_INPUT_DIR)
-	assert(len(files) == 2)
+	print(files)
+	assert(len(files) == 3)
 
 	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=1)
+	print(files)
 	assert(len(files) == 2)
 
+	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=27)
+	print(files)
+	assert(len(files) == 1)
+
 	files = u.find_catalog_files(SHARED_INPUT_DIR, camera=1)
+	print(files)
 	assert(len(files) == 1)
 
 	files = u.find_catalog_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	print(files)
 	assert(len(files) == 1)
+
+	# Try to run the exact same query, and it should now be taken over by the cache:
+	hits_before = u.find_catalog_files.cache_info().hits
+	files2 = u.find_catalog_files(SHARED_INPUT_DIR, sector=1, camera=3, ccd=2)
+	assert files2 == files
+	assert u.find_catalog_files.cache_info().hits == hits_before+1
 
 #--------------------------------------------------------------------------------------------------
 def test_load_ffi_files(SHARED_INPUT_DIR):
@@ -318,10 +438,10 @@ def test_sqlite_drop_column(factory, foreign_keys):
 
 		# Attempting to drop a column associated with an index should
 		# cause an Exception:
-		with pytest.raises(Exception):
+		with pytest.raises(RuntimeError):
 			u.sqlite_drop_column(conn, 'tbl', 'col_c')
 
-		with pytest.raises(Exception):
+		with pytest.raises(RuntimeError):
 			u.sqlite_drop_column(conn, 'tbl', 'col_e')
 
 #--------------------------------------------------------------------------------------------------

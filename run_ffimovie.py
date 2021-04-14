@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Create movie of FFIs and extracted backgrounds.
@@ -46,12 +46,13 @@ import os.path
 import functools
 import multiprocessing
 import re
+import copy
 from tqdm import tqdm, trange
 from photometry.plots import plt, plot_image
 from matplotlib import animation
 from matplotlib.colors import ListedColormap
 from photometry.quality import PixelQualityFlags
-from photometry.utilities import find_hdf5_files, TqdmLoggingHandler
+from photometry.utilities import find_hdf5_files, TqdmLoggingHandler, to_tuple
 
 #--------------------------------------------------------------------------------------------------
 def set_copyright(fig, xpos=0.01, ypos=0.99, fontsize=12):
@@ -78,7 +79,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	"""
 
 	logger = logging.getLogger(__name__)
-	tqdm_settings = {'disable': not logger.isEnabledFor(logging.INFO)}
+	tqdm_settings = {'disable': None if logger.isEnabledFor(logging.INFO) else True}
 	logger.info("Processing '%s'", hdf_file)
 
 	# File to be created:
@@ -146,7 +147,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			fig, ax = plt.subplots(1, 4, figsize=(20, 6.8), dpi=dpi)
 
 			# Colormap to use for FFIs:
-			cmap = plt.get_cmap('viridis')
+			cmap = copy.copy(plt.get_cmap('viridis'))
 			cmap.set_bad('k', 1.0)
 
 			# Colormap for Flags:
@@ -170,7 +171,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			set_copyright(fig)
 
 			metadata = {
-				'title': 'TESS Sector {sector:d}, Camera {camera:d}, CCD {ccd:d}'.format(sector=sector, camera=camera, ccd=ccd),
+				'title': f'TESS Sector {sector:d}, Camera {camera:d}, CCD {ccd:d}',
 				'artist': 'TASOC'
 			}
 
@@ -179,9 +180,9 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 			writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata)
 			with writer.saving(fig, output_file, dpi):
 				for k in trange(numfiles, **tqdm_settings):
-					dset_name = '%04d' % k
-					flux0 = np.asarray(hdf['images/' + dset_name])
-					bkg = np.asarray(hdf['backgrounds/' + dset_name])
+					dset = f'{k:04d}'
+					flux0 = np.asarray(hdf['images/' + dset])
+					bkg = np.asarray(hdf['backgrounds/' + dset])
 
 					# Plot original image, background and new image:
 					imgs[0].set_data(flux0 + bkg)
@@ -189,8 +190,8 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 					imgs[2].set_data(flux0)
 
 					# Background Shenanigans flags, if available:
-					if 'pixel_flags/' + dset_name in hdf:
-						img = np.asarray(hdf['pixel_flags/' + dset_name])
+					if 'pixel_flags/' + dset in hdf:
+						img = np.asarray(hdf['pixel_flags/' + dset])
 
 						flags = np.zeros_like(img, dtype='uint8')
 						flags[img & PixelQualityFlags.NotUsedForBackground != 0] = 1
@@ -200,14 +201,7 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 						imgs[3].set_data(flags)
 
 					# Update figure title with cadence information;
-					figtext.set_text("Sector {sector:d}, Camera {camera:d}, CCD {ccd:d}\ndset={dset:s}, cad={cad:d}, t={time:.6f}".format(
-						sector=sector,
-						camera=camera,
-						ccd=ccd,
-						dset=dset_name,
-						cad=cadenceno[k],
-						time=time[k]
-					))
+					figtext.set_text(f"Sector {sector:d}, Camera {camera:d}, CCD {ccd:d}\ndset={dset:s}, cad={cadenceno[k]:d}, t={time[k]:.6f}")
 
 					writer.grab_frame()
 
@@ -216,19 +210,20 @@ def make_movie(hdf_file, fps=15, dpi=100, overwrite=False):
 	return output_file
 
 #--------------------------------------------------------------------------------------------------
-def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=False):
+def make_combined_movie(input_dir, mode='images', sectors=None, fps=15, dpi=100, overwrite=False):
 	"""
 	Create animation of the combined contents of all HDF5 files in a directory,
 	produced by the photometry pipeline.
 
 	Parameters:
-		input_dir (string): Path to the directory with HDF5 files to produce movie from.
-		mode (string): Which images to show.
+		input_dir (str): Path to the directory with HDF5 files to produce movie from.
+		mode (str): Which images to show.
 			Choices are `'originals'`, `'images'`, `'backgrounds'` or `'flags'`.
 			Default=images.
-		fps (integer): Frames per second of generated movie. Default=15.
-		dpi (integer): DPI of the movie. Default=100.
-		overwrite (boolean): Overwrite existing MP4 files? Default=False.
+		sectors: Sector or list of sectors to generate combined movies for.
+		fps (int): Frames per second of generated movie. Default=15.
+		dpi (int): DPI of the movie. Default=100.
+		overwrite (bool): Overwrite existing MP4 files? Default=False.
 
 	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
@@ -238,7 +233,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 		raise ValueError("Invalid MODE specified")
 
 	logger = logging.getLogger(__name__)
-	tqdm_settings = {'disable': not logger.isEnabledFor(logging.INFO)}
+	tqdm_settings = {'disable': None if logger.isEnabledFor(logging.INFO) else True}
 	logger.info("Processing '%s'", input_dir)
 
 	camccdrot = [
@@ -247,28 +242,26 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 	]
 
 	# Find the sectors that are available:
-	sectors = []
-	for fname in find_hdf5_files(input_dir):
-		# Load the sector number from HDF5 file attributes:
-		with h5py.File(fname, 'r') as hdf:
-			s = hdf['images'].attrs.get('SECTOR')
+	if sectors is None:
+		sectors = []
+		for fname in find_hdf5_files(input_dir):
+			# Load the sector number from HDF5 file attributes:
+			with h5py.File(fname, 'r') as hdf:
+				s = hdf['images'].attrs.get('SECTOR')
 
-		if s is not None and int(s) not in sectors:
-			sectors.append(int(s))
-		else:
-			# If the attribute doesn't exist try to find it from
-			# parsing the file name:
-			m = re.match(r'^sector(\d+)_camera\d_ccd\d\.hdf5$', os.path.basename(fname))
-			if int(m.group(1)) not in sectors:
-				sectors.append(int(m.group(1)))
+			if s is not None and int(s) not in sectors:
+				sectors.append(int(s))
+			else:
+				# If the attribute doesn't exist try to find it from
+				# parsing the file name:
+				m = re.match(r'^sector(\d+)_camera\d_ccd\d\.hdf5$', os.path.basename(fname))
+				if int(m.group(1)) not in sectors:
+					sectors.append(int(m.group(1)))
 
 	# Create one movie per found sector:
 	for sector in sectors:
 		# Define the output file, and overwrite it if needed:
-		output_file = os.path.join(input_dir, 'sector{sector:03d}_combined_{mode:s}.mp4'.format(
-			sector=sector,
-			mode=mode
-		))
+		output_file = os.path.join(input_dir, f'sector{sector:03d}_combined_{mode:s}.mp4')
 		if os.path.exists(output_file):
 			if overwrite:
 				logger.debug("Deleting existing output file")
@@ -307,7 +300,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 			with plt.style.context('dark_background'):
 				fig, axes = plt.subplots(2, 8, figsize=(25, 6.8), dpi=dpi)
 
-				cmap = plt.get_cmap('viridis')
+				cmap = copy.copy(plt.get_cmap('viridis'))
 				cmap.set_bad('k', 1.0)
 
 				# Colormap for Flags:
@@ -330,7 +323,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 				set_copyright(fig)
 
 				metadata = {
-					'title': 'TESS Sector {sector:d}, {mode:s}'.format(sector=sector, mode=mode),
+					'title': f'TESS Sector {sector:d}, {mode:s}',
 					'artist': 'TASOC'
 				}
 
@@ -339,7 +332,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 				writer = WriterClass(fps=fps, codec='h264', bitrate=-1, metadata=metadata)
 				with writer.saving(fig, output_file, dpi):
 					for i in trange(numfiles, **tqdm_settings):
-						dset_name = '%04d' % i
+						dset = f'{i:04d}'
 
 						for k in range(16):
 							if hdf[k] is None:
@@ -347,16 +340,16 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 
 							# Background Shenanigans flags, if available:
 							if mode == 'flags':
-								flags = np.asarray(hdf[k]['pixel_flags/' + dset_name])
+								flags = np.asarray(hdf[k]['pixel_flags/' + dset])
 								img = np.zeros_like(flags, dtype='uint8')
 								img[flags & PixelQualityFlags.NotUsedForBackground != 0] = 1
 								img[flags & PixelQualityFlags.ManualExclude != 0] = 2
 								img[flags & PixelQualityFlags.BackgroundShenanigans != 0] = 3
 							elif mode == 'originals':
-								img = np.asarray(hdf[k]['images/' + dset_name])
-								img += np.asarray(hdf[k]['backgrounds/' + dset_name])
+								img = np.asarray(hdf[k]['images/' + dset])
+								img += np.asarray(hdf[k]['backgrounds/' + dset])
 							else:
-								img = np.asarray(hdf[k][mode + '/' + dset_name])
+								img = np.asarray(hdf[k][mode + '/' + dset])
 
 							# Rotate the image:
 							cam, ccd, rot = camccdrot[k]
@@ -366,13 +359,7 @@ def make_combined_movie(input_dir, mode='images', fps=15, dpi=100, overwrite=Fal
 							imgs[k].set_data(img)
 
 						# Update figure title with cadence information:
-						figtext.set_text("Sector {sector:d} - {mode:s}\ndset={dset:s}, cad={cad:d}, t={time:.6f}".format(
-							sector=sector,
-							mode=mode,
-							dset=dset_name,
-							cad=cadenceno[i],
-							time=time[i]
-						))
+						figtext.set_text(f"Sector {sector:d} - {mode:s}\ndset={dset:s}, cad={cadenceno[i]:d}, t={time[i]:.6f}")
 
 						writer.grab_frame()
 
@@ -400,6 +387,7 @@ def main():
 	parser.add_argument('-j', '--jobs', help='Maximal number of jobs to run in parallel.', type=int, default=0, nargs='?')
 	parser.add_argument('--fps', help='Frames per second of generated movie.', type=int, default=15, nargs='?')
 	parser.add_argument('--dpi', help='DPI of generated movie.', type=int, default=100, nargs='?')
+	parser.add_argument('--sector', type=int, default=None, action='append', help='TESS Sector. Default is to run all sectors.')
 	parser.add_argument('files', help='Directory or HDF5 file to create movie from.', nargs='+')
 	args = parser.parse_args()
 
@@ -427,11 +415,11 @@ def main():
 	run_full_directory = None
 	if len(args.files) == 1 and os.path.isdir(args.files[0]):
 		run_full_directory = args.files[0]
-		args.files = find_hdf5_files(run_full_directory)
+		args.files = find_hdf5_files(run_full_directory, sector=to_tuple(args.sector))
 		logger.info("Found %d HDF5 files in directory '%s'", len(args.files), run_full_directory)
 
 	tqdm_settings = {
-		'disable': not logger.isEnabledFor(logging.INFO),
+		'disable': None if logger.isEnabledFor(logging.INFO) else True,
 		'total': len(args.files),
 		'dynamic_ncols': True
 	}
@@ -467,6 +455,7 @@ def main():
 		make_combined_movie_wrapper = functools.partial(
 			make_combined_movie,
 			run_full_directory,
+			sectors=args.sector,
 			fps=args.fps,
 			dpi=args.dpi,
 			overwrite=args.overwrite

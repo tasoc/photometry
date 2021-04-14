@@ -1,4 +1,4 @@
-#!/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of time offset fixes.
@@ -37,11 +37,11 @@ def test_fixes_time_offset_invalid_input():
 
 	# The cases of data release 27 and 29 and no PROCVER:
 	hdr = {'DATA_REL': 27, 'CAMERA': 1, 'PROCVER': None}
-	with pytest.raises(Exception):
+	with pytest.raises(ValueError):
 		fixes.time_offset(time, hdr)
 
 	hdr = {'DATA_REL': 29, 'CAMERA': 2, 'PROCVER': None}
-	with pytest.raises(Exception):
+	with pytest.raises(ValueError):
 		fixes.time_offset(time, hdr)
 
 #--------------------------------------------------------------------------------------------------

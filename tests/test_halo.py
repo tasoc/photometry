@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of HaloPhotometry.
@@ -16,8 +16,7 @@ import conftest # noqa: F401
 from photometry import HaloPhotometry, STATUS
 
 #--------------------------------------------------------------------------------------------------
-#@pytest.mark.skipif(os.environ.get('CI') == 'true' and os.environ.get('TRAVIS') == 'true',
-#	reason="This is simply too slow to run on Travis. We need to do something about that.'")
+@pytest.mark.slow
 @pytest.mark.parametrize('datasource', ['tpf',]) # Not testing 'ffi' since there is not enough data
 def test_halo(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:

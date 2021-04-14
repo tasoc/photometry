@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of FFI Movies.
@@ -12,16 +12,20 @@ from conftest import capture_cli
 import photometry.plots # noqa: F401
 from matplotlib import animation
 
-HAS_FFMPEG = ('ffmpeg' in animation.writers)
+NO_FFMPEG = ('ffmpeg' not in animation.writers)
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.ffmpeg
-@pytest.mark.skipif(not HAS_FFMPEG, reason="FFMpeg not available")
+@pytest.mark.skipif(NO_FFMPEG, reason="FFMpeg not available")
 def test_run_ffimovie(SHARED_INPUT_DIR):
 
-	out, err, exitcode = capture_cli('run_ffimovie.py', params=[SHARED_INPUT_DIR])
-
+	out, err, exitcode = capture_cli('run_ffimovie.py', params=[
+		'--sector=1',
+		SHARED_INPUT_DIR
+	])
 	assert exitcode == 0
+	assert '- ERROR -' not in err
+	assert '- ERROR -' not in out
 
 	for fname in (
 		'sector001_camera3_ccd2.mp4',

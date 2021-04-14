@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Linear PSF Photometry.
@@ -11,14 +11,30 @@ squares method.
 """
 
 import numpy as np
-#import scipy
 import logging
-import os
-from bottleneck import allnan
+import os.path
+from bottleneck import allnan, nansum
 from . import BasePhotometry, STATUS
-from .psf import PSF
 #from .utilities import mag2flux
-from .plots import plt, plot_image_fit_residuals, save_figure
+from .plots import plt, plot_image_fit_residuals, save_figure, plot_outline
+
+#--------------------------------------------------------------------------------------------------
+def lsfit(A, b):
+	"""
+	Linear least squares fitting by solving Ax=b.
+	"""
+
+	# Try to fit with fast pseudo-inverse method:
+	try:
+		return (np.linalg.pinv(A.T.dot(A)).dot(A.T)).dot(b)
+	except np.linalg.LinAlgError:
+		pass
+
+	# Linear least squares:
+	return np.linalg.lstsq(A, b, rcond=None)[0]
+
+	# Non-negative linear least squares:
+	#fluxes, rnorm = scipy.optimize.nnls(A, b)
 
 #--------------------------------------------------------------------------------------------------
 class LinPSFPhotometry(BasePhotometry):
@@ -44,11 +60,20 @@ class LinPSFPhotometry(BasePhotometry):
 		# This will set several default settings
 		super().__init__(*args, **kwargs)
 
-		# Create instance of the PSF for the given pixel stamp:
-		# NOTE: If we run resize_stamp at any point in the code,
-		#       we should also update self.PSF.
-		# TODO: Maybe we should move this into BasePhotometry?
-		self.psf = PSF(self.sector, self.camera, self.ccd, self.stamp)
+		self.cutoff_radius = 5
+
+	#----------------------------------------------------------------------------------------------
+	def _minimum_aperture(self):
+		# Map of valid pixels that can be included:
+		collected_pixels = (self.aperture & 1 != 0)
+
+		# Create minimum 2x2 mask around target position:
+		cols, rows = self.get_pixel_grid()
+		mask_main = (( np.abs(cols - self.target_pos_column - 1) <= 1 )
+			& ( np.abs(rows - self.target_pos_row - 1) <= 1 ))
+
+		# Return the 2x2 mask, but only the pixels that are actually collected:
+		return mask_main & collected_pixels
 
 	#----------------------------------------------------------------------------------------------
 	def do_photometry(self):
@@ -82,6 +107,9 @@ class LinPSFPhotometry(BasePhotometry):
 		# Preallocate flux sum array for contamination calculation:
 		fluxes_sum = np.zeros(nstars, dtype='float64')
 
+		# Small aperture around target centre to do MOMF-style aperture correction on:
+		mini_aperture = self._minimum_aperture()
+
 		# Start looping through the images (time domain):
 		for k, img in enumerate(self.images):
 			# Get catalog at current time in MJD:
@@ -102,19 +130,14 @@ class LinPSFPhotometry(BasePhotometry):
 				params0 = np.atleast_2d([target['row_stamp'], target['column_stamp'], 1.])
 
 				# Fill out column of A with reshaped PRF array from one star:
-				A[:, col] = self.psf.integrate_to_image(params0, ctoff_radius=20)[good_pixels].flatten()
+				A[:, col] = self.psf.integrate_to_image(params0, cutoff_radius=self.cutoff_radius)[good_pixels].flatten()
 
 			# Crate b, the solution array by reshaping the image to a 1D array:
 			b = img[good_pixels].flatten()
 
 			# Do linear least squares fit to solve Ax=b:
 			try:
-				# Linear least squares:
-				res = np.linalg.lstsq(A, b)
-				fluxes = res[0]
-
-				# Non-negative linear least squares:
-				#fluxes, rnorm = scipy.optimize.nnls(A, b)
+				fluxes = lsfit(A, b)
 			except np.linalg.LinAlgError:
 				logger.debug("Linear PSF Fitting failed")
 				fluxes = None
@@ -123,17 +146,27 @@ class LinPSFPhotometry(BasePhotometry):
 			if fluxes is None:
 				logger.warning("We should flag that this has not gone well.")
 				self.lightcurve['flux'][k] = np.NaN
-				self.lightcurve['quality'][k] = 1 # FIXME: Use the real flag!
+				self.lightcurve['flux_err'][k] = np.NaN
+				self.lightcurve['quality'][k] |= 1 # FIXME: Use the real flag!
 
 			else:
 				# Get flux of target star:
-				result = fluxes[staridx]
+				target_flux = fluxes[staridx]
+				logger.debug('Target flux: %f', target_flux)
 
-				logger.debug('Fluxes are: %s', fluxes)
-				logger.debug('Result is: %f', result)
+				# Calculate final best fit image and residuals:
+				result = np.column_stack((cat['row_stamp'], cat['column_stamp'], fluxes))
+				best_fit = self.psf.integrate_to_image(result, cutoff_radius=self.cutoff_radius)
+				residuals = img - best_fit
+
+				# Perform aperture photometry on the residuals:
+				flux_ap = nansum(residuals[mini_aperture])
+				logger.debug("Aperture correction: %f%%", 100*flux_ap/target_flux)
+				result += flux_ap
 
 				# Add the result of the main star to the lightcurve:
-				self.lightcurve['flux'][k] = result
+				self.lightcurve['flux'][k] = target_flux
+				self.lightcurve['flux_err'][k] = np.NaN # FIXME: Add errors!
 
 				# Add current fitted fluxes for contamination calculation:
 				fluxes_sum += fluxes
@@ -141,27 +174,24 @@ class LinPSFPhotometry(BasePhotometry):
 				# Make plots for debugging:
 				if self.plot and logger.isEnabledFor(logging.DEBUG):
 					fig = plt.figure()
-					result4plot = []
-					for star, target in enumerate(cat):
-						result4plot.append(np.array([
-							target['row_stamp'],
-							target['column_stamp'],
-							fluxes[star]
-						]))
 
 					# Add subplots with the image, fit and residuals:
 					ax_list = plot_image_fit_residuals(
 						fig=fig,
 						image=img,
-						fit=self.psf.integrate_to_image(result4plot, cutoff_radius=20)
+						fit=best_fit,
+						residuals=residuals
 					)
 
 					# Add star position to the first plot:
-					ax_list[0].scatter(result4plot[staridx][1], result4plot[staridx][0], c='r', alpha=0.5)
+					ax_list[0].scatter(result[staridx][1], result[staridx][0], c='r', alpha=0.5)
+
+					# Plot outline of mini-aperture:
+					plot_outline(mini_aperture, ax=ax_list[2], color='k', lw=2)
 
 					# Save figure to file:
-					fig_name = 'tess_{0:011d}_linpsf_{1:05d}'.format(self.starid, k)
-					save_figure(os.path.join(self.plot_folder, fig_name))
+					fig_name = f'tess_{self.starid:011d}_linpsf_{k:05d}'
+					save_figure(os.path.join('.', fig_name), fig=fig)
 					plt.close(fig)
 
 		# Set contamination to NaN if all flux values are NaN:

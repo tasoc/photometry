@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Plotting utilities.
@@ -8,6 +8,8 @@ Plotting utilities.
 
 import logging
 import os
+import copy
+import warnings
 import numpy as np
 from bottleneck import allnan, anynan
 import matplotlib
@@ -25,6 +27,49 @@ plt.switch_backend('Agg')
 matplotlib.rcParams['font.family'] = 'serif'
 matplotlib.rcParams['text.usetex'] = False
 matplotlib.rcParams['mathtext.fontset'] = 'dejavuserif'
+
+#--------------------------------------------------------------------------------------------------
+def plots_interactive(backend=('Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo', 'TkAgg')):
+	"""
+	Change plotting to using an interactive backend.
+
+	Parameters:
+		backend (str or list): Backend to change to. If not provided, will try different
+			interactive backends and use the first one that works.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	logger = logging.getLogger(__name__)
+	logger.debug("Valid interactive backends: %s", matplotlib.rcsetup.interactive_bk)
+
+	if isinstance(backend, str):
+		backend = [backend]
+
+	for bckend in backend:
+		if bckend not in matplotlib.rcsetup.interactive_bk:
+			logger.warning("Interactive backend '%s' is not found", bckend)
+			continue
+
+		# Try to change the backend, and catch errors
+		# it it didn't work:
+		try:
+			plt.switch_backend(bckend)
+		except (ModuleNotFoundError, ImportError):
+			pass
+		else:
+			break
+
+#--------------------------------------------------------------------------------------------------
+def plots_noninteractive():
+	"""
+	Change plotting to using a non-interactive backend, which can e.g. be used on a cluster.
+
+	Will set backend to 'Agg'.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+	plt.switch_backend('Agg')
 
 #--------------------------------------------------------------------------------------------------
 def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=None,
@@ -62,7 +107,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		vmin (float, optional): Lower limit to use for colormap.
 		vmax (float, optional): Upper limit to use for colormap.
 		color_bad (str, optional): Color to apply to bad pixels (NaN). Default is black.
-		kwargs (dict, optional): Keyword arguments to be passed to :py:func:`matplotlib.pyplot.imshow`.
+		kwargs (dict, optional): Keyword arguments to be passed to :func:`matplotlib.pyplot.imshow`.
 
 	Returns:
 		:py:class:`matplotlib.image.AxesImage`: Image from returned
@@ -76,7 +121,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 	# Backward compatible settings:
 	make_cbar = kwargs.pop('make_cbar', None)
 	if make_cbar:
-		raise FutureWarning("'make_cbar' is deprecated. Use 'cbar' instead.")
+		warnings.warn("'make_cbar' is deprecated. Use 'cbar' instead.", category=DeprecationWarning)
 		if not cbar:
 			cbar = make_cbar
 
@@ -86,22 +131,6 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		if vmax is None: vmax = 1
 		if cbar_ticks is None: cbar_ticks = [0, 1]
 		if cbar_ticklabels is None: cbar_ticklabels = ['False', 'True']
-
-	# Calculate limits of color scaling:
-	interval = None
-	if vmin is None or vmax is None:
-		if allnan(image):
-			logger.warning("Image is all NaN")
-			vmin = 0
-			vmax = 1
-			if cbar_ticks is None:
-				cbar_ticks = []
-			if cbar_ticklabels is None:
-				cbar_ticklabels = []
-		elif isinstance(percentile, (list, tuple, np.ndarray)):
-			interval = viz.AsymmetricPercentileInterval(percentile[0], percentile[1])
-		else:
-			interval = viz.PercentileInterval(percentile)
 
 	# Create ImageNormalize object with extracted limits:
 	if scale in ('log', 'linear', 'sqrt', 'asinh', 'histeq', 'sinh', 'squared'):
@@ -120,6 +149,22 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		elif scale == 'squared':
 			stretch = viz.SquaredStretch()
 
+		# Calculate limits of color scaling:
+		interval = None
+		if vmin is None or vmax is None:
+			if allnan(image):
+				logger.warning("Image is all NaN")
+				vmin = 0
+				vmax = 1
+				if cbar_ticks is None:
+					cbar_ticks = []
+				if cbar_ticklabels is None:
+					cbar_ticklabels = []
+			elif isinstance(percentile, (list, tuple, np.ndarray)):
+				interval = viz.AsymmetricPercentileInterval(percentile[0], percentile[1])
+			else:
+				interval = viz.PercentileInterval(percentile)
+
 		# Create ImageNormalize object. Very important to use clip=False if the image contains
 		# NaNs, otherwise NaN points will not be plotted correctly.
 		norm = viz.ImageNormalize(
@@ -133,10 +178,15 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 	elif isinstance(scale, (viz.ImageNormalize, matplotlib.colors.Normalize)):
 		norm = scale
 	else:
-		raise ValueError("scale {} is not available.".format(scale))
+		raise ValueError(f"Scale {scale:s} is not available.")
 
 	if offset_axes:
-		extent = (offset_axes[0]-0.5, offset_axes[0] + image.shape[1]-0.5, offset_axes[1]-0.5, offset_axes[1] + image.shape[0]-0.5)
+		extent = (
+			offset_axes[0] - 0.5,
+			offset_axes[0] + image.shape[1] - 0.5,
+			offset_axes[1] - 0.5,
+			offset_axes[1] + image.shape[0] - 0.5
+		)
 	else:
 		extent = (-0.5, image.shape[1]-0.5, -0.5, image.shape[0]-0.5)
 
@@ -146,9 +196,9 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 	# Set up the colormap to use. If a bad color is defined,
 	# add it to the colormap:
 	if cmap is None:
-		cmap = plt.get_cmap('Blues')
+		cmap = copy.copy(plt.get_cmap('Blues'))
 	elif isinstance(cmap, str):
-		cmap = plt.get_cmap(cmap)
+		cmap = copy.copy(plt.get_cmap(cmap))
 
 	if color_bad:
 		cmap.set_bad(color_bad, 1.0)
@@ -192,7 +242,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 			cax = divider.append_axes('right', size=cbar_size, pad=cbar_pad)
 			orientation = 'vertical'
 
-		cb = fig.colorbar(im, norm=norm, cax=cax, orientation=orientation)
+		cb = fig.colorbar(im, cax=cax, orientation=orientation)
 
 		if cbar == 'top':
 			cax.xaxis.set_ticks_position('top')
@@ -270,7 +320,7 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 
 	# Make the common colorbar for image and fit subplots:
 	cbar_ax12 = fig.add_axes([0.125, 0.2, 0.494, 0.03])
-	fig.colorbar(im1, norm=norm, cax=cbar_ax12, orientation='horizontal')
+	fig.colorbar(im1, cax=cbar_ax12, orientation='horizontal')
 
 	# Make the colorbar for the residuals subplot:
 	cbar_ax3 = fig.add_axes([0.7, 0.2, 0.205, 0.03])
@@ -282,64 +332,86 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 	return [ax1, ax2, ax3]
 
 #--------------------------------------------------------------------------------------------------
-def save_figure(path, format='png', **kwargs):
+def plot_outline(img, ax=None, threshold=0.5, **kwargs):
+	"""
+	Plot outline of pixel mask.
+
+	Parameters:
+		img (ndarray):
+		ax (:class:`matplotlib.pyplot.Axes`): Axes to plot outline into.
+		threshold (float): If ``img`` is not a boolean array, this is used for defining
+			the pixels which should be outlined. Ignored if ``img`` is boolean.
+		**kwargs: Additional keywords are passed to :func:`matplotlib.pyplot.plot`.
+
+	Returns:
+		narray or :class:`matplotlib.pyplot.Axes`:
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	# Special treatment for boolean arrays:
+	if isinstance(img, np.ndarray) and img.dtype == 'bool':
+		mapimg = img
+	else:
+		mapimg = (img > threshold)
+
+	ver_seg = np.where(mapimg[:,1:] != mapimg[:,:-1])
+	hor_seg = np.where(mapimg[1:,:] != mapimg[:-1,:])
+
+	lines = []
+	for p in zip(*hor_seg):
+		lines.append((p[1], p[0]+1))
+		lines.append((p[1]+1, p[0]+1))
+		lines.append((np.nan, np.nan))
+
+	# and the same for vertical segments
+	for p in zip(*ver_seg):
+		lines.append((p[1]+1, p[0]))
+		lines.append((p[1]+1, p[0]+1))
+		lines.append((np.nan, np.nan))
+
+	segments = np.array(lines, dtype='float64')
+
+	x0 = -0.5
+	x1 = img.shape[1] + x0
+	y0 = -0.5
+	y1 = img.shape[0] + y0
+
+	# now we need to know something about the image which is shown
+	#   at this point let's assume it has extents (x0, y0)..(x1,y1) on the axis
+	#   drawn with origin='lower'
+	# with this information we can rescale our points
+	segments[:,0] = x0 + (x1-x0) * segments[:,0] / mapimg.shape[1]
+	segments[:,1] = y0 + (y1-y0) * segments[:,1] / mapimg.shape[0]
+
+	if ax is None:
+		return segments
+
+	return ax.plot(segments[:,0], segments[:,1], **kwargs)
+
+#--------------------------------------------------------------------------------------------------
+def save_figure(path, fig=None, fmt='png', **kwargs):
 	"""
 	Write current figure to file. Creates directory to place it in if needed.
 
+	Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
+
 	Parameters:
-		path (string): Path where to save figure. If no file extension is provided, the extension
+		path (str): Path where to save figure. If no file extension is provided, the extension
 			of the format is automatically appended.
-		format (string): Figure file type. Default is ``'png'``.
-		kwargs (dict, optional): Keyword arguments to be passed to `matplotlib.pyplot.savefig`.
+		fig (:class:`matplotlib.pyplot.Figure`): Figure to save. Default is to save current figure.
+		fmt (str): Figure file type. Default is ``'png'``.
 	"""
 
 	logger = logging.getLogger(__name__)
 	logger.debug("Saving figure '%s' to '%s'.", os.path.basename(path), os.path.dirname(path))
 
-	if not path.endswith('.' + format):
-		path += '.' + format
+	if not path.endswith('.' + fmt):
+		path += '.' + fmt
+
+	os.makedirs(os.path.dirname(path), exist_ok=True)
 
 	# Write current figure to file if it doesn't exist:
-	plt.savefig(path, format=format, bbox_inches='tight', **kwargs)
-
-#--------------------------------------------------------------------------------------------------
-def set_interactive(backend=('Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo', 'TkAgg')):
-	"""
-	Change plotting to using an interactive backend.
-
-	Parameters:
-		backend (str or list): Backend to change to. If not provided, will try different
-			interactive backends and use the first one that works.
-
-	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
-	"""
-
-	logger = logging.getLogger(__name__)
-	logger.debug("Valid interactive backends: %s", matplotlib.rcsetup.interactive_bk)
-
-	if isinstance(backend, str):
-		backend = [backend]
-
-	for bckend in backend:
-		if bckend not in matplotlib.rcsetup.interactive_bk:
-			logger.warning("Interactive backend '%s' is not found")
-			continue
-
-		# Try to change the backend, and catch errors
-		# it it didn't work:
-		try:
-			plt.switch_backend(bckend)
-		except (ModuleNotFoundError, ImportError):
-			pass
-		else:
-			break
-
-#--------------------------------------------------------------------------------------------------
-def set_noninteractive():
-	"""
-	Change plotting to using a non-interactive backend, which can e.g. be used on a cluster.
-	Will set backend to 'Agg'.
-
-	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
-	"""
-	plt.switch_backend('Agg')
+	if fig is None:
+		fig = plt.gcf()
+	fig.savefig(path, format=fmt, bbox_inches='tight', **kwargs)

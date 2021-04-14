@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Scheduler using MPI for running the TESS photometry
@@ -39,10 +39,12 @@ def main():
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
-	parser.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
-	parser.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
-	parser.add_argument('--datasource', type=str, choices=('ffi','tpf'), default=None, help='Data source or cadence. Default is to run all.')
-	parser.add_argument('--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
+	group = parser.add_argument_group('Filter which targets to run')
+	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
+	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
+	group.add_argument('--cadence', type=int, choices=(20,120,600,1800), default=None, help='Observing cadence. Default is to run all cadences.')
+	group.add_argument('--datasource', type=str, choices=('ffi','tpf'), default=None, help='Data source or cadence. Default is to run all.')
+	parser.add_argument('--version', type=int, required=True, help='Data release number to store in output files.')
 	parser.add_argument('input_folder', type=str, help='Input directory. This directory should contain a TODO-file.', nargs='?', default=None)
 	args = parser.parse_args()
 
@@ -77,6 +79,7 @@ def main():
 			constraints = {
 				'camera': args.camera,
 				'ccd': args.ccd,
+				'cadence': args.cadence,
 				'datasource': args.datasource
 			}
 
@@ -125,7 +128,7 @@ def main():
 					else: # pragma: no cover
 						# This should never happen, but just to
 						# make sure we don't run into an infinite loop:
-						raise Exception("Master received an unknown tag: '{0}'".format(tag))
+						raise RuntimeError(f"Master received an unknown tag: '{tag}'")
 
 				tm.logger.info("Master finishing")
 
@@ -176,6 +179,9 @@ def main():
 					# Send the result back to the master:
 					comm.send(result, dest=0, tag=tags.DONE)
 
+					# Attempt to do a cleanup:
+					del pho, result, task
+
 				elif tag == tags.EXIT:
 					# We were told to EXIT, so lets do that
 					break
@@ -183,7 +189,7 @@ def main():
 				else: # pragma: no cover
 					# This should never happen, but just to
 					# make sure we don't run into an infinite loop:
-					raise Exception("Worker received an unknown tag: '{0}'".format(tag))
+					raise RuntimeError(f"Worker received an unknown tag: '{tag}'")
 
 		except: # noqa: E722, pragma: no cover
 			logger.exception("Something failed in worker")

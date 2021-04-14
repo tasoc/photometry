@@ -10,7 +10,7 @@ Module Overview
 	:maxdepth: 4
 
 	photometry
-   
+
 
 Command-line Utilities
 ======================
@@ -18,9 +18,9 @@ Command-line Utilities
 .. toctree::
 	:maxdepth: 1
 
-	make_catalog
+	run_make_catalog
 	run_prepare_photometry
-	make_todo
+	run_make_todo
 	run_tessphot
 	run_tessphot_mpi
 	run_ffimovie

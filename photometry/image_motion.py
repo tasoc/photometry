@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Calculate image shifts between images.
@@ -100,7 +100,11 @@ class ImageMovementKernel(object):
 		flux1 = -1 + 2*((flux - fmin)/ran)
 
 		# Calculate Scharr gradient
-		flux1 = scharr(flux1)
+		# Ignore deprecation warning from scikit-image, which is fixed in version 1.18.1,
+		# but since that version does not support Python 3.6, we are just ignore the warning
+		with warnings.catch_warnings():
+			warnings.filterwarnings('ignore', category=DeprecationWarning, module='skimage')
+			flux1 = scharr(flux1)
 
 		# Remove potential NaNs in gradient image
 		flux1[np.isnan(flux1)] = 0
@@ -206,7 +210,7 @@ class ImageMovementKernel(object):
 
 		# Check that reference image was actually given:
 		if self.image_ref is None:
-			raise Exception("Reference image not defined")
+			raise RuntimeError("Reference image not defined")
 
 		# Define the motion model
 		if self.warpmode == 'euclidian':
@@ -234,7 +238,7 @@ class ImageMovementKernel(object):
 			inputMask = cv2.UMat(mask)
 			cc, warp_matrix = cv2.findTransformECC(self.image_ref, image, warp_matrix, warp_mode, criteria, inputMask, 5)
 			warp_matrix = np.asarray(warp_matrix.get(), dtype='float64')
-		except: # noqa: E722
+		except: # noqa: E722, pragma: no cover
 			logger.exception("Could not find transform")
 			return np.full(self.n_params, np.NaN)
 
@@ -305,7 +309,7 @@ class ImageMovementKernel(object):
 				test_coords = np.atleast_2d(fp[0, :])
 				try:
 					self.series_kernels[k].all_world2pix(test_coords, 0, ra_dec_order=True, maxiter=50)
-				except (NoConvergence, ValueError):
+				except (NoConvergence, ValueError): # pragma: no cover
 					good_series[k] = False
 
 			# Remove any bad series points from the lists:

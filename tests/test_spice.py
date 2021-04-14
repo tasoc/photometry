@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Tests of SPICE Kernel module.
@@ -15,9 +15,9 @@ import h5py
 from tempfile import TemporaryDirectory
 import conftest # noqa: F401
 from photometry import AperturePhotometry
-from photometry.spice import TESS_SPICE
+from photometry.spice import TESS_SPICE, InadequateSpiceError
 from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_motion
-from photometry.plots import plt
+from photometry.plots import plt, plots_interactive
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
 #--------------------------------------------------------------------------------------------------
@@ -29,10 +29,11 @@ def test_timestamps(SHARED_INPUT_DIR, starid):
 
 		tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 		with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
-			time_tpf = hdu[1].data['TIME']
-			timecorr_tpf = hdu[1].data['TIMECORR'] * 86400 * 1000
+			time_tpf = np.asarray(hdu[1].data['TIME'])
+			timecorr_tpf = np.asarray(hdu[1].data['TIMECORR']) * 86400 * 1000
 
-		intp_timecorr = interp1d(time_tpf, timecorr_tpf, kind='linear')
+		indx = np.isfinite(time_tpf) & np.isfinite(timecorr_tpf)
+		intp_timecorr = interp1d(time_tpf[indx], timecorr_tpf[indx], kind='linear')
 
 		with AperturePhotometry(starid, SHARED_INPUT_DIR, OUTPUT_DIR,
 			plot=False, datasource='ffi', sector=1, camera=3, ccd=2) as pho:
@@ -59,6 +60,21 @@ def test_position_velocity():
 			pass
 
 		time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
+
+		# We should fail with a timestamp that are outside the TESS SPICE coverage:
+		# The timestamp used here is well before TESS was launched
+		time_nocoverage = 1000 + 2457000
+		with pytest.raises(InadequateSpiceError) as e:
+			knl.position(time_nocoverage)
+		assert str(e.value) == 'Inadequate SPICE kernels available'
+
+		with pytest.raises(InadequateSpiceError) as e:
+			knl.velocity(time_nocoverage)
+		assert str(e.value) == 'Inadequate SPICE kernels available'
+
+		with pytest.raises(InadequateSpiceError) as e:
+			knl.position_velocity(time_nocoverage)
+		assert str(e.value) == 'Inadequate SPICE kernels available'
 
 		# Get the location of TESS as a function of time relative to Earth in kilometers:
 		pos = knl.position(time_nocorr + 2457000)
@@ -144,8 +160,8 @@ def test_spice(SHARED_INPUT_DIR, starid):
 
 		tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 		with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
-			time_tpf = hdu[1].data['TIME']
-			timecorr_tpf = hdu[1].data['TIMECORR']
+			time_tpf = np.asarray(hdu[1].data['TIME'])
+			timecorr_tpf = np.asarray(hdu[1].data['TIMECORR'])
 			camera = hdu[0].header['CAMERA']
 			ccd = hdu[0].header['CCD']
 
@@ -160,6 +176,11 @@ def test_spice(SHARED_INPUT_DIR, starid):
 				pm_dec=hdu[0].header['PMDEC']*u.mas/u.yr,
 				radial_velocity=0*u.km/u.s
 			)
+
+		# Remove bad timestamps from TPF file:
+		indx = np.isfinite(time_tpf) & np.isfinite(timecorr_tpf)
+		time_tpf = time_tpf[indx]
+		timecorr_tpf = timecorr_tpf[indx]
 
 		# Load the original timestamps from FFIs:
 		hdf_file = find_hdf5_files(SHARED_INPUT_DIR, camera=camera, ccd=ccd)[0]
@@ -239,6 +260,6 @@ def test_spice(SHARED_INPUT_DIR, starid):
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
-	plt.switch_backend('Qt5Agg')
+	plots_interactive()
 	pytest.main([__file__])
 	plt.show()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Corrections of time offset present in early data releases of TESS Data (sectors 1-21).
@@ -115,7 +115,7 @@ def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 	# files in earlier versions of the pipeline. In that case, we have to throw
 	# an error and tell users to re-run prepare:
 	elif datarel in (27, 29) and procver is None:
-		raise Exception("""The timestamps of these data may need to be corrected,
+		raise ValueError("""The timestamps of these data may need to be corrected,
 			but the PROCVER header is not present. HDF5 files may need to be re-created.""")
 
 	elif datarel == 27 \

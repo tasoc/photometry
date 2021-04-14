@@ -3,8 +3,8 @@ The TASOC Photometry module
 ===========================
 .. image:: https://zenodo.org/badge/103402174.svg
     :target: https://zenodo.org/badge/latestdoi/103402174
-.. image:: https://travis-ci.org/tasoc/photometry.svg?branch=devel
-    :target: https://travis-ci.org/tasoc/photometry
+.. image:: https://github.com/tasoc/photometry/actions/workflows/tests.yml/badge.svg?branch=devel
+    :target: https://github.com/tasoc/photometry/actions/workflows/tests.yml
 .. image:: https://img.shields.io/codecov/c/github/tasoc/photometry
     :target: https://codecov.io/github/tasoc/photometry
 .. image:: https://hitsofcode.com/github/tasoc/photometry?branch=devel
@@ -17,6 +17,9 @@ The TASOC Photometry module
 This module provides the basic photometry setup for the TESS Asteroseismic Science Operations Center (TASOC).
 
 The code is available through our GitHub organisation (https://github.com/tasoc/photometry) and full documentation for this code can be found on https://tasoc.dk/code/.
+
+.. note::
+    Even though the full code and documentation are freely available, we highly encourage users to not attempt to use the code to generate their own photometry from TESS. Instead we encourage you to use the fully processed data products from the full TASOC pipeline, which are available from `TASOC <https://tasoc.dk>`_ and `MAST <https://archive.stsci.edu/hlsp/tasoc>`_. If you are interested in working on details in the processing, we welcome you to join the T'DA working group.
 
 Installation instructions
 =========================
@@ -58,10 +61,10 @@ The directory defined in ``TESSPHOT_INPUT`` should contain all the data in FITS 
 
 Make star catalogs
 ------------------
-The first program to be run is the ``make_catalog.py`` program, which will create full catalogs of all stars known to fall on or near the TESS detectors during a given observing sector. These catalogs are created directly from the TESS Input Catalog (TIC), and since this is such a huge table this program relies on internal databases running at TASOC at Aarhus University. You therefore need to be connected to the network at TASOC at Aarhus Univsity to run this program.
+The first program to be run is the ``run_make_catalog.py`` program, which will create full catalogs of all stars known to fall on or near the TESS detectors during a given observing sector. These catalogs are created directly from the TESS Input Catalog (TIC), and since this is such a huge table this program relies on internal databases running at TASOC at Aarhus University. You therefore need to be connected to the network at TASOC at Aarhus Univsity to run this program.
 The program is simply run as shown here for sector #14 (see full documentation for more options):
 
->>> python make_catalog.py 14
+>>> python run_make_catalog.py 14
 
 Prepare photometry
 ------------------
@@ -81,7 +84,7 @@ Make TODO list
 A TODO-list is a list of targets that should be processed by the photometry code. It includes information about which cameras and CCDs they fall on and which photometric methods they should be processed with. A TODO-list can be generated directly from the catalog files (since these contain all targets near the field-of-view) and the details stored in the HDF5 files.
 In order to create a full TODO list of all stars that can be observed, simply run the command:
 
->>> python make_todo.py
+>>> python run_make_todo.py
 
 This will create the file ``todo.sqlite`` in the ``TESSPHOT_INPUT`` directory, which is needed for running the photometry. See the full documentation for more options.
 

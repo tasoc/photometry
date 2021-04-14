@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Pytest fixture to create temp copy of input data, shared across all tests.
@@ -78,4 +78,18 @@ def PRIVATE_TODO_FILE():
 	with tempfile.TemporaryDirectory(prefix='pytest-private-todo-') as my_tmpdir:
 		tmp = os.path.join(my_tmpdir, 'todo.sqlite')
 		shutil.copy2(TODO_FILE, tmp)
+		yield tmp
+
+#--------------------------------------------------------------------------------------------------
+@pytest.fixture(scope='function')
+def PRIVATE_SPICE_DIR(monkeypatch):
+	"""
+	Pytest fixture to create temp copy of SPICE data directory and changes the
+	TESSPHOT_SPICE_KERNELS environment variable.
+	"""
+	SPICE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'photometry', 'data', 'spice'))
+	with tempfile.TemporaryDirectory(prefix='pytest-private-spice-') as tmpdir:
+		tmp = os.path.join(tmpdir, 'spice')
+		shutil.copytree(SPICE_DIR, tmp, ignore=shutil.ignore_patterns('metakernel-*.txt'))
+		monkeypatch.setenv('TESSPHOT_SPICE_KERNELS', tmp)
 		yield tmp
