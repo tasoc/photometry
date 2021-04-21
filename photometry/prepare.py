@@ -74,7 +74,7 @@ def quality_from_tpf(tpffile, time_start, time_end):
 #--------------------------------------------------------------------------------------------------
 def _iterate_hdf_group(dset, start=0, stop=None):
 	for d in range(start, stop if stop is not None else len(dset)):
-		yield np.asarray(dset['%04d' % d])
+		yield np.asarray(dset[f'{d:04d}'])
 
 #--------------------------------------------------------------------------------------------------
 def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
@@ -276,7 +276,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						last_bck_fit = -1 if len(pixel_flags) == 0 else int(sorted(list(pixel_flags.keys()))[-1])
 						k = last_bck_fit+1
 						for bck, mask in tqdm(m(fit_background_wrapper, files[k:]), initial=k, total=numfiles, **tqdm_settings):
-							dset_name = '%04d' % k
+							dset_name = f'{k:04d}'
 							logger.debug("Background %d complete", k)
 							logger.debug("Estimate: %f sec/image", (default_timer()-tic)/(k-last_bck_fit))
 
@@ -304,7 +304,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					w = time_smooth//2
 					tic = default_timer()
 					for k in trange(numfiles, **tqdm_settings):
-						dset_name = '%04d' % k
+						dset_name = f'{k:04d}'
 						if dset_name in backgrounds: continue
 
 						indx1 = max(k-w, 0)
@@ -313,8 +313,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 						block = np.empty((img_shape[0], img_shape[1], indx2-indx1), dtype='float32')
 						logger.debug(block.shape)
-						for i, k in enumerate(range(indx1, indx2)):
-							block[:, :, i] = dset_bck_us['%04d' % k]
+						for i, n in enumerate(range(indx1, indx2)):
+							block[:, :, i] = dset_bck_us[f'{n:04d}']
 
 						bck = nanmean(block, axis=2)
 						#bck_err = np.sqrt(nansum(block_err**2, axis=2)) / time_smooth
@@ -408,7 +408,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					else:
 						for key, value in attributes.items():
 							if hdr.get(key) != value:
-								logger.error("%s is not constant!", key)
+								logger.error("%s: %s is not constant! (%s, %s)", dset_name, key, value, hdr.get(key))
 
 					# Find pixels marked for manual exclude:
 					manexcl = pixel_manual_exclude(flux0, hdr)
@@ -590,7 +590,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					logger.info("Setting background shenanigans...")
 					tic = default_timer()
 					for k in trange(numfiles, **tqdm_settings):
-						dset_name = '%04d' % k
+						dset_name = f'{k:04d}'
 						bckshe = np.asarray(pixel_flags_ind[:, :, k])
 
 						#img = bckshe - mean_shenanigans
@@ -677,7 +677,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			if calc_movement_kernel and 'movement_kernel' not in hdf:
 				# Calculate image motion:
 				logger.info("Calculation Image Movement Kernels...")
-				imk = ImageMovementKernel(image_ref=images['%04d' % refindx], warpmode='translation')
+				imk = ImageMovementKernel(image_ref=images[f'{refindx:04d}'], warpmode='translation')
 				kernel = np.empty((numfiles, imk.n_params), dtype='float64')
 
 				tic = default_timer()
