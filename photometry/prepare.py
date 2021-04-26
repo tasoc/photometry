@@ -174,13 +174,19 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 	for sector, camera, ccd in itertools.product(sectors, cameras, ccds):
 		download_catalogs(input_folder, sector, camera=camera, ccd=ccd)
 
+	# Force multiprocessing to start fresh python interpreter processes.
+	# This is already the default on Windows and MacOS, and the default "fork"
+	# has sometimes caused deadlocks on Linux:
+	# https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+	mp = multiprocessing.get_context('spawn')
+
 	# Get the number of processes we can spawn in case it is needed for calculations:
-	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
+	threads = int(os.environ.get('SLURM_CPUS_PER_TASK', mp.cpu_count()))
 	logger.info("Using %d processes.", threads)
 
 	# Start pool of workers:
 	if threads > 1:
-		pool = multiprocessing.Pool(threads)
+		pool = mp.Pool(threads)
 		m = pool.imap
 	else:
 		m = map

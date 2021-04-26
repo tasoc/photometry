@@ -424,16 +424,22 @@ def main():
 		'dynamic_ncols': True
 	}
 
+	# Force multiprocessing to start fresh python interpreter processes.
+	# This is already the default on Windows and MacOS, and the default "fork"
+	# has sometimes caused deadlocks on Linux:
+	# https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+	mp = multiprocessing.get_context('spawn')
+
 	# Get the number of processes we can spawn in case it is needed for calculations:
 	threads = args.jobs
 	if threads <= 0:
-		threads = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
+		threads = int(os.environ.get('SLURM_CPUS_PER_TASK', mp.cpu_count()))
 	threads = min(threads, len(args.files))
 	logger.info("Using %d processes.", threads)
 
 	# Start pool of workers:
 	if threads > 1:
-		pool = multiprocessing.Pool(threads)
+		pool = mp.Pool(threads)
 		m = pool.imap
 	else:
 		m = map
