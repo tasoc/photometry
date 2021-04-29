@@ -291,22 +291,19 @@ def load_ffi_fits(path, return_header=False, return_uncert=False):
 		list: If ``return_header`` is enabled, will return a dict of the FITS headers.
 	"""
 
-	with fits.open(path, memmap=True, mode='readonly') as hdu:
+	with fits.open(path, mode='readonly') as hdu:
 		hdr = hdu[0].header
 		if hdr.get('TELESCOP') == 'TESS' and hdu[1].header.get('NAXIS1') == 2136 and hdu[1].header.get('NAXIS2') == 2078:
-			img = hdu[1].data[0:2048, 44:2092]
+			img = np.asarray(hdu[1].data[0:2048, 44:2092], dtype='float32')
 			if return_uncert:
 				imgerr = np.asarray(hdu[2].data[0:2048, 44:2092], dtype='float32')
 			headers = dict(hdu[0].header)
 			headers.update(dict(hdu[1].header))
 		else:
-			img = hdu[0].data
+			img = np.asarray(hdu[0].data, dtype='float32')
 			headers = dict(hdu[0].header)
 			if return_uncert:
 				imgerr = np.asarray(hdu[1].data, dtype='float32')
-
-	# Make sure its an numpy array with the correct data type:
-	img = np.asarray(img, dtype='float32')
 
 	if return_uncert and return_header:
 		return img, headers, imgerr
