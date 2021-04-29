@@ -399,8 +399,14 @@ def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrit
 	settings = load_settings()
 	faint_limit = settings.getfloat('todolist', 'faint_limit', fallback=15.0)
 
+	# Force multiprocessing to start fresh python interpreter processes.
+	# This is already the default on Windows and MacOS, and the default "fork"
+	# has sometimes caused deadlocks on Linux:
+	# https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods
+	mp = multiprocessing.get_context('spawn')
+
 	# Number of threads available for parallel processing:
-	threads_max = int(os.environ.get('SLURM_CPUS_PER_TASK', multiprocessing.cpu_count()))
+	threads_max = int(os.environ.get('SLURM_CPUS_PER_TASK', mp.cpu_count()))
 
 	# Load file with targets to be excluded from processing for some reason:
 	exclude_file = os.path.join(os.path.dirname(__file__), 'data', 'todolist-exclude.dat')
@@ -462,7 +468,7 @@ def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrit
 		logger.info("Using %d processes.", threads)
 
 		if threads > 1:
-			pool = multiprocessing.Pool(threads)
+			pool = mp.Pool(threads)
 			m = pool.imap_unordered
 		else:
 			m = map
@@ -507,7 +513,7 @@ def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrit
 		logger.info("Using %d processes.", threads)
 
 		if threads > 1:
-			pool = multiprocessing.Pool(threads)
+			pool = mp.Pool(threads)
 			m = pool.imap_unordered
 		else:
 			m = map
