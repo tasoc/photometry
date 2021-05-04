@@ -127,11 +127,9 @@ def _ffi_todo(hdf5_file, exclude=[], faint_limit=15.0):
 			hdr_string = hdf['wcs'][f'{refindx:04d}'][0]
 		else:
 			hdr_string = hdf['wcs'][0]
-		if not isinstance(hdr_string, str):
-			hdr_string = hdr_string.decode("utf-8") # For Python 3
 		with warnings.catch_warnings():
 			warnings.filterwarnings('ignore', category=FITSFixedWarning)
-			wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True)
+			wcs = WCS(header=fits.Header.fromstring(hdr_string), relax=True)
 		offset_rows = hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
 		offset_cols = hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 0)
 		image_shape = hdf['images']['0000'].shape

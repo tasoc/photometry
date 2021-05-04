@@ -63,9 +63,7 @@ class ImageMovementKernel(object):
 			self.image_ref = self._prepare_flux(self.image_ref)
 
 		if self.wcs_ref is not None and not isinstance(self.wcs_ref, WCS):
-			if not isinstance(self.wcs_ref, str):
-				self.wcs_ref = self.wcs_ref.decode("utf-8") # For Python 3
-			self.wcs_ref = WCS(header=fits.Header().fromstring(self.wcs_ref))
+			self.wcs_ref = WCS(header=fits.Header.fromstring(self.wcs_ref), relax=True)
 
 		self._interpolator = None
 
@@ -288,16 +286,14 @@ class ImageMovementKernel(object):
 				if not isinstance(self.series_kernels[k], WCS):
 					# Assuming that is is a string then:
 					hdr_string = self.series_kernels[k]
-					if not isinstance(hdr_string, str):
-						hdr_string = hdr_string.decode("utf-8") # For Python 3
 
 					# If the string is empty, remove the point from the series:
-					if hdr_string.strip() == '':
+					if not hdr_string.strip():
 						good_series[k] = False
 						continue
 
 					# Create a WCS object from the header string:
-					self.series_kernels[k] = WCS(header=fits.Header().fromstring(hdr_string), relax=True)
+					self.series_kernels[k] = WCS(header=fits.Header.fromstring(hdr_string), relax=True)
 
 				# Try if the WCS can return pixel coordinates for the test-coordinates:
 				# If it can't we will remove that timestamp from the series, and the

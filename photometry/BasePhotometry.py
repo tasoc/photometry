@@ -252,10 +252,11 @@ class BasePhotometry(object):
 					hdr_string = self.hdf['wcs'][f'{refindx:04d}'][0]
 				else:
 					hdr_string = self.hdf['wcs'][0]
-				if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
+				if not hdr_string:
+					raise ValueError("Invalid WCS header string.")
 				with warnings.catch_warnings():
 					warnings.filterwarnings('ignore', category=FITSFixedWarning)
-					self.wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True) # World Coordinate system solution.
+					self.wcs = WCS(header=fits.Header.fromstring(hdr_string), relax=True)
 				attrs['wcs'] = self.wcs
 
 				# Get shape of sumimage from hdf5 file:

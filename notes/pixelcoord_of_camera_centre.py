@@ -19,7 +19,6 @@ if __name__ == '__main__':
 
 	rootdir = r'/aadc/tasoc/archive/S01_DR01'
 
-
 	xycendict = {}
 	for camera, ccd in itertools.product((1,2,3,4), (1,2,3,4)):
 
@@ -32,8 +31,7 @@ if __name__ == '__main__':
 		elif camera == 4:
 			camera_centre = [90.0042379538484, -66.5647239768875]
 
-
-		with h5py.File(os.path.join(rootdir, 'sector001_camera{camera:d}_ccd{ccd:d}.hdf5'.format(camera=camera, ccd=ccd)), 'r') as hdf:
+		with h5py.File(os.path.join(rootdir, f'sector001_camera{camera:d}_ccd{ccd:d}.hdf5'), 'r') as hdf:
 
 			N = len(hdf['images'])
 			a = np.full(N, np.NaN)
@@ -42,9 +40,8 @@ if __name__ == '__main__':
 
 			for k in trange(N):
 				if hdf['quality'][k] == 0:
-					hdr_string = hdf['wcs']['%04d' % k][0]
-					if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
-					wcs = WCS(header=fits.Header().fromstring(hdr_string), relax=True)
+					hdr_string = hdf['wcs'][f'{k:04d}'][0]
+					wcs = WCS(header=fits.Header.fromstring(hdr_string), relax=True)
 
 					xycen = wcs.all_world2pix(np.atleast_2d(camera_centre), 0, ra_dec_order=True)
 
@@ -67,10 +64,9 @@ if __name__ == '__main__':
 		# Save the
 		xycendict[(camera, ccd)] = np.array([am, bm])
 
-
 	print("xycen = {")
 	for key, value in xycendict.items():
-		print("\t(%d, %d): [%f, %f],"%(
+		print("\t(%d, %d): [%f, %f]," % (
 			key[0],
 			key[1],
 			value[0],

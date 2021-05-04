@@ -84,17 +84,19 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
-	sector_str = '????' if sector is None else f'{sector:04d}'
-	camera = '?' if camera is None else str(camera)
-	ccd = '?' if ccd is None else str(ccd)
-	filename_pattern = f'tess*-s{sector_str:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'
+	sector_str = r'\d{4}' if sector is None else f'{sector:04d}'
+	camera = r'\d' if camera is None else str(camera)
+	ccd = r'\d' if ccd is None else str(ccd)
+	filename_pattern = r'^tess\d+-s(?P<sector>' + sector_str + ')-(?P<camera>' + camera + r')-(?P<ccd>' + ccd + r')-\d{4}-[xsab]_ffic\.fits(\.gz)?$'
 	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
+	regexp = re.compile(filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
 	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
-		for filename in fnmatch.filter(filenames, filename_pattern):
-			matches.append(os.path.join(root, filename))
+		for filename in filenames:
+			if regexp.match(filename):
+				matches.append(os.path.join(root, filename))
 
 	# Sort the list of files by thir filename:
 	matches.sort(key=lambda x: os.path.basename(x))

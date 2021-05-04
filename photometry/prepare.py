@@ -246,7 +246,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			images_err = hdf.require_group('images_err')
 			backgrounds = hdf.require_group('backgrounds')
 			pixel_flags = hdf.require_group('pixel_flags')
-			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset): del hdf['wcs']
+			if 'wcs' in hdf and isinstance(hdf['wcs'], h5py.Dataset):
+				del hdf['wcs']
 			wcs = hdf.require_group('wcs')
 			time_smooth = backgrounds.attrs.get('time_smooth', {1800: 3, 600: 9}[cadence])
 			flux_cutoff = backgrounds.attrs.get('flux_cutoff', 8e4)
@@ -441,7 +442,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						flux0[manexcl] = np.nan
 
 					# Save the World Coordinate System of each image:
-					# TODO: Check if the WCS actually works for each image, and if not, set it to an empty string
+					# Check if the WCS actually works for each image, and if not, set it to an empty string
 					if dset_name not in wcs:
 						dset = wcs.create_dataset(dset_name, (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
 
@@ -672,10 +673,16 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			# Find the reference image:
 			# Create numpy masked array of timestamps with good quality data and
 			# find the index in the good timestamps closest to the reference time.
-			good_times_mask = (quality == 0) & ([wcs[w][0].strip() != '' for w in wcs])
-			good_times = np.ma.masked_array(hdf['time'], mask=good_times_mask)
+			bad_wcs_mask = np.asarray([not bool(wcs[w][0].strip()) for w in wcs], dtype='bool')
+			bad_times_mask = (quality != 0) | bad_wcs_mask
+			good_times = np.ma.masked_array(hdf['time'], mask=bad_times_mask)
 			refindx = find_nearest(good_times, sector_reference_time_tjd)
 			logger.info("WCS reference frame: %d", refindx)
+
+			# Make sure that the WCS solution and quality at the chosen refindx are good.
+			# They should be, this is just to catch any errors early.
+			if quality[refindx] != 0 or not wcs[f'{refindx:04d}'][0]:
+				raise RuntimeError("The chosen refindx does not contain good values.")
 
 			# Save WCS to the file:
 			wcs.attrs['ref_frame'] = refindx
