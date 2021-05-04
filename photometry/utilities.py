@@ -17,7 +17,6 @@ from scipy.stats import binned_statistic
 import configparser
 import json
 import os.path
-import fnmatch
 import glob
 import re
 import itertools
@@ -84,17 +83,19 @@ def find_ffi_files(rootdir, sector=None, camera=None, ccd=None):
 	logger = logging.getLogger(__name__)
 
 	# Create the filename pattern to search for:
-	sector_str = '????' if sector is None else f'{sector:04d}'
-	camera = '?' if camera is None else str(camera)
-	ccd = '?' if ccd is None else str(ccd)
-	filename_pattern = f'tess*-s{sector_str:s}-{camera:s}-{ccd:s}-????-[xsab]_ffic.fits*'
+	sector_str = r'\d{4}' if sector is None else f'{sector:04d}'
+	camera = r'\d' if camera is None else str(camera)
+	ccd = r'\d' if ccd is None else str(ccd)
+	filename_pattern = r'^tess\d+-s(?P<sector>' + sector_str + ')-(?P<camera>' + camera + r')-(?P<ccd>' + ccd + r')-\d{4}-[xsab]_ffic\.fits(\.gz)?$'
 	logger.debug("Searching for FFIs in '%s' using pattern '%s'", rootdir, filename_pattern)
+	regexp = re.compile(filename_pattern)
 
 	# Do a recursive search in the directory, finding all files that match the pattern:
 	matches = []
 	for root, dirnames, filenames in os.walk(rootdir, followlinks=True):
-		for filename in fnmatch.filter(filenames, filename_pattern):
-			matches.append(os.path.join(root, filename))
+		for filename in filenames:
+			if regexp.match(filename):
+				matches.append(os.path.join(root, filename))
 
 	# Sort the list of files by thir filename:
 	matches.sort(key=lambda x: os.path.basename(x))
@@ -780,15 +781,15 @@ def sqlite_drop_column(conn, table, col):
 
 	# Get a list of columns in the existing table:
 	cursor = conn.cursor()
-	cursor.execute("PRAGMA table_info({table:s})".format(table=table))
+	cursor.execute(f"PRAGMA table_info({table:s});")
 	columns = [col[1] for col in cursor.fetchall()]
 	if col not in columns:
-		raise ValueError("Column '%s' not found in table '%s'" % (col, table))
+		raise ValueError(f"Column '{col:s}' not found in table '{table:s}'")
 	columns.remove(col)
 	columns = ','.join(columns)
 
 	# Get list of index associated with the table:
-	cursor.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name=?", [table])
+	cursor.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name=?;", [table])
 	index = cursor.fetchall()
 	index_names = [row[0] for row in index]
 	index_sql = [row[1] for row in index]
@@ -807,8 +808,8 @@ def sqlite_drop_column(conn, table, col):
 	cursor.execute("PRAGMA foreign_keys;")
 	current_foreign_keys = cursor.fetchone()[0]
 
-	#BEGIN TRANSACTION;
-	#cursor.execute('BEGIN')
+	# Start a transaction:
+	cursor.execute('BEGIN TRANSACTION;')
 	try:
 		cursor.execute("PRAGMA foreign_keys=off;")
 
@@ -816,9 +817,9 @@ def sqlite_drop_column(conn, table, col):
 		for name in index_names:
 			cursor.execute("DROP INDEX {0:s};".format(name))
 
-		cursor.execute("ALTER TABLE {table:s} RENAME TO {table:s}_backup;".format(table=table))
-		cursor.execute("CREATE TABLE {table:s} AS SELECT {columns:s} FROM {table:s}_backup;".format(table=table, columns=columns))
-		cursor.execute("DROP TABLE {table:s}_backup;".format(table=table))
+		cursor.execute(f"ALTER TABLE {table:s} RENAME TO {table:s}_backup;")
+		cursor.execute(f"CREATE TABLE {table:s} AS SELECT {columns:s} FROM {table:s}_backup;")
+		cursor.execute(f"DROP TABLE {table:s}_backup;")
 
 		# Recreate all index associated with table:
 		for sql in index_sql:
@@ -829,4 +830,4 @@ def sqlite_drop_column(conn, table, col):
 		conn.rollback()
 		raise
 	finally:
-		cursor.execute("PRAGMA foreign_keys=%s;" % current_foreign_keys)
+		cursor.execute(f"PRAGMA foreign_keys={current_foreign_keys};")

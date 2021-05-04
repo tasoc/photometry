@@ -48,14 +48,17 @@ def main():
 	group = parser.add_argument_group('Filter which targets to run')
 	group.add_argument('--all', help='Run all stars, one by one. Please consider using the MPI program instead.', action='store_true')
 	group.add_argument('-r', '--random', help='Run on random target from TODO-list.', action='store_true')
-	group.add_argument('--priority', type=int, help='Priority of target.', nargs='?', default=None)
-	group.add_argument('--starid', type=int, help='TIC identifier of target.', nargs='?', default=None)
-	group.add_argument('--datasource', type=str, choices=('ffi', 'tpf'), default=None, help='Data-source to load.', )
-	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, help='TESS Camera. Default is to run all cameras.')
-	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, help='TESS CCD. Default is to run all CCDs.')
-	group.add_argument('--cadence', type=int, choices=(20,120,600,1800), default=None, help='Observing cadence. Default is to run all cadences.')
+	group.add_argument('--priority', type=int, default=None, action='append', help='Priority of target.')
+	group.add_argument('--starid', type=int, default=None, action='append', help='TIC identifier of target.')
+	group.add_argument('--sector', type=int, default=None, action='append', help='TESS Sector. Default is to run all Sectors.')
+	group.add_argument('--cadence', type=int, choices=(20,120,600,1800), default=None, action='append', help='Observing cadence. Default is to run all cadences.')
+	group.add_argument('--camera', type=int, choices=(1,2,3,4), default=None, action='append', help='TESS Camera. Default is to run all cameras.')
+	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, action='append', help='TESS CCD. Default is to run all CCDs.')
+	group.add_argument('--datasource', type=str, choices=('ffi', 'tpf'), default=None, help='Data-source to load.')
+	group.add_argument('--tmag_min', type=float, default=None, help='Lower/bright limit on Tmag.')
+	group.add_argument('--tmag_max', type=float, default=None, help='Upper/faint limit on Tmag.')
 
-	parser.add_argument('--version', type=int, help='Data release number to store in output files.', nargs='?', default=None)
+	parser.add_argument('--version', type=int, required=True, help='Data release number to store in output files.')
 	parser.add_argument('--output', type=str, help='Directory to put lightcurves into.', nargs='?', default=None)
 	parser.add_argument('input_folder', type=str, help='Directory to create catalog files in.', nargs='?', default=None)
 	args = parser.parse_args()
@@ -104,12 +107,15 @@ def main():
 
 	# Constraints on which targets to process:
 	constraints = {
+		'priority': args.priority,
+		'starid': args.starid,
+		'sector': args.sector,
+		'cadence': args.cadence,
 		'camera': args.camera,
 		'ccd': args.ccd,
-		'cadence': args.cadence,
 		'datasource': args.datasource,
-		'starid': args.starid,
-		'priority': args.priority
+		'tmag_min': args.tmag_min,
+		'tmag_max': args.tmag_max,
 	}
 
 	# Create partial function of tessphot, setting the common keywords:

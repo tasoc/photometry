@@ -11,7 +11,55 @@ import os
 import sqlite3
 import logging
 import json
+from numpy import atleast_1d
 from . import STATUS, utilities
+
+#--------------------------------------------------------------------------------------------------
+def build_constraints(priority=None, starid=None, sector=None, cadence=None,
+	camera=None, ccd=None, cbv_area=None, datasource=None, tmag_min=None, tmag_max=None):
+	"""
+	Build constraints for database query from given parameters.
+
+	Parameters:
+		priority (int, optional): Only return task matching this priority.
+		starid (int, optional): Only return tasks matching this starid.
+		sector (int, optional): Only return tasks matching this Sector.
+		cadence (int, optional): Only return tasks matching this cadence.
+		camera (int, optional): Only return tasks matching this camera.
+		ccd (int, optional): Only return tasks matching this CCD.
+
+	Returns:
+		list: List of strings containing constraints for database. The constraints should be
+			joined with "AND" to have the desired effect.
+	"""
+
+	constraints = []
+	if priority is not None:
+		constraints.append('todolist.priority IN (' + ','.join([str(int(c)) for c in atleast_1d(priority)]) + ')')
+	if starid is not None:
+		constraints.append('todolist.starid IN (' + ','.join([str(int(c)) for c in atleast_1d(starid)]) + ')')
+	if sector is not None:
+		constraints.append('todolist.sector IN (' + ','.join([str(int(c)) for c in atleast_1d(sector)]) + ')')
+	if cadence == 'ffi':
+		constraints.append("todolist.datasource='ffi'")
+	elif cadence is not None:
+		constraints.append('todolist.cadence IN (' + ','.join([str(int(c)) for c in atleast_1d(cadence)]) + ')')
+	if camera is not None:
+		constraints.append('todolist.camera IN (' + ','.join([str(int(c)) for c in atleast_1d(camera)]) + ')')
+	if ccd is not None:
+		constraints.append('todolist.ccd IN (' + ','.join([str(int(c)) for c in atleast_1d(ccd)]) + ')')
+	if cbv_area is not None:
+		constraints.append('todolist.cbv_area IN (' + ','.join([str(int(c)) for c in atleast_1d(cbv_area)]) + ')')
+
+	if tmag_min is not None:
+		constraints.append(f'todolist.tmag >= {tmag_min:f}')
+	if tmag_max is not None:
+		constraints.append(f'todolist.tmag <= {tmag_max:f}')
+
+	if datasource is not None:
+		constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
+
+	return constraints
 
 #--------------------------------------------------------------------------------------------------
 class TaskManager(object):
@@ -117,12 +165,14 @@ class TaskManager(object):
 		existing_columns = [r['name'] for r in self.cursor.fetchall()]
 		if 'cadence' not in existing_columns:
 			self.logger.debug("Adding CADENCE column to todolist")
+			self.cursor.execute("BEGIN TRANSACTION;")
 			self.cursor.execute("ALTER TABLE todolist ADD COLUMN cadence INTEGER DEFAULT NULL;")
 			self.cursor.execute("UPDATE todolist SET cadence=1800 WHERE datasource='ffi' AND sector < 27;")
 			self.cursor.execute("UPDATE todolist SET cadence=600 WHERE datasource='ffi' AND sector >= 27 AND sector <= 55;")
 			self.cursor.execute("UPDATE todolist SET cadence=120 WHERE datasource!='ffi' AND sector < 27;")
 			self.cursor.execute("SELECT COUNT(*) AS antal FROM todolist WHERE cadence IS NULL;")
 			if self.cursor.fetchone()['antal'] > 0:
+				self.close()
 				raise ValueError("TODO-file does not contain CADENCE information and it could not be determined automatically. Please recreate TODO-file.")
 			self.conn.commit()
 
@@ -143,6 +193,7 @@ class TaskManager(object):
 			# new column after creation, by finding keywords in other columns.
 			# This can be a pretty slow process, but it only has to be done once.
 			self.logger.debug("Adding method_used column to diagnostics")
+			self.cursor.execute("BEGIN TRANSACTION;")
 			self.cursor.execute("ALTER TABLE diagnostics ADD COLUMN method_used TEXT NOT NULL DEFAULT 'aperture';")
 			for m in ('aperture', 'halo', 'psf', 'linpsf'):
 				self.cursor.execute("UPDATE diagnostics SET method_used=? WHERE priority IN (SELECT priority FROM todolist WHERE method=?);", [m, m])
@@ -162,21 +213,18 @@ class TaskManager(object):
 		# Add additional constraints from the user input and build SQL query:
 		if cleanup_constraints:
 			if isinstance(cleanup_constraints, dict):
-				cc = cleanup_constraints.copy()
-				if cc.get('datasource'):
-					constraints.append("datasource='ffi'" if cc.pop('datasource') == 'ffi' else "datasource!='ffi'")
-				for key, val in cc.items():
-					if val is not None:
-						constraints.append(key + ' IN (%s)' % ','.join([str(v) for v in np.atleast_1d(val)]))
+				constraints += build_constraints(**cleanup_constraints)
 			else:
 				constraints += cleanup_constraints
 
 		constraints = ' AND '.join(constraints)
+		self.cursor.execute("BEGIN TRANSACTION;")
 		self.cursor.execute("DELETE FROM diagnostics WHERE priority IN (SELECT todolist.priority FROM todolist WHERE " + constraints + ");")
 		self.cursor.execute("UPDATE todolist SET status=NULL WHERE " + constraints + ";")
 		self.conn.commit()
 
 		# Analyze the tables for better query planning:
+		self.logger.debug("Analyzing database...")
 		self.cursor.execute("ANALYZE;")
 
 		# Prepare summary object:
@@ -193,6 +241,8 @@ class TaskManager(object):
 			self.summary[s.name] = 0
 		# If we are going to output summary, make sure to fill it up:
 		if self.summary_file:
+			# Ensure it is an absolute file path:
+			self.summary_file = os.path.abspath(self.summary_file)
 			# Extract information from database:
 			self.cursor.execute("SELECT status,COUNT(*) AS cnt FROM todolist GROUP BY status;")
 			for row in self.cursor.fetchall():
@@ -200,19 +250,19 @@ class TaskManager(object):
 				if row['status'] is not None:
 					self.summary[STATUS(row['status']).name] = row['cnt']
 			# Make sure the containing directory exists:
-			if not os.path.isdir(os.path.dirname(self.summary_file)):
-				os.makedirs(os.path.dirname(self.summary_file))
+			os.makedirs(os.path.dirname(self.summary_file), exist_ok=True)
 			# Write summary to file:
 			self.write_summary()
 
 		# Run a cleanup/optimization of the database before we get started:
 		if cleanup:
 			self.logger.info("Cleaning TODOLIST before run...")
+			tmp_isolevel = self.conn.isolation_level
 			try:
 				self.conn.isolation_level = None
 				self.cursor.execute("VACUUM;")
 			finally:
-				self.conn.isolation_level = ''
+				self.conn.isolation_level = tmp_isolevel
 
 	#----------------------------------------------------------------------------------------------
 	def close(self):
@@ -245,71 +295,34 @@ class TaskManager(object):
 		self.close()
 
 	#----------------------------------------------------------------------------------------------
-	def get_number_tasks(self, starid=None, camera=None, ccd=None, cadence=None, datasource=None,
-		priority=None):
+	def get_number_tasks(self, **kwargs):
 		"""
 		Get number of tasks due to be processed.
 
 		Parameters:
-			priority (int, optional): Only return task matching this priority.
-			starid (int, optional): Only return tasks matching this starid.
-			camera (int, optional): Only return tasks matching this camera.
-			ccd (int, optional): Only return tasks matching this CCD.
-			datasource (str, optional): Only return tasks matching this datasource.
+			**kwarg: Keyword arguments are passed to :func:`build_constraints`.
 
 		Returns:
 			int: Number of tasks due to be processed.
 		"""
-		constraints = []
-		if priority is not None:
-			constraints.append(f'todolist.priority={priority:d}')
-		if starid is not None:
-			constraints.append(f'todolist.starid={starid:d}')
-		if camera is not None:
-			constraints.append(f'todolist.camera={camera:d}')
-		if ccd is not None:
-			constraints.append(f'todolist.ccd={ccd:d}')
-		if cadence is not None:
-			constraints.append(f'todolist.cadence={cadence:d}')
-		if datasource is not None:
-			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
-
-		if constraints:
-			constraints = " AND " + " AND ".join(constraints)
-		else:
-			constraints = ''
-
+		constraints = build_constraints(**kwargs)
+		constraints = ' AND ' + ' AND '.join(constraints) if constraints else ''
 		self.cursor.execute("SELECT COUNT(*) AS num FROM todolist WHERE status IS NULL" + constraints + ";")
 		return int(self.cursor.fetchone()['num'])
 
 	#----------------------------------------------------------------------------------------------
-	def get_task(self, starid=None, camera=None, ccd=None, cadence=None, datasource=None,
-		priority=None):
+	def get_task(self, **kwargs):
 		"""
 		Get next task to be processed.
+
+		Parameters:
+			**kwarg: Keyword arguments are passed to :func:`build_constraints`.
 
 		Returns:
 			dict or None: Dictionary of settings for task.
 		"""
-		constraints = []
-		if priority is not None:
-			constraints.append(f'todolist.priority={priority:d}')
-		if starid is not None:
-			constraints.append(f'todolist.starid={starid:d}')
-		if camera is not None:
-			constraints.append(f'todolist.camera={camera:d}')
-		if ccd is not None:
-			constraints.append(f'todolist.ccd={ccd:d}')
-		if cadence is not None:
-			constraints.append(f'todolist.cadence={cadence:d}')
-		if datasource is not None:
-			constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
-
-		if constraints:
-			constraints = " AND " + " AND ".join(constraints)
-		else:
-			constraints = ''
-
+		constraints = build_constraints(**kwargs)
+		constraints = ' AND ' + ' AND '.join(constraints) if constraints else ''
 		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,cadence,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task:
@@ -334,6 +347,9 @@ class TaskManager(object):
 	def start_task(self, taskid):
 		"""
 		Mark a task as STARTED in the TODO-list.
+
+		Parameters:
+			taskid (int): ID (priority) of the task to be marked as STARTED.
 		"""
 		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (STATUS.STARTED.value, taskid))
 		self.conn.commit()

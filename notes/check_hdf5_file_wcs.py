@@ -14,8 +14,7 @@ from tqdm import tqdm
 
 if __name__ == '__main__':
 
-	with h5py.File(r'sector005_camera1_ccd3.hdf5', 'r') as hdf:
-
+	with h5py.File(r'../tests/input/sector001_camera1_ccd1.hdf5', 'r') as hdf:
 
 		refindx = hdf['wcs'].attrs['ref_frame']
 
@@ -25,10 +24,11 @@ if __name__ == '__main__':
 			refindx = int(w)
 			#print(refindx)
 
-			hdr_string = hdf['wcs']['%04d' % refindx][0]
-			if not isinstance(hdr_string, str): hdr_string = hdr_string.decode("utf-8") # For Python 3
+			hdr_string = hdf['wcs'][f'{refindx:04d}'][0]
+			#print(type(hdr_string))
+			#print(hdr_string)
 
-			hdr = fits.Header().fromstring(hdr_string)
+			hdr = fits.Header.fromstring(hdr_string)
 			#print(hdr)
 			wcs = WCS(header=hdr, relax=True) # World Coordinate system solution.
 
