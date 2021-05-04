@@ -17,7 +17,6 @@ from scipy.stats import binned_statistic
 import configparser
 import json
 import os.path
-import fnmatch
 import glob
 import re
 import itertools
