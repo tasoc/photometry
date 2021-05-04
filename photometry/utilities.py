@@ -781,15 +781,15 @@ def sqlite_drop_column(conn, table, col):
 
 	# Get a list of columns in the existing table:
 	cursor = conn.cursor()
-	cursor.execute("PRAGMA table_info({table:s})".format(table=table))
+	cursor.execute(f"PRAGMA table_info({table:s});")
 	columns = [col[1] for col in cursor.fetchall()]
 	if col not in columns:
-		raise ValueError("Column '%s' not found in table '%s'" % (col, table))
+		raise ValueError(f"Column '{col:s}' not found in table '{table:s}'")
 	columns.remove(col)
 	columns = ','.join(columns)
 
 	# Get list of index associated with the table:
-	cursor.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name=?", [table])
+	cursor.execute("SELECT name,sql FROM sqlite_master WHERE type='index' AND tbl_name=?;", [table])
 	index = cursor.fetchall()
 	index_names = [row[0] for row in index]
 	index_sql = [row[1] for row in index]
@@ -808,8 +808,8 @@ def sqlite_drop_column(conn, table, col):
 	cursor.execute("PRAGMA foreign_keys;")
 	current_foreign_keys = cursor.fetchone()[0]
 
-	#BEGIN TRANSACTION;
-	#cursor.execute('BEGIN')
+	# Start a transaction:
+	cursor.execute('BEGIN TRANSACTION;')
 	try:
 		cursor.execute("PRAGMA foreign_keys=off;")
 
@@ -817,9 +817,9 @@ def sqlite_drop_column(conn, table, col):
 		for name in index_names:
 			cursor.execute("DROP INDEX {0:s};".format(name))
 
-		cursor.execute("ALTER TABLE {table:s} RENAME TO {table:s}_backup;".format(table=table))
-		cursor.execute("CREATE TABLE {table:s} AS SELECT {columns:s} FROM {table:s}_backup;".format(table=table, columns=columns))
-		cursor.execute("DROP TABLE {table:s}_backup;".format(table=table))
+		cursor.execute(f"ALTER TABLE {table:s} RENAME TO {table:s}_backup;")
+		cursor.execute(f"CREATE TABLE {table:s} AS SELECT {columns:s} FROM {table:s}_backup;")
+		cursor.execute(f"DROP TABLE {table:s}_backup;")
 
 		# Recreate all index associated with table:
 		for sql in index_sql:
@@ -830,4 +830,4 @@ def sqlite_drop_column(conn, table, col):
 		conn.rollback()
 		raise
 	finally:
-		cursor.execute("PRAGMA foreign_keys=%s;" % current_foreign_keys)
+		cursor.execute(f"PRAGMA foreign_keys={current_foreign_keys};")
