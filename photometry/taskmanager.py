@@ -378,6 +378,7 @@ class TaskManager(object):
 
 		# Make changes to database:
 		additional_skipped = 0
+		self.cursor.execute("BEGIN TRANSACTION;")
 		try:
 			# Also set status of targets that were marked as "SKIPPED" by this target:
 			if 'skip_targets' in details and len(details['skip_targets']) > 0:
