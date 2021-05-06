@@ -384,10 +384,14 @@ def main():
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing files.', action='store_true')
-	parser.add_argument('-j', '--jobs', help='Maximal number of jobs to run in parallel.', type=int, default=0, nargs='?')
-	parser.add_argument('--fps', help='Frames per second of generated movie.', type=int, default=15, nargs='?')
-	parser.add_argument('--dpi', help='DPI of generated movie.', type=int, default=100, nargs='?')
-	parser.add_argument('--sector', type=int, default=None, action='append', help='TESS Sector. Default is to run all sectors.')
+	parser.add_argument('-j', '--jobs', type=int, default=0, help='Maximal number of jobs to run in parallel.')
+
+	group = parser.add_argument_group('Movie settings')
+	group.add_argument('--fps', type=int, default=15, help='Frames per second of generated movie.')
+	group.add_argument('--dpi', type=int, default=100, help='DPI of generated movie.')
+
+	group = parser.add_argument_group('Filter which FFIs to process')
+	group.add_argument('--sector', type=int, default=None, action='append', help='TESS Sector. Default is to run all sectors.')
 	parser.add_argument('files', help='Directory or HDF5 file to create movie from.', nargs='+')
 	args = parser.parse_args()
 
