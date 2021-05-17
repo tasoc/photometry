@@ -20,6 +20,11 @@ def build_constraints(priority=None, starid=None, sector=None, cadence=None,
 	"""
 	Build constraints for database query from given parameters.
 
+	For ``tmag_min`` and ``tmag_max`` constraints, these limits are put on the primary target
+	for all secondary targets. This means that a faint target will still be processed if it is
+	in the TPF of a bright target. This is because this constraint is primarily used for
+	processing bright targets separately since these require more memory.
+
 	Parameters:
 		priority (int, optional): Only return task matching this priority.
 		starid (int, optional): Only return tasks matching this starid.
@@ -27,6 +32,11 @@ def build_constraints(priority=None, starid=None, sector=None, cadence=None,
 		cadence (int, optional): Only return tasks matching this cadence.
 		camera (int, optional): Only return tasks matching this camera.
 		ccd (int, optional): Only return tasks matching this CCD.
+		cbv_area (int, optional): Only return tasks matching this CBV-AREA.
+		datasource (str, optional): Only return tasks from this datasource.
+			Choises are ``'tpf'`` and ``'ffi'``.
+		tmag_min (float, optional): Lower/bright limit on Tmag.
+		tmag_max (float, optional): Upper/faint limit on Tmag.
 
 	Returns:
 		list: List of strings containing constraints for database. The constraints should be
@@ -51,10 +61,12 @@ def build_constraints(priority=None, starid=None, sector=None, cadence=None,
 	if cbv_area is not None:
 		constraints.append('todolist.cbv_area IN (' + ','.join([str(int(c)) for c in atleast_1d(cbv_area)]) + ')')
 
-	if tmag_min is not None:
-		constraints.append(f'todolist.tmag >= {tmag_min:f}')
-	if tmag_max is not None:
-		constraints.append(f'todolist.tmag <= {tmag_max:f}')
+	if tmag_min is not None and tmag_max is not None:
+		constraints.append(f"(todolist.tmag BETWEEN {tmag_min:f} AND {tmag_max:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag BETWEEN {tmag_min:f} AND {tmag_max:f})))")
+	elif tmag_min is not None:
+		constraints.append(f"(todolist.tmag >= {tmag_max:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag >= {tmag_max:f})))")
+	elif tmag_max is not None:
+		constraints.append(f"(todolist.tmag <= {tmag_max:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag <= {tmag_max:f})))")
 
 	if datasource is not None:
 		constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")

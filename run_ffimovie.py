@@ -422,6 +422,10 @@ def main():
 		args.files = find_hdf5_files(run_full_directory, sector=to_tuple(args.sector))
 		logger.info("Found %d HDF5 files in directory '%s'", len(args.files), run_full_directory)
 
+	# Stop if there are no files to process:
+	if len(args.files) == 0:
+		return
+
 	tqdm_settings = {
 		'disable': None if logger.isEnabledFor(logging.INFO) else True,
 		'total': len(args.files),
