@@ -1,6 +1,6 @@
 Task Manager (``photometry.TaskManager``)
 =========================================
 
-.. autoclass:: photometry.TaskManager
+.. automodule:: photometry.taskmanager
 	:undoc-members:
 	:inherited-members:
