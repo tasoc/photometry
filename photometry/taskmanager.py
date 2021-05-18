@@ -64,7 +64,7 @@ def build_constraints(priority=None, starid=None, sector=None, cadence=None,
 	if tmag_min is not None and tmag_max is not None:
 		constraints.append(f"(todolist.tmag BETWEEN {tmag_min:f} AND {tmag_max:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag BETWEEN {tmag_min:f} AND {tmag_max:f})))")
 	elif tmag_min is not None:
-		constraints.append(f"(todolist.tmag >= {tmag_max:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag >= {tmag_max:f})))")
+		constraints.append(f"(todolist.tmag >= {tmag_min:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag >= {tmag_min:f})))")
 	elif tmag_max is not None:
 		constraints.append(f"(todolist.tmag <= {tmag_max:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag <= {tmag_max:f})))")
 
