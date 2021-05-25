@@ -41,6 +41,8 @@ def build_constraints(priority=None, starid=None, sector=None, cadence=None,
 	Returns:
 		list: List of strings containing constraints for database. The constraints should be
 			joined with "AND" to have the desired effect.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
 	constraints = []
@@ -61,12 +63,13 @@ def build_constraints(priority=None, starid=None, sector=None, cadence=None,
 	if cbv_area is not None:
 		constraints.append('todolist.cbv_area IN (' + ','.join([str(int(c)) for c in atleast_1d(cbv_area)]) + ')')
 
-	if tmag_min is not None and tmag_max is not None:
-		constraints.append(f"(todolist.tmag BETWEEN {tmag_min:f} AND {tmag_max:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag BETWEEN {tmag_min:f} AND {tmag_max:f})))")
-	elif tmag_min is not None:
-		constraints.append(f"(todolist.tmag >= {tmag_min:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag >= {tmag_min:f})))")
-	elif tmag_max is not None:
-		constraints.append(f"(todolist.tmag <= {tmag_max:f} OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag <= {tmag_max:f})))")
+	if tmag_min is not None or tmag_max is not None:
+		# To avoid having three separate cases, we join all cases by
+		# putting in dummy upper and lower bounds in case they are
+		# not provided. The values should be outside the range on any normal stars:
+		tmag_min = -99 if tmag_min is None else tmag_min
+		tmag_max = 99 if tmag_max is None else tmag_max
+		constraints.append(f"((todolist.datasource NOT LIKE 'tpf:%' AND todolist.tmag BETWEEN {tmag_min:f} AND {tmag_max:f}) OR (todolist.datasource LIKE 'tpf:%' AND CAST(SUBSTR(todolist.datasource,5) AS INTEGER) IN (SELECT DISTINCT starid FROM todolist t2 WHERE t2.datasource='tpf' AND t2.tmag BETWEEN {tmag_min:f} AND {tmag_max:f})))")
 
 	if datasource is not None:
 		constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
@@ -100,6 +103,8 @@ class TaskManager(object):
 
 		Raises:
 			FileNotFoundError: If TODO-file could not be found.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
 		self.overwrite = overwrite
@@ -170,6 +175,7 @@ class TaskManager(object):
 			FOREIGN KEY (skipped_by) REFERENCES todolist(priority) ON DELETE RESTRICT ON UPDATE CASCADE
 		);""")
 		self.cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS diagnostics_lightcurve_idx ON diagnostics (lightcurve);")
+		self.cursor.execute("CREATE INDEX IF NOT EXISTS todolist_datasource_idx ON todolist (datasource);")
 		self.conn.commit()
 
 		# This is only for backwards compatibility.
