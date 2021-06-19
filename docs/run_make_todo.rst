@@ -8,4 +8,5 @@
 Command help
 ------------
 
-.. program-output:: python ../photometry/run_make_todo.py --help
+.. program-output:: python run_make_todo.py --help
+	:cwd: ../
