@@ -4,4 +4,3 @@
 .. automodule:: run_tessphot_mpi
 	:no-members:
 	:no-undoc-members:
-

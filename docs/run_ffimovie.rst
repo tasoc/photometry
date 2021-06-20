@@ -8,4 +8,5 @@
 Command help
 ------------
 
-.. program-output:: python ../photometry/run_ffimovie.py --help
+.. program-output:: python run_ffimovie.py --help
+	:cwd: ../

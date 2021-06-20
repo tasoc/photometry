@@ -8,4 +8,5 @@
 Command help
 ------------
 
-.. program-output:: python ../photometry/run_tessphot.py --help
+.. program-output:: python run_tessphot.py --help
+	:cwd: ../
