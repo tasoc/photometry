@@ -48,7 +48,6 @@ jobs:
         # exit-zero treats all errors as warnings.
         flake8 --exit-zero
 
-
   # Run unit tests on Linux, OSX and Windows
   pytest:
     needs: flake8
@@ -134,7 +133,6 @@ jobs:
       with:
         env_vars: OS,PYTHON
 
-
   # Use sphinx to build the documentation
   docs:
     name: Build documentation
@@ -175,7 +173,7 @@ jobs:
     #  run: |
     #    sphinx-build -a -W --no-color -b coverage -d docs/_build/doctrees docs docs/_build/coverage
 
-
+  # Release tagged commits to:
   release:
     name: Create release
     if: startsWith( github.ref, 'refs/tags/v' )
