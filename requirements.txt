@@ -4,8 +4,8 @@ flake8
 flake8-tabs >= 2.3.2
 flake8-builtins
 flake8-logging-format
-numpy == 1.19.4
-scipy == 1.5.2
+numpy == 1.19.5
+scipy == 1.5.4
 matplotlib == 3.3.2
 astropy == 4.1
 PyYAML
