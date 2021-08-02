@@ -11,6 +11,11 @@ on:
   schedule:
     - cron: '0 6 1 * *'  # once a month in the morning
 
+# Change default shell to bash for all OS:
+defaults:
+  run:
+    shell: bash
+
 jobs:
   # Use the `flake8` tool to check for syntax errors
   flake8:
@@ -36,7 +41,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip wheel
+        python -m pip install --upgrade pip wheel setuptools
         grep "numpy" requirements.txt | xargs -I {} pip install "{}"
         pip install -r requirements.txt
 
@@ -111,13 +116,13 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip wheel
+        python -m pip install --upgrade pip wheel setuptools
         grep "numpy" requirements.txt | xargs -I {} pip install "{}"
         pip install -r requirements.txt
         pip install codecov pytest-cov
 
     - name: Setup MPI
-      if: matrix.os == 'ubuntu-latest'
+      if: runner.os == 'Linux'
       run: |
         sudo apt-get install -y openmpi-bin libopenmpi-dev
         pip install mpi4py
@@ -160,7 +165,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip wheel
+        python -m pip install --upgrade pip wheel setuptools
         grep "numpy" requirements.txt | xargs -I {} pip install "{}"
         pip install -r requirements.txt
         pip install -r requirements-docs.txt
@@ -214,7 +219,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m pip install --upgrade pip wheel
+        python -m pip install --upgrade pip wheel setuptools
         grep "numpy" requirements.txt | xargs -I {} pip install "{}"
         pip install -r requirements.txt
 

@@ -761,6 +761,9 @@ class LoggerWriter(object):
 		if message.strip() != '':
 			self.logger.log(self.level, message)
 
+	def flush(self):
+		self.logger.flush()
+
 #--------------------------------------------------------------------------------------------------
 def sqlite_drop_column(conn, table, col):
 	"""
