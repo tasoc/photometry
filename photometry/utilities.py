@@ -762,7 +762,7 @@ class LoggerWriter(object):
 			self.logger.log(self.level, message)
 
 	def flush(self):
-		self.logger.flush()
+		pass
 
 #--------------------------------------------------------------------------------------------------
 def sqlite_drop_column(conn, table, col):
