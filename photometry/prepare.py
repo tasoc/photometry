@@ -140,6 +140,14 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		'fletcher32': True
 	}
 	imgchunks = (64, 64)
+	# Commons settings for HDF5 datasets containing strings:
+	# Note: Fletcher32 filter does not work with variable length strings.
+	args_strings = {
+		'dtype': h5py.special_dtype(vlen=bytes),
+		'compression': 'lzf',
+		'shuffle': True,
+		'fletcher32': False
+	}
 
 	# If no sectors are provided, find all the available FFI files and figure out
 	# which sectors they are all from:
@@ -351,7 +359,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 
 				# Save list of file paths to the HDF5 file:
 				filenames = [os.path.basename(fname).rstrip('.gz').encode('ascii', 'strict') for fname in files]
-				hdf.require_dataset('imagespaths', (numfiles,), data=filenames, dtype=h5py.special_dtype(vlen=bytes), **args)
+				hdf.require_dataset('imagespaths', (numfiles,), data=filenames, **args_strings)
 
 				is_tess = False
 				attributes = {
@@ -444,7 +452,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					# Save the World Coordinate System of each image:
 					# Check if the WCS actually works for each image, and if not, set it to an empty string
 					if dset_name not in wcs:
-						dset = wcs.create_dataset(dset_name, (1,), dtype=h5py.special_dtype(vlen=bytes), **args)
+						dset = wcs.create_dataset(dset_name, (1,), **args_strings)
 
 						# Test the World Coordinate System solution.
 						w = WCS(header=hdr, relax=True)
