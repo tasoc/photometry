@@ -1475,7 +1475,7 @@ class BasePhotometry(object):
 
 		# Versions:
 		hdu.header['PROCVER'] = (__version__, 'Version of photometry pipeline')
-		hdu.header['FILEVER'] = ('1.4', 'File format version')
+		hdu.header['FILEVER'] = ('1.5', 'File format version')
 		hdu.header['DATA_REL'] = (self.data_rel, 'Data release number')
 		hdu.header['VERSION'] = (version, 'Version of the processing')
 		hdu.header['PHOTMET'] = (self.method, 'Photometric method used')

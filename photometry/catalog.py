@@ -179,7 +179,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 					sector INTEGER NOT NULL,
 					camera INTEGER NOT NULL,
 					ccd INTEGER NOT NULL,
-					ticver INTEGER NOT NULL,
+					ticver TEXT NOT NULL,
 					reference_time DOUBLE PRECISION NOT NULL,
 					epoch DOUBLE PRECISION NOT NULL,
 					coord_buffer DOUBLE PRECISION NOT NULL,
@@ -249,6 +249,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 				logger.info(footprint)
 
 				# Save settings to SQLite:
+				# TODO: TIC Version hard-coded to TIC-8.2. This should obviously be changed when TIC is updated
 				cursor.execute("INSERT INTO settings (sector,camera,ccd,reference_time,epoch,coord_buffer,footprint,camera_centre_ra,camera_centre_dec,ticver) VALUES (?,?,?,?,?,?,?,?,?,?);", (
 					sector,
 					camera,
@@ -259,7 +260,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 					footprint,
 					camera_centre_ra,
 					camera_centre_dec,
-					8 # TODO: TIC Version hard-coded to TIC-8. This should obviously be changed when TIC is updated
+					'8.2'
 				))
 				conn.commit()
 
@@ -380,7 +381,7 @@ def download_catalogs(input_folder, sector, camera=None, ccd=None):
 			continue
 
 		# URL for the missing catalog file:
-		url = f'https://tasoc.dk/pipeline/catalogs/tic8/sector{sector:03d}/{fname:s}'
+		url = f'https://tasoc.dk/pipeline/catalogs/tic82/sector{sector:03d}/{fname:s}'
 
 		# Download the file using the utilities function:
 		download_file(url, fpath, desc=f'Catalog S{sector:d}-{camera:d}-{ccd:d}')
