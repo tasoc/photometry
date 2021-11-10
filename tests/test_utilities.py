@@ -8,9 +8,15 @@ Tests of photometry.utilities.
 
 import pytest
 import os.path
-import numpy as np
+import random
+import logging
 import sqlite3
 import configparser
+import tempfile
+import numpy as np
+import requests
+import responses
+import httpretty
 import conftest # noqa: F401
 import photometry.utilities as u
 
@@ -443,6 +449,147 @@ def test_sqlite_drop_column(factory, foreign_keys):
 
 		with pytest.raises(RuntimeError):
 			u.sqlite_drop_column(conn, 'tbl', 'col_e')
+
+#--------------------------------------------------------------------------------------------------
+def test_download_file(caplog):
+	"""Test downloading of file, with mocking of HTTP requests"""
+	with tempfile.TemporaryDirectory() as tmpdir:
+
+		fpath = os.path.join(tmpdir, 'nevercreated.txt')
+		assert not os.path.exists(fpath), "File already exists"
+
+		url = 'https://tasoc.dk/foobar.json'
+		with responses.RequestsMock() as rsps:
+			rsps.add(responses.GET, url, status=500)
+
+			with caplog.at_level(logging.CRITICAL): # Silence logger error
+				with pytest.raises(requests.exceptions.HTTPError):
+					u.download_file(url, fpath)
+
+		# The output file should not exist after failure:
+		assert not os.path.exists(fpath), "File shouldn't exist"
+
+		# Test server not providing correct content-length header:
+		with responses.RequestsMock() as rsps:
+			rsps.add(responses.GET, url, status=200,
+				body='{}',
+				content_type='application/json',
+				headers={'content-length': '1234567890'})
+
+			with caplog.at_level(logging.CRITICAL): # Silence logger error
+				with pytest.raises(RuntimeError):
+					u.download_file(url, fpath)
+
+		# The output file should not exist after failure:
+		assert not os.path.exists(fpath), "File shouldn't exist"
+
+		# The body text that should be returned by a successful response:
+		body = '{"random":' + str(random.randrange(1, 100000000)) + '}'
+
+		# Try with a successful response:
+		url = 'https://tasoc.dk/foobar.json'
+		fpath = os.path.join(tmpdir, 'foobar.json')
+		assert not os.path.exists(fpath), "File already exists"
+		with responses.RequestsMock() as rsps:
+			rsps.add(responses.GET, url, status=200,
+				body=body,
+				content_type='application/json',
+				auto_calculate_content_length=True)
+			u.download_file(url, fpath)
+
+		# The file should now exist and contain the body of the response:
+		assert os.path.isfile(fpath)
+
+		# Check the file contents:
+		with open(fpath, 'r') as fid:
+			filecontents = fid.read()
+		assert filecontents == body
+
+#--------------------------------------------------------------------------------------------------
+def test_download_file_retries(caplog):
+	"""
+	Test retrying downloading of file, with mocking of HTTP requests
+
+	Because of an issue with the "responses" package, we are instead
+	using the "httpretty" package here:
+	https://github.com/getsentry/responses/issues/135
+
+	Ideally we would like to avoid this dependence, but there is no
+	other way arround it right now.
+	"""
+
+	# The number of retries allowed in utilities.download_file:
+	max_retries = 3
+
+	with tempfile.TemporaryDirectory() as tmpdir:
+
+		fpath = os.path.join(tmpdir, 'nevercreated.txt')
+		assert not os.path.exists(fpath), "File already exists"
+
+		url = 'https://tasoc.dk/nevercreated.json'
+		with httpretty.enabled(allow_net_connect=False):
+			httpretty.register_uri(httpretty.GET, url, responses=[
+				httpretty.Response(body='{"message": "HTTPretty :)"}', status=429),
+				httpretty.Response(body='{"message": "HTTPretty :)"}', status=200),
+			])
+
+			u.download_file(url, fpath)
+
+			# The file should now have been downloaded:
+			assert os.path.exists(fpath), "File should exist"
+
+			# And we should have made 2 HTTP requests, becuse we did one retry:
+			assert len(httpretty.latest_requests()) == 2
+
+			# Reset and make "server" even less responsive:
+			httpretty.reset()
+			httpretty.register_uri(httpretty.GET, url, responses=[
+				httpretty.Response(body='{"message": "HTTPretty :)"}', status=429),
+				httpretty.Response(body='{"message": "HTTPretty :)"}', status=429),
+				httpretty.Response(body='{"message": "HTTPretty :)"}', status=500),
+				httpretty.Response(body='{"message": "HTTPretty :)"}', status=500),
+				httpretty.Response(body='{"message": "HTTPretty :)"}', status=200),
+			])
+
+			# Try again, but now we should end up with a RetryError:
+			with caplog.at_level(logging.CRITICAL): # Silence logger error
+				with pytest.raises(requests.exceptions.RetryError):
+					u.download_file(url, fpath)
+
+			# We should have done one more request than the maximum number of retries:
+			assert len(httpretty.latest_requests()) == max_retries + 1
+
+#--------------------------------------------------------------------------------------------------
+def test_download_parallel():
+	"""Test parallel downloading of files, with mocking of HTTP requests"""
+
+	# The body text that should be returned by a successful response:
+	body_success = '{"random":' + str(random.randrange(1, 100000000)) + '}'
+
+	with tempfile.TemporaryDirectory() as tmpdir:
+
+		url = 'https://tasoc.dk/foobar.json'
+		urls = [
+			[url, os.path.join(tmpdir, 'foobar1.json')],
+			[url, os.path.join(tmpdir, 'foobar2.json')],
+		]
+
+		with responses.RequestsMock() as rsps:
+			rsps.add(responses.GET, url, status=200,
+				body=body_success,
+				content_type='application/json',
+				auto_calculate_content_length=True)
+
+			u.download_parallel(urls)
+
+		# The files should now exist and contain the body of the response:
+		for url, fpath in urls:
+			assert os.path.isfile(fpath)
+
+			# Check the file contents:
+			with open(fpath, 'r') as fid:
+				filecontents = fid.read()
+			assert filecontents == body_success
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

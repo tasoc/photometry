@@ -22,6 +22,8 @@ import re
 import itertools
 from functools import lru_cache
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 import concurrent.futures
 from threading import Lock
 from collections import defaultdict
@@ -620,21 +622,37 @@ def download_file(url, destination, desc=None, timeout=60,
 		position_holders[tqdm_settings['position']] = True
 		position_lock.release()
 
+	# Strategy for retrying failing requests several times
+	# with a small increasing sleep in between:
+	retry_strategy = Retry(
+		total=3,
+		backoff_factor=1,
+		status_forcelist=[413, 429, 500, 502, 503, 504],
+		allowed_methods=['HEAD', 'GET'],
+	)
+	adapter = HTTPAdapter(max_retries=retry_strategy)
+
 	try:
-		# Start stream from URL and throw an error for bad status codes:
-		response = requests.get(url, stream=True, allow_redirects=True, timeout=timeout)
-		response.raise_for_status()
+		with requests.Session() as http:
+			http.mount("https://", adapter)
+			http.mount("http://", adapter)
 
-		total_size = int(response.headers.get('content-length', 0))
-		block_size = 1024
+			# Start stream from URL and throw an error for bad status codes:
+			response = http.get(url, stream=True, allow_redirects=True, timeout=timeout)
+			response.raise_for_status()
 
-		with open(destination, 'wb') as handle:
-			with tqdm.tqdm(total=total_size, **tqdm_settings) as pbar:
-				for block in response.iter_content(block_size):
-					handle.write(block)
-					pbar.update(len(block))
+			total_size = response.headers.get('content-length', None)
+			if total_size is not None:
+				total_size = int(total_size)
+			block_size = 1024
 
-		if os.path.getsize(destination) != total_size:
+			with open(destination, 'wb') as handle:
+				with tqdm.tqdm(total=total_size, **tqdm_settings) as pbar:
+					for block in response.iter_content(block_size):
+						handle.write(block)
+						pbar.update(len(block))
+
+		if total_size is not None and os.path.getsize(destination) != total_size:
 			raise RuntimeError("File not downloaded correctly")
 
 	except: # noqa: E722, pragma: no cover
