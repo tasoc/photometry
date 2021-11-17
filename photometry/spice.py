@@ -49,7 +49,7 @@ class TESS_SPICE(object):
 		'TESS_EPH_PRE_LONG_2019045_01.bsp',
 		'TESS_EPH_PRE_LONG_2019364_21.bsp',
 		'TESS_EPH_PRE_LONG_2021028_21.bsp',
-		'TESS_EPH_PRE_LONG_2021256_21.bsp',
+		'TESS_EPH_PRE_LONG_2021305_21.bsp',
 		# Definite kernels of TESS's actual position:
 		#'TESS_EPH_DEF_2018004_01.bsp', # Does not contain any information
 		#'TESS_EPH_DEF_2018080_01.bsp', # Only contains information from before launch of TESS (??)
