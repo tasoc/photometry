@@ -853,12 +853,11 @@ class BasePhotometry(object):
 		if self._pixelflags_cube is None:
 			# We can't used the _loac_cube function here, since we always have
 			# to load from the HDF5 file, even though we are running an TPF.
+			ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+			ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
+			ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
+			ic2 = self._stamp[3] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
 			if self._pixelflags_cube_full is None:
-				ir1 = self._stamp[0] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-				ir2 = self._stamp[1] - self.hdf['images'].attrs.get('PIXEL_OFFSET_ROW', 0)
-				ic1 = self._stamp[2] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
-				ic2 = self._stamp[3] - self.hdf['images'].attrs.get('PIXEL_OFFSET_COLUMN', 44)
-
 				# We dont have an in-memory version of the full cube, so let us
 				# create the cube by loading the cutouts of each image:
 				cube = np.empty((ir2-ir1, ic2-ic1, len(self.hdf['time'])), dtype='uint8')
