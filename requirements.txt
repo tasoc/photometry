@@ -1,11 +1,11 @@
 pytest
 pytest-mpl
 flake8
-flake8-tabs !=2.3.0,!=2.3.1
+flake8-tabs >= 2.3.2
 flake8-builtins
 flake8-logging-format
-numpy == 1.19.2
-scipy == 1.5.2
+numpy == 1.19.5
+scipy == 1.5.4
 matplotlib == 3.3.2
 astropy == 4.1
 PyYAML
@@ -18,6 +18,8 @@ statsmodels == 0.12.1
 opencv-python-headless == 4.5.1.48
 psycopg2-binary
 requests >= 2.5
+responses
+httpretty
 astroquery >= 0.4 # Needed for halophot
 autograd == 1.3 # Needed for halophot
 future == 0.16.0 # Needed for halophot

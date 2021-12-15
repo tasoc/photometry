@@ -24,7 +24,7 @@ if __name__ == '__main__':
 	zp_reftime = 2458497.374306
 
 	# The maximum sector to go up to (i.e. we dont have reliable SPICE kernels after this):
-	max_sector = 35
+	max_sector = 41
 
 	# Create time axis:
 	launch = Time('2018-04-18T18:51:00', format='isot', scale='utc')

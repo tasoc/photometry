@@ -26,7 +26,7 @@ def test_aperturephotometry(SHARED_INPUT_DIR, datasource):
 		with AperturePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, plot=True, datasource=datasource, **DUMMY_KWARG) as pho:
 
 			pho.photometry()
-			filepath = pho.save_lightcurve()
+			filepath = pho.save_lightcurve(version=99)
 			print( pho.lightcurve )
 
 			# It should set the status to one of these:
@@ -55,6 +55,17 @@ def test_aperturephotometry(SHARED_INPUT_DIR, datasource):
 
 			# Test the outputted FITS file:
 			with fits.open(filepath, mode='readonly') as hdu:
+				# Check the number of extensions is correct:
+				assert len(hdu) == 4
+				assert isinstance(hdu[0], fits.PrimaryHDU)
+				assert hdu[0].data is None
+				assert isinstance(hdu[1], fits.BinTableHDU)
+				assert hdu[1].header['EXTNAME'] == 'LIGHTCURVE'
+				assert isinstance(hdu[2], fits.ImageHDU)
+				assert hdu[2].header['EXTNAME'] == 'SUMIMAGE'
+				assert isinstance(hdu[3], fits.ImageHDU)
+				assert hdu[3].header['EXTNAME'] == 'APERTURE'
+
 				# Should be the same vectors in FITS as returned in Table:
 				np.testing.assert_allclose(pho.lightcurve['time'], hdu[1].data['TIME'])
 				np.testing.assert_allclose(pho.lightcurve['timecorr'], hdu[1].data['TIMECORR'])
@@ -70,6 +81,19 @@ def test_aperturephotometry(SHARED_INPUT_DIR, datasource):
 				assert np.all(ap >= 0), "Negative values in aperture image"
 				assert np.any(ap & 2 != 0), "No photometric mask set"
 				assert np.any(ap & 8 != 0), "No position mask set"
+
+				# Test the generated header:
+				hdr = hdu[0].header
+				assert hdr['TICID'] == DUMMY_TARGET
+				assert hdr['OBJECT'] == 'TIC ' + str(DUMMY_TARGET)
+				assert hdr['SECTOR'] == DUMMY_KWARG['sector']
+				assert hdr['CAMERA'] == DUMMY_KWARG['camera']
+				assert hdr['CCD'] == DUMMY_KWARG['ccd']
+				assert hdr['PHOTMET'] == 'aperture'
+				assert hdr['TICVER'] == '8.2'
+				assert hdr['FILEVER'] == '1.5'
+				assert hdr['VERSION'] == 99
+				assert hdr['DATAVAL'] == 0
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])

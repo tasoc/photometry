@@ -8,4 +8,5 @@
 Command help
 ------------
 
-.. program-output:: python ../photometry/run_prepare_photometry.py --help
+.. program-output:: python run_prepare_photometry.py --help
+	:cwd: ../
