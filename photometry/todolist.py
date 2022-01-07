@@ -386,12 +386,14 @@ def make_todo(input_folder=None, sectors=None, cameras=None, ccds=None, overwrit
 			output_file = output_file + '.sqlite'
 		todo_file = output_file
 
-	if os.path.exists(todo_file):
-		if overwrite:
+	if overwrite:
+		with contextlib.suppress(FileNotFoundError):
 			os.remove(todo_file)
-		else:
-			logger.info("TODO file already exists")
-			return
+		with contextlib.suppress(FileNotFoundError):
+			os.remove(todo_file + '-journal')
+	elif os.path.exists(todo_file):
+		logger.info("TODO file already exists")
+		return
 
 	# Settings:
 	settings = load_settings()

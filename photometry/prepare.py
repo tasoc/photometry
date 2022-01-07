@@ -343,7 +343,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				hdf.flush()
 
 				# Delete the temporary HDF5 file again:
-				if os.path.exists(tmp_hdf_file):
+				with contextlib.suppress(FileNotFoundError):
 					os.remove(tmp_hdf_file)
 
 			if len(images) < numfiles or len(wcs) < numfiles or 'sumimage' not in hdf or 'backgrounds_pixels_used' not in hdf or 'time_start' not in hdf:
@@ -636,7 +636,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					logger.info("Setting Background Shenanigans: %f sec/image", (default_timer()-tic)/numfiles)
 
 				# Delete the temporary HDF5 file again:
-				if os.path.exists(tmp_hdf_file):
+				with contextlib.suppress(FileNotFoundError):
 					os.remove(tmp_hdf_file)
 
 				logger.info("Total Background Shenanigans: %f sec/image", (default_timer()-tic_bkgshe)/numfiles)

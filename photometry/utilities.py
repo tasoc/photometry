@@ -20,6 +20,7 @@ import os.path
 import glob
 import re
 import itertools
+import contextlib
 from functools import lru_cache
 import requests
 from requests.adapters import HTTPAdapter
@@ -657,7 +658,7 @@ def download_file(url, destination, desc=None, timeout=60,
 
 	except: # noqa: E722, pragma: no cover
 		logger.exception("Could not download file")
-		if os.path.exists(destination):
+		with contextlib.suppress(FileNotFoundError):
 			os.remove(destination)
 		raise
 

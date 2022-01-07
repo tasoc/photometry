@@ -159,12 +159,12 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 
 			# Create SQLite file:
 			catalog_file = os.path.join(input_folder, f'catalog_sector{sector:03d}_camera{camera:d}_ccd{ccd:d}.sqlite')
-			if os.path.exists(catalog_file):
-				if overwrite:
+			if overwrite:
+				with contextlib.suppress(FileNotFoundError):
 					os.remove(catalog_file)
-				else:
-					logger.info("Already done")
-					continue
+			elif os.path.exists(catalog_file):
+				logger.info("Already done")
+				continue
 
 			with contextlib.closing(sqlite3.connect(catalog_file)) as conn:
 				conn.row_factory = sqlite3.Row
