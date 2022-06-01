@@ -14,7 +14,7 @@ import contextlib
 import numpy as np
 from astropy.table import Table
 import skimage
-skimage.morphology.watershed=skimage.segmentation.watershed # TODO: Fix halophot to avoid this hack
+skimage.morphology.watershed = skimage.segmentation.watershed # TODO: Fix halophot to avoid this hack
 import halophot
 from halophot.halo_tools import do_lc
 from ..plots import matplotlib, plt, plot_image, save_figure
