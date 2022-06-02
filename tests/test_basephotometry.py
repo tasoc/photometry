@@ -333,14 +333,14 @@ def test_wcs(SHARED_INPUT_DIR, datasource):
 	else:
 		hdr = fits.getheader(os.path.join(SHARED_INPUT_DIR, 'images', 'tess2018206045859-s0001-0000000260795451-0120-s_tp.fits.gz'), extname='APERTURE')
 
-	# Create the "correct" WCS from the extracted FITS header:
-	wcs_spoc = wcs.WCS(header=hdr, relax=True)
+	with warnings.catch_warnings():
+		warnings.filterwarnings('ignore', category=wcs.FITSFixedWarning)
 
-	# Run the photometry, and load the WCS from the resulting FITS file:
-	with TemporaryDirectory() as tmpdir:
-		with warnings.catch_warnings():
-			warnings.filterwarnings('ignore', category=wcs.FITSFixedWarning)
+		# Create the "correct" WCS from the extracted FITS header:
+		wcs_spoc = wcs.WCS(header=hdr, relax=True)
 
+		# Run the photometry, and load the WCS from the resulting FITS file:
+		with TemporaryDirectory() as tmpdir:
 			with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, tmpdir, datasource=datasource, **DUMMY_KWARG) as pho:
 				#pho.photometry() # Only needed for e.g. checking the output apertures - If enabled, also need to change to an actual photometry
 				cols, rows = pho.get_pixel_grid()

@@ -140,7 +140,8 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			local_maxi = np.zeros_like(flux0, dtype='bool')
 
 			# Find maxima in the basin image to use for markers:
-			local_maxi_loc = peak_local_max(distance, indices=True, exclude_border=False,
+			# Returns an array representing peak coordinates (sorted by largest first)
+			local_maxi_loc = peak_local_max(distance, exclude_border=False,
 				threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
 
 			for c in catalog:
@@ -181,8 +182,13 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			distance = ndimage.gaussian_filter(distance0, ws_blur)
 
 			# Find maxima in the basin image to use for markers:
-			local_maxi = peak_local_max(distance, indices=False, exclude_border=False,
+			# local_maxi is a boolean array shaped as image.shape
+			# with peaks present at True elements
+			# (in skimage version < 0.20 this was made with indicies=False)
+			local_maxi_idx = peak_local_max(distance, exclude_border=False,
 				threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
+			local_maxi = np.zeros_like(distance, dtype='bool')
+			local_maxi[tuple(local_maxi_idx.T)] = True
 
 		# If masks of saturated pixels are provided, clean out in the
 		# found local maxima to make sure only one is found within
