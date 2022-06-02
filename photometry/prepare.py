@@ -16,8 +16,9 @@ import multiprocessing
 import itertools
 import functools
 import contextlib
+import warnings
 from astropy.io import fits
-from astropy.wcs import WCS, NoConvergence
+from astropy.wcs import WCS, NoConvergence, FITSFixedWarning
 from bottleneck import replace, nanmean, nanmedian
 from timeit import default_timer
 from tqdm import tqdm, trange
@@ -455,7 +456,9 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						dset = wcs.create_dataset(dset_name, (1,), **args_strings)
 
 						# Test the World Coordinate System solution.
-						w = WCS(header=hdr, relax=True)
+						with warnings.catch_warnings():
+							warnings.filterwarnings('ignore', category=FITSFixedWarning)
+							w = WCS(header=hdr, relax=True)
 						fp = w.calc_footprint()
 						test_coords = np.atleast_2d(fp[0, :])
 						try:
