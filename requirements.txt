@@ -24,6 +24,6 @@ httpretty
 astroquery >= 0.4 # Needed for halophot
 autograd == 1.4 # Needed for halophot
 future == 0.16.0 # Needed for halophot
-halophot == 0.7.6
+halophot == 0.7.4
 jplephem >= 2.9
 spiceypy == 5.0.1

@@ -464,7 +464,7 @@ def test_download_file(caplog):
 			rsps.add(responses.GET, url, status=500)
 
 			with caplog.at_level(logging.CRITICAL): # Silence logger error
-				with pytest.raises(MaxRetryError): # requests.exceptions.HTTPError
+				with pytest.raises(MaxRetryError):
 					u.download_file(url, fpath)
 
 		# The output file should not exist after failure:
