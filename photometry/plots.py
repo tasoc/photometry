@@ -48,11 +48,10 @@ def plots_interactive(backend=('QtAgg', 'Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo'
 
 	for bckend in backend:
 		if bckend not in matplotlib.rcsetup.interactive_bk:
-			logger.warning("Interactive backend '%s' is not found", bckend)
+			logger.debug("Interactive backend '%s' is not found", bckend)
 			continue
 
-		# Try to change the backend, and catch errors
-		# it it didn't work:
+		# Try to change the backend, and catch errors if it didn't work:
 		try:
 			plt.switch_backend(bckend)
 		except (ModuleNotFoundError, ImportError):

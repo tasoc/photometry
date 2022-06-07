@@ -92,6 +92,9 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 	Segment clusters using Watershed.
 	"""
 
+	if ws_alg not in ('dist', 'flux'):
+		raise ValueError(f"Unknown watershed algorithm: '{ws_alg}'")
+
 	# Get logger for printing messages:
 	logger = logging.getLogger(__name__)
 
@@ -110,9 +113,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 	max_label = np.max(labels)
 
-	for i in range(len(unique_labels_ini)):
-
-		lab = list(unique_labels_ini)[i]
+	for i, lab in enumerate(unique_labels_ini):
 
 		if lab == -1 or lab == -2:
 			continue
@@ -128,10 +129,6 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			distance0 = ndimage.distance_transform_edt(Z)
 		elif ws_alg == 'flux':
 			distance0 = Z
-		else:
-			logger.error("Unknown watershed algorithm: '%s'", ws_alg)
-
-		logger.debug("Using '%s' watershed algorithm", ws_alg)
 
 		if catalog is not None:
 			# Smooth the basin image with Gaussian filter:
