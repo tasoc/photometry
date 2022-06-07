@@ -7,6 +7,7 @@ Tests of Prepare Photometry.
 """
 
 import pytest
+import logging
 import tempfile
 import h5py
 import os.path
@@ -86,7 +87,6 @@ def hdf5_file_valid(fname, sector=None, camera=None, ccd=None, Ntimes=4):
 
 #--------------------------------------------------------------------------------------------------
 def test_prepare_photometry(caplog, SHARED_INPUT_DIR):
-	import logging
 	with tempfile.NamedTemporaryFile() as tmpfile:
 		# Silence logger error (Sector reference time outside timespan of data)
 		with caplog.at_level(logging.CRITICAL):
