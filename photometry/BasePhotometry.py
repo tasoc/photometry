@@ -440,12 +440,14 @@ class BasePhotometry(object):
 				frame='icrs'
 			)
 
+			# Change the timestamps back to uncorrected JD (TDB) in the TESS frame:
+			time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
+
+			intv = Time([time_nocorr[0], time_nocorr[-1]], 2457000, format='jd', scale='tdb')
+
 			# Use the SPICE kernels to get accurate positions of TESS, to be used in calculating
 			# the light-travel-time corrections:
-			with TESS_SPICE() as knl:
-				# Change the timestamps back to uncorrected JD (TDB) in the TESS frame:
-				time_nocorr = np.asarray(self.lightcurve['time'] - self.lightcurve['timecorr'])
-
+			with TESS_SPICE(intv=intv) as knl:
 				# Use SPICE kernels to get new barycentric time correction for the stars coordinates:
 				tm, tc = knl.barycorr(time_nocorr + 2457000, star_coord)
 				self.lightcurve['time'] = tm - 2457000

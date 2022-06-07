@@ -9,18 +9,44 @@ Tests of SPICE kernels with TESS to find barycentric time correction for FFIs.
 import os.path
 import logging
 import numpy as np
+from functools import lru_cache
 import astropy.constants as const
 import astropy.coordinates as coord
 from astropy.time import Time
+from astropy.table import Table
 import astropy.units as u
 from astropy.version import major as astropy_major_version
 import spiceypy
 import hashlib
-from .utilities import download_parallel
+from .utilities import download_parallel, to_tuple
 
 #--------------------------------------------------------------------------------------------------
 class InadequateSpiceError(Exception):
 	pass
+
+#--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=1)
+def load_kernel_files_table():
+	"""
+	List of kernels that should be loaded:
+	"""
+	tab = Table.read(os.path.join(os.path.dirname(__file__), 'data', 'spice-kernels.ecsv'),
+		format='ascii.ecsv')
+	if not isinstance(tab['tmin'], Time):
+		tab['tmin'] = Time(tab['tmin'], format='iso', scale='utc')
+	if not isinstance(tab['tmax'], Time):
+		tab['tmax'] = Time(tab['tmax'], format='iso', scale='utc')
+	return tab
+
+#--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=10)
+def _filter_kernels(intv):
+	tmin, tmax = Time(intv, format='jd', scale='utc')
+	kernels = []
+	for knl in load_kernel_files_table():
+		if knl['tmin'].mask or knl['tmax'] >= tmin or knl['tmin'] >= tmax:
+			kernels.append(knl['fname'])
+	return kernels
 
 #--------------------------------------------------------------------------------------------------
 class TESS_SPICE(object):
@@ -32,343 +58,19 @@ class TESS_SPICE(object):
 		planetary_ephemeris (string): Planetary ephemeris that is loaded. Can be passed to
 			astropy.coord.solar_system_ephemeris.set.
 		METAKERNEL (string): Path to meta-kernel currently loaded.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 	"""
 
-	# List of kernels that should be loaded:
-	kernel_files = (
-		# Planetary ephemeris and TESS clock kernels:
-		'tess2018338154046-41240_naif0012.tls',
-		'tess2018338154429-41241_de430.bsp',
-		'tess2019113195500-41374_sclk.tsc',
-		# Predictive kernels of TESS's expected position:
-		#'TESS_EPH_PRE_2YEAR_2018171_01.bsp',
-		#'TESS_EPH_PRE_LONG_2018004_01.bsp', # No informaion on TESS
-		#'TESS_EPH_PRE_LONG_2018080_01.bsp', # Only (really) providing info before launch
-		'TESS_EPH_PRE_LONG_2018109_02.bsp',
-		'TESS_EPH_PRE_LONG_2018176_01.bsp',
-		'TESS_EPH_PRE_LONG_2019045_01.bsp',
-		'TESS_EPH_PRE_LONG_2019364_21.bsp',
-		'TESS_EPH_PRE_LONG_2021028_21.bsp',
-		'TESS_EPH_PRE_LONG_2021305_21.bsp',
-		# Definite kernels of TESS's actual position:
-		#'TESS_EPH_DEF_2018004_01.bsp', # Does not contain any information
-		#'TESS_EPH_DEF_2018080_01.bsp', # Only contains information from before launch of TESS (??)
-		#'TESS_EPH_DEF_2018108_01.bsp', # Surpassed by never version below
-		'TESS_EPH_DEF_2018108_02.bsp',
-		'TESS_EPH_DEF_2018115_01.bsp',
-		'TESS_EPH_DEF_2018124_01.bsp',
-		'TESS_EPH_DEF_2018133_01.bsp',
-		'TESS_EPH_DEF_2018150_01.bsp',
-		#'TESS_EPH_DEF_2018183_01.bsp', # Overlaps 100% with other kernels
-		'TESS_EPH_DEF_2018186_01.bsp',
-		#'TESS_EPH_DEF_2018190_01.bsp', # Overlaps 100% with other kernels
-		'TESS_EPH_DEF_2018193_01.bsp',
-		#'TESS_EPH_DEF_2018197_01.bsp', # Overlaps 100% with other kernels
-		#'TESS_EPH_DEF_2018200_01.bsp', # Overlaps 100% with other kernels
-		#'TESS_EPH_DEF_2018204_01.bsp', # Overlaps 100% with other kernels
-		'TESS_EPH_DEF_2018207_01.bsp',
-		'TESS_EPH_DEF_2018211_01.bsp',
-		'TESS_EPH_DEF_2018214_01.bsp',
-		'TESS_EPH_DEF_2018218_01.bsp',
-		'TESS_EPH_DEF_2018221_01.bsp',
-		'TESS_EPH_DEF_2018225_01.bsp',
-		'TESS_EPH_DEF_2018228_01.bsp',
-		'TESS_EPH_DEF_2018232_01.bsp',
-		'TESS_EPH_DEF_2018235_01.bsp',
-		'TESS_EPH_DEF_2018239_01.bsp',
-		'TESS_EPH_DEF_2018242_01.bsp',
-		'TESS_EPH_DEF_2018246_01.bsp',
-		'TESS_EPH_DEF_2018249_01.bsp',
-		'TESS_EPH_DEF_2018253_01.bsp',
-		'TESS_EPH_DEF_2018256_01.bsp',
-		'TESS_EPH_DEF_2018260_01.bsp',
-		'TESS_EPH_DEF_2018263_01.bsp',
-		'TESS_EPH_DEF_2018268_01.bsp',
-		'TESS_EPH_DEF_2018270_01.bsp',
-		'TESS_EPH_DEF_2018274_01.bsp',
-		'TESS_EPH_DEF_2018277_01.bsp',
-		'TESS_EPH_DEF_2018282_01.bsp',
-		'TESS_EPH_DEF_2018285_01.bsp',
-		'TESS_EPH_DEF_2018288_01.bsp',
-		'TESS_EPH_DEF_2018291_01.bsp',
-		'TESS_EPH_DEF_2018295_01.bsp',
-		'TESS_EPH_DEF_2018298_01.bsp',
-		'TESS_EPH_DEF_2018302_01.bsp',
-		'TESS_EPH_DEF_2018305_01.bsp',
-		'TESS_EPH_DEF_2018309_01.bsp',
-		'TESS_EPH_DEF_2018312_01.bsp',
-		'TESS_EPH_DEF_2018316_01.bsp',
-		'TESS_EPH_DEF_2018319_01.bsp',
-		'TESS_EPH_DEF_2018323_01.bsp',
-		'TESS_EPH_DEF_2018327_01.bsp',
-		'TESS_EPH_DEF_2018330_01.bsp',
-		'TESS_EPH_DEF_2018333_01.bsp',
-		'TESS_EPH_DEF_2018337_01.bsp',
-		'TESS_EPH_DEF_2018340_01.bsp',
-		'TESS_EPH_DEF_2018344_01.bsp',
-		'TESS_EPH_DEF_2018347_01.bsp',
-		'TESS_EPH_DEF_2018351_01.bsp',
-		'TESS_EPH_DEF_2018354_01.bsp',
-		'TESS_EPH_DEF_2018358_01.bsp',
-		'TESS_EPH_DEF_2018361_01.bsp',
-		'TESS_EPH_DEF_2018365_01.bsp',
-		'TESS_EPH_DEF_2019003_01.bsp',
-		'TESS_EPH_DEF_2019007_01.bsp',
-		'TESS_EPH_DEF_2019010_01.bsp',
-		'TESS_EPH_DEF_2019014_01.bsp',
-		'TESS_EPH_DEF_2019017_01.bsp',
-		'TESS_EPH_DEF_2019021_01.bsp',
-		'TESS_EPH_DEF_2019024_01.bsp',
-		'TESS_EPH_DEF_2019028_01.bsp',
-		'TESS_EPH_DEF_2019031_01.bsp',
-		'TESS_EPH_DEF_2019035_01.bsp',
-		'TESS_EPH_DEF_2019038_01.bsp',
-		'TESS_EPH_DEF_2019042_01.bsp',
-		'TESS_EPH_DEF_2019045_01.bsp',
-		'TESS_EPH_DEF_2019049_01.bsp',
-		'TESS_EPH_DEF_2019052_01.bsp',
-		'TESS_EPH_DEF_2019056_01.bsp',
-		'TESS_EPH_DEF_2019059_01.bsp',
-		'TESS_EPH_DEF_2019063_01.bsp',
-		'TESS_EPH_DEF_2019066_01.bsp',
-		'TESS_EPH_DEF_2019070_01.bsp',
-		'TESS_EPH_DEF_2019073_01.bsp',
-		'TESS_EPH_DEF_2019077_01.bsp',
-		'TESS_EPH_DEF_2019080_01.bsp',
-		'TESS_EPH_DEF_2019084_01.bsp',
-		'TESS_EPH_DEF_2019087_01.bsp',
-		'TESS_EPH_DEF_2019091_01.bsp',
-		'TESS_EPH_DEF_2019094_01.bsp',
-		'TESS_EPH_DEF_2019098_01.bsp',
-		'TESS_EPH_DEF_2019102_01.bsp',
-		'TESS_EPH_DEF_2019105_01.bsp',
-		'TESS_EPH_DEF_2019108_01.bsp',
-		'TESS_EPH_DEF_2019112_01.bsp',
-		'TESS_EPH_DEF_2019115_01.bsp',
-		'TESS_EPH_DEF_2019119_01.bsp',
-		'TESS_EPH_DEF_2019122_01.bsp',
-		'TESS_EPH_DEF_2019126_01.bsp',
-		# New batch (2020-01-28):
-		'TESS_EPH_DEF_2019129_01.bsp',
-		'TESS_EPH_DEF_2019133_01.bsp',
-		'TESS_EPH_DEF_2019136_01.bsp',
-		'TESS_EPH_DEF_2019140_01.bsp',
-		'TESS_EPH_DEF_2019143_01.bsp',
-		'TESS_EPH_DEF_2019147_01.bsp',
-		'TESS_EPH_DEF_2019150_01.bsp',
-		'TESS_EPH_DEF_2019154_01.bsp',
-		'TESS_EPH_DEF_2019157_01.bsp',
-		'TESS_EPH_DEF_2019161_01.bsp',
-		'TESS_EPH_DEF_2019164_01.bsp',
-		'TESS_EPH_DEF_2019168_01.bsp',
-		'TESS_EPH_DEF_2019171_01.bsp',
-		'TESS_EPH_DEF_2019175_01.bsp',
-		'TESS_EPH_DEF_2019178_01.bsp',
-		'TESS_EPH_DEF_2019182_01.bsp',
-		'TESS_EPH_DEF_2019185_01.bsp',
-		'TESS_EPH_DEF_2019189_01.bsp',
-		'TESS_EPH_DEF_2019192_01.bsp',
-		'TESS_EPH_DEF_2019196_01.bsp',
-		'TESS_EPH_DEF_2019199_01.bsp',
-		'TESS_EPH_DEF_2019203_01.bsp',
-		'TESS_EPH_DEF_2019206_01.bsp',
-		'TESS_EPH_DEF_2019210_01.bsp',
-		#'TESS_EPH_DEF_2019213_01.bsp', # Surpassed by never version below
-		'TESS_EPH_DEF_2019213_02.bsp',
-		#'TESS_EPH_DEF_2019217_01.bsp', # Surpassed by never version below
-		'TESS_EPH_DEF_2019217_02.bsp',
-		#'TESS_EPH_DEF_2019220_01.bsp', # Surpassed by never version below
-		'TESS_EPH_DEF_2019220_02.bsp',
-		#'TESS_EPH_DEF_2019224_01.bsp', # Surpassed by never version below
-		'TESS_EPH_DEF_2019224_02.bsp',
-		'TESS_EPH_DEF_2019227_02.bsp',
-		'TESS_EPH_DEF_2019231_02.bsp',
-		'TESS_EPH_DEF_2019234_02.bsp',
-		'TESS_EPH_DEF_2019238_02.bsp',
-		'TESS_EPH_DEF_2019241_21.bsp',
-		'TESS_EPH_DEF_2019245_21.bsp',
-		'TESS_EPH_DEF_2019248_21.bsp',
-		'TESS_EPH_DEF_2019252_21.bsp',
-		'TESS_EPH_DEF_2019255_21.bsp',
-		'TESS_EPH_DEF_2019259_21.bsp',
-		'TESS_EPH_DEF_2019262_21.bsp',
-		'TESS_EPH_DEF_2019266_21.bsp',
-		'TESS_EPH_DEF_2019269_21.bsp',
-		'TESS_EPH_DEF_2019273_21.bsp',
-		'TESS_EPH_DEF_2019276_21.bsp',
-		'TESS_EPH_DEF_2019280_21.bsp',
-		'TESS_EPH_DEF_2019283_21.bsp',
-		'TESS_EPH_DEF_2019287_21.bsp',
-		'TESS_EPH_DEF_2019290_21.bsp',
-		'TESS_EPH_DEF_2019294_21.bsp',
-		'TESS_EPH_DEF_2019297_21.bsp',
-		'TESS_EPH_DEF_2019301_21.bsp',
-		'TESS_EPH_DEF_2019304_21.bsp',
-		'TESS_EPH_DEF_2019308_21.bsp',
-		'TESS_EPH_DEF_2019311_21.bsp',
-		'TESS_EPH_DEF_2019315_21.bsp',
-		'TESS_EPH_DEF_2019318_21.bsp',
-		'TESS_EPH_DEF_2019322_22.bsp',
-		'TESS_EPH_DEF_2019325_22.bsp',
-		'TESS_EPH_DEF_2019329_21.bsp',
-		'TESS_EPH_DEF_2019332_21.bsp',
-		'TESS_EPH_DEF_2019336_21.bsp',
-		'TESS_EPH_DEF_2019339_21.bsp',
-		'TESS_EPH_DEF_2019343_21.bsp',
-		'TESS_EPH_DEF_2019346_21.bsp',
-		'TESS_EPH_DEF_2019350_21.bsp',
-		'TESS_EPH_DEF_2019353_21.bsp',
-		'TESS_EPH_DEF_2019357_21.bsp',
-		'TESS_EPH_DEF_2019360_21.bsp',
-		'TESS_EPH_DEF_2019364_21.bsp',
-		# New batch (2020-11-11):
-		'TESS_EPH_DEF_2020002_21.bsp',
-		'TESS_EPH_DEF_2020006_21.bsp',
-		'TESS_EPH_DEF_2020009_21.bsp',
-		'TESS_EPH_DEF_2020013_21.bsp',
-		'TESS_EPH_DEF_2020016_21.bsp',
-		'TESS_EPH_DEF_2020020_21.bsp',
-		'TESS_EPH_DEF_2020023_21.bsp',
-		'TESS_EPH_DEF_2020027_21.bsp',
-		'TESS_EPH_DEF_2020030_21.bsp',
-		'TESS_EPH_DEF_2020034_21.bsp',
-		'TESS_EPH_DEF_2020037_21.bsp',
-		'TESS_EPH_DEF_2020041_21.bsp',
-		'TESS_EPH_DEF_2020044_21.bsp',
-		'TESS_EPH_DEF_2020049_21.bsp',
-		'TESS_EPH_DEF_2020051_21.bsp',
-		'TESS_EPH_DEF_2020055_21.bsp',
-		'TESS_EPH_DEF_2020058_21.bsp',
-		'TESS_EPH_DEF_2020062_21.bsp',
-		'TESS_EPH_DEF_2020065_21.bsp',
-		'TESS_EPH_DEF_2020069_21.bsp',
-		'TESS_EPH_DEF_2020072_21.bsp',
-		'TESS_EPH_DEF_2020076_21.bsp',
-		'TESS_EPH_DEF_2020079_21.bsp',
-		'TESS_EPH_DEF_2020083_21.bsp',
-		'TESS_EPH_DEF_2020086_21.bsp',
-		'TESS_EPH_DEF_2020090_21.bsp',
-		'TESS_EPH_DEF_2020093_21.bsp',
-		'TESS_EPH_DEF_2020097_21.bsp',
-		'TESS_EPH_DEF_2020100_21.bsp',
-		'TESS_EPH_DEF_2020104_21.bsp',
-		'TESS_EPH_DEF_2020111_21.bsp',
-		'TESS_EPH_DEF_2020118_21.bsp',
-		'TESS_EPH_DEF_2020125_21.bsp',
-		'TESS_EPH_DEF_2020132_21.bsp',
-		'TESS_EPH_DEF_2020139_21.bsp',
-		'TESS_EPH_DEF_2020146_21.bsp',
-		'TESS_EPH_DEF_2020153_21.bsp',
-		'TESS_EPH_DEF_2020160_21.bsp',
-		'TESS_EPH_DEF_2020167_21.bsp',
-		'TESS_EPH_DEF_2020174_21.bsp',
-		'TESS_EPH_DEF_2020181_21.bsp',
-		'TESS_EPH_DEF_2020188_21.bsp',
-		'TESS_EPH_DEF_2020195_21.bsp',
-		'TESS_EPH_DEF_2020202_21.bsp',
-		'TESS_EPH_DEF_2020209_21.bsp',
-		'TESS_EPH_DEF_2020216_21.bsp',
-		'TESS_EPH_DEF_2020223_21.bsp',
-		'TESS_EPH_DEF_2020230_21.bsp',
-		'TESS_EPH_DEF_2020237_21.bsp',
-		'TESS_EPH_DEF_2020244_21.bsp',
-		'TESS_EPH_DEF_2020251_21.bsp',
-		'TESS_EPH_DEF_2020258_21.bsp',
-		'TESS_EPH_DEF_2020265_21.bsp',
-		'TESS_EPH_DEF_2020272_21.bsp',
-		'TESS_EPH_DEF_2020279_21.bsp',
-		'TESS_EPH_DEF_2020286_21.bsp',
-		'TESS_EPH_DEF_2020293_21.bsp',
-		'TESS_EPH_DEF_2020300_21.bsp',
-		# New batch (2021-02-08):
-		#'TESS_EPH_DEF_2020307_21.bsp', # Surpassed by never version below
-		'TESS_EPH_DEF_2020307_22.bsp',
-		'TESS_EPH_DEF_2020314_22.bsp',
-		'TESS_EPH_DEF_2020321_21.bsp',
-		'TESS_EPH_DEF_2020328_21.bsp',
-		'TESS_EPH_DEF_2020335_21.bsp',
-		'TESS_EPH_DEF_2020342_21.bsp',
-		'TESS_EPH_DEF_2020349_21.bsp',
-		'TESS_EPH_DEF_2020356_21.bsp',
-		'TESS_EPH_DEF_2020363_21.bsp',
-		'TESS_EPH_DEF_2021004_21.bsp',
-		'TESS_EPH_DEF_2021011_21.bsp',
-		'TESS_EPH_DEF_2021018_21.bsp',
-		'TESS_EPH_DEF_2021021_21.bsp',
-		'TESS_EPH_DEF_2021028_21.bsp',
-		# 2021-03-15:
-		'TESS_EPH_DEF_2021035_21.bsp',
-		'TESS_EPH_DEF_2021043_21.bsp',
-		'TESS_EPH_DEF_2021050_21.bsp',
-		'TESS_EPH_DEF_2021057_21.bsp',
-		# 2021-04-30:
-		'TESS_EPH_DEF_2021063_21.bsp',
-		'TESS_EPH_DEF_2021070_21.bsp',
-		'TESS_EPH_DEF_2021074_21.bsp',
-		'TESS_EPH_DEF_2021081_21.bsp',
-		'TESS_EPH_DEF_2021088_21.bsp',
-		'TESS_EPH_DEF_2021095_21.bsp',
-		'TESS_EPH_DEF_2021102_21.bsp',
-		'TESS_EPH_DEF_2021109_21.bsp',
-		# 2021-06-23:
-		'TESS_EPH_DEF_2021116_21.bsp',
-		'TESS_EPH_DEF_2021123_21.bsp',
-		'TESS_EPH_DEF_2021127_21.bsp',
-		'TESS_EPH_DEF_2021137_21.bsp',
-		'TESS_EPH_DEF_2021144_21.bsp',
-		'TESS_EPH_DEF_2021151_21.bsp',
-		'TESS_EPH_DEF_2021158_21.bsp',
-		# 2021-07-20:
-		'TESS_EPH_DEF_2021165_21.bsp',
-		'TESS_EPH_DEF_2021172_21.bsp',
-		'TESS_EPH_DEF_2021179_21.bsp',
-		'TESS_EPH_DEF_2021186_21.bsp',
-		'TESS_EPH_DEF_2021189_21.bsp',
-		# 2021-08-04:
-		'TESS_EPH_DEF_2021193_21.bsp',
-		'TESS_EPH_DEF_2021196_21.bsp',
-		'TESS_EPH_DEF_2021200_21.bsp',
-		# 2021-09-07
-		'TESS_EPH_DEF_2021203_21.bsp',
-		'TESS_EPH_DEF_2021207_21.bsp',
-		'TESS_EPH_DEF_2021210_21.bsp',
-		'TESS_EPH_DEF_2021214_21.bsp',
-		'TESS_EPH_DEF_2021217_21.bsp',
-		'TESS_EPH_DEF_2021221_21.bsp',
-		'TESS_EPH_DEF_2021224_21.bsp',
-		'TESS_EPH_DEF_2021228_21.bsp',
-		'TESS_EPH_DEF_2021231_21.bsp',
-		'TESS_EPH_DEF_2021235_21.bsp',
-		'TESS_EPH_DEF_2021238_21.bsp',
-		# 2021-09-28:
-		'TESS_EPH_DEF_2021242_21.bsp',
-		'TESS_EPH_DEF_2021245_21.bsp',
-		'TESS_EPH_DEF_2021249_21.bsp',
-		'TESS_EPH_DEF_2021252_21.bsp',
-		'TESS_EPH_DEF_2021256_21.bsp',
-		# 2021-11-15
-		'TESS_EPH_DEF_2021259_21.bsp',
-		'TESS_EPH_DEF_2021263_21.bsp',
-		'TESS_EPH_DEF_2021266_21.bsp',
-		'TESS_EPH_DEF_2021270_21.bsp',
-		'TESS_EPH_DEF_2021273_21.bsp',
-		'TESS_EPH_DEF_2021277_21.bsp',
-		'TESS_EPH_DEF_2021280_21.bsp',
-		'TESS_EPH_DEF_2021284_21.bsp',
-		'TESS_EPH_DEF_2021287_21.bsp',
-		'TESS_EPH_DEF_2021291_21.bsp',
-		'TESS_EPH_DEF_2021294_21.bsp',
-		'TESS_EPH_DEF_2021298_21.bsp',
-		'TESS_EPH_DEF_2021301_21.bsp',
-		'TESS_EPH_DEF_2021305_21.bsp',
-	)
-
-	def __init__(self, kernels_folder=None):
+	#----------------------------------------------------------------------------------------------
+	def __init__(self, intv=None, kernels_folder=None):
 		"""
 		Parameters:
 			kernels_folder (string): If not provided, the path stored in the environment
 				variable ``TESSPHOT_SPICE_KERNELS`` is used, and if that is not set, the
 				``data/spice`` directory is used.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
 		logger = logging.getLogger(__name__)
@@ -381,35 +83,17 @@ class TESS_SPICE(object):
 		kernels_folder = os.path.abspath(kernels_folder)
 		os.makedirs(kernels_folder, exist_ok=True)
 
-		# Automatically download kernels from TASOC, if they don't already exist?
-		#urlbase = 'https://archive.stsci.edu/missions/tess/models/'
-		urlbase = 'https://tasoc.dk/pipeline/spice/'
-		downlist = []
-		for fname in self.kernel_files:
-			fpath = os.path.join(kernels_folder, fname)
-			if not os.path.exists(fpath):
-				downlist.append([urlbase + fname, fpath])
-
-		if downlist:
-			download_parallel(downlist)
+		if intv is None:
+			self.kernel_files = list(load_kernel_files_table()['fname'])
+		else:
+			if isinstance(intv, Time):
+				intv = intv.utc.jd
+			self.kernel_files = _filter_kernels(to_tuple(intv))
 
 		# Path where meta-kernel will be saved:
 		hashkey = kernels_folder + ',' + ','.join(self.kernel_files)
 		fileshash = hashlib.md5(hashkey.encode()).hexdigest()
 		self.METAKERNEL = os.path.join(kernels_folder, 'metakernel-' + fileshash + '.txt')
-
-		# Write meta-kernel to file:
-		if not os.path.exists(self.METAKERNEL):
-			with open(self.METAKERNEL, 'w') as fid:
-				fid.write("KPL/MK\n")
-				fid.write(r"\begindata" + "\n")
-				fid.write("PATH_VALUES = ('" + kernels_folder + "')\n")
-				fid.write("PATH_SYMBOLS = ('KERNELS')\n")
-				fid.write("KERNELS_TO_LOAD = (\n")
-				fid.write(",\n".join(["'$KERNELS/" + fname + "'" for fname in self.kernel_files]))
-				fid.write(")\n")
-				fid.write(r"\begintext" + "\n")
-				fid.write("End of MK file.\n")
 
 		# Because SpiceyPy loads kernels into a global memory scope (BAAAAADDDD SpiceyPy!!!),
 		# we first check if we have already loaded this into the global scope:
@@ -422,15 +106,40 @@ class TESS_SPICE(object):
 				already_loaded = True
 				break
 
-		# Define TESS object if it doesn't already exist:
-		try:
-			spiceypy.bodn2c('TESS')
-		except spiceypy.utils.exceptions.NotFoundError:
-			logger.debug("Defining TESS name in SPICE")
-			spiceypy.boddef('TESS', -95)
-
 		# Load kernels if needed:
 		if not already_loaded:
+			# Automatically download kernels from TASOC, if they don't already exist?
+			#urlbase = 'https://archive.stsci.edu/missions/tess/models/'
+			urlbase = 'https://tasoc.dk/pipeline/spice/'
+			downlist = []
+			for fname in self.kernel_files:
+				fpath = os.path.join(kernels_folder, fname)
+				if not os.path.exists(fpath):
+					downlist.append([urlbase + fname, fpath])
+
+			if downlist:
+				download_parallel(downlist)
+
+			# Write meta-kernel to file:
+			if not os.path.exists(self.METAKERNEL):
+				with open(self.METAKERNEL, 'w') as fid:
+					fid.write("KPL/MK\n")
+					fid.write(r"\begindata" + "\n")
+					fid.write("PATH_VALUES = ('" + kernels_folder + "')\n")
+					fid.write("PATH_SYMBOLS = ('KERNELS')\n")
+					fid.write("KERNELS_TO_LOAD = (\n")
+					fid.write(",\n".join(["'$KERNELS/" + fname + "'" for fname in self.kernel_files]))
+					fid.write(")\n")
+					fid.write(r"\begintext" + "\n")
+					fid.write("End of MK file.\n")
+
+			# Define TESS object if it doesn't already exist:
+			try:
+				spiceypy.bodn2c('TESS')
+			except spiceypy.utils.exceptions.NotFoundError:
+				logger.debug("Defining TESS name in SPICE")
+				spiceypy.boddef('TESS', -95)
+
 			logger.debug("Loading SPICE Meta-kernel: %s", self.METAKERNEL)
 			spiceypy.furnsh(self.METAKERNEL)
 

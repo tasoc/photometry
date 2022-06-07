@@ -259,6 +259,52 @@ def test_spice(SHARED_INPUT_DIR, starid):
 	print("="*72)
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('starid', [260795451, 267211065])
+def test_spice_with_interval(SHARED_INPUT_DIR, starid):
+
+	tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
+
+	with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
+		time_tpf = np.asarray(hdu[1].data['TIME'])
+		timecorr_tpf = np.asarray(hdu[1].data['TIMECORR'])
+
+		# Coordinates of the target as astropy SkyCoord object:
+		star_coord = coord.SkyCoord(
+			ra=hdu[0].header['RA_OBJ'],
+			dec=hdu[0].header['DEC_OBJ'],
+			unit=u.deg,
+			frame='icrs',
+			obstime=Time('J2000'),
+			pm_ra_cosdec=hdu[0].header['PMRA']*u.mas/u.yr,
+			pm_dec=hdu[0].header['PMDEC']*u.mas/u.yr,
+			radial_velocity=0*u.km/u.s
+		)
+
+	time = time_tpf - timecorr_tpf + 2457000
+
+	with TESS_SPICE() as knl:
+		num_kernels_full = len(knl.kernel_files)
+		t1 = knl.barycorr(time, star_coord)
+		p1 = knl.position_velocity(time)
+		knl.unload()
+
+	print(time)
+	print([time[0], time[-1]])
+	intv = Time([time[0], time[-1]], format='jd', scale='tdb')
+	with TESS_SPICE(intv=intv) as knl:
+		num_kernels_intv = len(knl.kernel_files)
+		t2 = knl.barycorr(time, star_coord)
+		p2 = knl.position_velocity(time)
+		knl.unload()
+
+	# There should be fewer kernels loaded when using an interval:
+	assert num_kernels_full > num_kernels_intv
+
+	# Using the interval should give exactly the same results:
+	np.testing.assert_allclose(t2, t1)
+	np.testing.assert_allclose(p2, p1)
+
+#--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
 	plots_interactive()
 	pytest.main([__file__])
