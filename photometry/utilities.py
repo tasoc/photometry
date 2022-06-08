@@ -7,13 +7,7 @@ the photometry package.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-import numpy as np
-from astropy.io import fits
-from bottleneck import move_median, nanmedian, nanmean, allnan, nanargmin, nanargmax
 import logging
-import tqdm
-from scipy.special import erf
-from scipy.stats import binned_statistic
 import configparser
 import json
 import os.path
@@ -22,12 +16,18 @@ import re
 import itertools
 import contextlib
 from functools import lru_cache
+from collections import defaultdict
+import numpy as np
+from astropy.io import fits
+from bottleneck import move_median, nanmedian, nanmean, allnan, nanargmin, nanargmax
+import tqdm
+from scipy.special import erf
+from scipy.stats import binned_statistic
 import requests
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 import concurrent.futures
 from threading import Lock
-from collections import defaultdict
 
 # Constants:
 mad_to_sigma = 1.482602218505602 #: Constant for converting from MAD to SIGMA. Constant is 1/norm.ppf(3/4)

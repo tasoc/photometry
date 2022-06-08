@@ -7,6 +7,7 @@ Tests of plots
 """
 
 import pytest
+import logging
 import os.path
 import numpy as np
 from scipy.stats import multivariate_normal
@@ -15,7 +16,7 @@ from photometry.plots import plt, plot_image, plot_image_fit_residuals, plots_in
 
 kwargs = {
 	'baseline_dir': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'correct_plots'),
-	'tolerance': 30
+	'tolerance': 20
 }
 
 #--------------------------------------------------------------------------------------------------
@@ -48,7 +49,7 @@ def test_plot_image():
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.mpl_image_compare(**kwargs)
-def test_plot_image_invalid():
+def test_plot_image_invalid(caplog):
 
 	mu = [3.5, 3]
 	x, y = np.mgrid[0:10, 0:10]
@@ -68,7 +69,13 @@ def test_plot_image_invalid():
 
 	# Run with all-NaN image:
 	gauss[:, :] = np.NaN
-	plot_image(gauss, ax=ax2, cbar='right')
+	caplog.clear()
+	with caplog.at_level(logging.WARNING):
+		plot_image(gauss, ax=ax2, cbar='right')
+	record = caplog.records[0]
+	assert record.levelname == "WARNING"
+	assert record.message == "Image is all NaN"
+
 	return fig
 
 #--------------------------------------------------------------------------------------------------
