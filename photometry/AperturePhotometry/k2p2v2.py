@@ -92,6 +92,9 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 	Segment clusters using Watershed.
 	"""
 
+	if ws_alg not in ('dist', 'flux'):
+		raise ValueError(f"Unknown watershed algorithm: '{ws_alg}'")
+
 	# Get logger for printing messages:
 	logger = logging.getLogger(__name__)
 
@@ -110,9 +113,7 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 	max_label = np.max(labels)
 
-	for i in range(len(unique_labels_ini)):
-
-		lab = list(unique_labels_ini)[i]
+	for i, lab in enumerate(unique_labels_ini):
 
 		if lab == -1 or lab == -2:
 			continue
@@ -128,10 +129,6 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			distance0 = ndimage.distance_transform_edt(Z)
 		elif ws_alg == 'flux':
 			distance0 = Z
-		else:
-			logger.error("Unknown watershed algorithm: '%s'", ws_alg)
-
-		logger.debug("Using '%s' watershed algorithm", ws_alg)
 
 		if catalog is not None:
 			# Smooth the basin image with Gaussian filter:
@@ -140,7 +137,8 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			local_maxi = np.zeros_like(flux0, dtype='bool')
 
 			# Find maxima in the basin image to use for markers:
-			local_maxi_loc = peak_local_max(distance, indices=True, exclude_border=False,
+			# Returns an array representing peak coordinates (sorted by largest first)
+			local_maxi_loc = peak_local_max(distance, exclude_border=False,
 				threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
 
 			for c in catalog:
@@ -181,8 +179,13 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 			distance = ndimage.gaussian_filter(distance0, ws_blur)
 
 			# Find maxima in the basin image to use for markers:
-			local_maxi = peak_local_max(distance, indices=False, exclude_border=False,
+			# local_maxi is a boolean array shaped as image.shape
+			# with peaks present at True elements
+			# (in skimage version < 0.20 this was made with indicies=False)
+			local_maxi_idx = peak_local_max(distance, exclude_border=False,
 				threshold_rel=ws_thres, footprint=np.ones((ws_footprint, ws_footprint)))
+			local_maxi = np.zeros_like(distance, dtype='bool')
+			local_maxi[tuple(local_maxi_idx.T)] = True
 
 		# If masks of saturated pixels are provided, clean out in the
 		# found local maxima to make sure only one is found within

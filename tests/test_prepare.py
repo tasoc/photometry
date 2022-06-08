@@ -7,6 +7,7 @@ Tests of Prepare Photometry.
 """
 
 import pytest
+import logging
 import tempfile
 import h5py
 import os.path
@@ -85,15 +86,16 @@ def hdf5_file_valid(fname, sector=None, camera=None, ccd=None, Ntimes=4):
 		assert int(hdf['images'].attrs['CADENCE']) == np.round(86400*np.median(np.diff(timestamps)))
 
 #--------------------------------------------------------------------------------------------------
-def test_prepare_photometry(SHARED_INPUT_DIR):
-
+def test_prepare_photometry(caplog, SHARED_INPUT_DIR):
 	with tempfile.NamedTemporaryFile() as tmpfile:
-		# Run prepare_photometry and save output to temp-file:
-		prepare.prepare_photometry(SHARED_INPUT_DIR,
-			sectors=1,
-			cameras=3,
-			ccds=2,
-			output_file=tmpfile.name)
+		# Silence logger error (Sector reference time outside timespan of data)
+		with caplog.at_level(logging.CRITICAL):
+			# Run prepare_photometry and save output to temp-file
+			prepare.prepare_photometry(SHARED_INPUT_DIR,
+				sectors=1,
+				cameras=3,
+				ccds=2,
+				output_file=tmpfile.name)
 
 		tmpfile.flush()
 		assert os.path.isfile(tmpfile.name + '.hdf5'), "HDF5 was not created"

@@ -18,7 +18,7 @@ import contextlib
 import warnings
 import enum
 from copy import deepcopy
-from astropy._erfa.core import ErfaWarning
+from erfa import ErfaWarning
 from astropy.io import fits
 from astropy.table import Table, Column
 from astropy import units

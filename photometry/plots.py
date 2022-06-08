@@ -29,7 +29,7 @@ matplotlib.rcParams['text.usetex'] = False
 matplotlib.rcParams['mathtext.fontset'] = 'dejavuserif'
 
 #--------------------------------------------------------------------------------------------------
-def plots_interactive(backend=('Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo', 'TkAgg')):
+def plots_interactive(backend=('QtAgg', 'Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo', 'TkAgg', 'GTK4Agg')):
 	"""
 	Change plotting to using an interactive backend.
 
@@ -48,16 +48,16 @@ def plots_interactive(backend=('Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo', 'TkAgg'
 
 	for bckend in backend:
 		if bckend not in matplotlib.rcsetup.interactive_bk:
-			logger.warning("Interactive backend '%s' is not found", bckend)
+			logger.debug("Interactive backend '%s' is not found", bckend)
 			continue
 
-		# Try to change the backend, and catch errors
-		# it it didn't work:
+		# Try to change the backend, and catch errors if it didn't work:
 		try:
 			plt.switch_backend(bckend)
 		except (ModuleNotFoundError, ImportError):
 			pass
 		else:
+			logger.debug("Interactive backend selected: %s", bckend)
 			break
 
 #--------------------------------------------------------------------------------------------------
