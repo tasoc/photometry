@@ -114,7 +114,7 @@ jobs:
       run: pytest --cov
 
     - name: Upload coverage
-      uses: codecov/codecov-action@v1
+      uses: codecov/codecov-action@v3
       with:
         env_vars: OS,PYTHON
 
@@ -194,6 +194,12 @@ jobs:
       id: vars
       run: echo ::set-output name=tag::${GITHUB_REF#refs/tags/v}
 
+    - name: Generate changelog
+      id: changelog
+      uses: metcalfc/changelog-generator@v3.0.0
+      with:
+        myToken: ${{ secrets.GITHUB_TOKEN }}
+
     - name: Create Release
       id: create_release
       uses: actions/create-release@v1
@@ -204,4 +210,8 @@ jobs:
         release_name: Version ${{ steps.vars.outputs.tag }}
         body: |
           Version ${{ steps.vars.outputs.tag }}
+
+          Changelog
+          ---------
+          ${{ steps.changelog.outputs.changelog }}
         draft: true
