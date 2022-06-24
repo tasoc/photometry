@@ -158,7 +158,12 @@ class TESS_SPICE(object):
 	#----------------------------------------------------------------------------------------------
 	def unload(self):
 		"""Unload TESS SPICE kernels from memory."""
-		spiceypy.unload(self.METAKERNEL)
+		try:
+			spiceypy.unload(self.METAKERNEL)
+		except spiceypy.exceptions.SpiceFILEOPENFAILED:
+			print(self.METAKERNEL)
+			print(' == ')
+			print([os.path.abspath(spiceypy.kdata(k, 'META')[0]) for k in range(spiceypy.ktotal('META'))])
 
 	#----------------------------------------------------------------------------------------------
 	def close(self):
