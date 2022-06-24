@@ -164,6 +164,7 @@ class TESS_SPICE(object):
 			print(self.METAKERNEL)
 			print(' == ')
 			print([os.path.abspath(spiceypy.kdata(k, 'META')[0]) for k in range(spiceypy.ktotal('META'))])
+			raise
 
 	#----------------------------------------------------------------------------------------------
 	def close(self):
