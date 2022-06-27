@@ -163,11 +163,8 @@ class TESS_SPICE(object):
 		"""Unload TESS SPICE kernels from memory."""
 		try:
 			spiceypy.unload(self.METAKERNEL)
-		except spiceypy.exceptions.SpiceFILEOPENFAILED:
-			print(self.METAKERNEL)
-			print(' == ')
-			print([spiceypy.kdata(k, 'META') for k in range(spiceypy.ktotal('META'))])
-			raise
+		except spiceypy.exceptions.SpiceFILEOPENFAILED: # pragma: nocover
+			pass
 
 	#----------------------------------------------------------------------------------------------
 	def close(self):

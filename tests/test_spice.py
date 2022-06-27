@@ -287,7 +287,6 @@ def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 		num_kernels_full = len(knl.kernel_files)
 		t1 = knl.barycorr(time, star_coord)
 		p1 = knl.position_velocity(time)
-		knl.unload()
 
 	print(time)
 	print([time[0], time[-1]])
@@ -296,7 +295,6 @@ def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 		num_kernels_intv = len(knl.kernel_files)
 		t2 = knl.barycorr(time, star_coord)
 		p2 = knl.position_velocity(time)
-		knl.unload()
 
 	# There should be fewer kernels loaded when using an interval:
 	assert num_kernels_full > num_kernels_intv
