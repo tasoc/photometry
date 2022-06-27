@@ -7,11 +7,12 @@ Download any missing data files to cache.
 """
 
 import logging
+from astropy.time import Time
 from astropy.utils import iers
 from .spice import TESS_SPICE
 
 #--------------------------------------------------------------------------------------------------
-def download_cache():
+def download_cache(testing=False):
 	"""
 	Download any missing data files to cache.
 
@@ -41,7 +42,19 @@ def download_cache():
 	# We also make sure to unload any loaded kernels again,
 	# to ensure that this function has zero effect.
 	logger.info("Downloading SPICE kernels...")
-	with TESS_SPICE() as tsp:
-		tsp.unload()
+	if testing:
+		# When downloading for testing only, add the two time-intervals
+		# corresponding to sectors 1 and 27, which are the ones needed
+		# for the test-cases.
+		intvs = [
+			Time([1325.30104564163, 1326.68855796131], 2457000, format='jd', scale='tdb'), # Sector 1
+			Time([2036.274561493, 2037.66210106632], 2457000, format='jd', scale='tdb') # Sector 27
+		]
+		for intv in intvs:
+			with TESS_SPICE(intv=intv) as tsp:
+				tsp.unload()
+	else:
+		with TESS_SPICE() as tsp:
+			tsp.unload()
 
 	logger.info("All cache data downloaded.")
