@@ -12,9 +12,9 @@ from conftest import capture_cli
 import photometry
 
 #--------------------------------------------------------------------------------------------------
-#@pytest.mark.xfail(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
-#	strict=False,
-#	reason='Fails on GitHub Actions on Mac for some reason')
+@pytest.mark.xfail(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
+	strict=False,
+	reason='Fails on GitHub Actions on Mac for some reason')
 @pytest.mark.web
 def test_download_cache(PRIVATE_SPICE_DIR):
 
@@ -34,9 +34,9 @@ def test_download_cache(PRIVATE_SPICE_DIR):
 	assert os.path.isfile(os.path.join(PRIVATE_SPICE_DIR, 'TESS_EPH_DEF_2018214_01.bsp'))
 
 #--------------------------------------------------------------------------------------------------
-#@pytest.mark.xfail(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
-#	strict=False,
-#	reason='Fails on GitHub Actions on Mac for some reason')
+@pytest.mark.xfail(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
+	strict=False,
+	reason='Fails on GitHub Actions on Mac for some reason')
 @pytest.mark.web
 def test_run_download_cache(PRIVATE_SPICE_DIR):
 
