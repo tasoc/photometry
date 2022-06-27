@@ -5,6 +5,7 @@ Tests of SPICE Kernel module.
 """
 
 import pytest
+import os
 import numpy as np
 from scipy.interpolate import interp1d
 import astropy.coordinates as coord
@@ -53,14 +54,16 @@ def test_timestamps(SHARED_INPUT_DIR, starid):
 #--------------------------------------------------------------------------------------------------
 def test_position_velocity():
 
-	with TESS_SPICE() as knl:
+	time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
+
+	intv = Time([time_nocorr[0], time_nocorr[-1]], 2457000, format='jd', scale='utc')
+
+	with TESS_SPICE(intv=intv) as knl:
 
 		# We should be able to load and close (not unload!) without
 		# affecting the results of the following:
-		with TESS_SPICE():
+		with TESS_SPICE(intv=intv):
 			pass
-
-		time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
 
 		# We should fail with a timestamp that are outside the TESS SPICE coverage:
 		# The timestamp used here is well before TESS was launched
@@ -126,9 +129,10 @@ def test_sclk2jd():
 		obstime=Time("J2000")
 	)
 
-	with TESS_SPICE() as knl:
+	desired = 1468.416666534158
 
-		desired = 1468.416666534158
+	intv = Time([desired-0.1, desired+0.1], 2457000, format='jd', scale='utc')
+	with TESS_SPICE(intv=intv) as knl:
 
 		jdtdb = knl.sclk2jd('1228946341.75')
 		time = jdtdb - 2457000
@@ -154,8 +158,10 @@ def test_sclk2jd():
 @pytest.mark.parametrize('starid', [260795451, 267211065])
 def test_spice(SHARED_INPUT_DIR, starid):
 
+	intv = Time([1325.30104564163, 1326.68855796131], 2457000, format='jd', scale='tdb')
+
 	# Initialize our home-made TESS Kernel object:
-	with TESS_SPICE() as knl:
+	with TESS_SPICE(intv=intv) as knl:
 		print("="*72)
 		print("TIC %d" % starid)
 
@@ -260,6 +266,8 @@ def test_spice(SHARED_INPUT_DIR, starid):
 	print("="*72)
 
 #--------------------------------------------------------------------------------------------------
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
+	reason='Requires full list of SPICE kernels')
 @pytest.mark.parametrize('starid', [260795451, 267211065])
 def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 
