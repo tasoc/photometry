@@ -55,7 +55,8 @@ def test_position_velocity():
 
 	with TESS_SPICE() as knl:
 
-		# We should be able to load and close without affecting the results of the following:
+		# We should be able to load and close (not unload!) without
+		# affecting the results of the following:
 		with TESS_SPICE():
 			pass
 

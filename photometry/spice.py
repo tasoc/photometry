@@ -41,10 +41,13 @@ def load_kernel_files_table():
 #--------------------------------------------------------------------------------------------------
 @lru_cache(maxsize=10)
 def _filter_kernels(intv):
-	tmin, tmax = Time(intv, format='jd', scale='utc')
+	if len(intv) != 2:
+		raise ValueError("Invalid interval")
+	tmin, tmax = sorted(Time(intv, format='jd', scale='utc'))
 	kernels = []
 	for knl in load_kernel_files_table():
-		if knl['tmin'].mask or knl['tmax'] >= tmin or knl['tmin'] >= tmax:
+		no_overlap = (knl['tmax'] < tmin) or (knl['tmin'] > tmax)
+		if knl['tmin'].mask or not no_overlap:
 			kernels.append(knl['fname'])
 	return kernels
 
@@ -163,7 +166,7 @@ class TESS_SPICE(object):
 		except spiceypy.exceptions.SpiceFILEOPENFAILED:
 			print(self.METAKERNEL)
 			print(' == ')
-			print([os.path.abspath(spiceypy.kdata(k, 'META')[0]) for k in range(spiceypy.ktotal('META'))])
+			print([spiceypy.kdata(k, 'META') for k in range(spiceypy.ktotal('META'))])
 			raise
 
 	#----------------------------------------------------------------------------------------------
