@@ -51,10 +51,10 @@ def download_cache(testing=False):
 			Time([2036.274561493, 2037.66210106632], 2457000, format='jd', scale='tdb') # Sector 27
 		]
 		for intv in intvs:
-			with TESS_SPICE(intv=intv) as tsp:
+			with TESS_SPICE(intv=intv, download=True) as tsp:
 				tsp.unload()
 	else:
-		with TESS_SPICE() as tsp:
+		with TESS_SPICE(download=True) as tsp:
 			tsp.unload()
 
 	logger.info("All cache data downloaded.")

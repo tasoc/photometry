@@ -447,7 +447,7 @@ class BasePhotometry(object):
 
 			# Use the SPICE kernels to get accurate positions of TESS, to be used in calculating
 			# the light-travel-time corrections:
-			with TESS_SPICE(intv=intv) as knl:
+			with TESS_SPICE(intv=intv, download=False) as knl:
 				# Use SPICE kernels to get new barycentric time correction for the stars coordinates:
 				tm, tc = knl.barycorr(time_nocorr + 2457000, star_coord)
 				self.lightcurve['time'] = tm - 2457000

@@ -66,12 +66,18 @@ class TESS_SPICE(object):
 	"""
 
 	#----------------------------------------------------------------------------------------------
-	def __init__(self, intv=None, kernels_folder=None):
+	def __init__(self, intv=None, kernels_folder=None, download=True):
 		"""
 		Parameters:
+			intv (Time):
 			kernels_folder (string): If not provided, the path stored in the environment
 				variable ``TESSPHOT_SPICE_KERNELS`` is used, and if that is not set, the
 				``data/spice`` directory is used.
+			download (bool): Allow download of missing SPICE kernels if needed. If ``False``,
+				an error is raised in case of a missing kernel. Default=True.
+
+		Raises:
+			ValueError: If required SPICE kernels are not available.
 
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
@@ -121,7 +127,10 @@ class TESS_SPICE(object):
 					downlist.append([urlbase + fname, fpath])
 
 			if downlist:
-				download_parallel(downlist)
+				if download:
+					download_parallel(downlist)
+				else:
+					raise ValueError("Some needed SPICE kernels are missing.")
 
 			# Write meta-kernel to file:
 			if not os.path.exists(self.METAKERNEL):
@@ -163,7 +172,7 @@ class TESS_SPICE(object):
 		"""Unload TESS SPICE kernels from memory."""
 		try:
 			spiceypy.unload(self.METAKERNEL)
-		except spiceypy.exceptions.SpiceFILEOPENFAILED: # pragma: nocover
+		except spiceypy.exceptions.SpiceFILEOPENFAILED: # pragma: no cover
 			pass
 
 	#----------------------------------------------------------------------------------------------

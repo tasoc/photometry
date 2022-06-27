@@ -57,8 +57,7 @@ def test_position_velocity():
 	time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
 
 	intv = Time([time_nocorr[0], time_nocorr[-1]], 2457000, format='jd', scale='utc')
-
-	with TESS_SPICE(intv=intv) as knl:
+	with TESS_SPICE(intv=intv, download=False) as knl:
 
 		# We should be able to load and close (not unload!) without
 		# affecting the results of the following:
@@ -161,7 +160,7 @@ def test_spice(SHARED_INPUT_DIR, starid):
 	intv = Time([1325.30104564163, 1326.68855796131], 2457000, format='jd', scale='tdb')
 
 	# Initialize our home-made TESS Kernel object:
-	with TESS_SPICE(intv=intv) as knl:
+	with TESS_SPICE(intv=intv, download=False) as knl:
 		print("="*72)
 		print("TIC %d" % starid)
 
@@ -268,6 +267,7 @@ def test_spice(SHARED_INPUT_DIR, starid):
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
 	reason='Requires full list of SPICE kernels')
+@pytest.mark.web
 @pytest.mark.parametrize('starid', [260795451, 267211065])
 def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 
@@ -291,7 +291,7 @@ def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 
 	time = time_tpf - timecorr_tpf + 2457000
 
-	with TESS_SPICE() as knl:
+	with TESS_SPICE(download=True) as knl:
 		num_kernels_full = len(knl.kernel_files)
 		t1 = knl.barycorr(time, star_coord)
 		p1 = knl.position_velocity(time)
@@ -299,7 +299,7 @@ def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 	print(time)
 	print([time[0], time[-1]])
 	intv = Time([time[0], time[-1]], format='jd', scale='tdb')
-	with TESS_SPICE(intv=intv) as knl:
+	with TESS_SPICE(intv=intv, download=False) as knl:
 		num_kernels_intv = len(knl.kernel_files)
 		t2 = knl.barycorr(time, star_coord)
 		p2 = knl.position_velocity(time)
