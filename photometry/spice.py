@@ -153,7 +153,11 @@ class TESS_SPICE(object):
 				spiceypy.boddef('TESS', -95)
 
 			logger.debug("Loading SPICE Meta-kernel: %s", self.METAKERNEL)
-			spiceypy.furnsh(self.METAKERNEL)
+			try:
+				spiceypy.furnsh(self.METAKERNEL)
+			except spiceypy.exceptions.SpiceNOSUCHFILE:
+				print(os.listdir(kernels_folder))
+				raise
 
 		# Let's make sure astropy is using the de430 kernels as well:
 		# Default is to use the same as is being used by SPOC (de430).
