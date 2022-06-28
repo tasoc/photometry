@@ -128,12 +128,15 @@ def test_sclk2jd():
 		obstime=Time("J2000")
 	)
 
-	desired = 1468.416666534158
+	# These values are "backenginered"
+	# TODO: Find exact values known from some independent source?
+	sclk = '1216587341.75'
+	desired = 1325.3726002136245
 
 	intv = Time([desired-0.1, desired+0.1], 2457000, format='jd', scale='utc')
-	with TESS_SPICE(intv=intv) as knl:
+	with TESS_SPICE(intv=intv, download=False) as knl:
 
-		jdtdb = knl.sclk2jd('1228946341.75')
+		jdtdb = knl.sclk2jd(sclk)
 		time = jdtdb - 2457000
 		diff = (time - desired)*86400
 
@@ -141,15 +144,17 @@ def test_sclk2jd():
 		print("Desired:        %.16f" % desired)
 		print("Difference:     %.6f s" % diff )
 
-		#np.testing.assert_allclose(diff, 0, atol=0.1)
+		np.testing.assert_allclose(time, desired)
 
 		time, timecorr = knl.barycorr(jdtdb, star_coord)
 		time -= 2457000
-		diff = (time - desired)*86400
+		#diff = (time - desired)*86400
 
-		print("Barycorr:       %.6f" % (timecorr*86400))
-		print("Converted time: %.16f" % time)
-		print("Difference:     %.6f s" % diff )
+		#print("Barycorr:       %.6f" % (timecorr*86400))
+		#print("Converted time: %.16f" % time)
+		#print("Difference:     %.6f s" % diff )
+
+		#np.testing.assert_allclose(diff, 0)
 
 	print("="*72)
 
