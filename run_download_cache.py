@@ -11,6 +11,7 @@ def main():
 	parser = argparse.ArgumentParser(description='Download all auxiliary data for pipeline.')
 	parser.add_argument('-d', '--debug', help='Print debug messages.', action='store_true')
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
+	parser.add_argument('--testing', help='Only download data needed for testing.', action='store_true')
 	args = parser.parse_args()
 
 	# Set logging level:
@@ -32,7 +33,7 @@ def main():
 	logger_parent.setLevel(logging_level)
 
 	# Download all data:
-	photometry.download_cache()
+	photometry.download_cache(testing=args.testing)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

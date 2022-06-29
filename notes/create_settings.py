@@ -24,7 +24,7 @@ if __name__ == '__main__':
 	zp_reftime = 2458497.374306
 
 	# The maximum sector to go up to (i.e. we dont have reliable SPICE kernels after this):
-	max_sector = 41
+	max_sector = 55
 
 	# Create time axis:
 	launch = Time('2018-04-18T18:51:00', format='isot', scale='utc')
@@ -58,7 +58,15 @@ if __name__ == '__main__':
 	sector = zp_sector
 	for i in range(indx, len(peaks), 2):
 		ax.axvline(time[peaks][i], ls='--', c='g')
-		print("\"%d\": {\"sector\": %d, \"reference_time\": %.6f, \"ffi_cadence\": ???}," % (sector, sector, time[peaks][i]))
+
+		if sector < 27:
+			ffi_cadence = 1800
+		elif sector < 55:
+			ffi_cadence = 600
+		else:
+			ffi_cadence = 200
+
+		print("\"%d\": {\"sector\": %d, \"reference_time\": %.6f, \"ffi_cadence\": %d}," % (sector, sector, time[peaks][i], ffi_cadence))
 		sector += 1
 		if sector > max_sector:
 			break

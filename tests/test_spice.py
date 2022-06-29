@@ -5,6 +5,7 @@ Tests of SPICE Kernel module.
 """
 
 import pytest
+import os
 import numpy as np
 from scipy.interpolate import interp1d
 import astropy.coordinates as coord
@@ -53,13 +54,15 @@ def test_timestamps(SHARED_INPUT_DIR, starid):
 #--------------------------------------------------------------------------------------------------
 def test_position_velocity():
 
-	with TESS_SPICE() as knl:
+	time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
 
-		# We should be able to load and close without affecting the results of the following:
-		with TESS_SPICE():
+	intv = Time([time_nocorr[0], time_nocorr[-1]], 2457000, format='jd', scale='utc')
+	with TESS_SPICE(intv=intv, download=False) as knl:
+
+		# We should be able to load and close (not unload!) without
+		# affecting the results of the following:
+		with TESS_SPICE(intv=intv):
 			pass
-
-		time_nocorr = np.array([1325.32351727, 1325.34435059, 1325.36518392, 1325.38601724])
 
 		# We should fail with a timestamp that are outside the TESS SPICE coverage:
 		# The timestamp used here is well before TESS was launched
@@ -125,11 +128,15 @@ def test_sclk2jd():
 		obstime=Time("J2000")
 	)
 
-	with TESS_SPICE() as knl:
+	# These values are "backenginered"
+	# TODO: Find exact values known from some independent source?
+	sclk = '1216587341.75'
+	desired = 1325.3726002136245
 
-		desired = 1468.416666534158
+	intv = Time([desired-0.1, desired+0.1], 2457000, format='jd', scale='utc')
+	with TESS_SPICE(intv=intv, download=False) as knl:
 
-		jdtdb = knl.sclk2jd('1228946341.75')
+		jdtdb = knl.sclk2jd(sclk)
 		time = jdtdb - 2457000
 		diff = (time - desired)*86400
 
@@ -137,15 +144,17 @@ def test_sclk2jd():
 		print("Desired:        %.16f" % desired)
 		print("Difference:     %.6f s" % diff )
 
-		#np.testing.assert_allclose(diff, 0, atol=0.1)
+		np.testing.assert_allclose(time, desired)
 
 		time, timecorr = knl.barycorr(jdtdb, star_coord)
 		time -= 2457000
-		diff = (time - desired)*86400
+		#diff = (time - desired)*86400
 
-		print("Barycorr:       %.6f" % (timecorr*86400))
-		print("Converted time: %.16f" % time)
-		print("Difference:     %.6f s" % diff )
+		#print("Barycorr:       %.6f" % (timecorr*86400))
+		#print("Converted time: %.16f" % time)
+		#print("Difference:     %.6f s" % diff )
+
+		#np.testing.assert_allclose(diff, 0)
 
 	print("="*72)
 
@@ -153,8 +162,10 @@ def test_sclk2jd():
 @pytest.mark.parametrize('starid', [260795451, 267211065])
 def test_spice(SHARED_INPUT_DIR, starid):
 
+	intv = Time([1325.30104564163, 1326.68855796131], 2457000, format='jd', scale='tdb')
+
 	# Initialize our home-made TESS Kernel object:
-	with TESS_SPICE() as knl:
+	with TESS_SPICE(intv=intv, download=False) as knl:
 		print("="*72)
 		print("TIC %d" % starid)
 
@@ -257,6 +268,53 @@ def test_spice(SHARED_INPUT_DIR, starid):
 		assert np.all(86400000*np.abs(timecorr_knl - f(time_nocorr)) < 1), "HomeMade method: More than 1 ms away"
 
 	print("="*72)
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
+	reason='Requires full list of SPICE kernels')
+@pytest.mark.web
+@pytest.mark.parametrize('starid', [260795451, 267211065])
+def test_spice_with_interval(SHARED_INPUT_DIR, starid):
+
+	tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
+
+	with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
+		time_tpf = np.asarray(hdu[1].data['TIME'])
+		timecorr_tpf = np.asarray(hdu[1].data['TIMECORR'])
+
+		# Coordinates of the target as astropy SkyCoord object:
+		star_coord = coord.SkyCoord(
+			ra=hdu[0].header['RA_OBJ'],
+			dec=hdu[0].header['DEC_OBJ'],
+			unit=u.deg,
+			frame='icrs',
+			obstime=Time('J2000'),
+			pm_ra_cosdec=hdu[0].header['PMRA']*u.mas/u.yr,
+			pm_dec=hdu[0].header['PMDEC']*u.mas/u.yr,
+			radial_velocity=0*u.km/u.s
+		)
+
+	time = time_tpf - timecorr_tpf + 2457000
+
+	with TESS_SPICE(download=True) as knl:
+		num_kernels_full = len(knl.kernel_files)
+		t1 = knl.barycorr(time, star_coord)
+		p1 = knl.position_velocity(time)
+
+	print(time)
+	print([time[0], time[-1]])
+	intv = Time([time[0], time[-1]], format='jd', scale='tdb')
+	with TESS_SPICE(intv=intv, download=False) as knl:
+		num_kernels_intv = len(knl.kernel_files)
+		t2 = knl.barycorr(time, star_coord)
+		p2 = knl.position_velocity(time)
+
+	# There should be fewer kernels loaded when using an interval:
+	assert num_kernels_full > num_kernels_intv
+
+	# Using the interval should give exactly the same results:
+	np.testing.assert_allclose(t2, t1)
+	np.testing.assert_allclose(p2, p1)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
