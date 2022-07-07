@@ -34,7 +34,7 @@ if __name__ == '__main__':
 
 	# Use SPICE kernels to get the distance between TESS and the Earth:
 	radius_earth = 6378.1370 # km
-	with TESS_SPICE() as knl:
+	with TESS_SPICE(download=True) as knl:
 		pos = knl.position(time, of='TESS', relative_to='EARTH')
 		dist = np.linalg.norm(pos, axis=1) / radius_earth
 		knl.unload()
