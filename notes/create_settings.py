@@ -13,7 +13,7 @@ from astropy.time import Time
 import sys
 if os.path.abspath(os.path.join(os.path.dirname(__file__), '..')) not in sys.path:
 	sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from photometry.spice import TESS_SPICE
+from photometry.spice import TESS_SPICE, load_kernel_files_table
 from photometry.plots import plt, plots_interactive
 
 if __name__ == '__main__':
@@ -23,14 +23,16 @@ if __name__ == '__main__':
 	zp_sector = 7
 	zp_reftime = 2458497.374306
 
-	# The maximum sector to go up to (i.e. we dont have reliable SPICE kernels after this):
-	max_sector = 55
+	# The maximum time where we have reliable SPICE kernels:
+	spicetab = load_kernel_files_table()
+	indx_def = np.asarray([f.startswith('TESS_EPH_DEF_') for f in spicetab['fname']], dtype='bool')
+	time_end = max(spicetab[indx_def]['tmax'])
+	print(f"Max time: {time_end}")
 
 	# Create time axis:
 	launch = Time('2018-04-18T18:51:00', format='isot', scale='utc')
-	time_end = Time.now()
-	dt = 900/86400
-	time = np.arange(launch.jd + 20, time_end.jd, dt)
+	dt = 300/86400
+	time = np.arange(launch.utc.jd + 20, time_end.utc.jd, dt)
 
 	# Use SPICE kernels to get the distance between TESS and the Earth:
 	radius_earth = 6378.1370 # km
@@ -48,27 +50,33 @@ if __name__ == '__main__':
 
 	# Create figure of TESS orbit with reference times marked:
 	fig, ax = plt.subplots()
-	ax.plot(time, dist)
-	ax.scatter(time[peaks], dist[peaks])
-	ax.axvline(zp_reftime, c='r')
-	ax.set_xlabel('Time (JD)')
+	ax.plot(time - 2457000, dist)
+	ax.scatter(time[peaks] - 2457000, dist[peaks])
+	ax.axvline(zp_reftime - 2457000, c='r')
+	ax.set_xlabel('Time (JD - 2457000)')
 	ax.set_ylabel('Distance (Earth radii)')
+	#ax.set_title('TESS orbit height')
+	#ax.set_xlim(2000, 2760)
 
 	# Go two orbit at a time forward and mark those peaks as the reference times for that sector:
 	sector = zp_sector
 	for i in range(indx, len(peaks), 2):
-		ax.axvline(time[peaks][i], ls='--', c='g')
-
 		if sector < 27:
 			ffi_cadence = 1800
+			reference_time = time[peaks][i]
 		elif sector < 55:
 			ffi_cadence = 600
+			reference_time = time[peaks][i]
 		else:
+			# Now TESS is doing downlinks at apogee as well as perigee,
+			# therefore we are setting the reference time 3 days before
+			# the firt apogee.
 			ffi_cadence = 200
+			reference_time = time[peaks][i] - 3
 
-		print("\"%d\": {\"sector\": %d, \"reference_time\": %.6f, \"ffi_cadence\": %d}," % (sector, sector, time[peaks][i], ffi_cadence))
+		ax.axvline(reference_time - 2457000, ls='--', c='g')
+
+		print(f'"{sector:d}": {{"sector": {sector:d}, "reference_time": {reference_time:.6f}, "ffi_cadence": {ffi_cadence:d}}},')
 		sector += 1
-		if sector > max_sector:
-			break
 
 	plt.show()

@@ -24,16 +24,16 @@ if __name__ == '__main__':
 	# List of sectors from tess.mit.edu:
 	# TODO: Are these actually in UTC?
 	sectors = [
-		[0,  datetime.strptime('04/18/18 22:51:00.338000 UTC', '%m/%d/%y %H:%M:%S.%f %Z'), '07/25/18'],
-		[1,  '07/25/18', '08/22/18'],
-		[2,  '08/22/18', '09/20/18'],
-		[3,  '09/20/18', '10/18/18'],
-		[4,  '10/18/18', '11/15/18'],
-		[5,  '11/15/18', '12/11/18'],
-		[6,  '12/11/18', '01/07/19'],
-		[7,  '01/07/19', '02/02/19'],
-		[8,  '02/02/19', '02/28/19'],
-		[9,  '02/28/19', '03/26/19'],
+		[0, datetime.strptime('04/18/18 22:51:00.338000 UTC', '%m/%d/%y %H:%M:%S.%f %Z'), '07/25/18'],
+		[1, '07/25/18', '08/22/18'],
+		[2, '08/22/18', '09/20/18'],
+		[3, '09/20/18', '10/18/18'],
+		[4, '10/18/18', '11/15/18'],
+		[5, '11/15/18', '12/11/18'],
+		[6, '12/11/18', '01/07/19'],
+		[7, '01/07/19', '02/02/19'],
+		[8, '02/02/19', '02/28/19'],
+		[9, '02/28/19', '03/26/19'],
 		[10, '03/26/19', '04/22/19'],
 		[11, '04/22/19', '05/21/19'],
 		[12, '05/21/19', '06/19/19'],
@@ -105,7 +105,7 @@ if __name__ == '__main__':
 	fig = plt.figure(figsize=(15,6), dpi=100)
 	ax = fig.add_subplot(111)
 
-	with TESS_SPICE() as ts:
+	with TESS_SPICE(download=True) as ts:
 		# This requires the "brief" utility tool
 		# https://naif.jpl.nasa.gov/naif/utilities.html
 		# TODO: There is properly a way to do this with SpiceyPy
@@ -157,6 +157,9 @@ if __name__ == '__main__':
 		ax.axvline(s[1], color='0.7', ls=':')
 		ax.text(s[1] + (s[2] - s[1])/2, k+10, '%d' % s[0], horizontalalignment='center', verticalalignment='top')
 	ax.axvline(sectors[-1][2], color='0.7', ls=':')
+
+	# Plot now:
+	ax.axvline(datetime.utcnow(), color='r', ls='--')
 
 	ax.set_xlim(left=datetime(2018, 3, 20))
 	ax.set_ylim(bottom=0)
