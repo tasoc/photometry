@@ -1,6 +1,8 @@
 ===========================
 The TASOC Photometry module
 ===========================
+.. image:: https://img.shields.io/badge/bibcode-2021AJ....162..170H-blue
+	:target: https://doi.org/10.3847/1538-3881/ac09f1
 .. image:: https://zenodo.org/badge/103402174.svg
     :target: https://zenodo.org/badge/latestdoi/103402174
 .. image:: https://github.com/tasoc/photometry/actions/workflows/tests.yml/badge.svg?branch=devel
