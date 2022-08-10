@@ -271,7 +271,7 @@ def test_spice(SHARED_INPUT_DIR, starid):
 	print("="*72)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true',
 	reason='Requires full list of SPICE kernels')
 @pytest.mark.web
 @pytest.mark.parametrize('starid', [260795451, 267211065])
@@ -318,7 +318,7 @@ def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 	np.testing.assert_allclose(p2, p1)
 
 #--------------------------------------------------------------------------------------------------
-@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true',
 	reason='Requires full list of SPICE kernels')
 @pytest.mark.web
 def test_spice_endpoints():
@@ -338,7 +338,7 @@ def test_spice_endpoints():
 
 	with TESS_SPICE(download=True) as knl:
 		# Unload all kernels:
-		knl.unload()
+		knl.unload_all()
 
 		# Make sure to load all core kernels (no tmin/tmax):
 		core_kernels = 0

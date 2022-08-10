@@ -178,6 +178,15 @@ class TESS_SPICE(object):
 			pass
 
 	#----------------------------------------------------------------------------------------------
+	def unload_all(self):
+		"""Unload all SPICE kernels from memory."""
+		for fpath in self.loaded_kernels():
+			try:
+				spiceypy.unload(fpath)
+			except spiceypy.exceptions.SpiceFILEOPENFAILED: # pragma: no cover
+				pass
+
+	#----------------------------------------------------------------------------------------------
 	def close(self):
 		"""Close SPICE object."""
 		#self.unload() # Uhh, we are being naugthy here!
