@@ -106,13 +106,37 @@ if __name__ == '__main__':
 	ax = fig.add_subplot(111)
 
 	with TESS_SPICE(download=True) as ts:
+		for k, row in enumerate(ts.time_coverage('TESS')):
+
+			fname, tmin, tmax = row
+			print(fname + "," + tmin.utc.iso + "," + tmax.utc.iso)
+
+			# Plot in different style depending on the type of kernel:
+			if 'DEF' in fname:
+				color = 'b'
+			elif 'PRE_LONG' in fname:
+				color = 'r'
+			elif 'PRE_MNVR' in fname:
+				color = 'g'
+			elif 'PRE_COMM' in fname:
+				color = 'c'
+			elif 'PRE' in fname:
+				color = 'y'
+			else:
+				print("???????")
+
+			ax.plot([tmin.datetime, tmax.datetime], [k, k], color=color, ls='-', marker='.', alpha=0.5, label=fname)
+			ax.fill_between([tmin.datetime, tmax.datetime], 0, k, color=color, alpha=0.1)
+
+		"""
+		print('-'*70)
+
 		# This requires the "brief" utility tool
 		# https://naif.jpl.nasa.gov/naif/utilities.html
 		# TODO: There is properly a way to do this with SpiceyPy
 		proc = subprocess.Popen('brief --95 -utc "' + ts.METAKERNEL + '"', shell=True, stdout=subprocess.PIPE, universal_newlines=True)
 		stdout, stderr = proc.communicate()
 		lines = stdout.split("\n")
-
 		k = -1
 		for line in lines:
 			line = line.strip()
@@ -130,25 +154,9 @@ if __name__ == '__main__':
 
 				print(fname + "," + str(dt_start) + "," + str(dt_end))
 
-				# Plot in different style depending on the type of kernel:
-				if 'DEF' in fname:
-					color = 'b'
-				elif 'PRE_LONG' in fname:
-					color = 'r'
-				elif 'PRE_MNVR' in fname:
-					color = 'g'
-				elif 'PRE_COMM' in fname:
-					color = 'c'
-				elif 'PRE' in fname:
-					color = 'y'
-				else:
-					print("???????")
-
-				ax.plot([dt_start, dt_end], [k, k], color=color, ls='-', marker='.', alpha=0.5, label=fname)
-				ax.fill_between([dt_start, dt_end], 0, k, color=color, alpha=0.1)
-
 				fpath = None
 				fname = None
+		"""
 
 		ts.unload()
 

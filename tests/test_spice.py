@@ -10,13 +10,14 @@ import numpy as np
 from scipy.interpolate import interp1d
 import astropy.coordinates as coord
 import astropy.units as u
-from astropy.time import Time
+from astropy.time import Time, TimeDelta
 from astropy.io import fits
 import h5py
 from tempfile import TemporaryDirectory
+import spiceypy
 import conftest # noqa: F401
 from photometry import AperturePhotometry
-from photometry.spice import TESS_SPICE, InadequateSpiceError
+from photometry.spice import TESS_SPICE, InadequateSpiceError, load_kernel_files_table
 from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_motion
 from photometry.plots import plt, plots_interactive
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
@@ -315,6 +316,85 @@ def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 	# Using the interval should give exactly the same results:
 	np.testing.assert_allclose(t2, t1)
 	np.testing.assert_allclose(p2, p1)
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.skipif(os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('OS','').startswith('macos'),
+	reason='Requires full list of SPICE kernels')
+@pytest.mark.web
+def test_spice_endpoints():
+
+	tab = load_kernel_files_table()
+	print(tab)
+
+	# All rows with TESS ephemeris should have start and end points:
+	for row in tab:
+		fname = str(row['fname'])
+		if (row['tmin'].mask or row['tmax'].mask) and fname.endswith('.bsp') and fname.startswith('TESS_EPH_'):
+			print("WHAT? " + fname)
+			raise ValueError(f"{fname}")
+
+	dt = TimeDelta(1, format='sec')
+	print("Time buffer: " + str(dt))
+
+	with TESS_SPICE(download=True) as knl:
+		# Unload all kernels:
+		knl.unload()
+
+		# Make sure to load all core kernels (no tmin/tmax):
+		core_kernels = 0
+		for row in tab:
+			if row['tmin'].mask or row['tmax'].mask:
+				fpath = os.path.join(knl.kernel_folder, row['fname'])
+				spiceypy.furnsh(fpath)
+				core_kernels += 1
+
+		# Loop through all non-core kernels:
+		for row in tab:
+			if row['tmin'].mask or row['tmax'].mask:
+				continue
+
+			print(row)
+
+			# Load the single TESS kernel:
+			fpath = os.path.join(knl.kernel_folder, row['fname'])
+			spiceypy.furnsh(fpath)
+
+			# Make sure we have the right number of kernels loaded:
+			assert len(knl.loaded_kernels()) == core_kernels + 1
+
+			# Time bounds for this kernel:
+			tmin = row['tmin']
+			tmax = row['tmax']
+
+			# Middle of coverage should work:
+			tmid = tmin + (tmax - tmin)/2
+			knl.position(tmid.tdb.jd)
+
+			# The following test does not work as intended.
+			# This is work-in-progress
+			"""
+			# So should the two end-points:
+			knl.position(tmin.tdb.jd)
+			knl.position(tmax.tdb.jd)
+
+			tmin = row['tmin'] - dt
+			#with pytest.raises(InadequateSpiceError):
+			try:
+				knl.position(tmin.tdb.jd)
+			except InadequateSpiceError:
+				pass
+				#print(f"{row['fname']},tmin")
+
+			tmax = row['tmax'] + dt
+			#with pytest.raises(InadequateSpiceError):
+			try:
+				knl.position(tmax.tdb.jd)
+			except InadequateSpiceError:
+				#print(f"{row['fname']},tmax")
+				pass
+			"""
+
+			spiceypy.unload(fpath)
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

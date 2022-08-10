@@ -88,6 +88,8 @@ class TESS_SPICE(object):
 		if kernels_folder is None:
 			kernels_folder = os.environ.get('TESSPHOT_SPICE_KERNELS', os.path.join(os.path.dirname(__file__), 'data', 'spice'))
 
+		self.kernel_folder = kernels_folder
+
 		# Make sure the kernel directory exists:
 		kernels_folder = os.path.abspath(kernels_folder)
 		os.makedirs(kernels_folder, exist_ok=True)
@@ -188,6 +190,24 @@ class TESS_SPICE(object):
 	#----------------------------------------------------------------------------------------------
 	def __exit__(self, *args, **kwargs):
 		self.close()
+
+	#----------------------------------------------------------------------------------------------
+	def loaded_kernels(self, kind='ALL'):
+		"""
+		Return load of currently loaded SPICE kernels.
+
+		Parameters:
+			kind (str, optional): Only return SPICE kernels of the given type. Default='ALL'.
+
+		Returns:
+			list: List of absolute paths to the SPICE kernels currently loaded into memory.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+		"""
+		knls = []
+		for k in range(spiceypy.ktotal(kind)):
+			knls.append(os.path.abspath(spiceypy.kdata(k, kind)[0]))
+		return knls
 
 	#----------------------------------------------------------------------------------------------
 	def position(self, jd, of='TESS', relative_to='EARTH'):
@@ -363,6 +383,8 @@ class TESS_SPICE(object):
 		Parameters:
 			tm (ndarray): Timestamps in UTC Julian Date (JD).
 			star_coord (SkyCoord object): Coordinates of star.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
 		# Constants in appropiate units:
@@ -398,3 +420,43 @@ class TESS_SPICE(object):
 		#print(timecorr)
 
 		return timecorr
+
+	#----------------------------------------------------------------------------------------------
+	def time_coverage(self, of='TESS'):
+		"""
+		Return table of time-coverage of loaded kernels.
+
+		Parameters:
+			of (str, optional): Object to generate table for (default='TESS').
+
+		Returns:
+			:class:`astropy.table.Table`: Table containing one row per loaded kernel
+				and the corresponding minimum and maximum time coverage.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+		"""
+
+		objid = spiceypy.bodn2c(of)
+
+		rows = []
+		for f in self.kernel_files:
+			fpath = os.path.join(self.kernel_folder, f)
+
+			try:
+				cell = spiceypy.spkcov(fpath, objid)
+			except spiceypy.exceptions.SpiceINVALIDARCHTYPE:
+				continue
+
+			ncell = spiceypy.wncard(cell)
+			if ncell == 0:
+				continue
+			elif ncell > 1:
+				raise RuntimeError("what?")
+
+			tmin, tmax = spiceypy.wnfetd(cell, 0)
+			tmin = Time(spiceypy.unitim(tmin, 'ET', 'JDTDB'), format='jd', scale='tdb')
+			tmax = Time(spiceypy.unitim(tmax, 'ET', 'JDTDB'), format='jd', scale='tdb')
+
+			rows.append([f, tmin, tmax])
+
+		return Table(rows=rows, names=['fname', 'tmin', 'tmax'])
