@@ -39,6 +39,7 @@ def main():
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
+	parser.add_argument('--no-in-memory', action='store_false', help="Do not run TaskManager completely in-memory.")
 
 	group = parser.add_argument_group('Filter which targets to run')
 	group.add_argument('--sector', type=int, default=None, action='append', help='TESS Sector. Default is to run all Sectors.')
@@ -92,7 +93,8 @@ def main():
 			}
 
 			with photometry.TaskManager(input_folder, cleanup=True, overwrite=args.overwrite,
-				cleanup_constraints=constraints, summary=os.path.join(output_folder, 'summary.json')) as tm:
+				cleanup_constraints=constraints, load_into_memory=args.no_in_memory,
+				summary=os.path.join(output_folder, 'summary.json')) as tm:
 
 				# Set level of TaskManager logger:
 				tm.logger.setLevel(logging_level)

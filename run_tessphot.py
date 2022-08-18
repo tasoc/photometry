@@ -44,6 +44,7 @@ def main():
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
 	parser.add_argument('-t', '--test', help='Use test data and ignore TESSPHOT_INPUT environment variable.', action='store_true')
 	parser.add_argument('-m', '--method', choices=('aperture', 'psf', 'linpsf', 'halo'), default=None, help='Photometric method to use.')
+	parser.add_argument('--no-in-memory', action='store_false', help="Do not run TaskManager completely in-memory.")
 
 	group = parser.add_argument_group('Filter which targets to run')
 	group.add_argument('--all', help='Run all stars, one by one. Please consider using the MPI program instead.', action='store_true')
@@ -127,7 +128,8 @@ def main():
 		version=args.version)
 
 	# Run the program:
-	with TaskManager(input_folder, overwrite=args.overwrite, cleanup_constraints=constraints) as tm:
+	with TaskManager(input_folder, overwrite=args.overwrite,
+		cleanup_constraints=constraints, load_into_memory=args.no_in_memory) as tm:
 		while True:
 			if args.random:
 				task = tm.get_random_task()

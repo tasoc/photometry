@@ -10,10 +10,30 @@ import pytest
 import os.path
 import json
 import tempfile
+import sqlite3
+from contextlib import closing
+import numpy as np
 import conftest # noqa: F401
 from photometry import TaskManager, STATUS
 
-INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
+#--------------------------------------------------------------------------------------------------
+def _make_fake_result(task):
+	result = task.copy()
+	result['status'] = STATUS.OK
+	result['time'] = 6.14
+	result['worker_wait_time'] = 2.0
+	result['method_used'] = 'aperture'
+	#result['details'] = {
+	#	'skip_targets': [261522674] # Tmag = 14.574
+	#}
+	return result
+
+#--------------------------------------------------------------------------------------------------
+def _num_saved(todo_file):
+	with closing(sqlite3.connect('file:' + todo_file + '?mode=ro', uri=True)) as conn:
+		cursor = conn.cursor()
+		cursor.execute("SELECT COUNT(*) FROM todolist WHERE status IS NOT NULL;")
+		return cursor.fetchone()[0]
 
 #--------------------------------------------------------------------------------------------------
 def test_taskmanager(PRIVATE_TODO_FILE):
@@ -62,6 +82,7 @@ def test_taskmanager(PRIVATE_TODO_FILE):
 
 #--------------------------------------------------------------------------------------------------
 def test_taskmanager_invalid():
+	INPUT_DIR = os.path.join(os.path.dirname(__file__), 'input')
 	with pytest.raises(FileNotFoundError):
 		TaskManager(os.path.join(INPUT_DIR, 'does-not-exists'))
 
@@ -197,11 +218,9 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			assert j['mean_elaptime'] is None
 
 			# Make a fake result we can save;
-			result = task.copy()
-			result['status'] = STATUS.OK
+			result = _make_fake_result(task)
 			result['time'] = 3.14
 			result['worker_wait_time'] = 1.0
-			result['method_used'] = 'aperture'
 
 			# Save the result:
 			tm.save_result(result)
@@ -239,11 +258,9 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			task = tm.get_random_task()
 			tm.start_task(task['priority'])
 
-			# Make a fake result we can save;
-			result = task.copy()
+			# Make a fake result we can save:
+			result = _make_fake_result(task)
 			result['status'] = STATUS.ERROR
-			result['time'] = 6.14
-			result['worker_wait_time'] = 2.0
 			result['method_used'] = 'halo'
 			result['details'] = {
 				'errors': ['dummy error 1', 'dummy error 2']
@@ -280,8 +297,8 @@ def test_taskmanager_summary(PRIVATE_TODO_FILE):
 			assert j['tasks_run'] == 2
 			assert j['slurm_jobid'] is None
 			assert j['last_error'] == "dummy error 1\ndummy error 2"
-			assert j['mean_elaptime'] == 3.44
-			assert j['mean_worker_waittime'] == 1.1
+			assert j['mean_elaptime'] == 3.44 # 3.14 + 0.1*(6.14-3.14)
+			assert j['mean_worker_waittime'] == 1.1 # 1.0 + 0.1*(2.0-1.0)
 
 #--------------------------------------------------------------------------------------------------
 def test_taskmanager_skip_targets1(PRIVATE_TODO_FILE):
@@ -294,15 +311,10 @@ def test_taskmanager_skip_targets1(PRIVATE_TODO_FILE):
 
 		# Make a fake result we can save:
 		tm.start_task(task['priority'])
-		result = task.copy()
-		result['status'] = STATUS.OK
-		result['time'] = 6.14
-		result['worker_wait_time'] = 2.0
-		result['method_used'] = 'aperture'
+		result = _make_fake_result(task)
 		result['details'] = {
 			'skip_targets': [261522674] # Tmag = 14.574
 		}
-
 		tm.save_result(result)
 
 		tm.cursor.execute("SELECT * FROM todolist LEFT JOIN diagnostics ON todolist.priority=diagnostics.priority WHERE todolist.priority=?;", [task['priority']])
@@ -346,11 +358,7 @@ def test_taskmanager_skip_targets2(PRIVATE_TODO_FILE):
 
 		# Make a fake result we can save;
 		tm.start_task(task['priority'])
-		result = task.copy()
-		result['status'] = STATUS.OK
-		result['time'] = 6.14
-		result['worker_wait_time'] = 2.0
-		result['method_used'] = 'aperture'
+		result = _make_fake_result(task)
 		result['details'] = {
 			'skip_targets': [267211065] # Tmag = 2.216
 		}
@@ -400,13 +408,9 @@ def test_taskmanager_skip_targets_secondary1(PRIVATE_TODO_FILE):
 
 		# Make a fake result we can save;
 		tm.start_task(task['priority'])
-		result = task.copy()
+		result = _make_fake_result(task)
 		result['datasource'] = 'tpf:267211065'
 		result['cadence'] = 120
-		result['status'] = STATUS.OK
-		result['time'] = 6.14
-		result['worker_wait_time'] = 2.0
-		result['method_used'] = 'aperture'
 		result['details'] = {
 			'skip_targets': [267211065] # Tmag = 2.216
 		}
@@ -449,13 +453,9 @@ def test_taskmanager_skip_targets_secondary2(PRIVATE_TODO_FILE):
 
 		# Make a fake result we can save;
 		tm.start_task(task['priority'])
-		result = task.copy()
+		result = _make_fake_result(task)
 		result['datasource'] = 'tpf:999999999'
 		result['cadence'] = 120
-		result['status'] = STATUS.OK
-		result['time'] = 6.14
-		result['worker_wait_time'] = 2.0
-		result['method_used'] = 'aperture'
 		result['details'] = {
 			'skip_targets': [999999999]
 		}
@@ -484,6 +484,93 @@ def test_taskmanager_skip_targets_secondary2(PRIVATE_TODO_FILE):
 		tm.cursor.execute("SELECT * FROM photometry_skipped;")
 		row = tm.cursor.fetchall()
 		assert len(row) == 0
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('interval', [
+	pytest.param(-1, marks=pytest.mark.xfail(raises=ValueError)),
+	pytest.param(-1.0, marks=pytest.mark.xfail(raises=ValueError)),
+	pytest.param(0, marks=pytest.mark.xfail(raises=ValueError)),
+	pytest.param(0.0, marks=pytest.mark.xfail(raises=ValueError)),
+	pytest.param(np.nan, marks=pytest.mark.xfail(raises=ValueError)),
+	pytest.param('nonsense', marks=pytest.mark.xfail(raises=ValueError)),
+	1,
+	1.0,
+	10000,
+	None
+])
+def test_taskmanager_backupinterval(PRIVATE_TODO_FILE, interval):
+	"""Test TaskManager with invalid backup interval"""
+	TaskManager(PRIVATE_TODO_FILE, overwrite=False, cleanup=False, backup_interval=interval)
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('in_memory', [True, False])
+def test_taskmanager_backup_manual(PRIVATE_TODO_FILE, in_memory):
+
+	chunk = 1
+
+	# Manual backup:
+	with TaskManager(PRIVATE_TODO_FILE, load_into_memory=in_memory, backup_interval=None) as tm:
+		# In order to be able to read the database while it is still open,
+		# change the locking_mode here:
+		if not in_memory:
+			tm.cursor.execute("PRAGMA locking_mode=NORMAL;")
+			tm.conn.commit()
+
+		for _ in range(3):
+			task = tm.get_task()
+			res = _make_fake_result(task)
+			tm.save_result(res)
+
+		assert _num_saved(PRIVATE_TODO_FILE) == (0 if in_memory else 3*chunk)
+
+		tm.backup()
+
+		assert _num_saved(PRIVATE_TODO_FILE) == 3*chunk
+
+	# Because we have closed the TaskManager, the on-disk file should be fully up-to-date:
+	assert _num_saved(PRIVATE_TODO_FILE) == 3*chunk
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('in_memory', [True, False])
+def test_taskmanager_backup_automatic(PRIVATE_TODO_FILE, in_memory):
+
+	chunk = 1
+
+	# Automatic backup on interval:
+	with TaskManager(PRIVATE_TODO_FILE, overwrite=True, load_into_memory=in_memory, backup_interval=2*chunk) as tm:
+		# In order to be able to read the database while it is still open,
+		# change the locking_mode here:
+		if not in_memory:
+			tm.cursor.execute("PRAGMA locking_mode=NORMAL;")
+			tm.conn.commit()
+
+		# Do a single chunk of tasks, save them and check if anything has been saved to
+		# on-disk file yet:
+		task = tm.get_task()
+		res = _make_fake_result(task)
+		tm.save_result(res)
+
+		assert _num_saved(PRIVATE_TODO_FILE) == (0 if in_memory else chunk)
+
+	# Because we have closed the TaskManager, the on-disk file should be fully up-to-date:
+	assert _num_saved(PRIVATE_TODO_FILE) == chunk
+
+	with TaskManager(PRIVATE_TODO_FILE, overwrite=False, load_into_memory=in_memory, backup_interval=2*chunk) as tm:
+		# In order to be able to read the database while it is still open,
+		# change the locking_mode here:
+		if not in_memory:
+			tm.cursor.execute("PRAGMA locking_mode=NORMAL;")
+			tm.conn.commit()
+
+		for _ in range(3):
+			task = tm.get_task()
+			res = _make_fake_result(task)
+			tm.save_result(res)
+
+		assert _num_saved(PRIVATE_TODO_FILE) == (3*chunk if in_memory else 4*chunk)
+
+	# Because we have closed the TaskManager, the on-disk file should be fully up-to-date:
+	assert _num_saved(PRIVATE_TODO_FILE) == 4*chunk
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':
