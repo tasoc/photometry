@@ -250,9 +250,9 @@ class TaskManager(object):
 			self.conn.commit()
 		if 'starid' in existing_columns:
 			# Drop this column from the diagnostics table, since the information is already in
-			# the todolist table. Use utility function for this, since SQLite does not
-			# have a DROP COLUMN mechanism directly.
-			utilities.sqlite_drop_column(self.conn, 'diagnostics', 'starid')
+			# the todolist table.
+			self.cursor.execute("ALTER TABLE diagnostics DROP COLUMN starid;")
+			self.conn.commit()
 
 		# Reset calculations with status STARTED, ABORT or ERROR:
 		# We are re-running all with error, in the hope that they will work this time around:
