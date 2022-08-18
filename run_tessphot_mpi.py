@@ -30,6 +30,7 @@ import os
 import enum
 from timeit import default_timer
 import photometry
+from photometry.utilities import to_tuple
 
 #--------------------------------------------------------------------------------------------------
 def main():
@@ -83,10 +84,10 @@ def main():
 		try:
 			# Constraints on which targets to process:
 			constraints = {
-				'sector': args.sector,
-				'cadence': args.cadence,
-				'camera': args.camera,
-				'ccd': args.ccd,
+				'sector': to_tuple(args.sector),
+				'cadence': to_tuple(args.cadence),
+				'camera': to_tuple(args.camera),
+				'ccd': to_tuple(args.ccd),
 				'datasource': args.datasource,
 				'tmag_min': args.tmag_min,
 				'tmag_max': args.tmag_max,

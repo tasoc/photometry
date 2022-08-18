@@ -33,6 +33,7 @@ import logging
 import functools
 from timeit import default_timer
 from photometry import tessphot, TaskManager
+from photometry.utilities import to_tuple
 
 #--------------------------------------------------------------------------------------------------
 def main():
@@ -108,12 +109,12 @@ def main():
 
 	# Constraints on which targets to process:
 	constraints = {
-		'priority': args.priority,
-		'starid': args.starid,
-		'sector': args.sector,
-		'cadence': args.cadence,
-		'camera': args.camera,
-		'ccd': args.ccd,
+		'priority': to_tuple(args.priority),
+		'starid': to_tuple(args.starid),
+		'sector': to_tuple(args.sector),
+		'cadence': to_tuple(args.cadence),
+		'camera': to_tuple(args.camera),
+		'ccd': to_tuple(args.ccd),
 		'datasource': args.datasource,
 		'tmag_min': args.tmag_min,
 		'tmag_max': args.tmag_max,

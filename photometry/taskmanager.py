@@ -92,7 +92,7 @@ class TaskManager(object):
 	"""
 
 	def __init__(self, todo_file, cleanup=False, overwrite=False, cleanup_constraints=None,
-		summary=None, summary_interval=100, load_into_memory=False, backup_interval=10000):
+		summary=None, summary_interval=200, load_into_memory=False, backup_interval=10000):
 		"""
 		Initialize the TaskManager which keeps track of which targets to process.
 
