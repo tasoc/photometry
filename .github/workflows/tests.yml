@@ -118,6 +118,7 @@ jobs:
     - name: Upload coverage
       uses: codecov/codecov-action@v3
       with:
+        files: coverage.xml
         env_vars: OS,PYTHON
 
   # Use sphinx to build the documentation
