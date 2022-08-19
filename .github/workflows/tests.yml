@@ -28,7 +28,7 @@ jobs:
     - name: Setup Python 3.7
       uses: actions/setup-python@v3
       with:
-        python-version: 3.7
+        python-version: '3.7'
         cache: 'pip'
 
     - name: Install dependencies
@@ -113,7 +113,7 @@ jobs:
       run: coverage run run_download_cache.py -q --testing
 
     - name: Testing
-      run: pytest --cov --cov-append
+      run: pytest --cov --cov-append --cov-report xml --cov-report term
 
     - name: Upload coverage
       uses: codecov/codecov-action@v3
@@ -134,7 +134,7 @@ jobs:
     - name: Setup Python 3.7
       uses: actions/setup-python@v3
       with:
-        python-version: 3.7
+        python-version: '3.7'
         cache: 'pip'
 
     - name: Install dependencies
