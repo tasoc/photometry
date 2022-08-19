@@ -30,6 +30,7 @@ import os
 import enum
 from timeit import default_timer
 import photometry
+from photometry.utilities import to_tuple
 
 #--------------------------------------------------------------------------------------------------
 def main():
@@ -39,6 +40,7 @@ def main():
 	parser.add_argument('-q', '--quiet', help='Only report warnings and errors.', action='store_true')
 	parser.add_argument('-o', '--overwrite', help='Overwrite existing results.', action='store_true')
 	parser.add_argument('-p', '--plot', help='Save plots when running.', action='store_true')
+	parser.add_argument('--no-in-memory', action='store_false', help="Do not run TaskManager completely in-memory.")
 
 	group = parser.add_argument_group('Filter which targets to run')
 	group.add_argument('--sector', type=int, default=None, action='append', help='TESS Sector. Default is to run all Sectors.')
@@ -82,17 +84,18 @@ def main():
 		try:
 			# Constraints on which targets to process:
 			constraints = {
-				'sector': args.sector,
-				'cadence': args.cadence,
-				'camera': args.camera,
-				'ccd': args.ccd,
+				'sector': to_tuple(args.sector),
+				'cadence': to_tuple(args.cadence),
+				'camera': to_tuple(args.camera),
+				'ccd': to_tuple(args.ccd),
 				'datasource': args.datasource,
 				'tmag_min': args.tmag_min,
 				'tmag_max': args.tmag_max,
 			}
 
 			with photometry.TaskManager(input_folder, cleanup=True, overwrite=args.overwrite,
-				cleanup_constraints=constraints, summary=os.path.join(output_folder, 'summary.json')) as tm:
+				cleanup_constraints=constraints, load_into_memory=args.no_in_memory,
+				summary=os.path.join(output_folder, 'summary.json')) as tm:
 
 				# Set level of TaskManager logger:
 				tm.logger.setLevel(logging_level)

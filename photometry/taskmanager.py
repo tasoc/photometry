@@ -11,12 +11,17 @@ import os
 import sqlite3
 import logging
 import json
+import contextlib
+import tempfile
+from functools import lru_cache
 from numpy import atleast_1d
 from . import STATUS, utilities
 
 #--------------------------------------------------------------------------------------------------
+@lru_cache(maxsize=10)
 def build_constraints(priority=None, starid=None, sector=None, cadence=None,
-	camera=None, ccd=None, cbv_area=None, datasource=None, tmag_min=None, tmag_max=None):
+	camera=None, ccd=None, cbv_area=None, datasource=None, tmag_min=None, tmag_max=None,
+	return_list=False):
 	"""
 	Build constraints for database query from given parameters.
 
@@ -74,7 +79,11 @@ def build_constraints(priority=None, starid=None, sector=None, cadence=None,
 	if datasource is not None:
 		constraints.append("todolist.datasource='ffi'" if datasource == 'ffi' else "todolist.datasource!='ffi'")
 
-	return constraints
+	# If asked for it, return the list if constraints otherwise return string
+	# which fits into the other queries done by the TaskManager:
+	if return_list:
+		return constraints
+	return ' AND ' + ' AND '.join(constraints) if constraints else ''
 
 #--------------------------------------------------------------------------------------------------
 class TaskManager(object):
@@ -83,7 +92,7 @@ class TaskManager(object):
 	"""
 
 	def __init__(self, todo_file, cleanup=False, overwrite=False, cleanup_constraints=None,
-		summary=None, summary_interval=100):
+		summary=None, summary_interval=200, load_into_memory=False, backup_interval=10000):
 		"""
 		Initialize the TaskManager which keeps track of which targets to process.
 
@@ -107,10 +116,11 @@ class TaskManager(object):
 		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 		"""
 
-		self.overwrite = overwrite
-		self.summary_file = summary
-		self.summary_interval = summary_interval
-		self.summary_counter = 0
+		if cleanup_constraints is not None and not isinstance(cleanup_constraints, (dict, list)):
+			raise ValueError("cleanup_constraints should be dict or list")
+
+		if backup_interval is not None and int(backup_interval) <= 0:
+			raise ValueError("Invalid backup_interval")
 
 		if os.path.isdir(todo_file):
 			todo_file = os.path.join(todo_file, 'todo.sqlite')
@@ -118,8 +128,14 @@ class TaskManager(object):
 		if not os.path.exists(todo_file):
 			raise FileNotFoundError('Could not find TODO-file')
 
-		if cleanup_constraints is not None and not isinstance(cleanup_constraints, (dict, list)):
-			raise ValueError("cleanup_constraints should be dict or list")
+		self.todo_file = os.path.abspath(todo_file)
+		self.overwrite = overwrite
+		self.summary_file = summary
+		self.summary_interval = None if summary_interval is None else int(summary_interval)
+		self.load_into_memory = load_into_memory
+		self.backup_interval = None if backup_interval is None else int(backup_interval)
+		self.summary_counter = 0
+		self._results_saved_counter = 0
 
 		# Setup logging:
 		formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -130,13 +146,27 @@ class TaskManager(object):
 			self.logger.addHandler(console)
 		self.logger.setLevel(logging.INFO)
 
-		# Load the SQLite file:
-		self.conn = sqlite3.connect(todo_file)
+		# Load the SQLite file (possibly into memory):
+		if self.load_into_memory:
+			self.logger.debug('Creating in-memory copy of database...')
+			self.conn = sqlite3.connect(':memory:')
+			journal_mode = 'MEMORY'
+			syncronous = 'OFF'
+			with contextlib.closing(sqlite3.connect('file:' + self.todo_file + '?mode=ro', uri=True)) as source:
+				source.backup(self.conn)
+		else:
+			self.conn = sqlite3.connect(self.todo_file)
+			journal_mode = 'TRUNCATE'
+			syncronous = 'NORMAL'
+
 		self.conn.row_factory = sqlite3.Row
 		self.cursor = self.conn.cursor()
 		self.cursor.execute("PRAGMA foreign_keys=ON;")
 		self.cursor.execute("PRAGMA locking_mode=EXCLUSIVE;")
-		self.cursor.execute("PRAGMA journal_mode=TRUNCATE;")
+		self.cursor.execute(f"PRAGMA journal_mode={journal_mode:s};")
+		self.cursor.execute(f"PRAGMA synchronous={syncronous:s};")
+		self.cursor.execute("PRAGMA temp_store=MEMORY;")
+		self.conn.commit()
 
 		# Reset the status of everything for a new run:
 		if overwrite:
@@ -144,6 +174,7 @@ class TaskManager(object):
 			self.cursor.execute("DROP TABLE IF EXISTS diagnostics;")
 			self.cursor.execute("DROP TABLE IF EXISTS photometry_skipped;")
 			self.conn.commit()
+			cleanup = True # Enforce a cleanup after deleting old results
 
 		# Create table for diagnostics:
 		self.cursor.execute("""CREATE TABLE IF NOT EXISTS diagnostics (
@@ -179,7 +210,7 @@ class TaskManager(object):
 		self.conn.commit()
 
 		# This is only for backwards compatibility.
-		self.cursor.execute("PRAGMA table_info(todolist)")
+		self.cursor.execute("PRAGMA table_info(todolist);")
 		existing_columns = [r['name'] for r in self.cursor.fetchall()]
 		if 'cadence' not in existing_columns:
 			self.logger.debug("Adding CADENCE column to todolist")
@@ -196,7 +227,7 @@ class TaskManager(object):
 
 		# Add status indicator for corrections to todolist, if it doesn't already exists:
 		# This is only for backwards compatibility.
-		self.cursor.execute("PRAGMA table_info(diagnostics)")
+		self.cursor.execute("PRAGMA table_info(diagnostics);")
 		existing_columns = [r['name'] for r in self.cursor.fetchall()]
 		if 'edge_flux' not in existing_columns:
 			self.logger.debug("Adding edge_flux column to diagnostics")
@@ -219,19 +250,18 @@ class TaskManager(object):
 			self.conn.commit()
 		if 'starid' in existing_columns:
 			# Drop this column from the diagnostics table, since the information is already in
-			# the todolist table. Use utility function for this, since SQLite does not
-			# have a DROP COLUMN mechanism directly.
-			utilities.sqlite_drop_column(self.conn, 'diagnostics', 'starid')
+			# the todolist table.
+			self.cursor.execute("ALTER TABLE diagnostics DROP COLUMN starid;")
+			self.conn.commit()
 
 		# Reset calculations with status STARTED, ABORT or ERROR:
 		# We are re-running all with error, in the hope that they will work this time around:
-		clear_status = str(STATUS.STARTED.value) + ',' + str(STATUS.ABORT.value) + ',' + str(STATUS.ERROR.value)
-		constraints = ['status IN (' + clear_status + ')']
+		constraints = [f'status IN ({STATUS.STARTED.value:d},{STATUS.ABORT.value:d},{STATUS.ERROR.value:d})']
 
 		# Add additional constraints from the user input and build SQL query:
 		if cleanup_constraints:
 			if isinstance(cleanup_constraints, dict):
-				constraints += build_constraints(**cleanup_constraints)
+				constraints += build_constraints(**cleanup_constraints, return_list=True)
 			else:
 				constraints += cleanup_constraints
 
@@ -283,14 +313,44 @@ class TaskManager(object):
 				self.conn.isolation_level = tmp_isolevel
 
 	#----------------------------------------------------------------------------------------------
+	def backup(self):
+		"""
+		Save backup of todo-file to disk.
+		This only has an effect when `load_into_memory` is enabled.
+
+		.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+		"""
+		self._results_saved_counter = 0
+		if self.load_into_memory:
+			backupfile = tempfile.NamedTemporaryFile(
+				dir=os.path.dirname(self.todo_file),
+				prefix=os.path.basename(self.todo_file) + '-backup-',
+				delete=False).name
+			with contextlib.closing(sqlite3.connect(backupfile)) as dest:
+				self.conn.backup(dest)
+				dest.execute("PRAGMA journal_mode=DELETE;")
+				dest.execute('PRAGMA synchronous=NORMAL;')
+				dest.commit()
+
+			# Since we are running from memory, the original file
+			# is not opened by any process, so we are free to
+			# replace it:
+			try:
+				os.replace(backupfile, self.todo_file)
+			except PermissionError: # pragma: no cover
+				self.logger.exception('Could not overwrite original file. Backup saved as: %s', backupfile)
+
+	#----------------------------------------------------------------------------------------------
 	def close(self):
 		"""Close TaskManager and all associated objects."""
 		if hasattr(self, 'cursor') and hasattr(self, 'conn'):
 			try:
 				self.conn.rollback()
 				self.cursor.execute("PRAGMA journal_mode=DELETE;")
+				self.cursor.execute('PRAGMA synchronous=NORMAL;')
 				self.conn.commit()
 				self.cursor.close()
+				self.backup()
 			except sqlite3.ProgrammingError:
 				pass
 
@@ -324,7 +384,6 @@ class TaskManager(object):
 			int: Number of tasks due to be processed.
 		"""
 		constraints = build_constraints(**kwargs)
-		constraints = ' AND ' + ' AND '.join(constraints) if constraints else ''
 		self.cursor.execute("SELECT COUNT(*) AS num FROM todolist WHERE status IS NULL" + constraints + ";")
 		return int(self.cursor.fetchone()['num'])
 
@@ -340,7 +399,6 @@ class TaskManager(object):
 			dict or None: Dictionary of settings for task.
 		"""
 		constraints = build_constraints(**kwargs)
-		constraints = ' AND ' + ' AND '.join(constraints) if constraints else ''
 		self.cursor.execute("SELECT priority,starid,method,sector,camera,ccd,cadence,datasource,tmag FROM todolist WHERE status IS NULL" + constraints + " ORDER BY priority LIMIT 1;")
 		task = self.cursor.fetchone()
 		if task:
@@ -369,7 +427,7 @@ class TaskManager(object):
 		Parameters:
 			taskid (int): ID (priority) of the task to be marked as STARTED.
 		"""
-		self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (STATUS.STARTED.value, taskid))
+		self.cursor.execute(f"UPDATE todolist SET status={STATUS.STARTED.value:d} WHERE priority=?;", [taskid])
 		self.conn.commit()
 		self.summary['STARTED'] += 1
 
@@ -451,10 +509,9 @@ class TaskManager(object):
 							# as SKIPPED:
 							self.cursor.execute("DELETE FROM photometry_skipped WHERE skipped_by=?;", (result['priority'],))
 							for row in skip_rows:
-								self.cursor.execute("UPDATE todolist SET status=? WHERE priority=?;", (
-									STATUS.SKIPPED.value,
+								self.cursor.execute(f"UPDATE todolist SET status={STATUS.SKIPPED.value:d} WHERE priority=?;", [
 									row['priority']
-								))
+								])
 								additional_skipped += self.cursor.rowcount
 								self.cursor.execute("INSERT INTO photometry_skipped (priority,skipped_by) VALUES (?,?);", (
 									row['priority'],
@@ -528,16 +585,22 @@ class TaskManager(object):
 
 		# All the results should have the same worker_waittime.
 		# So only update this once, using just that last result in the list:
-		if self.summary['mean_worker_waittime'] is None and result.get('worker_wait_time') is not None:
-			self.summary['mean_worker_waittime'] = result['worker_wait_time']
-		elif result.get('worker_wait_time') is not None:
-			self.summary['mean_worker_waittime'] += 0.1 * (result['worker_wait_time'] - self.summary['mean_worker_waittime'])
+		if result.get('worker_wait_time') is not None:
+			if self.summary['mean_worker_waittime'] is None:
+				self.summary['mean_worker_waittime'] = result['worker_wait_time']
+			else:
+				self.summary['mean_worker_waittime'] += 0.1 * (result['worker_wait_time'] - self.summary['mean_worker_waittime'])
 
 		# Write summary file:
 		self.summary_counter += 1
-		if self.summary_file and self.summary_counter % self.summary_interval == 0:
+		if self.summary_file and self.summary_counter >= self.summary_interval:
 			self.summary_counter = 0
 			self.write_summary()
+
+		# Backup every X results:
+		self._results_saved_counter += 1
+		if self.backup_interval is not None and self._results_saved_counter >= self.backup_interval:
+			self.backup()
 
 	#----------------------------------------------------------------------------------------------
 	def write_summary(self):
