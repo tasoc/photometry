@@ -15,7 +15,7 @@ import contextlib
 import tempfile
 from functools import lru_cache
 from numpy import atleast_1d
-from . import STATUS, utilities
+from . import STATUS
 
 #--------------------------------------------------------------------------------------------------
 @lru_cache(maxsize=10)

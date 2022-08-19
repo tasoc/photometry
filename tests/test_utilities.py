@@ -10,7 +10,6 @@ import pytest
 import os.path
 import random
 import logging
-import sqlite3
 import configparser
 import tempfile
 import numpy as np
