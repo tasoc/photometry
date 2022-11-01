@@ -63,7 +63,6 @@ def plots_noninteractive():
 	plt.switch_backend('Agg')
 
 #--------------------------------------------------------------------------------------------------
-@lru_cache(maxsize=5)
 def plot_style_context(style=None):
 	"""
 	Context manager for using plotting style tempoarily.
