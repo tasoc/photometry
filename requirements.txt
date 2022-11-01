@@ -1,6 +1,6 @@
 pytest
 pytest-mpl
-flake8
+flake8 < 5.0.0
 flake8-tabs >= 2.3.2
 flake8-builtins
 flake8-logging-format
