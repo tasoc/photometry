@@ -31,7 +31,8 @@ Note:
 import argparse
 import logging
 import os.path
-import photometry
+from photometry.todolist import make_todo
+from photometry.plots import plots_noninteractive
 
 #------------------------------------------------------------------------------
 def main():
@@ -70,10 +71,10 @@ def main():
 	logger_parent.setLevel(logging_level)
 
 	# Make sure we have turned plotting to non-interactive:
-	photometry.plots.plots_noninteractive()
+	plots_noninteractive()
 
 	# Run the program:
-	photometry.todolist.make_todo(args.input_folder,
+	make_todo(args.input_folder,
 		sectors=args.sector,
 		cameras=args.camera,
 		ccds=args.ccd,
