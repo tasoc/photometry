@@ -19,12 +19,6 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import astropy.visualization as viz
 
-# Change the fonts used in plots:
-# TODO: Use stylesheets instead of overwriting defaults here
-matplotlib.rcParams['font.family'] = 'serif'
-matplotlib.rcParams['text.usetex'] = False
-matplotlib.rcParams['mathtext.fontset'] = 'dejavuserif'
-
 #--------------------------------------------------------------------------------------------------
 def plots_interactive(backend=('QtAgg', 'Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo', 'TkAgg', 'GTK4Agg')):
 	"""
@@ -73,6 +67,9 @@ def plots_noninteractive():
 def plot_style_context(style=None):
 	"""
 	Context manager for using plotting style tempoarily.
+
+	Parameters:
+		style: Passed directly to :py:func:`plt.style.context`.
 
 	See also:
 		:py:func:`plt.style.context`
