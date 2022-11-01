@@ -16,7 +16,6 @@ import numpy as np
 import requests
 import responses
 import httpretty
-from urllib3.exceptions import MaxRetryError
 import conftest # noqa: F401
 import photometry.utilities as u
 
@@ -397,7 +396,7 @@ def test_download_file(caplog):
 			rsps.add(responses.GET, url, status=500)
 
 			with caplog.at_level(logging.CRITICAL): # Silence logger error
-				with pytest.raises(MaxRetryError):
+				with pytest.raises(requests.exceptions.RetryError):
 					u.download_file(url, fpath)
 
 		# The output file should not exist after failure:
