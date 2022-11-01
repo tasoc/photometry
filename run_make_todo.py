@@ -31,7 +31,7 @@ Note:
 import argparse
 import logging
 import os.path
-from photometry.todolist import make_todo
+import photometry
 
 #------------------------------------------------------------------------------
 def main():
@@ -46,6 +46,10 @@ def main():
 	group.add_argument('--ccd', type=int, choices=(1,2,3,4), default=None, action='append', help='TESS CCD. Default is to run all CCDs.')
 	parser.add_argument('input_folder', type=str, help='TESSPhot input directory to create TODO file in.', nargs='?', default=None)
 	args = parser.parse_args()
+
+	# Check that the given input directory is indeed a directory:
+	if args.input_folder is not None and not os.path.isdir(args.input_folder):
+		parser.error("The given path does not exist or is not a directory")
 
 	# Set logging level:
 	logging_level = logging.INFO
@@ -65,12 +69,11 @@ def main():
 	logger_parent.addHandler(console)
 	logger_parent.setLevel(logging_level)
 
-	# Check that the given input directory is indeed a directory:
-	if args.input_folder is not None and not os.path.isdir(args.input_folder):
-		parser.error("The given path does not exist or is not a directory")
+	# Make sure we have turned plotting to non-interactive:
+	photometry.plots.plots_noninteractive()
 
 	# Run the program:
-	make_todo(args.input_folder,
+	photometry.todolist.make_todo(args.input_folder,
 		sectors=args.sector,
 		cameras=args.camera,
 		ccds=args.ccd,

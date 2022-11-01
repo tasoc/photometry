@@ -48,7 +48,7 @@ import multiprocessing
 import re
 import copy
 from tqdm import tqdm, trange
-from photometry.plots import plt, plot_image
+from photometry.plots import plt, plot_image, plots_noninteractive
 from matplotlib import animation
 from matplotlib.colors import ListedColormap
 from photometry.quality import PixelQualityFlags
@@ -425,6 +425,9 @@ def main():
 	# Stop if there are no files to process:
 	if len(args.files) == 0:
 		return
+
+	# Make sure we have turned plotting to non-interactive:
+	plots_noninteractive()
 
 	tqdm_settings = {
 		'disable': None if logger.isEnabledFor(logging.INFO) else True,

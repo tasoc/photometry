@@ -34,6 +34,7 @@ import functools
 from timeit import default_timer
 from photometry import tessphot, TaskManager
 from photometry.utilities import to_tuple
+from photometry.plots import plots_noninteractive
 
 #--------------------------------------------------------------------------------------------------
 def main():
@@ -86,6 +87,9 @@ def main():
 	logger_parent = logging.getLogger('photometry')
 	logger_parent.addHandler(console)
 	logger_parent.setLevel(logging_level)
+
+	# Make sure we have turned plotting to non-interactive:
+	plots_noninteractive()
 
 	# Get input and output folder from environment variables:
 	test_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), 'tests', 'input'))

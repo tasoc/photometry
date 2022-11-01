@@ -35,7 +35,7 @@ from statsmodels.nonparametric.bandwidths import select_bandwidth
 from sklearn.cluster import DBSCAN
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
-from ..plots import plt, plot_image, plot_outline, save_figure
+from ..plots import plt, plot_image, plot_outline, save_figure, plot_style_context
 import matplotlib as mpl
 from matplotlib.backends.backend_pdf import PdfPages
 from ..utilities import mad_to_sigma
@@ -253,37 +253,37 @@ def k2p2WS(X, Y, X2, Y2, flux0, XX, labels, core_samples_mask, saturated_masks=N
 
 		# Create plot of the watershed segmentation:
 		if output_folder is not None:
+			with plot_style_context():
+				fig, axes = plt.subplots(ncols=3, figsize=(14, 6))
+				fig.subplots_adjust(hspace=0.12, wspace=0.12)
+				ax0, ax1, ax2 = axes
 
-			fig, axes = plt.subplots(ncols=3, figsize=(14, 6))
-			fig.subplots_adjust(hspace=0.12, wspace=0.12)
-			ax0, ax1, ax2 = axes
+				plot_image(Z, ax=ax0, scale='log', title='Overlapping objects')
 
-			plot_image(Z, ax=ax0, scale='log', title='Overlapping objects')
+				# Plot the basin used for watershed:
+				plot_image(distance, ax=ax1, scale='log', title='Basin')
 
-			# Plot the basin used for watershed:
-			plot_image(distance, ax=ax1, scale='log', title='Basin')
+				# Overplot the full catalog:
+				if catalog is not None:
+					ax1.scatter(catalog[:,0], catalog[:,1], color='y', s=5, alpha=0.3)
 
-			# Overplot the full catalog:
-			if catalog is not None:
-				ax1.scatter(catalog[:,0], catalog[:,1], color='y', s=5, alpha=0.3)
+				#if local_maxi_all is not None:
+				#	print(local_maxi_all)
+				#	ax1.scatter(X[local_maxi_all[:,0]], Y[local_maxi_all[:,1]], color='g', marker='+', s=5, alpha=0.5)
+				#ax1.scatter(X[local_maxi_before], Y[local_maxi_before], color='c', s=5, alpha=0.7)
 
-			#if local_maxi_all is not None:
-			#	print(local_maxi_all)
-			#	ax1.scatter(X[local_maxi_all[:,0]], Y[local_maxi_all[:,1]], color='g', marker='+', s=5, alpha=0.5)
-			#ax1.scatter(X[local_maxi_before], Y[local_maxi_before], color='c', s=5, alpha=0.7)
+				# Overplot the final markers for the watershed:
+				ax1.scatter(X[local_maxi], Y[local_maxi], color='r', s=5, alpha=0.7)
 
-			# Overplot the final markers for the watershed:
-			ax1.scatter(X[local_maxi], Y[local_maxi], color='r', s=5, alpha=0.7)
+				plot_image(labels_ws, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects')
 
-			plot_image(labels_ws, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral', title='Separated objects')
+				for ax in axes:
+					ax.set_xticklabels([])
+					ax.set_yticklabels([])
 
-			for ax in axes:
-				ax.set_xticklabels([])
-				ax.set_yticklabels([])
-
-			figname = 'seperated_cluster_%d' % i
-			save_figure(os.path.join(output_folder, figname), fig=fig)
-			plt.close(fig)
+				figname = 'seperated_cluster_%d' % i
+				save_figure(os.path.join(output_folder, figname), fig=fig)
+				plt.close(fig)
 
 	return labels_new, unique_labels, NoCluster
 
@@ -429,15 +429,16 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 	logger.debug("  Threshold used: %f", thresh)
 	logger.debug("  Flux cut is: %f", CUT)
 	if logger.isEnabledFor(logging.DEBUG) and plot_folder is not None:
-		fig = plt.figure()
-		ax = fig.add_subplot(111)
-		ax.fill_between(kernel.support, kernel.density, alpha=0.3)
-		ax.axvline(MODE, color='k')
-		ax.axvline(CUT, color='r')
-		ax.set_xlabel('Flux')
-		ax.set_ylabel('Distribution')
-		save_figure(os.path.join(plot_folder, 'flux_distribution'), fig=fig)
-		plt.close(fig)
+		with plot_style_context():
+			fig = plt.figure()
+			ax = fig.add_subplot(111)
+			ax.fill_between(kernel.support, kernel.density, alpha=0.3)
+			ax.axvline(MODE, color='k')
+			ax.axvline(CUT, color='r')
+			ax.set_xlabel('Flux')
+			ax.set_ylabel('Distribution')
+			save_figure(os.path.join(plot_folder, 'flux_distribution'), fig=fig)
+			plt.close(fig)
 
 	#==========================================================================
 	# Find and seperate clusters of pixels
@@ -560,18 +561,19 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 					img[r[1], r[2]] = r[0]+1
 
 				# Plot everything together:
-				fig = plt.figure()
-				ax = fig.add_subplot(111)
-				plot_image(img, ax=ax, scale='linear', percentile=100, cmap='nipy_spectral',
-					title='Holes in mask filled')
+				with plot_style_context():
+					fig = plt.figure()
+					ax = fig.add_subplot(111)
+					plot_image(img, ax=ax, scale='linear', percentile=100, cmap='nipy_spectral',
+						title='Holes in mask filled')
 
-				# Create outline of filled holes:
-				for hole in np.transpose(np.where(mask_holes_indx)):
-					cen = (hole[2]-0.5, hole[1]-0.5)
-					ax.add_patch(mpl.patches.Rectangle(cen, 1, 1, color='k', lw=2, fill=False, hatch='//'))
+					# Create outline of filled holes:
+					for hole in np.transpose(np.where(mask_holes_indx)):
+						cen = (hole[2]-0.5, hole[1]-0.5)
+						ax.add_patch(mpl.patches.Rectangle(cen, 1, 1, color='k', lw=2, fill=False, hatch='//'))
 
-				save_figure(os.path.join(plot_folder, 'mask_filled_holes'), fig=fig)
-				plt.close(fig)
+					save_figure(os.path.join(plot_folder, 'mask_filled_holes'), fig=fig)
+					plt.close(fig)
 
 		#==========================================================================
 		# Entend overflow lanes
@@ -625,122 +627,124 @@ def k2p2FixFromSum(SumImage, thresh=1, output_folder=None, plot_folder=None, sho
 			# If we are running as DEBUG, output some plots as well:
 			if plot_folder is not None and logger.isEnabledFor(logging.DEBUG):
 				logger.debug("Plotting overflow figures...")
-				Ypixel = np.arange(NY)
-				for u in range(no_masks):
-					mask = np.asarray(MASKS[u, :, :], dtype='bool')
-					mask_rows, mask_columns = np.where(mask)
-					mask_max = np.nanmax(SumImage[mask])
+				with plot_style_context():
+					Ypixel = np.arange(NY)
+					for u in range(no_masks):
+						mask = np.asarray(MASKS[u, :, :], dtype='bool')
+						mask_rows, mask_columns = np.where(mask)
+						mask_max = np.nanmax(SumImage[mask])
 
-					with PdfPages(os.path.join(plot_folder, 'overflow_mask' + str(u) + '.pdf')) as pdf:
-						for c in sorted(set(mask_columns)):
+						with PdfPages(os.path.join(plot_folder, 'overflow_mask' + str(u) + '.pdf')) as pdf:
+							for c in sorted(set(mask_columns)):
 
-							column_rows = mask_rows[mask_columns == c]
+								column_rows = mask_rows[mask_columns == c]
 
-							title = "Mask %d - Column %d" % (u, c)
-							if np.any(saturated_mask[u,:,c]):
-								title += " - Saturated"
+								title = "Mask %d - Column %d" % (u, c)
+								if np.any(saturated_mask[u,:,c]):
+									title += " - Saturated"
 
-							fig = plt.figure(figsize=(14,6))
-							ax1 = fig.add_subplot(121)
-							ax1.axvspan(np.min(column_rows)-0.5, np.max(column_rows)+0.5, color='0.7')
-							ax1.plot(Ypixel, SumImage[:, c], 'ro-', drawstyle='steps-mid')
-							ax1.set_title(title)
-							ax1.set_xlabel('Y pixels')
-							ax1.set_ylabel('Sum-image counts')
-							ax1.set_ylim(0, mask_max)
-							ax1.set_xlim(-0.5, NY-0.5)
+								fig = plt.figure(figsize=(14,6))
+								ax1 = fig.add_subplot(121)
+								ax1.axvspan(np.min(column_rows)-0.5, np.max(column_rows)+0.5, color='0.7')
+								ax1.plot(Ypixel, SumImage[:, c], 'ro-', drawstyle='steps-mid')
+								ax1.set_title(title)
+								ax1.set_xlabel('Y pixels')
+								ax1.set_ylabel('Sum-image counts')
+								ax1.set_ylim(0, mask_max)
+								ax1.set_xlim(-0.5, NY-0.5)
 
-							ax2 = fig.add_subplot(122)
-							plot_image(SumImage, ax=ax2, scale='log')
-							ax2.plot(outline_before[u][:,0], outline_before[u][:,1], 'r:')
-							# The outline of the mask after saturated columns have been
-							# corrected for:
-							plot_outline(mask, ax=ax2, c='r')
-							ax2.axvline(c, color='r', ls='--')
+								ax2 = fig.add_subplot(122)
+								plot_image(SumImage, ax=ax2, scale='log')
+								ax2.plot(outline_before[u][:,0], outline_before[u][:,1], 'r:')
+								# The outline of the mask after saturated columns have been
+								# corrected for:
+								plot_outline(mask, ax=ax2, c='r')
+								ax2.axvline(c, color='r', ls='--')
 
-							pdf.savefig(fig)
-							plt.close(fig)
+								pdf.savefig(fig)
+								plt.close(fig)
 
 	#==============================================================================
 	# Create plots
 	#==============================================================================
 	if plot_folder is not None:
-		# Colors to use for each cluster label:
-		cmap_rainbow = copy.copy(plt.get_cmap('gist_rainbow'))
-		colors = cmap_rainbow(np.linspace(0, 1, len(unique_labels)))
+		with plot_style_context():
+			# Colors to use for each cluster label:
+			cmap_rainbow = copy.copy(plt.get_cmap('gist_rainbow'))
+			colors = cmap_rainbow(np.linspace(0, 1, len(unique_labels)))
 
-		# Set up figure to hold subplots:
-		aspect = 0.5 if NY/NX > 5 else 0.2
-		fig0 = plt.figure(figsize=(2*plt.figaspect(aspect)))
-		fig0.subplots_adjust(wspace=0.12)
+			# Set up figure to hold subplots:
+			aspect = 0.5 if NY/NX > 5 else 0.2
+			fig0 = plt.figure(figsize=(2*plt.figaspect(aspect)))
+			fig0.subplots_adjust(wspace=0.12)
 
-		# ---------------
-		# PLOT 1
-		ax0 = fig0.add_subplot(151)
-		plot_image(SumImage, ax=ax0, scale='log', title='Sum-image')
+			# ---------------
+			# PLOT 1
+			ax0 = fig0.add_subplot(151)
+			plot_image(SumImage, ax=ax0, scale='log', title='Sum-image')
 
-		# ---------------
-		# PLOT 2
-		idx = np.zeros_like(SumImage, dtype='bool')
-		np.greater(SumImage, CUT, out=idx, where=~np.isnan(SumImage))
-		Flux_mat2 = np.zeros_like(SumImage)
-		Flux_mat2[~idx] = 1
-		Flux_mat2[idx] = 2
-		Flux_mat2[ori_mask == 0] = 0
+			# ---------------
+			# PLOT 2
+			idx = np.zeros_like(SumImage, dtype='bool')
+			np.greater(SumImage, CUT, out=idx, where=~np.isnan(SumImage))
+			Flux_mat2 = np.zeros_like(SumImage)
+			Flux_mat2[~idx] = 1
+			Flux_mat2[idx] = 2
+			Flux_mat2[ori_mask == 0] = 0
 
-		ax2 = fig0.add_subplot(152)
-		plot_image(Flux_mat2, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral',
-			title='Significant flux')
+			ax2 = fig0.add_subplot(152)
+			plot_image(Flux_mat2, ax=ax2, scale='linear', percentile=100, cmap='nipy_spectral',
+				title='Significant flux')
 
-		# ---------------
-		# PLOT 3
-		ax2 = fig0.add_subplot(153)
+			# ---------------
+			# PLOT 3
+			ax2 = fig0.add_subplot(153)
 
-		Flux_mat4 = np.zeros_like(SumImage)
-		for u,lab in enumerate(unique_labels):
-			class_member_mask = (labels == lab)
-			xy = XX[class_member_mask,:]
-			if lab == -1:
-				# Black used for noise.
-				ax2.plot(xy[:, 0], xy[:, 1], '+', markerfacecolor='k',
-					markeredgecolor='k', markersize=5)
+			Flux_mat4 = np.zeros_like(SumImage)
+			for u,lab in enumerate(unique_labels):
+				class_member_mask = (labels == lab)
+				xy = XX[class_member_mask,:]
+				if lab == -1:
+					# Black used for noise.
+					ax2.plot(xy[:, 0], xy[:, 1], '+', markerfacecolor='k',
+						markeredgecolor='k', markersize=5)
 
+				else:
+					Flux_mat4[xy[:,1], xy[:,0]] = u+1
+					ax2.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(colors[u]),
+						markeredgecolor='k', markersize=5)
+
+			ax2.set_title("Clustering + Watershed")
+			ax2.set_xlim([-0.5, SumImage.shape[1]-0.5])
+			ax2.set_ylim([-0.5, SumImage.shape[0]-0.5])
+			ax2.set_aspect('equal')
+
+			# ---------------
+			# PLOT 4
+			ax4 = fig0.add_subplot(154)
+			plot_image(Flux_mat4, ax=ax4, scale='linear', percentile=100, cmap='nipy_spectral',
+				title='Extracted clusters')
+
+			# ---------------
+			# PLOT 5
+			ax5 = fig0.add_subplot(155)
+			plot_image(SumImage, ax=ax5, scale='log', title='Final masks')
+
+			# Plot outlines of selected masks:
+			for u in range(no_masks):
+				# Get the color associated with this label:
+				col = colors[ int(np.where(unique_labels == No_pix_sort[u, 1])[0]) ]
+				# Make mask outline:
+				outline = plot_outline(MASKS[u, :, :])
+				# Plot outlines:
+				ax5.plot(outline[:, 0], outline[:, 1], color=col, zorder=10, lw=2.5)
+				ax4.plot(outline[:, 0], outline[:, 1], color='k', zorder=10, lw=1.5)
+
+			# Save the figure and close it:
+			save_figure(os.path.join(plot_folder, 'masks_' + ws_alg), fig=fig0)
+			if show_plot:
+				plt.show()
 			else:
-				Flux_mat4[xy[:,1], xy[:,0]] = u+1
-				ax2.plot(xy[:, 0], xy[:, 1], 'o', markerfacecolor=tuple(colors[u]),
-					markeredgecolor='k', markersize=5)
-
-		ax2.set_title("Clustering + Watershed")
-		ax2.set_xlim([-0.5, SumImage.shape[1]-0.5])
-		ax2.set_ylim([-0.5, SumImage.shape[0]-0.5])
-		ax2.set_aspect('equal')
-
-		# ---------------
-		# PLOT 4
-		ax4 = fig0.add_subplot(154)
-		plot_image(Flux_mat4, ax=ax4, scale='linear', percentile=100, cmap='nipy_spectral',
-			title='Extracted clusters')
-
-		# ---------------
-		# PLOT 5
-		ax5 = fig0.add_subplot(155)
-		plot_image(SumImage, ax=ax5, scale='log', title='Final masks')
-
-		# Plot outlines of selected masks:
-		for u in range(no_masks):
-			# Get the color associated with this label:
-			col = colors[ int(np.where(unique_labels == No_pix_sort[u, 1])[0]) ]
-			# Make mask outline:
-			outline = plot_outline(MASKS[u, :, :])
-			# Plot outlines:
-			ax5.plot(outline[:, 0], outline[:, 1], color=col, zorder=10, lw=2.5)
-			ax4.plot(outline[:, 0], outline[:, 1], color='k', zorder=10, lw=1.5)
-
-		# Save the figure and close it:
-		save_figure(os.path.join(plot_folder, 'masks_' + ws_alg), fig=fig0)
-		if show_plot:
-			plt.show()
-		else:
-			plt.close('all')
+				plt.close('all')
 
 	return MASKS, background_bandwidth
