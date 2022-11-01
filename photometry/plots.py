@@ -6,7 +6,6 @@ Plotting utilities.
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """
 
-from functools import lru_cache
 import logging
 import os
 import copy

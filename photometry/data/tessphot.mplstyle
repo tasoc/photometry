@@ -9,15 +9,15 @@ savefig.dpi      : 100
 figure.figsize   : 9.6, 7.2
 figure.dpi       : 100
 
-axes.titlesize   : 16
-axes.labelsize   : 18
-axes.labelpad    : 10
+axes.titlesize   : large
+axes.labelsize   : medium
+axes.labelpad    : 4.0
 
-legend.fontsize  : 12
+legend.fontsize  : medium
 
 xtick.direction  : out
 xtick.minor.visible : True
-xtick.labelsize  : 15
+xtick.labelsize  : medium
 xtick.major.size : 5
 xtick.major.pad  : 6
 xtick.minor.size : 3
@@ -25,7 +25,7 @@ xtick.minor.pad  : 5
 
 ytick.direction  : out
 ytick.minor.visible : True
-ytick.labelsize  : 15
+ytick.labelsize  : medium
 ytick.major.size : 5
 ytick.major.pad  : 6
 ytick.minor.size : 3
