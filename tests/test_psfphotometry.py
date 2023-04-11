@@ -32,7 +32,7 @@ def test_psfphotometry(SHARED_INPUT_DIR):
 			print( pho.lightcurve )
 
 			# It should set the status to one of these:
-			assert(pho.status in (STATUS.OK, STATUS.WARNING))
+			assert pho.status in (STATUS.OK, STATUS.WARNING)
 
 			# Check the sumimage:
 			plt.figure()
