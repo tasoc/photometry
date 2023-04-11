@@ -16,6 +16,12 @@ defaults:
   run:
     shell: bash
 
+# Avoid random build errors caused by the use of "sklearn" instead of "scikit-learn"
+# in dependenices (e.g. k2sc).
+# https://github.com/scikit-learn/sklearn-pypi-package
+env:
+  SKLEARN_ALLOW_DEPRECATED_SKLEARN_PACKAGE_INSTALL: True
+
 jobs:
   # Use the `flake8` tool to check for syntax errors
   flake8:
