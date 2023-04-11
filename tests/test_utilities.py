@@ -60,7 +60,7 @@ def test_load_sector_settings():
 		assert 'sector' in value
 		assert 'reference_time' in value
 		assert 'ffi_cadence' in value
-		assert value['ffi_cadence'] in (1800, 600), "Invalid FFI Cadence"
+		assert value['ffi_cadence'] in (1800, 600, 200), "Invalid FFI Cadence"
 
 		# Ensure that sector numbers are unique:
 		assert value['sector'] not in sectors
