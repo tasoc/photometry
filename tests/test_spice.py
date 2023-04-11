@@ -16,9 +16,9 @@ import h5py
 from tempfile import TemporaryDirectory
 import spiceypy
 import conftest # noqa: F401
-from photometry import AperturePhotometry
+from photometry import AperturePhotometry, io
 from photometry.spice import TESS_SPICE, InadequateSpiceError, load_kernel_files_table
-from photometry.utilities import find_tpf_files, find_hdf5_files, add_proper_motion
+from photometry.utilities import add_proper_motion
 from photometry.plots import plt, plots_interactive
 from mpl_toolkits.mplot3d import Axes3D # noqa: F401
 
@@ -29,7 +29,7 @@ def test_timestamps(SHARED_INPUT_DIR, starid):
 		print("="*72)
 		print("TIC %d" % starid)
 
-		tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
+		tpf_file = io.find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 		with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
 			time_tpf = np.asarray(hdu[1].data['TIME'])
 			timecorr_tpf = np.asarray(hdu[1].data['TIMECORR']) * 86400 * 1000
@@ -170,7 +170,7 @@ def test_spice(SHARED_INPUT_DIR, starid):
 		print("="*72)
 		print("TIC %d" % starid)
 
-		tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
+		tpf_file = io.find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 		with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
 			time_tpf = np.asarray(hdu[1].data['TIME'])
 			timecorr_tpf = np.asarray(hdu[1].data['TIMECORR'])
@@ -195,7 +195,7 @@ def test_spice(SHARED_INPUT_DIR, starid):
 		timecorr_tpf = timecorr_tpf[indx]
 
 		# Load the original timestamps from FFIs:
-		hdf_file = find_hdf5_files(SHARED_INPUT_DIR, camera=camera, ccd=ccd)[0]
+		hdf_file = io.find_hdf5_files(SHARED_INPUT_DIR, camera=camera, ccd=ccd)[0]
 		with h5py.File(hdf_file, 'r') as hdf:
 			ffi_time = np.asarray(hdf['time'])
 			ffi_timecorr = np.asarray(hdf['timecorr'])
@@ -277,7 +277,7 @@ def test_spice(SHARED_INPUT_DIR, starid):
 @pytest.mark.parametrize('starid', [260795451, 267211065])
 def test_spice_with_interval(SHARED_INPUT_DIR, starid):
 
-	tpf_file = find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
+	tpf_file = io.find_tpf_files(SHARED_INPUT_DIR, starid=starid)[0]
 
 	with fits.open(tpf_file, mode='readonly', memmap=True) as hdu:
 		time_tpf = np.asarray(hdu[1].data['TIME'])

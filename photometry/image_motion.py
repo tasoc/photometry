@@ -11,7 +11,6 @@ To calculate the image shifts between the reference image (``ref_image``) and an
 	>>> kernel = img.calc_kernel(image)
 	>>> print(kernel)
 
-
 .. codeauthor:: Mikkel N. Lund
 .. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
 """

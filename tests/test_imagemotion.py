@@ -10,7 +10,7 @@ import numpy as np
 import h5py
 import conftest # noqa: F401
 from photometry.image_motion import ImageMovementKernel
-from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
+from photometry import io
 #from photometry.plots import plt
 
 #--------------------------------------------------------------------------------------------------
@@ -27,11 +27,11 @@ def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 	print("Testing warpmode=" + warpmode)
 
 	# Load the first image in the input directory:
-	files = find_ffi_files(os.path.join(SHARED_INPUT_DIR, 'images'), camera=1, ccd=1)
+	files = io.find_ffi_files(os.path.join(SHARED_INPUT_DIR, 'images'), camera=1, ccd=1)
 	fname = files[0]
 
-	# Load the image:
-	img = load_ffi_fits(fname)
+	# Load the image:1
+	img = io.FFIImage(fname)
 
 	# Trying to calculate kernel with no reference image should give error:
 	if warpmode == 'unchanged':
@@ -124,7 +124,7 @@ def test_imagemotion_wcs(SHARED_INPUT_DIR):
 	print(xy)
 
 	# Load the first image in the input directory:
-	INPUT_FILE = find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=1, ccd=1)[0]
+	INPUT_FILE = io.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=1, ccd=1)[0]
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 
