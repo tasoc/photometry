@@ -14,8 +14,8 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 from photutils import Background2D, SExtractorBackground, BackgroundBase
 from statsmodels.nonparametric.kde import KDEUnivariate as KDE
 from .utilities import move_median_central
-from .pixel_flags import pixel_manual_exclude
 from .io import FFIImage
+from . import pixel_flags as pxf
 
 #--------------------------------------------------------------------------------------------------
 def _reduce_mode(x):
@@ -94,7 +94,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 	mask |= (img0.data < 0)
 
 	# Mask out pixels marked for manual exclude:
-	mask |= pixel_manual_exclude(img0)
+	mask |= pxf.pixel_manual_exclude(img0)
 
 	# If the entire image has been masked out,
 	# we should just stop now and return NaNs:

@@ -378,8 +378,6 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					# Load the FITS file data and the header:
 					img = io.FFIImage(fname)
 					hdr = img.header
-					flux0 = img.data
-					flux0_err = img.uncertainty.array
 
 					if k == 0:
 						for key in attributes.keys():
@@ -407,25 +405,30 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						cadenceno[k] = k+1
 
 					# Find pixels marked for manual exclude and add then to pixel flags:
-					manexcl = pixel_manual_exclude(img)
+					manexcl = pxf.pixel_manual_exclude(img)
 					if np.any(manexcl):
 						pixel_flags[dset_name][manexcl] |= PixelQualityFlags.ManualExclude
-						# Mask out manually excluded data before saving:
-						flux0[manexcl] = np.nan
-						flux0_err[manexcl] = np.nan
+
 
 					if dset_name not in images:
+						flux0 = img.data
+						flux0_err = img.uncertainty.array
+
 						# Load background from HDF file and subtract background from image,
 						# if the background has not already been subtracted:
 						if not hdr.get('BACKAPP', False):
 							flux0 -= backgrounds[dset_name]
+
+						# Mask out manually excluded data before saving:
+						excl = ~PixelQualityFlags.filter(np.asarray(pixel_flags[dset_name]))
+						flux0[excl] = np.NaN
+						flux0_err[excl] = np.NaN
 
 						# Save image subtracted the background in HDF5 file:
 						images.create_dataset(dset_name, data=flux0, chunks=imgchunks, **args)
 						images_err.create_dataset(dset_name, data=flux0_err, chunks=imgchunks, **args)
 					else:
 						flux0 = np.asarray(images[dset_name])
-						flux0[manexcl] = np.nan
 
 					# Save the World Coordinate System of each image:
 					# Check if the WCS actually works for each image, and if not, set it to an empty string
@@ -517,7 +520,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				bkgshe_threshold = pixel_flags.attrs.get('bkgshe_threshold', 40)
 				pixel_flags.attrs['bkgshe_threshold'] = bkgshe_threshold
 				pixel_background_shenanigans_wrapper = functools.partial(
-					pixel_background_shenanigans,
+					pxf.pixel_background_shenanigans,
 					SumImage=SumImage
 				)
 

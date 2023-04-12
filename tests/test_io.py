@@ -104,6 +104,9 @@ def test_find_ffi_files(SHARED_INPUT_DIR):
 	files = io.find_ffi_files(SHARED_INPUT_DIR, camera=3)
 	assert len(files) == 4
 
+	files = io.find_ffi_files(SHARED_INPUT_DIR, sector=11)
+	assert(len(files) == 2)
+
 	files = io.find_ffi_files(SHARED_INPUT_DIR, sector=27)
 	assert len(files) == 2
 
