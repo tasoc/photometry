@@ -24,7 +24,7 @@ from tqdm import tqdm, trange
 from .catalog import download_catalogs
 from .backgrounds import fit_background
 from .utilities import (find_nearest, to_tuple)
-from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
+from . import pixel_flags as pxf
 from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes, io
 
 #--------------------------------------------------------------------------------------------------
