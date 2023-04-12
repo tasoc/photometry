@@ -95,6 +95,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 
 	# Mask out pixels marked for manual exclude:
 	mask |= pxf.pixel_manual_exclude(img0)
+	mask |= pxf.pixel_detect_bad_smear_columns(img0)
 
 	# If the entire image has been masked out,
 	# we should just stop now and return NaNs:

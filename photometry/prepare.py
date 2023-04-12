@@ -409,6 +409,10 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					if np.any(manexcl):
 						pixel_flags[dset_name][manexcl] |= PixelQualityFlags.ManualExclude
 
+					#
+					bad_smear_columns = pxf.pixel_detect_bad_smear_columns(img)
+					if np.any(bad_smear_columns):
+						pixel_flags[dset_name][bad_smear_columns] |= PixelQualityFlags.BadSmearCalibration
 
 					if dset_name not in images:
 						flux0 = img.data

@@ -49,7 +49,7 @@ def test_pixel_manual_exclude_zero(SHARED_INPUT_DIR):
 	assert isinstance(mask, np.ndarray)
 	assert mask.shape == img.shape
 	assert mask.dtype == 'bool'
-	assert np.all(mask)
+	assert np.all(mask), "All pixels should be masked"
 
 #--------------------------------------------------------------------------------------------------
 def test_pixel_manual_exclude_earth(SHARED_INPUT_DIR):
@@ -67,7 +67,29 @@ def test_pixel_manual_exclude_earth(SHARED_INPUT_DIR):
 	assert isinstance(mask, np.ndarray)
 	assert mask.shape == img.shape
 	assert mask.dtype == 'bool'
-	assert np.all(mask)
+	assert np.all(mask), "All pixels should be masked"
+
+#--------------------------------------------------------------------------------------------------
+@pytest.mark.parametrize('sector,camera,ccd,expected', [
+	(1,None,None,0),
+	(11,2,2,7),
+	(27,4,1,0),
+])
+def test_pixel_detect_bad_smear_columns(SHARED_INPUT_DIR, sector, camera, ccd, expected):
+
+	files = io.find_ffi_files(os.path.join(SHARED_INPUT_DIR, 'images'),
+		sector=sector, camera=camera, ccd=ccd)
+	assert len(files) > 0, "No files found"
+
+	for fpath in files:
+		print(fpath)
+		img = io.FFIImage(fpath)
+		mask = pxf.pixel_detect_bad_smear_columns(img)
+
+		assert isinstance(mask, np.ndarray)
+		assert mask.shape == img.shape
+		assert mask.dtype == 'bool'
+		assert np.sum(np.any(mask, axis=0)) == expected, "Not the expected number of bad columns"
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

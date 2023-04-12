@@ -9,6 +9,8 @@
 import numpy as np
 import logging
 from scipy.ndimage.filters import median_filter
+from scipy.ndimage import label
+from bottleneck import nanmedian
 
 #--------------------------------------------------------------------------------------------------
 def pixel_manual_exclude(img):
@@ -77,3 +79,41 @@ def pixel_background_shenanigans(img, SumImage=None):
 	flux0 = median_filter(flux0, size=15)
 
 	return flux0
+
+#--------------------------------------------------------------------------------------------------
+def pixel_detect_bad_smear_columns(img):
+	"""
+
+	Parameters:
+		img (:class:`io.FFIImage`): Image of which to create mask.
+
+	Returns:
+		:func:`np.ndarray`: Boolean mask indicating bad columns in the image.
+
+	.. codeauthor:: Rasmus Handberg <rasmush@phys.au.dk>
+	"""
+
+	mask = np.zeros(img.shape, dtype='bool')
+	if not img.is_tess:
+		return mask
+
+	# Check the median of the virtual smear column.
+	# This should not be very large, unless a bright star has contaminated it.
+	ms = nanmedian(img.vsmear, axis=0)
+	indx1 = (ms > 250)
+
+	# Also check the image itself for large negative columns:
+	ms2 = nanmedian(img, axis=0)
+	indx2 = (ms2 < -1000)
+
+	# Usually the effect of the bad smear is best detected in the virtual smear,
+	# but the image itself shows which columns were actually affected.
+	# Therefore, mark columns as bad if they either of the indicies above are true,
+	# but require that the virtual smear condition is true in the cluster of columns:
+	lab_both, num_both = label(indx1 | indx2)
+	for k in range(num_both):
+		indx_this = (lab_both == k+1)
+		if np.any(indx1 & indx_this):
+			mask[:, indx_this] = True
+
+	return mask

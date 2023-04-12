@@ -161,13 +161,15 @@ class PixelQualityFlags(QualityFlagsBase):
 	NotUsedForBackground = 1
 	ManualExclude = 2
 	BackgroundShenanigans = 4
+	BadSmearCalibration = 8
 
 	# Default bitmask
-	DEFAULT_BITMASK = (ManualExclude)
+	DEFAULT_BITMASK = (ManualExclude | BadSmearCalibration)
 
 	# Pretty string descriptions for each flag
 	STRINGS = {
 		NotUsedForBackground: "Pixel was not used in background calculation",
 		ManualExclude: "Manual exclude",
 		BackgroundShenanigans: "Background Shenanigans detected in pixel",
+		BadSmearCalibration: "Bad smear correction detected in column"
 	}
