@@ -17,6 +17,7 @@ from matplotlib.ticker import MaxNLocator
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import astropy.visualization as viz
+from astropy.nddata import NDData, CCDData
 
 # Change to a non-GUI backend since this
 # should be able to run on a cluster:
@@ -124,6 +125,12 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		warnings.warn("'make_cbar' is deprecated. Use 'cbar' instead.", category=DeprecationWarning)
 		if not cbar:
 			cbar = make_cbar
+
+	if isinstance(image, (NDData, CCDData)):
+		mask = image.mask
+		image = np.asarray(image)
+		if mask is not None:
+			image[mask] = np.NaN
 
 	# Special treatment for boolean arrays:
 	if isinstance(image, np.ndarray) and image.dtype == 'bool':

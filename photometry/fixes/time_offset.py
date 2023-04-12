@@ -61,7 +61,7 @@ to be re-run and HDF5 file re-created.
 """
 
 import logging
-from ..utilities import load_settings
+from .. import io
 
 #--------------------------------------------------------------------------------------------------
 def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
@@ -132,7 +132,7 @@ def time_offset(time, header, datatype='ffi', timepos='mid', return_flag=False):
 
 	# Allow the fix to be turned off through the settings:
 	if apply_correction:
-		settings = load_settings()
+		settings = io.load_settings()
 		if not settings.getboolean('fixes', 'time_offset', fallback=True):
 			logger.warning("SettingsWarning: Time offset fix has been turned off in settings.")
 			apply_correction = False

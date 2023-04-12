@@ -8,15 +8,15 @@ import pytest
 import numpy as np
 import conftest # noqa: F401
 from photometry.backgrounds import fit_background
-from photometry.utilities import find_ffi_files, load_ffi_fits
+from photometry import io
 
 #--------------------------------------------------------------------------------------------------
 def test_background(SHARED_INPUT_DIR):
 	"""Test of background estimator"""
 
 	# Load the first image in the input directory:
-	fname = find_ffi_files(SHARED_INPUT_DIR)[0]
-	img, hdr = load_ffi_fits(fname, return_header=True)
+	fname = io.find_ffi_files(SHARED_INPUT_DIR)[0]
+	img = io.FFIImage(fname)
 
 	# Estimate the background:
 	bck, mask = fit_background(fname)
@@ -33,7 +33,7 @@ def test_background(SHARED_INPUT_DIR):
 	assert mask.dtype == 'bool'
 
 #--------------------------------------------------------------------------------------------------
-def test_background_fakeimg(SHARED_INPUT_DIR):
+def test_background_fakeimg():
 
 	# Create fake image, which is constant:
 	# FIXME: This doesn't test the radial background component,

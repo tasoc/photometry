@@ -14,8 +14,9 @@ import itertools
 import contextlib
 from tqdm import tqdm
 from .tasoc_db import TASOC_DB
-from .utilities import (add_proper_motion, load_sector_settings,
-	radec_to_cartesian, cartesian_to_radec, download_file, to_tuple)
+from .utilities import (add_proper_motion, radec_to_cartesian, cartesian_to_radec,
+	download_file, to_tuple)
+from . import io
 
 #--------------------------------------------------------------------------------------------------
 def catalog_sqlite_search_footprint(cursor, footprint, columns='*', constraints=None,
@@ -141,7 +142,7 @@ def make_catalog(sector, input_folder=None, cameras=None, ccds=None, coord_buffe
 	cameras = to_tuple(cameras, (1,2,3,4))
 	ccds = to_tuple(ccds, (1,2,3,4))
 
-	settings = load_sector_settings(sector=sector)
+	settings = io.load_sector_settings(sector=sector)
 	sector_reference_time = settings['reference_time']
 	epoch = (sector_reference_time - 2451544.5)/365.25
 

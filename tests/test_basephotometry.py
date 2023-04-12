@@ -71,14 +71,14 @@ def test_stamp(SHARED_INPUT_DIR):
 			print(cols)
 			print(cols.shape)
 
-			assert(rows.shape == (10, 20))
-			assert(cols.shape == (10, 20))
-			assert(rows[0,0] == 51)
-			assert(cols[0,0] == 51)
-			assert(rows[-1,0] == 60)
-			assert(cols[-1,0] == 51)
-			assert(rows[-1,-1] == 60)
-			assert(cols[-1,-1] == 70)
+			assert rows.shape == (10, 20)
+			assert cols.shape == (10, 20)
+			assert rows[0,0] == 51
+			assert cols[0,0] == 51
+			assert rows[-1,0] == 60
+			assert cols[-1,0] == 51
+			assert rows[-1,-1] == 60
+			assert cols[-1,-1] == 70
 
 			pho.resize_stamp(up=12)
 			cols, rows = pho.get_pixel_grid()
@@ -88,8 +88,8 @@ def test_stamp(SHARED_INPUT_DIR):
 			print('Cols:')
 			print(cols)
 			print(cols.shape)
-			assert(rows.shape == (22, 20))
-			assert(cols.shape == (22, 20))
+			assert rows.shape == (22, 20)
+			assert cols.shape == (22, 20)
 
 			pho.resize_stamp(down=2)
 			cols, rows = pho.get_pixel_grid()
@@ -99,8 +99,8 @@ def test_stamp(SHARED_INPUT_DIR):
 			print('Cols:')
 			print(cols)
 			print(cols.shape)
-			assert(rows.shape == (24, 20))
-			assert(cols.shape == (24, 20))
+			assert rows.shape == (24, 20)
+			assert cols.shape == (24, 20)
 
 			pho.resize_stamp(right=3)
 			cols, rows = pho.get_pixel_grid()
@@ -110,8 +110,8 @@ def test_stamp(SHARED_INPUT_DIR):
 			print('Cols:')
 			print(cols)
 			print(cols.shape)
-			assert(rows.shape == (24, 23))
-			assert(cols.shape == (24, 23))
+			assert rows.shape == (24, 23)
+			assert cols.shape == (24, 23)
 
 			pho.resize_stamp(left=3)
 			cols, rows = pho.get_pixel_grid()
@@ -121,8 +121,8 @@ def test_stamp(SHARED_INPUT_DIR):
 			print('Cols:')
 			print(cols)
 			print(cols.shape)
-			assert(rows.shape == (24, 26))
-			assert(cols.shape == (24, 26))
+			assert rows.shape == (24, 26)
+			assert cols.shape == (24, 26)
 
 			# Set a stamp that is not going to work:
 			with pytest.raises(ValueError) as e:
@@ -181,7 +181,7 @@ def test_images(SHARED_INPUT_DIR):
 			pho._set_stamp()
 
 			for img in pho.images:
-				assert(img.shape == (10, 20))
+				assert img.shape == (10, 20)
 
 #--------------------------------------------------------------------------------------------------
 def test_backgrounds(SHARED_INPUT_DIR):
@@ -192,7 +192,7 @@ def test_backgrounds(SHARED_INPUT_DIR):
 			pho._set_stamp()
 
 			for img in pho.backgrounds:
-				assert(img.shape == (10, 20))
+				assert img.shape == (10, 20)
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.parametrize('datasource', ['tpf', 'ffi'])
@@ -200,12 +200,12 @@ def test_catalog(SHARED_INPUT_DIR, datasource):
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource=datasource, **DUMMY_KWARG) as pho:
 			print(pho.catalog)
-			assert(DUMMY_TARGET in pho.catalog['starid'])
+			assert DUMMY_TARGET in pho.catalog['starid']
 
-			assert(pho.target['ra'] >= np.min(pho.catalog['ra']))
-			assert(pho.target['ra'] <= np.max(pho.catalog['ra']))
-			assert(pho.target['decl'] >= np.min(pho.catalog['dec']))
-			assert(pho.target['decl'] <= np.max(pho.catalog['dec']))
+			assert pho.target['ra'] >= np.min(pho.catalog['ra'])
+			assert pho.target['ra'] <= np.max(pho.catalog['ra'])
+			assert pho.target['decl'] >= np.min(pho.catalog['dec'])
+			assert pho.target['decl'] <= np.max(pho.catalog['dec'])
 
 			indx_main = (pho.catalog['starid'] == DUMMY_TARGET)
 
@@ -226,7 +226,7 @@ def test_catalog_attime(SHARED_INPUT_DIR, datasource):
 
 			cat = pho.catalog_attime(time[0])
 
-			assert(cat.colnames == pho.catalog.colnames)
+			assert cat.colnames == pho.catalog.colnames
 			# TODO: Add more tests here, once we change the test input data
 
 #--------------------------------------------------------------------------------------------------
@@ -240,7 +240,7 @@ def test_aperture(SHARED_INPUT_DIR, datasource):
 
 			print(pho.sumimage.shape)
 			print(pho.aperture.shape)
-			assert(pho.sumimage.shape == pho.aperture.shape)
+			assert pho.sumimage.shape == pho.aperture.shape
 
 			# For this target, all the pixels should be available:
 			assert np.all(pho.aperture & 1 != 0)
@@ -451,22 +451,22 @@ def test_cache(SHARED_INPUT_DIR):
 		print("Running with no cache...")
 		#BasePhotometry.hdf5_cache = {}
 		#with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='none'):
-		#	assert(BasePhotometry.hdf5_cache == {})
+		#	assert BasePhotometry.hdf5_cache == {}
 
 		print("Running with basic cache...")
 		#hdf5_cache = {}
 		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='basic') as pho:
 			print("WHAT?", BasePhotometry.hdf5_cache)
-			assert(pho.filepath_hdf5 in BasePhotometry.hdf5_cache)
+			assert pho.filepath_hdf5 in BasePhotometry.hdf5_cache
 			c = BasePhotometry.hdf5_cache.get(pho.filepath_hdf5)
-			assert(c.get('_images_cube_full') is None)
+			assert c.get('_images_cube_full') is None
 
 		#print(hdf5_cache)
 		BasePhotometry.hdf5_cache = {}
 		with BasePhotometry(DUMMY_TARGET, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='ffi', camera=2, ccd=2, cache='full') as pho:
 			c = BasePhotometry.hdf5_cache.get(pho.filepath_hdf5)
 			cube = c.get('_images_cube_full')
-			assert(cube.shape == (2048, 2048, 2))
+			assert cube.shape == (2048, 2048, 2)
 """
 
 #--------------------------------------------------------------------------------------------------
@@ -474,8 +474,8 @@ def test_tpf_with_other_target(SHARED_INPUT_DIR):
 	sub_target = 267091131
 	with TemporaryDirectory() as OUTPUT_DIR:
 		with BasePhotometry(sub_target, SHARED_INPUT_DIR, OUTPUT_DIR, datasource='tpf:267211065', sector=1, camera=3, ccd=2) as pho:
-			assert(pho.starid == sub_target)
-			assert(pho.datasource == 'tpf')
+			assert pho.starid == sub_target
+			assert pho.datasource == 'tpf'
 
 #--------------------------------------------------------------------------------------------------
 if __name__ == '__main__':

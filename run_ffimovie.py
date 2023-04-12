@@ -50,9 +50,10 @@ import copy
 from tqdm import tqdm, trange
 from photometry.plots import plt, plot_image
 from matplotlib import animation
+from photometry import io
 from matplotlib.colors import ListedColormap
 from photometry.quality import PixelQualityFlags
-from photometry.utilities import find_hdf5_files, TqdmLoggingHandler, to_tuple
+from photometry.utilities import TqdmLoggingHandler, to_tuple
 
 #--------------------------------------------------------------------------------------------------
 def set_copyright(fig, xpos=0.01, ypos=0.99, fontsize=12):
@@ -244,7 +245,7 @@ def make_combined_movie(input_dir, mode='images', sectors=None, fps=15, dpi=100,
 	# Find the sectors that are available:
 	if sectors is None:
 		sectors = []
-		for fname in find_hdf5_files(input_dir):
+		for fname in io.find_hdf5_files(input_dir):
 			# Load the sector number from HDF5 file attributes:
 			with h5py.File(fname, 'r') as hdf:
 				s = hdf['images'].attrs.get('SECTOR')
@@ -275,7 +276,7 @@ def make_combined_movie(input_dir, mode='images', sectors=None, fps=15, dpi=100,
 			vmin = np.full(16, np.NaN)
 			vmax = np.full(16, np.NaN)
 			for k, (camera, ccd, rot) in enumerate(camccdrot):
-				hdf_file = find_hdf5_files(input_dir, sector=sector, camera=camera, ccd=ccd)
+				hdf_file = io.find_hdf5_files(input_dir, sector=sector, camera=camera, ccd=ccd)
 				if hdf_file:
 					hdf[k] = h5py.File(hdf_file[0], 'r')
 
@@ -419,7 +420,7 @@ def main():
 	run_full_directory = None
 	if len(args.files) == 1 and os.path.isdir(args.files[0]):
 		run_full_directory = args.files[0]
-		args.files = find_hdf5_files(run_full_directory, sector=to_tuple(args.sector))
+		args.files = io.find_hdf5_files(run_full_directory, sector=to_tuple(args.sector))
 		logger.info("Found %d HDF5 files in directory '%s'", len(args.files), run_full_directory)
 
 	# Stop if there are no files to process:

@@ -30,7 +30,7 @@ def test_aperturephotometry(SHARED_INPUT_DIR, datasource):
 			print( pho.lightcurve )
 
 			# It should set the status to one of these:
-			assert(pho.status in (STATUS.OK, STATUS.WARNING))
+			assert pho.status in (STATUS.OK, STATUS.WARNING)
 
 			# Check the sumimage:
 			plt.figure()
@@ -123,7 +123,8 @@ if __name__ == '__main__':
 	console = logging.StreamHandler()
 	console.setFormatter(formatter)
 	logger_phot = logging.getLogger('photometry')
-	if not logger_phot.hasHandlers(): logger_phot.addHandler(console)
+	if not logger_phot.hasHandlers():
+		logger_phot.addHandler(console)
 	logger_phot.setLevel(logging.INFO)
 
 	pytest.main([__file__])

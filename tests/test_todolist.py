@@ -62,7 +62,7 @@ def test_exclude_file():
 #
 #		cbv_area = todolist.calc_cbv_area(catalog_row, settings)
 #		print(cbv_area)
-#		assert(cbv_area == 131)
+#		assert cbv_area == 131
 
 #--------------------------------------------------------------------------------------------------
 def todo_file_valid(fpath, sector=None, camera=None, ccd=None):

@@ -13,8 +13,9 @@ from scipy.stats import binned_statistic
 from scipy.interpolate import InterpolatedUnivariateSpline
 from photutils import Background2D, SExtractorBackground, BackgroundBase
 from statsmodels.nonparametric.kde import KDEUnivariate as KDE
-from .utilities import load_ffi_fits, move_median_central
-from .pixel_flags import pixel_manual_exclude
+from .utilities import move_median_central
+from .io import FFIImage
+from . import pixel_flags as pxf
 
 #--------------------------------------------------------------------------------------------------
 def _reduce_mode(x):
@@ -82,29 +83,18 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 	logger = logging.getLogger(__name__)
 
 	# Load file:
-	hdr = {}
-	if isinstance(image, np.ndarray):
-		img0 = image
-	elif isinstance(image, str):
-		if image.endswith('.npy'):
-			img0 = np.load(image)
-		else:
-			img0, hdr = load_ffi_fits(image, return_header=True)
-	else:
-		raise ValueError("Input image must be either 2D ndarray or path to file.")
-
-	# Check if this is real TESS data:
-	# Could proberly be done more elegant, but if it works, it works...
-	is_tess = (hdr.get('TELESCOP') == 'TESS' and hdr.get('NAXIS1') == 2136 and hdr.get('NAXIS2') == 2078)
+	img0 = FFIImage(image)
+	hdr = img0.header
 
 	# Create mask
 	# TODO: Use the known locations of bright stars
-	mask = ~np.isfinite(img0)
-	mask |= (img0 > flux_cutoff)
-	mask |= (img0 < 0)
+	mask = img0.mask
+	mask |= ~np.isfinite(img0.data)
+	mask |= (img0.data > flux_cutoff)
+	mask |= (img0.data < 0)
 
 	# Mask out pixels marked for manual exclude:
-	mask |= pixel_manual_exclude(img0, hdr)
+	mask |= pxf.pixel_manual_exclude(img0)
 
 	# If the entire image has been masked out,
 	# we should just stop now and return NaNs:
@@ -117,7 +107,7 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 
 	# Create distance-image with distances (in pixels) from the camera centre:
 	use_radial_component = True
-	if is_tess:
+	if img0.is_tess:
 		# Background estimator function to be evaluated in radial coordinates:
 		#stat = lambda x: bkg_estimator.calc_background(x)
 		stat = _reduce_mode
@@ -167,8 +157,8 @@ def fit_background(image, catalog=None, flux_cutoff=8e4,
 		bkgiters = 1
 
 	# Iterate the radial and square background components:
-	img_bkg_radial = 0
-	img_bkg_square = 0
+	img_bkg_radial = np.asarray(0)
+	img_bkg_square = np.asarray(0)
 	for iters in range(bkgiters):
 		if use_radial_component:
 			# Remove the square component from image for next iteration:
