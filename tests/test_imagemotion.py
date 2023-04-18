@@ -10,7 +10,7 @@ import numpy as np
 import h5py
 import conftest # noqa: F401
 from photometry.image_motion import ImageMovementKernel
-from photometry.utilities import find_ffi_files, find_hdf5_files, load_ffi_fits
+from photometry import io
 #from photometry.plots import plt
 
 #--------------------------------------------------------------------------------------------------
@@ -27,11 +27,11 @@ def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 	print("Testing warpmode=" + warpmode)
 
 	# Load the first image in the input directory:
-	files = find_ffi_files(os.path.join(SHARED_INPUT_DIR, 'images'), camera=1, ccd=1)
+	files = io.find_ffi_files(os.path.join(SHARED_INPUT_DIR, 'images'), camera=1, ccd=1)
 	fname = files[0]
 
-	# Load the image:
-	img = load_ffi_fits(fname)
+	# Load the image:1
+	img = io.FFIImage(fname)
 
 	# Trying to calculate kernel with no reference image should give error:
 	if warpmode == 'unchanged':
@@ -100,7 +100,7 @@ def test_imagemotion(SHARED_INPUT_DIR, warpmode):
 	print("Extracted movements:")
 	print(delta_pos)
 
-	assert(delta_pos.shape == xy.shape)
+	assert delta_pos.shape == xy.shape
 
 	# The movements should all be very close to zero,
 	# since we used the same image as the reference:
@@ -124,7 +124,7 @@ def test_imagemotion_wcs(SHARED_INPUT_DIR):
 	print(xy)
 
 	# Load the first image in the input directory:
-	INPUT_FILE = find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=1, ccd=1)[0]
+	INPUT_FILE = io.find_hdf5_files(SHARED_INPUT_DIR, sector=1, camera=1, ccd=1)[0]
 
 	with h5py.File(INPUT_FILE, 'r') as h5:
 
@@ -139,28 +139,28 @@ def test_imagemotion_wcs(SHARED_INPUT_DIR):
 		# The movements should all be very close to zero,
 		# since we used the same image as the reference:
 		jitter = imk.interpolate(times[0], xy)
-		assert(jitter.shape == xy.shape)
+		assert jitter.shape == xy.shape
 		np.testing.assert_allclose(jitter, 0, atol=1e-5, rtol=1e-5)
 
 		# Ask for a jitter in-between timestamp to check the interpolation:
 		jitter = imk.interpolate(0.5*(times[0] + times[1]), xy)
-		assert(jitter.shape == xy.shape)
+		assert jitter.shape == xy.shape
 
 		# Check other critical timestamps:
 		jitter = imk.interpolate(times[1], xy)
-		assert(jitter.shape == xy.shape)
+		assert jitter.shape == xy.shape
 
 		# Last timestamp should also work:
 		jitter = imk.interpolate(times[-1], xy)
-		assert(jitter.shape == xy.shape)
+		assert jitter.shape == xy.shape
 
 		# Just before first timestamp should also work (roundoff check):
 		jitter = imk.interpolate(times[0] - np.finfo('float64').eps, xy)
-		assert(jitter.shape == xy.shape)
+		assert jitter.shape == xy.shape
 
 		# Just after last timestamp should also work (roundoff check):
 		jitter = imk.interpolate(times[-1] + np.finfo('float64').eps, xy)
-		assert(jitter.shape == xy.shape)
+		assert jitter.shape == xy.shape
 
 		#plt.close('all')
 		#plt.figure()
@@ -176,7 +176,7 @@ def test_imagemotion_wcs(SHARED_INPUT_DIR):
 		# Overwrite the second WCS object to be identical to the first one:
 		imk.series_kernels[1] = imk.series_kernels[0]
 		jitter = imk.interpolate(0.5*(times[0] + times[1]), xy)
-		assert(jitter.shape == xy.shape)
+		assert jitter.shape == xy.shape
 		np.testing.assert_allclose(jitter, 0, atol=1e-5, rtol=1e-5)
 
 		# Add one to the reference pixels of the second:
@@ -186,7 +186,7 @@ def test_imagemotion_wcs(SHARED_INPUT_DIR):
 		imk.series_kernels[1].sip = None
 		imk.series_kernels[1].wcs.crpix += 1.0
 		jitter = imk.interpolate(times[1], xy)
-		assert(jitter.shape == xy.shape)
+		assert jitter.shape == xy.shape
 		np.testing.assert_allclose(jitter, 1)
 
 		# Removing some timestamps should so we can test if we correctky throw an exceotion;

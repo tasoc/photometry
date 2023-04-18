@@ -28,14 +28,13 @@ from astropy.wcs import WCS, FITSFixedWarning
 from bottleneck import nanmedian, nanvar, nanstd, allnan
 from .image_motion import ImageMovementKernel
 from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
-from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, rms_timescale,
-	find_nearest, ListHandler, load_settings, load_sector_settings)
+from .utilities import (rms_timescale, find_nearest, ListHandler)
 from .catalog import catalog_sqlite_search_footprint
 from .psf import PSF
 from .plots import plot_image, plt, save_figure, plot_style_context
 from .spice import TESS_SPICE
 from .version import get_version
-from . import fixes
+from . import fixes, io
 
 # Filter out annoying warnings:
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -198,7 +197,7 @@ class BasePhotometry(object):
 			logger.debug('CCD = %s', self.ccd)
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+			filepath_hdf5 = io.find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
 				raise FileNotFoundError(f"HDF5 File not found. SECTOR={self.sector:d}, CAMERA={self.camera:d}, CCD={self.ccd:d}")
 			filepath_hdf5 = filepath_hdf5[0]
@@ -230,7 +229,7 @@ class BasePhotometry(object):
 				attrs['data_rel'] = hdr['DATA_REL'] # Data release number
 				attrs['cadence'] = hdr.get('CADENCE')
 				if attrs['cadence'] is None:
-					attrs['cadence'] = load_sector_settings(self.sector)['ffi_cadence']
+					attrs['cadence'] = io.load_sector_settings(self.sector)['ffi_cadence']
 
 				# Start filling out the basic vectors:
 				self.lightcurve['time'] = Column(self.hdf['time'], description='Time', dtype='float64', unit='TBJD')
@@ -317,7 +316,7 @@ class BasePhotometry(object):
 				starid_to_load = self.starid
 
 			# Find the target pixel file for this star:
-			fname = find_tpf_files(self.input_folder, starid=starid_to_load, sector=sector, cadence=cadence)
+			fname = io.find_tpf_files(self.input_folder, starid=starid_to_load, sector=sector, cadence=cadence)
 			if len(fname) == 1:
 				fname = fname[0]
 			elif len(fname) == 0:
@@ -375,7 +374,7 @@ class BasePhotometry(object):
 			self.n_readout = self.tpf['PIXELS'].header.get('NREADOUT', 48) # Number of frames co-added in each timestamp.
 
 			# Load stuff from the common HDF5 file:
-			filepath_hdf5 = find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+			filepath_hdf5 = io.find_hdf5_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 			if len(filepath_hdf5) != 1:
 				raise FileNotFoundError(f"HDF5 File not found. SECTOR={self.sector:d}, CAMERA={self.camera:d}, CCD={self.ccd:d}")
 			filepath_hdf5 = filepath_hdf5[0]
@@ -399,7 +398,7 @@ class BasePhotometry(object):
 			os.makedirs(self.plot_folder, exist_ok=True)
 
 		# The file to load the star catalog from:
-		self.catalog_file = find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
+		self.catalog_file = io.find_catalog_files(self.input_folder, sector=self.sector, camera=self.camera, ccd=self.ccd)
 		self._catalog = None
 		logger.debug('Catalog file: %s', self.catalog_file)
 		if len(self.catalog_file) != 1:
@@ -1089,7 +1088,7 @@ class BasePhotometry(object):
 			:func:`load_settings`.
 		"""
 		if not hasattr(self, '_settings') or self._settings is None:
-			self._settings = load_settings()
+			self._settings = io.load_settings()
 		return self._settings
 
 	#----------------------------------------------------------------------------------------------

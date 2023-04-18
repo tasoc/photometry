@@ -55,6 +55,12 @@
 		"51": {"sector": 51, "reference_time": 2459698.847830, "ffi_cadence": 600},
 		"52": {"sector": 52, "reference_time": 2459724.747134, "ffi_cadence": 600},
 		"53": {"sector": 53, "reference_time": 2459750.326994, "ffi_cadence": 600},
-		"54": {"sector": 54, "reference_time": 2459776.403381, "ffi_cadence": 600}
+		"54": {"sector": 54, "reference_time": 2459776.403381, "ffi_cadence": 600},
+		"55": {"sector": 55, "reference_time": 2459800.493657, "ffi_cadence": 200},
+		"56": {"sector": 56, "reference_time": 2459828.632544, "ffi_cadence": 200},
+		"57": {"sector": 57, "reference_time": 2459857.472821, "ffi_cadence": 200},
+		"58": {"sector": 58, "reference_time": 2459886.250597, "ffi_cadence": 200},
+		"59": {"sector": 59, "reference_time": 2459914.035317, "ffi_cadence": 200},
+		"60": {"sector": 60, "reference_time": 2459940.514482, "ffi_cadence": 200}
 	}
 }

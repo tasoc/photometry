@@ -12,7 +12,7 @@ import os.path
 from astropy.table import Table
 import conftest # noqa: F401
 from photometry import fixes
-from photometry.utilities import load_settings
+from photometry.io import load_settings
 
 TOFFDIR = os.path.abspath(os.path.join(os.path.dirname(__file__), 'input', 'time_offset'))
 

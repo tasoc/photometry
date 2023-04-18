@@ -22,8 +22,9 @@ from astropy.table import Table, vstack, Column
 from astropy.io import fits
 from astropy.wcs import WCS, FITSFixedWarning
 from timeit import default_timer
-from .utilities import (find_tpf_files, find_hdf5_files, find_catalog_files, sphere_distance,
-	to_tuple, load_settings, load_sector_settings)
+from .utilities import (sphere_distance, to_tuple)
+from .io import (find_tpf_files, find_hdf5_files, find_catalog_files,
+	load_settings, load_sector_settings)
 from .catalog import catalog_sqlite_search_footprint, download_catalogs
 
 #--------------------------------------------------------------------------------------------------

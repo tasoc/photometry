@@ -43,36 +43,44 @@ if __name__ == '__main__':
 
 	# Find peaks, meaning positions where TESS is the furthest from Earth, separated by
 	# at least 10 days (orbit ~13.4 days) and at a hight of at least 40 Earth radii:
-	peaks, _ = find_peaks(dist, height=40, distance=10/dt)
+	peaks_max, _ = find_peaks(dist, height=40, distance=10/dt)
+	peaks_min, _ = find_peaks(-dist, height=-40, distance=10/dt)
 
 	# Find the peak which is the closest to the given "zeropoint" reference time:
-	indx = np.argmin(np.abs(time[peaks] - zp_reftime))
+	indx = np.argmin(np.abs(time[peaks_max] - zp_reftime))
 
 	# Create figure of TESS orbit with reference times marked:
 	fig, ax = plt.subplots()
 	ax.plot(time - 2457000, dist)
-	ax.scatter(time[peaks] - 2457000, dist[peaks])
+	ax.scatter(time[peaks_max] - 2457000, dist[peaks_max])
+	ax.scatter(time[peaks_min] - 2457000, dist[peaks_min])
 	ax.axvline(zp_reftime - 2457000, c='r')
 	ax.set_xlabel('Time (JD - 2457000)')
 	ax.set_ylabel('Distance (Earth radii)')
-	#ax.set_title('TESS orbit height')
 	#ax.set_xlim(2000, 2760)
 
 	# Go two orbit at a time forward and mark those peaks as the reference times for that sector:
 	sector = zp_sector
-	for i in range(indx, len(peaks), 2):
+	for i in range(indx, len(peaks_max), 2):
 		if sector < 27:
 			ffi_cadence = 1800
-			reference_time = time[peaks][i]
+			reference_time = time[peaks_max][i]
 		elif sector < 55:
 			ffi_cadence = 600
-			reference_time = time[peaks][i]
+			reference_time = time[peaks_max][i]
 		else:
 			# Now TESS is doing downlinks at apogee as well as perigee,
 			# therefore we are setting the reference time 3 days before
 			# the firt apogee.
 			ffi_cadence = 200
-			reference_time = time[peaks][i] - 3
+			reference_time = time[peaks_max][i] - 3
+
+		# Make sure that there are at least two minima after the reference time
+		# This is to ensures that the whole sector is covered by DEF SPICE kernels:
+		number_of_minima_after = np.sum(time[peaks_min] > reference_time)
+		if number_of_minima_after < 2:
+			print(f"Stopped because not all of sector {sector:d} is covered.")
+			break
 
 		ax.axvline(reference_time - 2457000, ls='--', c='g')
 

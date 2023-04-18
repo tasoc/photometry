@@ -16,18 +16,16 @@ import multiprocessing
 import itertools
 import functools
 import contextlib
-import warnings
 from astropy.io import fits
-from astropy.wcs import WCS, NoConvergence, FITSFixedWarning
+from astropy.wcs import NoConvergence
 from bottleneck import replace, nanmean, nanmedian
 from timeit import default_timer
 from tqdm import tqdm, trange
 from .catalog import download_catalogs
 from .backgrounds import fit_background
-from .utilities import (load_ffi_fits, find_ffi_files, find_catalog_files, find_nearest,
-	find_tpf_files, load_sector_settings, to_tuple)
-from .pixel_flags import pixel_manual_exclude, pixel_background_shenanigans
-from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes
+from .utilities import (find_nearest, to_tuple)
+from . import pixel_flags as pxf
+from . import TESSQualityFlags, PixelQualityFlags, ImageMovementKernel, fixes, io
 
 #--------------------------------------------------------------------------------------------------
 def quality_from_tpf(tpffile, time_start, time_end):
@@ -156,7 +154,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		sectors = []
 
 		# TODO: Could we change this so we don't have to parse the filenames?
-		for fname in find_ffi_files(input_folder):
+		for fname in io.find_ffi_files(input_folder):
 			m = re.match(r'^tess.+-s(\d+)-.+\.fits', os.path.basename(fname))
 			if int(m.group(1)) not in sectors:
 				sectors.append(int(m.group(1)))
@@ -165,7 +163,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		# catalogs are available. Can be added directly to the sectors list,
 		# since the HDF5 creation below will simply skip any sectors with
 		# no FFIs available
-		for fname in find_tpf_files(input_folder):
+		for fname in io.find_tpf_files(input_folder):
 			m = re.match(r'^.+-s(\d+)[-_].+_(fast-)?tp\.fits', os.path.basename(fname))
 			if int(m.group(1)) not in sectors:
 				sectors.append(int(m.group(1)))
@@ -206,14 +204,14 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		tic_total = default_timer()
 
 		# Find all the FFI files associated with this camera and CCD:
-		files = find_ffi_files(input_folder, sector=sector, camera=camera, ccd=ccd)
+		files = io.find_ffi_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 		numfiles = len(files)
 		logger.info("Number of files: %d", numfiles)
 		if numfiles == 0:
 			continue
 
 		# Catalog file:
-		catalog_file = find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
+		catalog_file = io.find_catalog_files(input_folder, sector=sector, camera=camera, ccd=ccd)
 		if len(catalog_file) != 1:
 			logger.error("Catalog file could not be found: SECTOR=%d, CAMERA=%d, CCD=%d", sector, camera, ccd)
 			continue
@@ -232,7 +230,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 			cursor.close()
 
 		# Cadence is simply changed in sector 28:
-		cadence = load_sector_settings(sector)['ffi_cadence']
+		cadence = io.load_sector_settings(sector)['ffi_cadence']
 
 		# HDF5 file to be created/modified:
 		if output_file is None:
@@ -245,8 +243,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 		logger.debug("HDF5 File: %s", hdf_file)
 
 		# Get image shape from the first file:
-		img = load_ffi_fits(files[0])
-		img_shape = img.shape
+		img_shape = io.FFIImage(files[0]).shape
 
 		# Open the HDF5 file for editing:
 		with h5py.File(hdf_file, 'a', libver='latest') as hdf:
@@ -362,7 +359,6 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				filenames = [os.path.basename(fname).rstrip('.gz').encode('ascii', 'strict') for fname in files]
 				hdf.require_dataset('imagespaths', (numfiles,), data=filenames, **args_strings)
 
-				is_tess = False
 				attributes = {
 					'CAMERA': None,
 					'CCD': None,
@@ -380,43 +376,8 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					dset_name = f'{k:04d}'
 
 					# Load the FITS file data and the header:
-					flux0, hdr, flux0_err = load_ffi_fits(fname, return_header=True, return_uncert=True)
-
-					# Check if this is real TESS data:
-					# Could proberly be done more elegant, but if it works, it works...
-					if not is_tess and hdr.get('TELESCOP') == 'TESS' and hdr.get('NAXIS1') == 2136 and hdr.get('NAXIS2') == 2078:
-						is_tess = True
-
-					# Pick out the important bits from the header:
-					# Keep time in BTJD. If we want BJD we could
-					# simply add BJDREFI + BJDREFF:
-					time_start[k] = hdr['TSTART']
-					time_stop[k] = hdr['TSTOP']
-					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP'])
-					timecorr[k] = hdr.get('BARYCORR', 0)
-
-					# Get cadence-numbers from headers, if they are available.
-					# This header is not added before sector 6, so in that case
-					# we are doing a simple scaling of the timestamps.
-					if 'FFIINDEX' in hdr:
-						cadenceno[k] = hdr['FFIINDEX']
-					elif is_tess and cadence == 1800:
-						# The following numbers comes from unofficial communication
-						# with Doug Caldwell and Roland Vanderspek:
-						# The timestamp in TJD and the corresponding cadenceno:
-						first_time = 0.5*(1325.317007851970 + 1325.337841177751) - 3.9072474e-03
-						first_cadenceno = 4697
-						timedelt = 1800/86400
-						# Extracpolate the cadenceno as a simple linear relation:
-						offset = first_cadenceno - first_time/timedelt
-						cadenceno[k] = np.round((time[k] - timecorr[k])/timedelt + offset)
-					elif is_tess:
-						raise RuntimeError("Could not determine CADENCENO for TESS data")
-					else:
-						cadenceno[k] = k+1
-
-					# Data quality flags:
-					quality[k] = hdr.get('DQUALITY', 0)
+					img = io.FFIImage(fname)
+					hdr = img.header
 
 					if k == 0:
 						for key in attributes.keys():
@@ -426,29 +387,48 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 							if hdr.get(key) != value:
 								logger.error("%s: %s is not constant! (%s, %s)", dset_name, key, value, hdr.get(key))
 
-					# Find pixels marked for manual exclude:
-					manexcl = pixel_manual_exclude(flux0, hdr)
+					# Pick out the important bits from the header:
+					# Keep time in BTJD. If we want BJD we could
+					# simply add BJDREFI + BJDREFF:
+					time_start[k] = hdr['TSTART']
+					time_stop[k] = hdr['TSTOP']
+					time[k] = 0.5*(hdr['TSTART'] + hdr['TSTOP'])
+					timecorr[k] = hdr.get('BARYCORR', 0)
+					quality[k] = hdr.get('DQUALITY', 0)
 
-					# Add manual excludes to pixel flags:
+					# Get cadence-numbers from headers, if they are available.
+					if 'FFIINDEX' in hdr:
+						cadenceno[k] = hdr['FFIINDEX']
+					elif img.is_tess:
+						raise RuntimeError("Could not determine CADENCENO for TESS data")
+					else:
+						cadenceno[k] = k+1
+
+					# Find pixels marked for manual exclude and add then to pixel flags:
+					manexcl = pxf.pixel_manual_exclude(img)
 					if np.any(manexcl):
 						pixel_flags[dset_name][manexcl] |= PixelQualityFlags.ManualExclude
 
+
 					if dset_name not in images:
-						# Mask out manually excluded data before saving:
-						flux0[manexcl] = np.nan
-						flux0_err[manexcl] = np.nan
+						flux0 = img.data
+						flux0_err = img.uncertainty.array
 
 						# Load background from HDF file and subtract background from image,
 						# if the background has not already been subtracted:
 						if not hdr.get('BACKAPP', False):
 							flux0 -= backgrounds[dset_name]
 
+						# Mask out manually excluded data before saving:
+						excl = ~PixelQualityFlags.filter(np.asarray(pixel_flags[dset_name]))
+						flux0[excl] = np.NaN
+						flux0_err[excl] = np.NaN
+
 						# Save image subtracted the background in HDF5 file:
 						images.create_dataset(dset_name, data=flux0, chunks=imgchunks, **args)
 						images_err.create_dataset(dset_name, data=flux0_err, chunks=imgchunks, **args)
 					else:
 						flux0 = np.asarray(images[dset_name])
-						flux0[manexcl] = np.nan
 
 					# Save the World Coordinate System of each image:
 					# Check if the WCS actually works for each image, and if not, set it to an empty string
@@ -456,18 +436,15 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 						dset = wcs.create_dataset(dset_name, (1,), **args_strings)
 
 						# Test the World Coordinate System solution.
-						with warnings.catch_warnings():
-							warnings.filterwarnings('ignore', category=FITSFixedWarning)
-							w = WCS(header=hdr, relax=True)
-						fp = w.calc_footprint()
+						fp = img.wcs.calc_footprint()
 						test_coords = np.atleast_2d(fp[0, :])
 						try:
-							w.all_world2pix(test_coords, 0, ra_dec_order=True, maxiter=50)
+							img.wcs.all_world2pix(test_coords, 0, ra_dec_order=True, maxiter=50)
 						except (NoConvergence, ValueError):
 							logger.info("%s has bad WCS.", dset_name)
 							dset[0] = ''
 						else:
-							dset[0] = w.to_header_string(relax=True).strip().encode('ascii', 'strict')
+							dset[0] = img.wcs.to_header_string(relax=True).strip().encode('ascii', 'strict')
 
 					# Add together images for sum-image:
 					if TESSQualityFlags.filter(quality[k]):
@@ -501,7 +478,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 					images.attrs[key] = value
 
 				# Set pixel offsets:
-				if is_tess:
+				if img.is_tess:
 					images.attrs['PIXEL_OFFSET_ROW'] = 0
 					images.attrs['PIXEL_OFFSET_COLUMN'] = 44
 				else:
@@ -543,7 +520,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				bkgshe_threshold = pixel_flags.attrs.get('bkgshe_threshold', 40)
 				pixel_flags.attrs['bkgshe_threshold'] = bkgshe_threshold
 				pixel_background_shenanigans_wrapper = functools.partial(
-					pixel_background_shenanigans,
+					pxf.pixel_background_shenanigans,
 					SumImage=SumImage
 				)
 
@@ -654,7 +631,7 @@ def prepare_photometry(input_folder=None, sectors=None, cameras=None, ccds=None,
 				logger.info("Transfering QUALITY flags from TPFs to FFIs...")
 
 				# Select (max) five random TPF targets from the given sector, camera and ccd:
-				tpffiles = find_tpf_files(input_folder, sector=sector, camera=camera, ccd=ccd, findmax=5)
+				tpffiles = io.find_tpf_files(input_folder, sector=sector, camera=camera, ccd=ccd, findmax=5)
 				if len(tpffiles) == 0:
 					logger.warning("No TPF files found for SECTOR=%d, CAMERA=%d, CCD=%d and quality flags could therefore not be propergated.", sector, camera, ccd)
 				else:
