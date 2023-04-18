@@ -1,5 +1,6 @@
 pytest
 pytest-mpl
+pytest-cov
 flake8
 flake8-tabs >= 2.3.2
 flake8-builtins

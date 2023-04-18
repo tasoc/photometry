@@ -106,7 +106,6 @@ jobs:
         python -m pip install --upgrade pip wheel setuptools
         grep "^numpy" requirements.txt | xargs -I {} pip install "{}"
         pip install -r requirements.txt
-        pip install codecov pytest-cov
 
     - name: Setup MPI
       if: runner.os == 'Linux'
