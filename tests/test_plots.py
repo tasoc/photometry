@@ -12,7 +12,8 @@ import os.path
 import numpy as np
 from scipy.stats import multivariate_normal
 import conftest # noqa: F401
-from photometry.plots import plt, plot_image, plot_image_fit_residuals, plots_interactive
+import photometry.plots as p
+from photometry.plots import plt
 
 kwargs = {
 	'baseline_dir': os.path.join(os.path.abspath(os.path.dirname(__file__)), 'correct_plots'),
@@ -33,17 +34,18 @@ def test_plot_image():
 
 	scales = ['linear', 'sqrt', 'log', 'asinh', 'histeq', 'sinh', 'squared']
 
-	fig, axes = plt.subplots(2, 4, figsize=(14, 8))
-	axes = axes.flatten()
-	for k, scale in enumerate(scales):
-		ax = axes[k]
-		plot_image(gauss, ax=ax, scale=scale, title=scale, cbar='right')
-		ax.plot(mu[1], mu[0], 'r+')
+	with p.plot_style_context():
+		fig, axes = plt.subplots(2, 4, figsize=(14, 8))
+		axes = axes.flatten()
+		for k, scale in enumerate(scales):
+			ax = axes[k]
+			p.plot_image(gauss, ax=ax, scale=scale, title=scale, cbar='right')
+			ax.plot(mu[1], mu[0], 'r+')
 
-	# In the final plot:
-	plot_image(gauss, ax=axes[-1], scale='log', title='log - Reds', cmap='Reds', cbar='right')
+		# In the final plot:
+		p.plot_image(gauss, ax=axes[-1], scale='log', title='log - Reds', cmap='Reds', cbar='right')
 
-	fig.tight_layout()
+		fig.tight_layout()
 
 	return fig
 
@@ -57,24 +59,26 @@ def test_plot_image_invalid(caplog):
 	var = multivariate_normal(mean=mu, cov=[[1,0],[0,1]])
 	gauss = var.pdf(pos)
 
-	fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+	with p.plot_style_context():
+		fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 
-	# Run with invalid scale:
-	with pytest.raises(ValueError):
-		plot_image(gauss, ax=ax1, scale='invalid-scale')
+		# Run with invalid scale:
+		with pytest.raises(ValueError):
+			p.plot_image(gauss, ax=ax1, scale='invalid-scale')
 
-	# Plot with single NaN:
-	gauss[1,1] = np.NaN
-	plot_image(gauss, ax=ax1, scale='log')
+		# Plot with single NaN:
+		gauss[1,1] = np.NaN
+		p.plot_image(gauss, ax=ax1, scale='log')
 
-	# Run with all-NaN image:
-	gauss[:, :] = np.NaN
-	caplog.clear()
-	with caplog.at_level(logging.WARNING):
-		plot_image(gauss, ax=ax2, cbar='right')
-	record = caplog.records[0]
-	assert record.levelname == "WARNING"
-	assert record.message == "Image is all NaN"
+		# Run with all-NaN image:
+		gauss[:, :] = np.NaN
+		caplog.clear()
+		with caplog.at_level(logging.WARNING):
+			p.plot_image(gauss, ax=ax2, cbar='right')
+		assert len(caplog.records) == 1, "No warning was issued"
+		record = caplog.records[0]
+		assert record.levelname == "WARNING"
+		assert record.message == "Image is all NaN"
 
 	return fig
 
@@ -88,12 +92,13 @@ def test_plot_image_grid():
 	img[:,-1] = 1
 	img[-1,:] = 1
 
-	fig = plt.figure()
-	ax = fig.add_subplot(111)
-	plot_image(img, ax=ax, scale='linear')
-	ax.plot(0.5, 0.5, 'r+')
-	ax.plot(5.5, 3.5, 'g+')
-	ax.grid(True)
+	with p.plot_style_context():
+		fig = plt.figure()
+		ax = fig.add_subplot(111)
+		p.plot_image(img, ax=ax, scale='linear')
+		ax.plot(0.5, 0.5, 'r+')
+		ax.plot(5.5, 3.5, 'g+')
+		ax.grid(True)
 	return fig
 
 #--------------------------------------------------------------------------------------------------
@@ -106,12 +111,13 @@ def test_plot_image_grid_offset():
 	img[:,-1] = 1
 	img[-1,:] = 1
 
-	fig = plt.figure()
-	ax = fig.add_subplot(111)
-	plot_image(img, ax=ax, scale='linear', offset_axes=(3,2))
-	ax.plot(3.5, 2.5, 'r+')
-	ax.plot(8.5, 5.5, 'g+')
-	ax.grid(True)
+	with p.plot_style_context():
+		fig = plt.figure()
+		ax = fig.add_subplot(111)
+		p.plot_image(img, ax=ax, scale='linear', offset_axes=(3,2))
+		ax.plot(3.5, 2.5, 'r+')
+		ax.plot(8.5, 5.5, 'g+')
+		ax.grid(True)
 	return fig
 
 #--------------------------------------------------------------------------------------------------
@@ -126,23 +132,24 @@ def test_plot_image_data_change():
 	# Save the original image for comparison:
 	img_before = np.copy(img)
 
-	# Make a couple of plots trying out the different settings:
-	fig = plt.figure()
-	ax1 = fig.add_subplot(131)
-	plot_image(img, ax=ax1, scale='linear')
-	np.testing.assert_allclose(img, img_before)
+	with p.plot_style_context():
+		# Make a couple of plots trying out the different settings:
+		fig = plt.figure()
+		ax1 = fig.add_subplot(131)
+		p.plot_image(img, ax=ax1, scale='linear')
+		np.testing.assert_allclose(img, img_before)
 
-	ax2 = fig.add_subplot(132)
-	plot_image(img, ax=ax2, scale='sqrt')
-	np.testing.assert_allclose(img, img_before)
+		ax2 = fig.add_subplot(132)
+		p.plot_image(img, ax=ax2, scale='sqrt')
+		np.testing.assert_allclose(img, img_before)
 
-	ax3 = fig.add_subplot(133)
-	plot_image(img, ax=ax3, scale='log')
-	np.testing.assert_allclose(img, img_before)
+		ax3 = fig.add_subplot(133)
+		p.plot_image(img, ax=ax3, scale='log')
+		np.testing.assert_allclose(img, img_before)
 
-	fig = plt.figure()
-	plot_image_fit_residuals(fig, img, img, img)
-	np.testing.assert_allclose(img, img_before)
+		fig = plt.figure()
+		p.plot_image_fit_residuals(fig, img, img, img)
+		np.testing.assert_allclose(img, img_before)
 
 #--------------------------------------------------------------------------------------------------
 @pytest.mark.mpl_image_compare(**kwargs)
@@ -153,11 +160,12 @@ def test_plot_cbar_and_nans():
 	img = np.random.rand(10, 10)
 	img[2:8, 2:8] = np.NaN
 
-	fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(16, 6))
-	plot_image(img, ax=ax1, scale='linear', vmin=0.4, cbar='left')
-	plot_image(img, ax=ax2, scale='sqrt', vmin=0.4, cbar='bottom')
-	plot_image(img, ax=ax3, scale='log', vmin=0.4, cbar='right')
-	plot_image(img, ax=ax4, scale='asinh', vmin=0.4, cbar='top')
+	with p.plot_style_context():
+		fig, (ax1, ax2, ax3, ax4) = plt.subplots(1, 4, figsize=(16, 6))
+		p.plot_image(img, ax=ax1, scale='linear', vmin=0.4, cbar='left')
+		p.plot_image(img, ax=ax2, scale='sqrt', vmin=0.4, cbar='bottom')
+		p.plot_image(img, ax=ax3, scale='log', vmin=0.4, cbar='right')
+		p.plot_image(img, ax=ax4, scale='asinh', vmin=0.4, cbar='top')
 	return fig
 
 #--------------------------------------------------------------------------------------------------
@@ -165,6 +173,6 @@ if __name__ == '__main__':
 	print("To generate new correct images:")
 	print('pytest --mpl-generate-path="' + kwargs['baseline_dir'] + '" "' + __file__ + '"')
 
-	plots_interactive()
-	pytest.main([__file__])
+	p.plots_interactive()
+	pytest.main(['--mpl-results-path=' + os.path.join(os.path.abspath(os.path.dirname(__file__)), 'test_plots'), __file__])
 	plt.show()

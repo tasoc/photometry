@@ -19,16 +19,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import astropy.visualization as viz
 from astropy.nddata import NDData, CCDData
 
-# Change to a non-GUI backend since this
-# should be able to run on a cluster:
-plt.switch_backend('Agg')
-
-# Change the fonts used in plots:
-# TODO: Use stylesheets instead of overwriting defaults here
-matplotlib.rcParams['font.family'] = 'serif'
-matplotlib.rcParams['text.usetex'] = False
-matplotlib.rcParams['mathtext.fontset'] = 'dejavuserif'
-
 #--------------------------------------------------------------------------------------------------
 def plots_interactive(backend=('QtAgg', 'Qt5Agg', 'MacOSX', 'Qt4Agg', 'Qt5Cairo', 'TkAgg', 'GTK4Agg')):
 	"""
@@ -73,10 +63,26 @@ def plots_noninteractive():
 	plt.switch_backend('Agg')
 
 #--------------------------------------------------------------------------------------------------
+def plot_style_context(style=None):
+	"""
+	Context manager for using plotting style tempoarily.
+
+	Parameters:
+		style: Passed directly to :py:func:`plt.style.context`.
+
+	See also:
+		:py:func:`plt.style.context`
+	"""
+	if style is None:
+		style = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data', 'tessphot.mplstyle'))
+	return plt.style.context(style)
+
+#--------------------------------------------------------------------------------------------------
 def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=None,
 	ylabel=None, cbar=None, clabel='Flux ($e^{-}s^{-1}$)', cbar_ticks=None,
 	cbar_ticklabels=None, cbar_pad=None, cbar_size='5%', title=None,
-	percentile=95.0, vmin=None, vmax=None, offset_axes=None, color_bad='k', **kwargs):
+	percentile=95.0, vmin=None, vmax=None, offset_axes=None, color_bad='k', style=None,
+	**kwargs):
 	"""
 	Utility function to plot a 2D image.
 
@@ -108,6 +114,7 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 		vmin (float, optional): Lower limit to use for colormap.
 		vmax (float, optional): Upper limit to use for colormap.
 		color_bad (str, optional): Color to apply to bad pixels (NaN). Default is black.
+		style (str, optional):
 		kwargs (dict, optional): Keyword arguments to be passed to :func:`matplotlib.pyplot.imshow`.
 
 	Returns:
@@ -197,9 +204,6 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 	else:
 		extent = (-0.5, image.shape[1]-0.5, -0.5, image.shape[0]-0.5)
 
-	if ax is None:
-		ax = plt.gca()
-
 	# Set up the colormap to use. If a bad color is defined,
 	# add it to the colormap:
 	if cmap is None:
@@ -210,79 +214,84 @@ def plot_image(image, ax=None, scale='log', cmap=None, origin='lower', xlabel=No
 	if color_bad:
 		cmap.set_bad(color_bad, 1.0)
 
-	# Plotting the image using all the settings set above:
-	im = ax.imshow(
-		image,
-		cmap=cmap,
-		norm=norm,
-		origin=origin,
-		extent=extent,
-		interpolation='nearest',
-		**kwargs)
+	with plot_style_context(style):
 
-	if xlabel is not None:
-		ax.set_xlabel(xlabel)
-	if ylabel is not None:
-		ax.set_ylabel(ylabel)
-	if title is not None:
-		ax.set_title(title)
-	ax.set_xlim([extent[0], extent[1]])
-	ax.set_ylim([extent[2], extent[3]])
+		if ax is None:
+			ax = plt.gca()
 
-	if cbar:
-		fig = ax.figure
-		divider = make_axes_locatable(ax)
-		if cbar == 'top':
-			cbar_pad = 0.05 if cbar_pad is None else cbar_pad
-			cax = divider.append_axes('top', size=cbar_size, pad=cbar_pad)
-			orientation = 'horizontal'
-		elif cbar == 'bottom':
-			cbar_pad = 0.35 if cbar_pad is None else cbar_pad
-			cax = divider.append_axes('bottom', size=cbar_size, pad=cbar_pad)
-			orientation = 'horizontal'
-		elif cbar == 'left':
-			cbar_pad = 0.35 if cbar_pad is None else cbar_pad
-			cax = divider.append_axes('left', size=cbar_size, pad=cbar_pad)
-			orientation = 'vertical'
-		else:
-			cbar_pad = 0.05 if cbar_pad is None else cbar_pad
-			cax = divider.append_axes('right', size=cbar_size, pad=cbar_pad)
-			orientation = 'vertical'
+		# Plotting the image using all the settings set above:
+		im = ax.imshow(
+			image,
+			cmap=cmap,
+			norm=norm,
+			origin=origin,
+			extent=extent,
+			interpolation='nearest',
+			**kwargs)
 
-		cb = fig.colorbar(im, cax=cax, orientation=orientation)
+		if xlabel is not None:
+			ax.set_xlabel(xlabel)
+		if ylabel is not None:
+			ax.set_ylabel(ylabel)
+		if title is not None:
+			ax.set_title(title)
+		ax.set_xlim([extent[0], extent[1]])
+		ax.set_ylim([extent[2], extent[3]])
 
-		if cbar == 'top':
-			cax.xaxis.set_ticks_position('top')
-			cax.xaxis.set_label_position('top')
-		elif cbar == 'left':
-			cax.yaxis.set_ticks_position('left')
-			cax.yaxis.set_label_position('left')
+		if cbar:
+			fig = ax.figure
+			divider = make_axes_locatable(ax)
+			if cbar == 'top':
+				cbar_pad = 0.05 if cbar_pad is None else cbar_pad
+				cax = divider.append_axes('top', size=cbar_size, pad=cbar_pad)
+				orientation = 'horizontal'
+			elif cbar == 'bottom':
+				cbar_pad = 0.35 if cbar_pad is None else cbar_pad
+				cax = divider.append_axes('bottom', size=cbar_size, pad=cbar_pad)
+				orientation = 'horizontal'
+			elif cbar == 'left':
+				cbar_pad = 0.35 if cbar_pad is None else cbar_pad
+				cax = divider.append_axes('left', size=cbar_size, pad=cbar_pad)
+				orientation = 'vertical'
+			else:
+				cbar_pad = 0.05 if cbar_pad is None else cbar_pad
+				cax = divider.append_axes('right', size=cbar_size, pad=cbar_pad)
+				orientation = 'vertical'
 
-		if clabel is not None:
-			cb.set_label(clabel)
-		if cbar_ticks is not None:
-			cb.set_ticks(cbar_ticks)
-		if cbar_ticklabels is not None:
-			cb.set_ticklabels(cbar_ticklabels)
+			cb = fig.colorbar(im, cax=cax, orientation=orientation)
 
-		#cax.yaxis.set_major_locator(matplotlib.ticker.AutoLocator())
-		#cax.yaxis.set_minor_locator(matplotlib.ticker.AutoLocator())
-		cax.tick_params(which='both', direction='out', pad=5)
+			if cbar == 'top':
+				cax.xaxis.set_ticks_position('top')
+				cax.xaxis.set_label_position('top')
+			elif cbar == 'left':
+				cax.yaxis.set_ticks_position('left')
+				cax.yaxis.set_label_position('left')
 
-	# Settings for ticks:
-	integer_locator = MaxNLocator(nbins=10, integer=True)
-	ax.xaxis.set_major_locator(integer_locator)
-	ax.xaxis.set_minor_locator(integer_locator)
-	ax.yaxis.set_major_locator(integer_locator)
-	ax.yaxis.set_minor_locator(integer_locator)
-	ax.tick_params(which='both', direction='out', pad=5)
-	ax.xaxis.tick_bottom()
-	ax.yaxis.tick_left()
+			if clabel is not None:
+				cb.set_label(clabel)
+			if cbar_ticks is not None:
+				cb.set_ticks(cbar_ticks)
+			if cbar_ticklabels is not None:
+				cb.set_ticklabels(cbar_ticklabels)
+
+			#cax.yaxis.set_major_locator(matplotlib.ticker.AutoLocator())
+			#cax.yaxis.set_minor_locator(matplotlib.ticker.AutoLocator())
+			cax.tick_params(which='both', direction='out', pad=5)
+
+		# Settings for ticks:
+		integer_locator = MaxNLocator(nbins=10, integer=True)
+		ax.xaxis.set_major_locator(integer_locator)
+		ax.xaxis.set_minor_locator(integer_locator)
+		ax.yaxis.set_major_locator(integer_locator)
+		ax.yaxis.set_minor_locator(integer_locator)
+		ax.tick_params(which='both', direction='out', pad=5)
+		ax.xaxis.tick_bottom()
+		ax.yaxis.tick_left()
 
 	return im
 
 #--------------------------------------------------------------------------------------------------
-def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
+def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0, style=None):
 	"""
 	Make a figure with three subplots showing the image, the fit and the
 	residuals. The image and the fit are shown with logarithmic scaling and a
@@ -309,32 +318,34 @@ def plot_image_fit_residuals(fig, image, fit, residuals=None, percentile=95.0):
 	vmax = np.nanmax([vmax_image, vmax_fit])
 	norm = viz.ImageNormalize(vmin=vmin, vmax=vmax, stretch=viz.LogStretch())
 
-	# Add subplot with the image:
-	ax1 = fig.add_subplot(131)
-	im1 = plot_image(image, ax=ax1, scale=norm, cbar=None, title='Image')
+	with plot_style_context(style):
 
-	# Add subplot with the fit:
-	ax2 = fig.add_subplot(132)
-	plot_image(fit, ax=ax2, scale=norm, cbar=None, title='PSF fit')
+		# Add subplot with the image:
+		ax1 = fig.add_subplot(131)
+		im1 = plot_image(image, ax=ax1, scale=norm, cbar=None, title='Image')
 
-	# Calculate the normalization for the third subplot:
-	vmin, vmax = viz.PercentileInterval(percentile).get_limits(residuals)
-	v = np.max(np.abs([vmin, vmax]))
+		# Add subplot with the fit:
+		ax2 = fig.add_subplot(132)
+		plot_image(fit, ax=ax2, scale=norm, cbar=None, title='PSF fit')
 
-	# Add subplot with the residuals:
-	ax3 = fig.add_subplot(133)
-	im3 = plot_image(residuals, ax=ax3, scale='linear', cmap='seismic', vmin=-v, vmax=v, cbar=None, title='Residuals')
+		# Calculate the normalization for the third subplot:
+		vmin, vmax = viz.PercentileInterval(percentile).get_limits(residuals)
+		v = np.max(np.abs([vmin, vmax]))
 
-	# Make the common colorbar for image and fit subplots:
-	cbar_ax12 = fig.add_axes([0.125, 0.2, 0.494, 0.03])
-	fig.colorbar(im1, cax=cbar_ax12, orientation='horizontal')
+		# Add subplot with the residuals:
+		ax3 = fig.add_subplot(133)
+		im3 = plot_image(residuals, ax=ax3, scale='linear', cmap='seismic', vmin=-v, vmax=v, cbar=None, title='Residuals')
 
-	# Make the colorbar for the residuals subplot:
-	cbar_ax3 = fig.add_axes([0.7, 0.2, 0.205, 0.03])
-	fig.colorbar(im3, cax=cbar_ax3, orientation='horizontal')
+		# Make the common colorbar for image and fit subplots:
+		cbar_ax12 = fig.add_axes([0.125, 0.2, 0.494, 0.03])
+		fig.colorbar(im1, cax=cbar_ax12, orientation='horizontal')
 
-	# Add more space between subplots:
-	plt.subplots_adjust(wspace=0.4, hspace=0.4)
+		# Make the colorbar for the residuals subplot:
+		cbar_ax3 = fig.add_axes([0.7, 0.2, 0.205, 0.03])
+		fig.colorbar(im3, cax=cbar_ax3, orientation='horizontal')
+
+		# Add more space between subplots:
+		plt.subplots_adjust(wspace=0.4, hspace=0.4)
 
 	return [ax1, ax2, ax3]
 

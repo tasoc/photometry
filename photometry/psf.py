@@ -11,8 +11,9 @@ import numpy as np
 from scipy.io import loadmat
 from scipy.interpolate import RectBivariateSpline
 import glob
-from .plots import plt, plot_image
+from .plots import plot_style_context, plt, plot_image
 
+#--------------------------------------------------------------------------------------------------
 class PSF(object):
 	"""
 	Point Spread Function (PSF).
@@ -167,16 +168,17 @@ class PSF(object):
 
 		img = self.integrate_to_image(stars)
 
-		fig = plt.figure()
-		ax = fig.add_subplot(121)
-		ax.contourf(yy, xx, spline, 20, cmap='bone_r')
-		ax.set_xlim(-6, 6)
-		ax.set_ylim(-6, 6)
-		ax.axis('equal')
+		with plot_style_context():
+			fig = plt.figure()
+			ax = fig.add_subplot(121)
+			ax.contourf(yy, xx, spline, 20, cmap='bone_r')
+			ax.set_xlim(-6, 6)
+			ax.set_ylim(-6, 6)
+			ax.axis('equal')
 
-		ax = fig.add_subplot(122)
-		plot_image(img, ax=ax)
-		ax.scatter(stars[:,1], stars[:,0], c='r', alpha=0.5)
+			ax = fig.add_subplot(122)
+			plot_image(img, ax=ax)
+			ax.scatter(stars[:,1], stars[:,0], c='r', alpha=0.5)
 
-		plt.tight_layout()
+			plt.tight_layout()
 		return fig

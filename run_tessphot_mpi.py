@@ -70,6 +70,9 @@ def main():
 		parser.error("Please specify an INPUT_FOLDER.")
 	output_folder = os.environ.get('TESSPHOT_OUTPUT', os.path.join(input_folder, 'lightcurves'))
 
+	# Make sure we have turned plotting to non-interactive:
+	photometry.plots.plots_noninteractive()
+
 	# Define MPI message tags
 	tags = enum.IntEnum('tags', ('READY', 'DONE', 'EXIT', 'START'))
 

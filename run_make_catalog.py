@@ -24,6 +24,7 @@ Note:
 import argparse
 import logging
 from photometry.catalog import make_catalog
+from photometry.plots import plots_noninteractive
 
 #--------------------------------------------------------------------------------------------------
 def main():
@@ -55,6 +56,9 @@ def main():
 	logger = logging.getLogger('photometry')
 	logger.setLevel(logging_level)
 	logger.addHandler(console)
+
+	# Make sure we have turned plotting to non-interactive:
+	plots_noninteractive()
 
 	# Run the program:
 	make_catalog(args.sector,

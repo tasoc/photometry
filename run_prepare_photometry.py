@@ -28,6 +28,7 @@ import argparse
 import os.path
 import logging
 from photometry.prepare import prepare_photometry
+from photometry.plots import plots_noninteractive
 from photometry.utilities import TqdmLoggingHandler
 
 #--------------------------------------------------------------------------------------------------
@@ -59,6 +60,9 @@ def main():
 	logger_parent.setLevel(logging_level)
 	if not logger.hasHandlers(): logger.addHandler(console)
 	if not logger_parent.hasHandlers(): logger_parent.addHandler(console)
+
+	# Make sure we have turned plotting to non-interactive:
+	plots_noninteractive()
 
 	# Check that the given input directory is indeed a directory:
 	if args.input_folder is not None and not os.path.isdir(args.input_folder):

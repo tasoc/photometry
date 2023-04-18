@@ -1,0 +1,35 @@
+font.family      : serif
+text.usetex      : False
+mathtext.fontset : dejavuserif
+
+savefig.bbox     : tight
+savefig.pad_inches: 0.1
+savefig.dpi      : 100
+
+figure.figsize   : 9.6, 7.2
+figure.dpi       : 100
+
+axes.titlesize   : large
+axes.labelsize   : medium
+axes.labelpad    : 4.0
+
+legend.fontsize  : medium
+
+xtick.direction  : out
+xtick.minor.visible : True
+xtick.labelsize  : medium
+xtick.major.size : 5
+xtick.major.pad  : 6
+xtick.minor.size : 3
+xtick.minor.pad  : 5
+
+ytick.direction  : out
+ytick.minor.visible : True
+ytick.labelsize  : medium
+ytick.major.size : 5
+ytick.major.pad  : 6
+ytick.minor.size : 3
+ytick.minor.pad  : 5
+
+hatch.color      : black
+hatch.linewidth  : 0.5

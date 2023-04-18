@@ -10,7 +10,7 @@ import pytest
 import numpy as np
 import conftest # noqa: F401
 from photometry.psf import PSF
-from photometry.plots import plt
+from photometry.plots import plots_noninteractive, plt
 
 #--------------------------------------------------------------------------------------------------
 def test_psf_invalid_input():
@@ -37,7 +37,12 @@ def test_psf_invalid_input():
 @pytest.mark.parametrize('sector', (2,5))
 @pytest.mark.parametrize('camera', (1,2,3,4))
 @pytest.mark.parametrize('ccd', (1,2,3,4))
-def test_psf(sector, camera, ccd, keep_figures=False):
+def test_psf(sector, camera, ccd):
+
+	close_figures = True
+
+	if close_figures:
+		plots_noninteractive()
 
 	stamp = (50, 60, 120, 140)
 
@@ -59,7 +64,7 @@ def test_psf(sector, camera, ccd, keep_figures=False):
 
 	fig = psf.plot()
 
-	if not keep_figures:
+	if close_figures:
 		plt.close(fig)
 
 #--------------------------------------------------------------------------------------------------

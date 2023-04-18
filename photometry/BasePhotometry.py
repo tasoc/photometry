@@ -31,7 +31,7 @@ from .quality import TESSQualityFlags, PixelQualityFlags, CorrectorQualityFlags
 from .utilities import (rms_timescale, find_nearest, ListHandler)
 from .catalog import catalog_sqlite_search_footprint
 from .psf import PSF
-from .plots import plot_image, plt, save_figure
+from .plots import plot_image, plt, save_figure, plot_style_context
 from .spice import TESS_SPICE
 from .version import get_version
 from . import fixes, io
@@ -161,6 +161,7 @@ class BasePhotometry(object):
 		self._details = {}
 		self.tpf = None
 		self.hdf = None
+		self.plot_style = None
 		self._MovementKernel = None
 		self._images_cube_full = None
 		self._images_err_cube_full = None
@@ -1019,12 +1020,13 @@ class BasePhotometry(object):
 				self._sumimage[~isgood] = np.NaN
 
 			if self.plot:
-				fig, ax = plt.subplots()
-				plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2]+1, self._stamp[0]+1),
-					xlabel='Pixel Column Number', ylabel='Pixel Row Number', cbar='right')
-				ax.plot(self.target_pos_column + 1, self.target_pos_row + 1, 'r+')
-				save_figure(os.path.join(self.plot_folder, 'sumimage'), fig=fig)
-				plt.close(fig)
+				with plot_style_context(self.plot_style):
+					fig, ax = plt.subplots()
+					plot_image(self._sumimage, ax=ax, offset_axes=(self._stamp[2]+1, self._stamp[0]+1),
+						xlabel='Pixel Column Number', ylabel='Pixel Row Number', cbar='right')
+					ax.plot(self.target_pos_column + 1, self.target_pos_row + 1, 'r+')
+					save_figure(os.path.join(self.plot_folder, 'sumimage'), fig=fig)
+					plt.close(fig)
 
 		return self._sumimage
 
