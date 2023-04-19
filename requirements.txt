@@ -5,8 +5,8 @@ flake8
 flake8-tabs >= 2.3.2
 flake8-builtins
 flake8-logging-format
-numpy == 1.24.2
-scipy == 1.9.1
+numpy
+scipy
 matplotlib == 3.7.1
 astropy == 5.2.2
 PyYAML
@@ -16,7 +16,7 @@ h5py >= 3.7
 scikit-image == 0.20.0
 scikit-learn == 1.2.2
 statsmodels == 0.13.5
-opencv-python-headless == 4.5.5.64
+opencv-python-headless == 4.7.0.72
 psycopg
 requests >= 2.5
 responses
