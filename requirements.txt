@@ -23,6 +23,7 @@ responses
 httpretty
 astroquery >= 0.4 # Needed for halophot
 autograd >= 1.4 # Needed for halophot
-halophot == 0.7.6.1
+#halophot == 0.7.6.1
+git+https://github.com/rhandberg/halophot.git@fix-sklearn#egg=halophot
 jplephem >= 2.9
 spiceypy == 5.1.2
